@@ -1,0 +1,16 @@
+# Ignore build directories
+build/
+cmake-build/
+docker/
+
+# Ignore IDE/editor settings
+.idea/
+.vscode/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore JUCE project files (if you generate them via Projucer)
+*.jucer
+

@@ -1,4 +1,5 @@
 # Ignore JUCE project files (if you generate them via Projucer)
+JUCE/
 *.jucer
 
 # Build artifacts

@@ -1,16 +1,28 @@
-# Ignore build directories
+# Ignore JUCE project files (if you generate them via Projucer)
+*.jucer
+
+# Build artifacts
 build/
 cmake-build/
 docker/
+out/
+bin/
+obj/
+*.o
+*.a
+*.so
+*.exe
+*.dll
+*.dylib
 
-# Ignore IDE/editor settings
-.idea/
-.vscode/
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+Makefile
 
-# Ignore OS-specific files
-.DS_Store
-Thumbs.db
-
-# Ignore JUCE project files (if you generate them via Projucer)
-*.jucer
+# Compilation database (if using clangd)
+.cache/
+.clangd/
 

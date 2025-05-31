@@ -1,41 +1,50 @@
 cmake_minimum_required(VERSION 3.20)
 project(vimDAW)
 
-# Add JUCE
-set(JUCE_DIR "/home/manslayer/JUCE" CACHE PATH "Path to JUCE directory")
-add_subdirectory(${JUCE_DIR} JUCE)
+set(RTAUDIO_INCLUDE_DIR "/usr/include")
+set(RTAUDIO_LIBRARY "/usr/lib/librtaudio.so")
 
-# Ensure compile_commands.json is generated
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FLUIDSYNTH REQUIRED fluidsynth)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Set C++ standard to C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Ensures no compiler-specific extensions are used
 
-# Find SDL3
 find_package(SDL3 REQUIRED CONFIG)
 
-# Find SDL3_ttf
 find_package(SDL3_ttf REQUIRED)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(RTMIDI REQUIRED rtmidi)
+include_directories(${RTMIDI_INCLUDE_DIRS})
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
+
+include_directories(${PORTAUDIO_INCLUDE_DIRS})
+link_directories(${PORTAUDIO_LIBRARY_DIRS})
+
+include_directories(/usr/lib)
+link_directories(/usr/lib)
 
 find_package(CURL REQUIRED)
 
-# Define your target
-add_executable(vimDAW src/main.cpp)
+add_executable(vimDAW src/audio_playback.cpp src/render_and_input.cpp src/vimDAW.cpp)
 
-target_link_libraries(vimDAW PRIVATE ${CURL_LIBRARIES})
+# learning
+add_executable(learning src/learning.cpp)
 
-# Link SDL3 and SDL3_ttf
-target_link_libraries(vimDAW PRIVATE SDL3::SDL3-shared SDL3_ttf::SDL3_ttf-shared)
-
-# Link JUCE modules (modify as needed)
 target_link_libraries(vimDAW PRIVATE
-    juce::juce_core
-    juce::juce_gui_basics
-    juce::juce_audio_basics
+    ${CURL_LIBRARIES}
+    SDL3::SDL3-shared
+    SDL3_ttf::SDL3_ttf-shared
+    ${RTAUDIO_LIBRARY}
+    ${PORTAUDIO_LIBRARIES}
+    ${RTMIDI_LIBRARIES}
+    ${FLUIDSYNTH_LIBRARIES}
 )
 
-# Include JUCE headers
-target_include_directories(vimDAW PRIVATE ${JUCE_DIR})
-
+target_include_directories(vimDAW PRIVATE ${RTAUDIO_INCLUDE_DIR} ${FLUIDSYNTH_INCLUDE_DIRS})

@@ -1352,7 +1352,8 @@ int update() {
                         height - gutter_font_offset_px, gutter_number_color);
         } else {
             int num = abs((rows + viewport_row * rows) - i + 1);
-            if (num > 127) {
+            int rel_num = abs(rows - relative_cursor_row + 1 - i);
+            if (num > 127 || num > rows) {
                 continue;
             }
             std::string num_str = std::to_string(num);

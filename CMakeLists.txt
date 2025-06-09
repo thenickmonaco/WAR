@@ -32,7 +32,9 @@ link_directories(/usr/lib)
 
 find_package(CURL REQUIRED)
 
-add_executable(vimDAW src/audio_playback.cpp src/render_and_input.cpp src/vimDAW.cpp)
+find_package(Freetype REQUIRED)
+
+add_executable(vimDAW src/render_and_input.cpp src/vimDAW.cpp)
 
 # learning
 add_executable(learning src/learning.cpp)
@@ -45,6 +47,11 @@ target_link_libraries(vimDAW PRIVATE
     ${PORTAUDIO_LIBRARIES}
     ${RTMIDI_LIBRARIES}
     ${FLUIDSYNTH_LIBRARIES}
+    ${FREETYPE_LIBRARIES}
 )
 
-target_include_directories(vimDAW PRIVATE ${RTAUDIO_INCLUDE_DIR} ${FLUIDSYNTH_INCLUDE_DIRS})
+target_include_directories(vimDAW PRIVATE 
+    ${RTAUDIO_INCLUDE_DIR} 
+    ${FLUIDSYNTH_INCLUDE_DIRS}
+    ${FREETYPE_INCLUDE_DIRS}
+)

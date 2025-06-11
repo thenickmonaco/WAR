@@ -1,12 +1,4 @@
 #include "vimDAW.hpp"
-#include <alsa/asoundlib.h>
-#include <atomic>
-#include <cmath>
-#include <condition_variable>
-#include <iostream>
-#include <portaudio.h>
-#include <random>
-#include <vector>
 
 typedef enum Waveform {
     WAVE_SINE,

@@ -6,6 +6,10 @@ set(RTAUDIO_LIBRARY "/usr/lib/librtaudio.so")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FLUIDSYNTH REQUIRED fluidsynth)
+pkg_check_modules(GLFW REQUIRED glfw3)
+pkg_check_modules(HARFBUZZ REQUIRED harfbuzz)
+include_directories(${HARFBUZZ_INCLUDE_DIRS})
+include_directories(${GLFW_INCLUDE_DIRS})
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -34,10 +38,21 @@ find_package(CURL REQUIRED)
 
 find_package(Freetype REQUIRED)
 
-add_executable(vimDAW src/render_and_input.cpp src/vimDAW.cpp)
+find_package(OpenGL REQUIRED)
 
-# learning
-add_executable(learning src/learning.cpp)
+find_path(LUAJIT_INCLUDE_DIR luajit-2.1/lua.hpp)
+find_library(LUAJIT_LIB luajit-5.1)
+
+if (NOT LUAJIT_INCLUDE_DIR OR NOT LUAJIT_LIB)
+    message(FATAL_ERROR "LuaJIT not found.")
+endif()
+
+include_directories(${LUAJIT_INCLUDE_DIR})
+
+find_package(GLEW REQUIRED)
+find_package(glm REQUIRED)
+
+add_executable(vimDAW src/render_and_input.cpp src/vimDAW.cpp)
 
 target_link_libraries(vimDAW PRIVATE
     ${CURL_LIBRARIES}
@@ -48,10 +63,18 @@ target_link_libraries(vimDAW PRIVATE
     ${RTMIDI_LIBRARIES}
     ${FLUIDSYNTH_LIBRARIES}
     ${FREETYPE_LIBRARIES}
+    ${GLFW_LIBRARIES}
+    OpenGL::GL
+    ${HARFBUZZ_LIBRARIES}
+    ${LUAJIT_LIB}
+    GLEW::GLEW
+    glm::glm
 )
 
 target_include_directories(vimDAW PRIVATE 
     ${RTAUDIO_INCLUDE_DIR} 
     ${FLUIDSYNTH_INCLUDE_DIRS}
     ${FREETYPE_INCLUDE_DIRS}
+    ${GLEW_INCLUDE_DIRS}
+    ${GLM_INCLUDE_DIRS}
 )

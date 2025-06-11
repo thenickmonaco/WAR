@@ -1,108 +1,304 @@
 #include "vimDAW.hpp"
-#include <SDL3/SDL.h>
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#include <cassert>
-#include <cmath>
-#include <iostream>
-#include <limits>
-#include <map>
-#include <math.h>
-#include <stdlib.h>
-#include <vector>
 
-SDL_Window *gSDLWindow;
-SDL_Renderer *gSDLRenderer;
-int gDone;
+/*****************************************************************************/
+/* window                                                                    */
+/*****************************************************************************/
+
+GLFWwindow *window;
+const float TARGET_ASPECT = 16.0f / 9.0f;
+
+GLFWmonitor *find_best_monitor_for_16_9() {
+    int count;
+    GLFWmonitor **monitors = glfwGetMonitors(&count);
+    if (!monitors || count == 0) {
+        return nullptr;
+    }
+
+    GLFWmonitor *best = nullptr;
+    float closest_diff = 1000.0f;
+
+    for (int i = 0; i < count; i++) {
+        const GLFWvidmode *mode = glfwGetVideoMode(monitors[i]);
+        if (!mode) {
+            continue;
+        }
+
+        float aspect = static_cast<float>(mode->width) / mode->height;
+        float diff = std::fabs(aspect - TARGET_ASPECT);
+
+        if (diff < closest_diff) {
+            closest_diff = diff;
+            best = monitors[i];
+        }
+    }
+    return best;
+}
+
+/*****************************************************************************/
+/* colors                                                                    */
+/*****************************************************************************/
+
+Color color_from_hex(const std::string &hex) {
+    if (hex.empty() || hex[0] != '#' ||
+        (hex.length() != 7 && hex.length() != 9)) {
+        throw std::invalid_argument("Invalid hex color format");
+    }
+
+    unsigned int rgba = 0;
+    std::istringstream iss(hex.substr(1)); // Parse hex digits after '#'
+    iss >> std::hex >> rgba;
+
+    unsigned int r, g, b, a;
+    if (hex.length() == 7) { // #RRGGBB
+        r = (rgba >> 16) & 0xFF;
+        g = (rgba >> 8) & 0xFF;
+        b = rgba & 0xFF;
+        a = 255;
+    } else { // #RRGGBBAA
+        r = (rgba >> 24) & 0xFF;
+        g = (rgba >> 16) & 0xFF;
+        b = (rgba >> 8) & 0xFF;
+        a = rgba & 0xFF;
+    }
+
+    return Color{r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f};
+}
+
+Palette palette;
+
+/*****************************************************************************/
+/* font                                                                      */
+/*****************************************************************************/
 
 FT_Library ft;
 FT_Face face;
-const char *font_path =
-    "/home/monaco/Projects/vimDAW/assets/fonts/FreeMono.otf";
+const char *font_path = "assets/fonts/FreeMono.otf";
 int font_size_pt = 25;
 FT_Library bold_ft;
 FT_Face bold_face;
-const char *bold_font_path =
-    "/home/monaco/Projects/vimDAW/assets/fonts/FreeMonoBold.otf";
-int font_offset_px = 7;
-int gutter_font_offset_px = 13;
-int column_row_offset_cell = 64;
-int track_percent_offset_cell = 100; // later
+const char *bold_font_path = "assets/fonts/FreeMonoBold.otf";
 
+hb_buffer_t *hb_buffer;
+hb_font_t *hb_font;
+
+void init_font() {
+    if (FT_Init_FreeType(&ft)) {
+        std::cerr << "Could not init FreeType Library\n";
+        return;
+    }
+
+    if (FT_New_Face(ft, font_path, 0, &face)) {
+        std::cerr << "Failed to load font\n";
+        return;
+    }
+
+    FT_Set_Char_Size(face, 0, font_size_pt * 64, dpi, dpi);
+    FT_Load_Char(face, '0', FT_LOAD_DEFAULT);
+
+    cell_width = (face->glyph->advance.x / 64.0f) * scale_factor;
+    cell_height = (face->size->metrics.height / 64.0f) * scale_factor;
+
+    hb_buffer = hb_buffer_create();
+    hb_font = hb_ft_font_create(face, nullptr);
+}
+
+const int ATLAS_WIDTH = 1024;
+const int ATLAS_HEIGHT = 1024;
+
+GLuint atlas_texture;
+int atlas_x = 0;
+int atlas_y = 0;
+int row_height = 0;
+
+std::map<hb_codepoint_t, Glyph_Info> glyph_cache;
+
+void init_texture_atlas() {
+    glGenTextures(1, &atlas_texture);
+    glBindTexture(GL_TEXTURE_2D, atlas_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, ATLAS_WIDTH, ATLAS_HEIGHT, 0, GL_RED,
+                 GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+}
+
+void load_glyph_to_atlas(hb_codepoint_t glyph_index) {
+    if (glyph_cache.count(glyph_index)) {
+        return;
+    }
+
+    if (FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER)) {
+        return;
+    }
+    FT_Bitmap &bitmap = face->glyph->bitmap;
+
+    // Line wrap
+    if (atlas_x + bitmap.width >= ATLAS_WIDTH) {
+        atlas_x = 0;
+        atlas_y += row_height;
+        row_height = 0;
+    }
+
+    // Upload glyph to atlas
+    glBindTexture(GL_TEXTURE_2D, atlas_texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, atlas_x, atlas_y, bitmap.width,
+                    bitmap.rows, GL_RED, GL_UNSIGNED_BYTE, bitmap.buffer);
+
+    Glyph_Info info;
+    info.u1 = (float)atlas_x / ATLAS_WIDTH;
+    info.v1 = (float)atlas_y / ATLAS_HEIGHT;
+    info.u2 = (float)(atlas_x + bitmap.width) / ATLAS_WIDTH;
+    info.v2 = (float)(atlas_y + bitmap.rows) / ATLAS_HEIGHT;
+    info.width = bitmap.width;
+    info.height = bitmap.rows;
+    info.bearing_x = face->glyph->bitmap_left;
+    info.bearing_y = face->glyph->bitmap_top;
+    info.advance = face->glyph->advance.x >> 6;
+
+    glyph_cache[glyph_index] = info;
+
+    atlas_x += bitmap.width + 1;
+    row_height = std::max(row_height, (int)bitmap.rows);
+}
+
+void draw_textured_quad(float x, float y, float w, float h, float u1, float v1,
+                        float u2, float v2) {
+    static GLuint VAO = 0, VBO = 0;
+
+    if (VAO == 0) {
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL,
+                     GL_DYNAMIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                              (void *)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                              (void *)(2 * sizeof(float)));
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
+    float vertices[] = {
+        x, y + h, u1, v2, x,     y, u1, v1, x + w, y,     u2, v1,
+        x, y + h, u1, v2, x + w, y, u2, v1, x + w, y + h, u2, v2,
+    };
+
+    glBindTexture(GL_TEXTURE_2D, atlas_texture);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void shape_and_render_text(const char *&text, int x, int y) {
+    hb_buffer_t *buf = hb_buffer_create();
+    hb_buffer_add_utf8(buf, text, -1, 0, -1);
+    hb_buffer_guess_segment_properties(buf);
+    hb_shape(hb_font, buf, nullptr, 0);
+
+    unsigned int glyph_count;
+    hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+    hb_glyph_position_t *glyph_pos =
+        hb_buffer_get_glyph_positions(buf, &glyph_count);
+
+    glBindTexture(GL_TEXTURE_2D, atlas_texture);
+
+    int pen_x = x;
+    int pen_y = y;
+
+    for (unsigned int i = 0; i < glyph_count; i++) {
+        hb_codepoint_t gid = glyph_info[i].codepoint;
+
+        load_glyph_to_atlas(gid);
+        const Glyph_Info &g = glyph_cache[gid];
+
+        float xpos = pen_x + (glyph_pos[i].x_offset >> 6) + g.bearing_x;
+        float ypos = pen_y - (glyph_pos[i].y_offset >> 6) - g.bearing_y;
+
+        float w = g.width;
+        float h = g.height;
+
+        glUniform1i(glGetUniformLocation(shaderProgram, "text"),
+                    0); // texture unit
+        glUniform4f(glGetUniformLocation(shaderProgram, "textColor"), 1.0, 1.0,
+                    1.0, 1.0); // white text
+
+        draw_textured_quad(xpos, ypos, w, h, g.u1, g.v1, g.u2, g.v2);
+
+        pen_x += glyph_pos[i].x_advance >> 6;
+        pen_y += glyph_pos[i].y_advance >> 6;
+    }
+
+    hb_buffer_destroy(buf);
+}
+
+/*****************************************************************************/
+/* render                                                                    */
+/*****************************************************************************/
+
+int width;
+int height;
+int grid_width;
+int grid_height;
+int cell_width;
+int cell_height;
+int usable_width;
+int usable_height;
 float dpi = 100.0f; // default 100.0f
 float scale_factor = 1;
 float zoom_step = 0.1;
-
-float screen_width_px;
-float screen_height_px;
-
-float cell_width_px;
-float cell_height_px;
-
 const int gutter_cols = 8;
-float gutter_width_px;
-float gutter_height_px;
-
 const int status_rows = 4;
-float status_width_px;
-float status_height_px;
-
-float usable_width_px;
-float usable_height_px;
-
-int cols;
-int rows;
-
-int cursor_col = 0;
-int cursor_row = 60;
-int relative_cursor_col = 0;
-int relative_cursor_row = 0;
-int col_step = 13;
-int row_step = 13;
+const int MIDI_NOTES = 128;
+const int MAX_INT = std::numeric_limits<int>::max();
 bool relative_line_numbers = false;
-float piano_black_note_factor = (float)2 / 3;
-int piano_black_note_offset_px = 5;
+bool redraw = true;
 
-const char *note_color_hex = "#DD1F01FF"; // red: #DD1F01FF
-const char *bg_color_hex = "#262626FF";   // dark-gray: #262626FF
+void render() {
+    Color bg = palette.bg;
+    glClearColor(bg.r, bg.g, bg.b, bg.a);
+    glClear(GL_COLOR_BUFFER_BIT);
 
-const char *vim_status_fg_color_hex = "#EEEEEEFF"; // white: #EEEEEEFF
-const char *vim_status_bg_color_hex = "#4E4E4EFF"; // light-gray: #4E4E4EFF
+    const char *hello = "Hello, World!";
+    int start_x = 100;
+    int start_y = 200;
+    shape_and_render_text(hello, start_x, start_y);
 
-const char *mode_status_color_hex = "#FFAF00FF"; // gold-yellow: #FFAF00FF
+    glfwSwapBuffers(window);
+}
 
-const char *tmux_status_fg_color_hex = "#EEEEEEFF"; // white: #EEEEEEFF
-const char *tmux_status_bg_color_hex = "#DD1F01FF"; // red: #DD1F01FF
-                                                    //
-const char *gutter_bar_color_hex = "#3A3A3AFF";     // dark-gray-2: #3A3A3AFF
-const char *gutter_number_color_hex = "#6A6C6BFF";  // light-gray-2: #6A6C6BFF
+GLuint create_text_shader();
 
-const char *gutter_piano_white_color_hex = "#EEEEEEFF";
-const char *gutter_piano_black_color_hex = "#000000FF";
+/*****************************************************************************/
+/* input                                                                     */
+/*****************************************************************************/
 
-const char *cursor_color_hex = "#FFD7AFFF";    // white2: #5F5F5FFF
-const char *cursor_bg_color_hex = "#5F5F5FFF"; // light-gray-3: #5F5F5FFF
-
-typedef enum Mode {
-    NORMAL,
-    INSERT,
-    VISUAL,
-    VISUAL_BLOCK,
-    VISUAL_LINE,
-    COMMAND,
-    SLAVE
-} Mode;
-
-typedef enum Movement { UP, DOWN, LEFT, RIGHT } Movement;
-
-Mode mode = NORMAL;
-bool slave = false;
-const SDL_Keycode LEADER_KEY = SDLK_SPACE;
+int col = 0;
+int row = 60;
+int relative_col;
+int relative_row;
 std::string command_buffer = "";
 std::string numeric_prefix = "1";
 bool leader = false;
-const Uint32 LEADER_TIMEOUT = 500;
-Uint32 leader_press_time;
+bool slave = false;
+const uint32_t LEADER_TIMEOUT = 500;
+uint32_t leader_press_time;
+
+int up_limit = MIDI_NOTES - 1;
+int down_limit = 0;
+int left_limit = 0;
+int right_limit = MAX_INT - 1;
+
+int col_step = 13;
+int row_step = 13;
 
 /*
  * lookahead scheduling (process only milliseconds ahead)
@@ -110,1343 +306,112 @@ Uint32 leader_press_time;
  */
 std::map<int, std::vector<Note>> buffer_map;
 
-const int MIDI_NOTES = 128;
-const int MAX_INT = std::numeric_limits<int>::max();
-int up_limit = MIDI_NOTES - 1;
-int down_limit = 0;
-int left_limit = 0;
-int right_limit = MAX_INT - 1;
+Mode mode = NORMAL;
 
-int viewport_col = 0;
-int viewport_row = 0;
-int viewport_up_limit;
-int viewport_down_limit;
-int viewport_left_limit;
-int viewport_right_limit;
-
-SDL_Color hex_to_sdl(const char *hex_color) {
-    if (hex_color[0] != '#' || strlen(hex_color) != 9) {
-        throw std::invalid_argument(
-            "Invalid hex color format. Expected format: #RRGGBBAA");
-    }
-    Uint8 r, g, b, a;
-    // Use sscanf to parse the color components
-    if (sscanf(hex_color + 1, "%2hhx%2hhx%2hhx%2hhx", &r, &g, &b, &a) != 4) {
-        throw std::invalid_argument("Failed to parse hex color.");
-    }
-
-    return {r, g, b, a};
-}
-
-void init_resolution() {
-    // Set display resolution
-    int num_displays;
-    SDL_DisplayID *displays = SDL_GetDisplays(&num_displays);
-    if (displays == nullptr) {
-        std::cerr << "Failed to get displays: " << SDL_GetError() << std::endl;
-        SDL_Quit();
-        return;
-    }
-
-    // pick display device closest to 1920x1080
-    int count = 0;
-    int current_avg;
-    for (int i = 0; count < num_displays; ++i) {
-        const SDL_DisplayMode *display_mode = SDL_GetDesktopDisplayMode(i);
-        if (display_mode == NULL) {
-            continue; // Skip to the next display if there is an error
-        }
-
-        count++;
-        if (count == 1) {
-            float width_distance = abs(1920 - display_mode->w);
-            float height_distance = abs(1080 - display_mode->h);
-            current_avg = (width_distance + height_distance) / 2;
-            screen_width_px = display_mode->w;
-            screen_height_px = display_mode->h;
-            continue;
-        }
-
-        float width_distance = abs(1920 - display_mode->w);
-        float height_distance = abs(1080 - display_mode->h);
-        float avg = (width_distance + height_distance) / 2;
-
-        if (avg <= current_avg) {
-            screen_width_px = display_mode->w;
-            screen_height_px = display_mode->h;
-        }
-    }
-}
-
-void init_freetype() {
-    if (FT_Init_FreeType(&ft)) {
-        SDL_Log("Could not init FreeType Library\n");
-        return;
-    }
-
-    if (FT_New_Face(ft, font_path, 0, &face)) {
-        SDL_Log("Failed to load font\n");
-        return;
-    }
-
-    FT_Set_Char_Size(face, 0, font_size_pt * 64, dpi, dpi);
-    FT_Load_Char(face, '0', FT_LOAD_DEFAULT);
-
-    cell_width_px = (face->glyph->advance.x / 64.0f) * scale_factor;
-    cell_height_px = (face->size->metrics.height / 64.0f) * scale_factor;
-}
-
-void init_bold_freetype() {
-    if (FT_Init_FreeType(&bold_ft)) {
-        SDL_Log("Could not init FreeType Library\n");
-        return;
-    }
-
-    if (FT_New_Face(bold_ft, bold_font_path, 0, &bold_face)) {
-        SDL_Log("Failed to load font\n");
-        return;
-    }
-
-    FT_Set_Char_Size(bold_face, 0, font_size_pt * 64, dpi, dpi);
-    FT_Load_Char(bold_face, '0', FT_LOAD_DEFAULT);
-}
-
-/*
- * how to handle max viewport col / row limits in slave mode?
- */
-void handle_limits(Movement mvmt) {
-    switch (mvmt) {
-    case UP:
-        if (cursor_row > up_limit) {
-            cursor_row = up_limit;
-        }
-        break;
-    case DOWN:
-        if (cursor_row < down_limit) {
-            cursor_row = down_limit;
-        }
-        break;
-    case LEFT:
-        if (cursor_col < left_limit) {
-            cursor_col = left_limit;
-        }
-        break;
-    case RIGHT:
-        if (cursor_col > right_limit) {
-            cursor_col = right_limit;
-        }
-        break;
-    }
-}
-
-void numeric_prefix_check() {
-    if (numeric_prefix.empty() || numeric_prefix[0] == '0') {
-        numeric_prefix = "1";
-    }
-    // check for overflow
-    std::string max_int_str = std::to_string(MAX_INT - 1);
-    if (numeric_prefix.length() > max_int_str.length()) {
-        numeric_prefix = max_int_str;
-    } else if (numeric_prefix.length() == max_int_str.length()) {
-        if (numeric_prefix > max_int_str) {
-            numeric_prefix = max_int_str;
-        }
-    }
-}
-
-void handle_normal_keys(SDL_Event &event, SDL_Keymod &mod) {
-    switch (event.key.key) {
-    case LEADER_KEY:
-        if (leader) {
-            cursor_col = left_limit;
-            cursor_row = down_limit;
-            leader = false;
+void key_callback(GLFWwindow *window, int key, int scancode, int action,
+                  int mod) {
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        switch (key) {
+        case GLFW_KEY_K:
+            if (mod & GLFW_MOD_CONTROL) {
+                row = std::min(row + row_step, up_limit);
+            } else {
+                row = std::min(row + 1, up_limit);
+            }
             break;
-        }
-        leader = true;
-        leader_press_time = SDL_GetTicks();
-        break;
-    case SDLK_X:
-        break;
-    case SDLK_I:
-        mode = INSERT;
-        break;
-    case SDLK_V:
-        mode = VISUAL;
-        if (mod & SDL_KMOD_CTRL) {
-            mode = VISUAL_BLOCK;
-        }
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = VISUAL_LINE;
-        }
-        break;
-    case SDLK_SEMICOLON:
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = COMMAND;
-        }
-        break;
-    case SDLK_S:
-        slave = !slave;
-        break;
-    case SDLK_G:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_row = down_limit;
+        case GLFW_KEY_J:
+            if (mod & GLFW_MOD_CONTROL) {
+                row = std::max(row - row_step, down_limit);
+            } else {
+                row = std::max(row - 1, down_limit);
+            }
             break;
-        }
-        cursor_row = up_limit;
-        break;
-    case SDLK_U:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_D:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_K: // up
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row += stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_J: // down
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row -= stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_H: // left
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col -= col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col -= stoi(numeric_prefix);
-        }
-        handle_limits(LEFT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_L: // right
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col += col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col += stoi(numeric_prefix);
-        }
-        handle_limits(RIGHT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_0:
-        if (!numeric_prefix.empty()) {
-            numeric_prefix.append("0");
+        case GLFW_KEY_H:
+            if (mod & GLFW_MOD_CONTROL) {
+                col = std::max(col - col_step, left_limit);
+            } else {
+                col = std::max(col - 1, left_limit);
+            }
             break;
-        }
-        cursor_col = left_limit;
-        handle_limits(LEFT);
-        break;
-    case SDLK_1:
-        numeric_prefix.append("1");
-        break;
-    case SDLK_2:
-        numeric_prefix.append("2");
-        break;
-    case SDLK_3:
-        numeric_prefix.append("3");
-        break;
-    case SDLK_4:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_col = right_limit;
-            handle_limits(RIGHT);
-            break;
-        }
-        numeric_prefix.append("4");
-        break;
-    case SDLK_5:
-        numeric_prefix.append("5");
-        break;
-    case SDLK_6:
-        numeric_prefix.append("6");
-        break;
-    case SDLK_7:
-        numeric_prefix.append("7");
-        break;
-    case SDLK_8:
-        numeric_prefix.append("8");
-        break;
-    case SDLK_9:
-        numeric_prefix.append("9");
-        break;
-    }
-}
-
-void handle_insert_keys(SDL_Event &event, SDL_Keymod &mod) {
-    switch (event.key.key) {
-    case SDLK_ESCAPE:
-        mode = NORMAL;
-        break;
-    }
-}
-
-void handle_visual_keys(SDL_Event &event, SDL_Keymod &mod) {
-    switch (event.key.key) {
-    case LEADER_KEY:
-        if (leader) {
-            cursor_col = left_limit;
-            cursor_row = down_limit;
-            leader = false;
-            break;
-        }
-        leader = true;
-        leader_press_time = SDL_GetTicks();
-        break;
-    case SDLK_ESCAPE:
-        mode = NORMAL;
-        break;
-    case SDLK_I:
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = INSERT;
-        }
-        break;
-    case SDLK_V:
-        mode = NORMAL;
-        if (mod & SDL_KMOD_CTRL) {
-            mode = VISUAL_BLOCK;
-        }
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = VISUAL_LINE;
-        }
-        break;
-    case SDLK_SEMICOLON:
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = COMMAND;
-            numeric_prefix.append("'<,'>");
-        }
-        break;
-    case SDLK_S:
-        slave = !slave;
-        break;
-    case SDLK_G:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_row = down_limit;
-            break;
-        }
-        cursor_row = up_limit;
-        break;
-    case SDLK_U:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_D:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_K: // up
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row += stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_J: // down
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row -= stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_H: // left
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col -= col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col -= stoi(numeric_prefix);
-        }
-        handle_limits(LEFT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_L: // right
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col += col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col += stoi(numeric_prefix);
-        }
-        handle_limits(RIGHT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_0:
-        if (!numeric_prefix.empty()) {
-            numeric_prefix.append("0");
-            break;
-        }
-        cursor_col = left_limit;
-        handle_limits(LEFT);
-        break;
-    case SDLK_1:
-        numeric_prefix.append("1");
-        break;
-    case SDLK_2:
-        numeric_prefix.append("2");
-        break;
-    case SDLK_3:
-        numeric_prefix.append("3");
-        break;
-    case SDLK_4:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_col = right_limit;
-            handle_limits(RIGHT);
-            break;
-        }
-        numeric_prefix.append("4");
-        break;
-    case SDLK_5:
-        numeric_prefix.append("5");
-        break;
-    case SDLK_6:
-        numeric_prefix.append("6");
-        break;
-    case SDLK_7:
-        numeric_prefix.append("7");
-        break;
-    case SDLK_8:
-        numeric_prefix.append("8");
-        break;
-    case SDLK_9:
-        numeric_prefix.append("9");
-        break;
-    }
-}
-
-void handle_visual_block_keys(SDL_Event &event, SDL_Keymod &mod) {
-    switch (event.key.key) {
-    case LEADER_KEY:
-        if (leader) {
-            cursor_col = left_limit;
-            cursor_row = down_limit;
-            leader = false;
-            break;
-        }
-        leader = true;
-        leader_press_time = SDL_GetTicks();
-        break;
-    case SDLK_ESCAPE:
-        mode = NORMAL;
-        break;
-    case SDLK_I:
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = INSERT;
-        }
-        break;
-    case SDLK_V:
-        mode = VISUAL;
-        if (mod & SDL_KMOD_CTRL) {
-            mode = NORMAL;
-        }
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = VISUAL_LINE;
-        }
-        break;
-    case SDLK_SEMICOLON:
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = COMMAND;
-            numeric_prefix.append("'<,'>");
-        }
-        break;
-    case SDLK_S:
-        slave = !slave;
-        break;
-    case SDLK_G:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_row = down_limit;
-            break;
-        }
-        cursor_row = up_limit;
-        break;
-    case SDLK_U:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_D:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_K: // up
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row += stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_J: // down
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row -= stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_H: // left
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col -= col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col -= stoi(numeric_prefix);
-        }
-        handle_limits(LEFT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_L: // right
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col += col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col += stoi(numeric_prefix);
-        }
-        handle_limits(RIGHT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_0:
-        if (!numeric_prefix.empty()) {
-            numeric_prefix.append("0");
-            break;
-        }
-        cursor_col = left_limit;
-        handle_limits(LEFT);
-        break;
-    case SDLK_1:
-        numeric_prefix.append("1");
-        break;
-    case SDLK_2:
-        numeric_prefix.append("2");
-        break;
-    case SDLK_3:
-        numeric_prefix.append("3");
-        break;
-    case SDLK_4:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_col = right_limit;
-            handle_limits(RIGHT);
-            break;
-        }
-        numeric_prefix.append("4");
-        break;
-    case SDLK_5:
-        numeric_prefix.append("5");
-        break;
-    case SDLK_6:
-        numeric_prefix.append("6");
-        break;
-    case SDLK_7:
-        numeric_prefix.append("7");
-        break;
-    case SDLK_8:
-        numeric_prefix.append("8");
-        break;
-    case SDLK_9:
-        numeric_prefix.append("9");
-        break;
-    }
-}
-
-void handle_visual_line_keys(SDL_Event &event, SDL_Keymod &mod) {
-    switch (event.key.key) {
-    case LEADER_KEY:
-        if (leader) {
-            cursor_col = left_limit;
-            cursor_row = down_limit;
-            leader = false;
-            break;
-        }
-        leader = true;
-        leader_press_time = SDL_GetTicks();
-        break;
-    case SDLK_ESCAPE:
-        mode = NORMAL;
-        break;
-    case SDLK_I:
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = INSERT;
-        }
-        break;
-    case SDLK_V:
-        mode = VISUAL;
-        if (mod & SDL_KMOD_CTRL) {
-            mode = VISUAL_BLOCK;
-        }
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = NORMAL;
-        }
-        break;
-    case SDLK_SEMICOLON:
-        if (mod & SDL_KMOD_SHIFT) {
-            mode = COMMAND;
-            numeric_prefix.append("'<,'>");
-        }
-        break;
-    case SDLK_S:
-        slave = !slave;
-        break;
-    case SDLK_G:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_row = down_limit;
-            break;
-        }
-        cursor_row = up_limit;
-        break;
-    case SDLK_U:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_D:
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_K: // up
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row += row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row += stoi(numeric_prefix);
-        }
-        handle_limits(UP);
-        numeric_prefix.clear();
-        break;
-    case SDLK_J: // down
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_row -= row_step * stoi(numeric_prefix);
-        } else {
-            cursor_row -= stoi(numeric_prefix);
-        }
-        handle_limits(DOWN);
-        numeric_prefix.clear();
-        break;
-    case SDLK_H: // left
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col -= col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col -= stoi(numeric_prefix);
-        }
-        handle_limits(LEFT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_L: // right
-        numeric_prefix_check();
-        if (mod & SDL_KMOD_CTRL) {
-            cursor_col += col_step * stoi(numeric_prefix);
-        } else {
-            cursor_col += stoi(numeric_prefix);
-        }
-        handle_limits(RIGHT);
-        numeric_prefix.clear();
-        break;
-    case SDLK_0:
-        if (!numeric_prefix.empty()) {
-            numeric_prefix.append("0");
-            break;
-        }
-        cursor_col = left_limit;
-        handle_limits(LEFT);
-        break;
-    case SDLK_1:
-        numeric_prefix.append("1");
-        break;
-    case SDLK_2:
-        numeric_prefix.append("2");
-        break;
-    case SDLK_3:
-        numeric_prefix.append("3");
-        break;
-    case SDLK_4:
-        if (mod & SDL_KMOD_SHIFT) {
-            cursor_col = right_limit;
-            handle_limits(RIGHT);
-            break;
-        }
-        numeric_prefix.append("4");
-        break;
-    case SDLK_5:
-        numeric_prefix.append("5");
-        break;
-    case SDLK_6:
-        numeric_prefix.append("6");
-        break;
-    case SDLK_7:
-        numeric_prefix.append("7");
-        break;
-    case SDLK_8:
-        numeric_prefix.append("8");
-        break;
-    case SDLK_9:
-        numeric_prefix.append("9");
-        break;
-    }
-}
-
-std::string sdlk_to_str(SDL_Event &event, SDL_Keymod &mod) {
-    std::string ch = "";
-    switch (event.key.key) {
-    case SDLK_SPACE:
-        ch = " ";
-        break;
-    case SDLK_A:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "A";
-        } else {
-            ch = "a";
-        }
-        break;
-    case SDLK_B:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "B";
-        } else {
-            ch = "b";
-        }
-        break;
-    case SDLK_C:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "C";
-        } else {
-            ch = "c";
-        }
-        break;
-    case SDLK_D:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "D";
-        } else {
-            ch = "d";
-        }
-        break;
-    case SDLK_E:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "E";
-        } else {
-            ch = "e";
-        }
-        break;
-    case SDLK_F:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "F";
-        } else {
-            ch = "f";
-        }
-        break;
-    case SDLK_G:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "G";
-        } else {
-            ch = "g";
-        }
-        break;
-    case SDLK_H:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "H";
-        } else {
-            ch = "h";
-        }
-        break;
-    case SDLK_I:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "I";
-        } else {
-            ch = "i";
-        }
-        break;
-    case SDLK_J:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "J";
-        } else {
-            ch = "j";
-        }
-        break;
-    case SDLK_K:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "K";
-        } else {
-            ch = "k";
-        }
-        break;
-    case SDLK_L:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "L";
-        } else {
-            ch = "l";
-        }
-        break;
-    case SDLK_M:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "M";
-        } else {
-            ch = "m";
-        }
-        break;
-    case SDLK_N:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "N";
-        } else {
-            ch = "n";
-        }
-        break;
-    case SDLK_O:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "O";
-        } else {
-            ch = "o";
-        }
-        break;
-    case SDLK_P:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "P";
-        } else {
-            ch = "p";
-        }
-        break;
-    case SDLK_Q:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "Q";
-        } else {
-            ch = "q";
-        }
-        break;
-    case SDLK_R:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "R";
-        } else {
-            ch = "r";
-        }
-        break;
-    case SDLK_S:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "S";
-        } else {
-            ch = "s";
-        }
-        break;
-    case SDLK_T:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "T";
-        } else {
-            ch = "t";
-        }
-        break;
-    case SDLK_U:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "U";
-        } else {
-            ch = "u";
-        }
-        break;
-    case SDLK_V:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "V";
-        } else {
-            ch = "v";
-        }
-        break;
-    case SDLK_W:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "W";
-        } else {
-            ch = "w";
-        }
-        break;
-    case SDLK_X:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "X";
-        } else {
-            ch = "x";
-        }
-        break;
-    case SDLK_Y:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "Y";
-        } else {
-            ch = "y";
-        }
-        break;
-    case SDLK_Z:
-        if (mod & SDL_KMOD_SHIFT) {
-            ch = "Z";
-        } else {
-            ch = "z";
-        }
-        break;
-    }
-    return ch;
-}
-
-void handle_command_execution() {
-    switch (command_buffer.length()) {
-    case 0:
-        break;
-    case 1:
-        if (command_buffer[0] == 'q') {
-            gDone = 1;
-        }
-        break;
-    }
-}
-
-void handle_command_keys(SDL_Event &event, SDL_Keymod &mod) {
-    switch (event.key.key) {
-    case SDLK_ESCAPE:
-        command_buffer.clear();
-        mode = NORMAL;
-        break;
-    case SDLK_RETURN:
-        handle_command_execution();
-        command_buffer.clear();
-        mode = NORMAL;
-        break;
-    case SDLK_BACKSPACE:
-        if (!command_buffer.empty()) {
-            command_buffer.pop_back();
-        }
-        break;
-    default:
-        command_buffer.append(sdlk_to_str(event, mod));
-        break;
-    }
-}
-
-void toggle_slave_mode() {
-    if (slave) {
-        up_limit = viewport_up_limit;
-        down_limit = viewport_down_limit;
-        left_limit = viewport_left_limit;
-        right_limit = viewport_right_limit;
-    } else {
-        up_limit = MIDI_NOTES - 1;
-        down_limit = 0;
-        left_limit = 0;
-        right_limit = MAX_INT - 1;
-    }
-}
-
-void handle_keys(SDL_Event &event, SDL_Keymod mod) {
-    switch (mode) {
-    case NORMAL:
-        handle_normal_keys(event, mod);
-        break;
-    case INSERT:
-        handle_insert_keys(event, mod);
-        break;
-    case VISUAL:
-        handle_visual_keys(event, mod);
-        break;
-    case VISUAL_BLOCK:
-        handle_visual_block_keys(event, mod);
-        break;
-    case VISUAL_LINE:
-        handle_visual_line_keys(event, mod);
-        break;
-    case COMMAND:
-        handle_command_keys(event, mod);
-        break;
-    case SLAVE:
-        break;
-    }
-}
-
-void handle_input() {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        SDL_Keymod mod = event.key.mod;
-        switch (event.type) {
-        case SDL_EVENT_QUIT:
-            gDone = 1;
-            break;
-        case SDL_EVENT_KEY_DOWN:
-            handle_keys(event, mod);
-            break;
-        default:
-            if (SDL_GetTicks() - leader_press_time >= LEADER_TIMEOUT) {
-                leader = false;
+        case GLFW_KEY_L:
+            if (mod & GLFW_MOD_CONTROL) {
+                col = std::min(col + col_step, right_limit);
+            } else {
+                col = std::min(col + 1, right_limit);
             }
             break;
         }
     }
+    redraw = true;
 }
 
-void render_text(const std::string &text, int x, int y, SDL_Color textColor,
-                 bool bold = false) {
-    FT_Face current_face = bold ? bold_face : face;
-    for (char c : text) {
-        if (c == ' ') {
-            x += current_face->glyph->advance.x >> 6;
-            continue;
-        }
-        if (FT_Load_Char(current_face, c,
-                         FT_LOAD_RENDER | FT_LOAD_TARGET_NORMAL)) {
-            std::cerr << "Could not load character " << c << std::endl;
-            continue;
-        }
-
-        float text_scale_factor = 1;
-        SDL_Surface *surface = SDL_CreateSurface(
-            current_face->glyph->bitmap.width * text_scale_factor,
-            current_face->glyph->bitmap.rows * text_scale_factor,
-            SDL_PIXELFORMAT_RGBA8888 // Use RGBA format to support transparency
-        );
-        if (!surface) {
-            std::cerr << "Could not create surface" << std::endl;
-            continue;
-        }
-        // Fill the surface with transparent color
-        const SDL_PixelFormatDetails *details =
-            SDL_GetPixelFormatDetails(surface->format);
-        Uint32 transparentColor = SDL_MapRGBA(details, NULL, 0, 0, 0, 0);
-        SDL_FillSurfaceRect(surface, NULL, transparentColor);
-        for (int i = 0; i < current_face->glyph->bitmap.rows; ++i) {
-            for (int j = 0; j < current_face->glyph->bitmap.width; ++j) {
-                Uint8 gray =
-                    current_face->glyph->bitmap
-                        .buffer[i * current_face->glyph->bitmap.pitch + j];
-                if (gray > 0) {
-                    int scaledX = j * text_scale_factor;
-                    int scaledY = i * text_scale_factor;
-                    for (int si = 0; si < text_scale_factor; ++si) {
-                        for (int sj = 0; sj < text_scale_factor; ++sj) {
-                            // Calculate RGB values based on gray value
-                            Uint8 r = (textColor.r * gray) / 255;
-                            Uint8 g = (textColor.g * gray) / 255;
-                            Uint8 b = (textColor.b * gray) / 255;
-                            Uint8 a = 255; // Fully opaque for the text
-                            // Create the color
-                            Uint32 color =
-                                SDL_MapRGBA(details, NULL, r, g, b, a);
-                            ((Uint32 *)
-                                 surface->pixels)[(scaledY + si) * surface->w +
-                                                  (scaledX + sj)] = color;
-                        }
-                    }
-                }
-            }
-        }
-        SDL_Texture *texture =
-            SDL_CreateTextureFromSurface(gSDLRenderer, surface);
-        SDL_DestroySurface(surface);
-        if (!texture) {
-            std::cerr << "Could not create texture" << std::endl;
-            continue;
-        }
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-        SDL_FRect dst_rect = {
-            static_cast<float>(x + current_face->glyph->bitmap_left),
-            static_cast<float>(y - current_face->glyph->bitmap_top),
-            static_cast<float>(current_face->glyph->bitmap.width *
-                               text_scale_factor),
-            static_cast<float>(current_face->glyph->bitmap.rows *
-                               text_scale_factor)};
-        SDL_RenderTexture(gSDLRenderer, texture, NULL, &dst_rect);
-        SDL_DestroyTexture(texture);
-        x += current_face->glyph->advance.x >> 6;
-    }
-}
-
-std::string mode_string(Mode mode) {
-    switch (mode) {
-    case NORMAL:
-        return "";
-    case INSERT:
-        return "INSERT";
-    case VISUAL:
-        return "VISUAL";
-    case VISUAL_BLOCK:
-        return "VISUAL BLOCK";
-    case VISUAL_LINE:
-        return "VISUAL LINE";
-    case COMMAND:
-        return "";
-    case SLAVE:
-        return "";
-    default:
-        return "";
-    }
-}
-
-// enforce limits
-void enslave() {
-    if (cursor_col > MAX_INT - 1 || cursor_col < 0) {
-        cursor_col = MAX_INT - 1;
-    }
-    if (cursor_row > MIDI_NOTES - 1) {
-        cursor_row = MIDI_NOTES - 1;
-    }
-}
-
-int update() {
-    toggle_slave_mode();
-    enslave();
-
-    SDL_Color bg_color = hex_to_sdl(bg_color_hex);
-    SDL_SetRenderDrawColor(gSDLRenderer, bg_color.r, bg_color.g, bg_color.b,
-                           bg_color.a);
-    SDL_RenderClear(
-        gSDLRenderer); // Clear the renderer with the background color
-
-    handle_input();
-
-    viewport_col = cursor_col / cols;
-    viewport_row = cursor_row / rows;
-
-    viewport_up_limit = rows + rows * viewport_row - 1;
-    viewport_down_limit = rows * viewport_row;
-    viewport_left_limit = cols * viewport_col;
-    viewport_right_limit = cols + cols * viewport_col - 1;
-
-    relative_cursor_col = cursor_col - cols * viewport_col;
-    relative_cursor_row = cursor_row - rows * viewport_row;
-
-    // 0,0 is bottom left instead of top right
-    float adjusted_x = relative_cursor_col * cell_width_px +
-                       (screen_width_px - usable_width_px);
-    float adjusted_y = usable_height_px -
-                       (relative_cursor_row * cell_height_px) - cell_height_px;
-
-    // cursor
-    SDL_Color cursor_color = hex_to_sdl(cursor_color_hex);
-    SDL_SetRenderDrawColor(gSDLRenderer, cursor_color.r, cursor_color.g,
-                           cursor_color.b, cursor_color.a);
-    SDL_FRect cursor_rect = {
-        adjusted_x,    // x
-        adjusted_y,    // y
-        cell_width_px, // w
-        cell_height_px // h
-    };
-    SDL_RenderFillRect(gSDLRenderer, &cursor_rect);
-
-    // vim status bg
-    SDL_Color vim_status_bg_color = hex_to_sdl(vim_status_bg_color_hex);
-    SDL_SetRenderDrawColor(gSDLRenderer, vim_status_bg_color.r,
-                           vim_status_bg_color.g, vim_status_bg_color.b,
-                           vim_status_bg_color.a);
-    SDL_FRect vim_status_bg_rect = {0, usable_height_px, screen_width_px,
-                                    cell_height_px};
-    SDL_RenderFillRect(gSDLRenderer, &vim_status_bg_rect);
-
-    // vim status text
-    SDL_Color vim_status_fg_color = hex_to_sdl(vim_status_fg_color_hex);
-    std::string column_row =
-        std::to_string(cursor_col) + "," + std::to_string(cursor_row);
-    render_text(column_row, cell_width_px * column_row_offset_cell,
-                usable_height_px + cell_height_px - font_offset_px,
-                vim_status_fg_color);
-    std::string track_percent = "100%"; // later
-    render_text(track_percent, cell_width_px * track_percent_offset_cell,
-                usable_height_px + cell_height_px - font_offset_px,
-                vim_status_fg_color);
-
-    // mode status / command bar
-    SDL_Color mode_status_color = hex_to_sdl(mode_status_color_hex);
-    std::string slave_text = "";
-    if (slave) {
-        slave_text = "SLAVE";
-    }
-    if (mode == COMMAND) {
-        render_text(":" + command_buffer, 0,
-                    usable_height_px + cell_height_px * 2 - font_offset_px,
-                    vim_status_fg_color);
-    } else if (mode == NORMAL && slave) {
-        render_text("-- " + slave_text + " --", 0,
-                    usable_height_px + cell_height_px * 2 - font_offset_px,
-                    mode_status_color, true);
-    } else if (mode != NORMAL && !slave) {
-        render_text("-- " + mode_string(mode) + " --", 0,
-                    usable_height_px + cell_height_px * 2 - font_offset_px,
-                    mode_status_color, true);
-    } else if (mode != NORMAL && slave) {
-        render_text("-- " + mode_string(mode) + " " + slave_text + " --", 0,
-                    usable_height_px + cell_height_px * 2 - font_offset_px,
-                    mode_status_color, true);
-    }
-
-    // tmux status bg
-    SDL_Color tmux_status_bg_color = hex_to_sdl(tmux_status_bg_color_hex);
-    SDL_SetRenderDrawColor(gSDLRenderer, tmux_status_bg_color.r,
-                           tmux_status_bg_color.g, tmux_status_bg_color.b,
-                           tmux_status_bg_color.a);
-    SDL_FRect tmux_status_bg_rect = {0, usable_height_px + cell_height_px * 2,
-                                     screen_width_px, cell_height_px};
-    SDL_RenderFillRect(gSDLRenderer, &tmux_status_bg_rect);
-
-    //// tmux status fg
-    // SDL_Color tmux_status_fg_color = hex_to_sdl(tmux_status_fg_color_hex);
-    // SDL_SetRenderDrawColor(gSDLRenderer, tmux_status_fg_color.r,
-    // tmux_status_fg_color.g,
-    //                        tmux_status_fg_color.b, tmux_status_fg_color.a);
-    // SDL_FRect tmux_status_fg_rect = {
-    //
-    // };
-    // SDL_RenderFillRect(gSDLRenderer, &tmux_status_fg_rect);
-
-    // draw gutter / draw piano
-    SDL_Color gutter_number_color = hex_to_sdl(gutter_number_color_hex);
-    for (int height = 0, i = 0; height <= usable_height_px + cell_height_px;
-         height += cell_height_px, i++) {
-        if (relative_line_numbers) {
-            int num = abs(rows - relative_cursor_row + 1 - i);
-            int non_rel_num = abs((rows + viewport_row * rows) - i + 1);
-            if (non_rel_num > 127 || num > rows) {
-                continue;
-            }
-            if (num == 0) {
-                num = cursor_row;
-            }
-            std::string num_str = std::to_string(num);
-            int cell_offset_px = num_str.length() * cell_width_px;
-
-            render_text(num_str,
-                        (gutter_cols - 1) * cell_width_px - cell_offset_px,
-                        height - gutter_font_offset_px, gutter_number_color);
-        } else {
-            int num = abs((rows + viewport_row * rows) - i + 1);
-            if (num > 127) {
-                continue;
-            }
-            std::string num_str = std::to_string(num);
-            int cell_offset_px = num_str.length() * cell_width_px;
-
-            render_text(num_str,
-                        (gutter_cols - 1) * cell_width_px - cell_offset_px,
-                        height - gutter_font_offset_px, gutter_number_color);
-        }
-    }
-    SDL_Color gutter_piano_black_color =
-        hex_to_sdl(gutter_piano_black_color_hex);
-    SDL_SetRenderDrawColor(
-        gSDLRenderer, gutter_piano_black_color.r, gutter_piano_black_color.g,
-        gutter_piano_black_color.b, gutter_piano_black_color.a);
-    const char *note_names[12] = {"C",  "C#", "D",  "D#", "E",  "F",
-                                  "F#", "G",  "G#", "A",  "A#", "B"};
-    for (int height = 0, i = 0; height <= usable_height_px - cell_height_px;
-         height += cell_height_px, i++) {
-        int note_num = abs((rows + viewport_row * rows) - i + 1);
-        if (note_num > 127) {
-            continue;
-        }
-        SDL_Color gutter_piano_white_color =
-            hex_to_sdl(gutter_piano_white_color_hex);
-        SDL_SetRenderDrawColor(gSDLRenderer, gutter_piano_white_color.r,
-                               gutter_piano_white_color.g,
-                               gutter_piano_white_color.b,
-                               gutter_piano_white_color.a);
-        SDL_FRect gutter_piano_white_rect = {
-            0, usable_height_px - height - cell_height_px,
-            (gutter_cols - 4) * cell_width_px, cell_height_px};
-        SDL_RenderFillRect(gSDLRenderer, &gutter_piano_white_rect);
-    }
-
-    SDL_RenderPresent(gSDLRenderer);
-    return 1;
-}
+/*****************************************************************************/
+/* main                                                                      */
+/*****************************************************************************/
 
 void loop() {
-    if (!update()) {
-        gDone = 1;
+    while (!glfwWindowShouldClose(window)) {
+        glfwWaitEvents();
+        if (redraw) {
+            render();
+            redraw = false;
+        }
     }
 }
 
 void render_and_input() {
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-        std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
+    if (!glfwInit()) {
+        std::cerr << "Failed to init GLFW\n";
         return;
     }
 
-    init_resolution();
-
-    init_freetype();
-    init_bold_freetype();
-
-    status_width_px = screen_width_px;
-    status_height_px = cell_height_px * status_rows;
-
-    gutter_width_px = cell_width_px * gutter_cols;
-    gutter_height_px = screen_height_px - status_height_px;
-
-    usable_width_px = screen_width_px - gutter_width_px;
-    usable_height_px = screen_height_px - status_height_px;
-
-    cols = (int)(usable_width_px / cell_width_px);
-    rows = (int)(usable_height_px / cell_height_px);
-
-    viewport_up_limit = rows + rows * viewport_row - 1;
-    viewport_down_limit = rows * viewport_row;
-    viewport_left_limit = cols * viewport_col;
-    viewport_right_limit = cols + cols * viewport_col - 1;
-
-    gSDLWindow =
-        SDL_CreateWindow("vimDAW", screen_width_px, screen_height_px, 0);
-
-    gSDLRenderer = SDL_CreateRenderer(gSDLWindow, NULL);
-
-    if (!gSDLWindow || !gSDLRenderer) {
-        std::cerr << "SDL_Create* Error: " << SDL_GetError() << std::endl;
+    GLFWmonitor *monitor = find_best_monitor_for_16_9();
+    if (!monitor) {
+        std::cerr << "No monitors found\n";
+        glfwTerminate();
         return;
     }
 
-    gDone = 0;
+    const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+    width = mode->width;
+    height = mode->height;
 
-    while (!gDone) {
-        loop();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    window = glfwCreateWindow(width, height, "vimDAW", monitor, nullptr);
+    if (!window) {
+        std::cerr << "Failed to create window\n";
+        glfwTerminate();
+        return;
     }
 
+    glfwMakeContextCurrent(window);
+
+    glewExperimental = GL_TRUE; // Required in core profile
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "Failed to initialize GLEW" << std::endl;
+        return;
+    }
+
+    GLuint shader_program = create_text_shader(); // define this function
+    glUseProgram(shader_program);
+
+    glfwSwapInterval(1); // vsync
+
+    glfwSetKeyCallback(window, key_callback);
+    glfwPostEmptyEvent(); // initial render
+
+    init_font();
+    init_texture_atlas();
+
+    loop();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    hb_buffer_destroy(hb_buffer);
+    hb_font_destroy(hb_font);
     FT_Done_Face(face);
-    FT_Done_Face(bold_face);
     FT_Done_FreeType(ft);
-    FT_Done_FreeType(bold_ft);
-    SDL_DestroyRenderer(gSDLRenderer);
-    SDL_DestroyWindow(gSDLWindow);
-    SDL_Quit();
 }

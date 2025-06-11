@@ -1,0 +1,11 @@
+/home/monaco/Projects/vimDAW/target/debug/deps/libharfbuzz_rs-810e04ce67c2d54c.rmeta: /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/lib.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/blob.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/buffer.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/common.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/face.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/font.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/font_funcs.rs
+
+/home/monaco/Projects/vimDAW/target/debug/deps/harfbuzz_rs-810e04ce67c2d54c.d: /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/lib.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/blob.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/buffer.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/common.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/face.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/font.rs /home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/font_funcs.rs
+
+/home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/lib.rs:
+/home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/blob.rs:
+/home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/buffer.rs:
+/home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/common.rs:
+/home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/face.rs:
+/home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/font.rs:
+/home/monaco/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/harfbuzz_rs-2.0.1/src/font_funcs.rs:

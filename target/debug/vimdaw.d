@@ -1,1 +1,1 @@
-/home/monaco/Projects/vimDAW/target/debug/vimdaw: /home/monaco/Projects/vimDAW/src/main.rs /home/monaco/Projects/vimDAW/src/render.rs
+/home/monaco/Projects/vimDAW/target/debug/vimdaw: /home/monaco/Projects/vimDAW/src/audio.rs /home/monaco/Projects/vimDAW/src/colors.rs /home/monaco/Projects/vimDAW/src/config.rs /home/monaco/Projects/vimDAW/src/font.rs /home/monaco/Projects/vimDAW/src/input.rs /home/monaco/Projects/vimDAW/src/main.rs /home/monaco/Projects/vimDAW/src/render.rs /home/monaco/Projects/vimDAW/src/shared.rs

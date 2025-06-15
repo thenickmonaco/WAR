@@ -1,21 +1,21 @@
-// src/render.rs
+//=============================================================================
+//  src/render.rs
+//=============================================================================
 
 use glfw::{Context, WindowHint, WindowMode};
 use glow::HasContext;
 
 pub fn render() {
-    let mut glfw: glfw::Glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw =
+        glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
 
     glfw.window_hint(WindowHint::ContextVersionMajor(3));
     glfw.window_hint(WindowHint::ContextVersionMinor(3));
     glfw.window_hint(WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
 
-    let (mut window, _events): (
-        glfw::Window,
-        std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
-    ) = glfw
+    let (mut window, _events) = glfw
         .create_window(1920, 1080, "vimDAW", WindowMode::Windowed)
-        .expect("Failed to create GLFW window");
+        .expect("create_window failure");
 
     window.make_current();
     window.set_key_polling(true);
@@ -28,7 +28,7 @@ pub fn render() {
 
     while !window.should_close() {
         unsafe {
-            gl.clear_color(1.0, 0.0, 0.0, 1.0);
+            gl.clear_color(0.0, 0.0, 0.0, 0.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
         }
 

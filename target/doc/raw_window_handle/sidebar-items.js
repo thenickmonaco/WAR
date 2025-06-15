@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RawWindowHandle"],"struct":["AndroidNdkHandle","AppKitHandle","HaikuHandle","OrbitalHandle","UiKitHandle","WaylandHandle","WebHandle","Win32Handle","WinRtHandle","XcbHandle","XlibHandle"],"trait":["HasRawWindowHandle"]};

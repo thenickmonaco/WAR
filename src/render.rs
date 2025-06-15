@@ -15,9 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/render.rsdslfkjsf
+// src/render.rssldfkjaskdfl
 //=============================================================================
-//
 
 use glfw::{Context, WindowHint, WindowMode};
 use glow::HasContext;

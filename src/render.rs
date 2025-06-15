@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/render.rssldfkjaskdfl
+// src/render.rsldkfjasldkfj
 //=============================================================================
 
 use glfw::{Context, WindowHint, WindowMode};

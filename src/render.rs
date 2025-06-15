@@ -17,18 +17,8 @@
  */
 
 //=============================================================================
-//  src/render.rs dlsfkjaskfjd
-/asdlfjkasdfkjsa/ asdlkjfasdkfj
+//  src/render.rs
 //=============================================================================
-/////asdjflaskdfj
-///asldfjakldsjf
-///asdjflkasdflkjsd
-///asldfjakdslfj
-///jalksdfjasldfjaskl
-///alsdjkfaslkdjfasd
-///asldjfaksldjfalksdjfsadf
-asldfjaskldjfasdf
-alsdjfaskldfjsadf
 
 use glfw::{Context, WindowHint, WindowMode};
 use glow::HasContext;

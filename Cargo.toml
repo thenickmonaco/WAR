@@ -2,6 +2,8 @@
 name = "vimdaw"
 version = "0.1.0"
 edition = "2021"
+authors = ["Nick Monaco thenickmonaco@gmail.com"]
+license = "AGPL-3.0"
 
 [dependencies]
 glfw = "0.45"           # Windowing, context, input

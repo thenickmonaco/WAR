@@ -7,3 +7,9 @@
 # NOT FUNCTIONAL YET
 
 Make music with vim motions
+
+# License
+
+vimDAW is licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+
+Use it, remix it, share it — just keep it open source.

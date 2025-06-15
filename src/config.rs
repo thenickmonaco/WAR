@@ -35,7 +35,7 @@ pub fn init_lua() -> Result<()> {
     //  init.lua
     //=========================================================================
 
-    lua.load(&std::fs::read_to_string("config/init.lua")?)
+    lua.load(&std::fs::read_to_string("src/lua/init.lua")?)
         .exec()?;
 
     let theme: Theme = load_theme(&lua).expect("load_theme failure");

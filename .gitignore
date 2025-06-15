@@ -11,6 +11,7 @@
 *.bak
 *.tmp
 *.un~
+.vimdaw_license_header
 
 # session files
 Session.vim

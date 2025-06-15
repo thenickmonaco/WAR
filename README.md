@@ -6,7 +6,7 @@
 
 # NOT FUNCTIONAL YET
 
-Make music with vim motions
+make music with vim motions
 
 # License
 

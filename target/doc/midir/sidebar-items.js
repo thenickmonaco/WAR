@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ConnectErrorKind","Ignore","PortInfoError","SendError"],"mod":["os"],"struct":["ConnectError","InitError","MidiInput","MidiInputConnection","MidiInputPort","MidiOutput","MidiOutputConnection","MidiOutputPort"],"trait":["MidiIO"],"type":["MidiInputPorts","MidiOutputPorts"]};

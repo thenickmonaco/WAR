@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["allocate","deallocate","empty","reallocate"]};

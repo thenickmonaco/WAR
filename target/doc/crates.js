@@ -1,2 +1,0 @@
-window.ALL_CRATES = ["alsa","alsa_sys","bitflags","bstr","cfg_if","cty","freetype","freetype_sys","glfw","glfw_sys","glow","harfbuzz_rs","harfbuzz_sys","libc","memalloc","memchr","memoffset","midir","mlua","nix","num","num_complex","num_integer","num_iter","num_rational","num_traits","once_cell","portaudio","portaudio_sys","raw_window_handle","rustc_hash","vimdaw"];
-//{"start":21,"fragment_lengths":[6,11,11,7,9,6,11,15,7,11,7,14,15,7,11,9,12,8,7,6,6,14,14,11,15,13,12,12,16,20,13,9]}

@@ -1,1 +1,0 @@
-searchState.loadedDescShard("memalloc", 0, "memalloc\nReturns a pointer to <code>size</code> bytes of memory aligned to …\nDeallocates the memory referenced by <code>ptr</code>.\nA token empty allocation which cannot be read from or …\nResizes the allocation referenced by <code>ptr</code> to <code>new_size</code> bytes.")

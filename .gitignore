@@ -1,8 +1,8 @@
 # rust build output
-target/
+/target/
 
 # rustfmt config
-rustfmt.toml
+/rustfmt.toml
 
 # neovim swap and backup files
 *.swp

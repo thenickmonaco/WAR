@@ -1,29 +1,24 @@
-# Ignore JUCE project files (if you generate them via Projucer)
-JUCE/
-*.jucer
+# rust build output
+/target/
 
-# Build artifacts
-build/
-cmake-build/
-docker/
-out/
-bin/
-obj/
-*.o
-*.a
-*.so
-*.exe
-*.dll
-*.dylib
+# rustfmt config
+/rustfmt.toml
 
-# CMake generated files
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-compile_commands.json
-Makefile
+# neovim swap and backup files
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*.un~
 
-# Compilation database (if using clangd)
-.cache/
-.clangd/
+# session files
+Session.vim
+
+# os files
+.DS_Store
+*~
+
+# logs
+*.log
 

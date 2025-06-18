@@ -12,4 +12,6 @@ freetype-rs = "0.26"    # FreeType font rasterization
 harfbuzz_rs = "2.0.1"     # Text shaping with HarfBuzz
 portaudio = "0.8"       # Audio I/O
 midir = "0.8"           # MIDI I/O
+parking_lot = "0.12"
+crossbeam = "0.8"
 mlua = { version = "0.8", features = ["luajit"] }  # LuaJIT scripting

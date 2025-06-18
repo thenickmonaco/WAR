@@ -26,50 +26,49 @@ mod lua;
 mod message;
 mod render;
 mod state;
+mod clock;
 
-use crate::state::State;
+use crate::message::EngineType;
+use crate::state::{Engine, State};
 use audio::AudioEngine;
 use input::InputEngine;
 use lua::LuaEngine;
 use render::RenderEngine;
 use std::collections::HashMap;
-use std::sync::mpsc;
-use std::sync::{Arc, RwLock};
+use crossbeam::channel;
+use std::sync::Arc;
 use std::thread;
 
 pub fn main() {
-    let state = Arc::new(RwLock::new(State::default()));
+    let state = Arc::new(State::default());
 
-    let (lua_tx, lua_rx) = mpsc::channel();
-    let (input_tx, input_rx) = mpsc::channel();
-    let (render_tx, render_rx) = mpsc::channel();
-    let (audio_tx, audio_rx) = mpsc::channel();
+    let (lua_tx, lua_rx) = crossbeam::channel::unbounded();
+    let (input_tx, input_rx) = crossbeam::channel::unbounded();
+    let (render_tx, render_rx) = crossbeam::channel::unbounded();
+    let (audio_tx, audio_rx) = crossbeam::channel::unbounded();
 
     let mut senders_map = HashMap::new();
-    senders_map.insert("render", render_tx.clone());
-    senders_map.insert("input", input_tx.clone());
-    senders_map.insert("audio", audio_tx.clone());
-    senders_map.insert("lua", lua_tx.clone());
+    senders_map.insert(EngineType::Render, render_tx.clone());
+    senders_map.insert(EngineType::Input, input_tx.clone());
+    senders_map.insert(EngineType::Audio, audio_tx.clone());
+    senders_map.insert(EngineType::Lua, lua_tx.clone());
 
     let senders = Arc::new(senders_map);
 
     let render_senders = Arc::clone(&senders);
     let state_for_render = Arc::clone(&state);
     let render_handle = thread::spawn(move || {
-        let mut render_engine = RenderEngine::init_render(
-            render_rx,
-            render_senders,
-            state_for_render,
-        )
-        .unwrap();
+        let mut render_engine =
+            RenderEngine::init(render_rx, render_senders, state_for_render)
+                .unwrap();
         render_engine.run();
     });
 
     let input_senders = Arc::clone(&senders);
     let state_for_input = Arc::clone(&state);
     let input_handle = thread::spawn(move || {
-        let input_engine =
-            InputEngine::init_input(input_rx, input_senders, state_for_input)
+        let mut input_engine =
+            InputEngine::init(input_rx, input_senders, state_for_input)
                 .unwrap();
         input_engine.run();
     });
@@ -77,8 +76,8 @@ pub fn main() {
     let audio_senders = Arc::clone(&senders);
     let state_for_audio = Arc::clone(&state);
     let audio_handle = thread::spawn(move || {
-        let audio_engine =
-            AudioEngine::init_audio(audio_rx, audio_senders, state_for_audio)
+        let mut audio_engine =
+            AudioEngine::init(audio_rx, audio_senders, state_for_audio)
                 .unwrap();
         audio_engine.run();
     });
@@ -87,8 +86,8 @@ pub fn main() {
     let lua_senders = Arc::clone(&senders);
     let state_for_lua = Arc::clone(&state);
     let lua_handle = thread::spawn(move || {
-        let lua_engine =
-            LuaEngine::init_lua(lua_rx, lua_senders, state_for_lua).unwrap();
+        let mut lua_engine =
+            LuaEngine::init(lua_rx, lua_senders, state_for_lua).unwrap();
         lua_engine.run();
     });
 

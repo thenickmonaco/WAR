@@ -18,32 +18,37 @@
 // src/lua.rs
 //=============================================================================
 
-use crate::state::State;
 use crate::colors::{hex_to_rgba, Theme};
 use crate::input::hello_world;
-use crate::message::Message;
+use crate::message::{EngineType, Message};
+use crate::state::{Engine, State};
 use mlua::{Lua, Result};
 use std::collections::HashMap;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use crossbeam::channel::{Receiver, Sender};
+use std::sync::Arc;
 
 pub struct LuaEngine {
     pub lua: Lua,
-    pub state: Arc<RwLock<State>>,
+    pub state: Arc<State>,
     pub receiver: Receiver<Message>,
-    pub senders: Arc<HashMap<&'static str, Sender<Message>>>,
+    pub senders: Arc<HashMap<EngineType, Sender<Message>>>,
 }
 
-impl LuaEngine {
-    pub fn init_lua(
+impl Engine for LuaEngine {
+    fn init(
         receiver: Receiver<Message>,
-        senders: Arc<HashMap<&'static str, Sender<Message>>>,
-        state: Arc<RwLock<State>>,
-    ) -> Result<Self> {
+        senders: Arc<HashMap<EngineType, Sender<Message>>>,
+        state: Arc<State>,
+    ) -> std::result::Result<Self, String> {
         let lua: mlua::Lua = unsafe { Lua::unsafe_new() };
-        lua.load("jit.on()").exec()?;
-        lua.load(&std::fs::read_to_string("src/lua/init.lua")?)
-            .exec()?;
+
+        lua.load("jit.on()").exec().map_err(|e| e.to_string())?;
+
+        let lua_code = std::fs::read_to_string("src/lua/init.lua")
+            .map_err(|e| e.to_string())?;
+
+        lua.load(&lua_code).exec().map_err(|e| e.to_string())?;
+
         Ok(Self {
             lua,
             receiver,
@@ -52,7 +57,7 @@ impl LuaEngine {
         })
     }
 
-    pub fn run(&self) {
+    fn handle_message(&mut self) {
         while let Ok(message) = self.receiver.recv() {
             match message {
                 Message::Lua(cmd) => {
@@ -70,7 +75,13 @@ impl LuaEngine {
         }
     }
 
-    pub fn load_theme(&self) -> Result<Theme> {
+    fn run(&mut self) {}
+
+    fn shutdown(&mut self) {}
+}
+
+impl LuaEngine {
+    fn load_theme(&self) -> Result<Theme> {
         let theme: mlua::Table = self.lua.globals().get("theme")?;
         let default: mlua::Table = theme.get("default")?;
 
@@ -83,7 +94,7 @@ impl LuaEngine {
         })
     }
 
-    pub fn register_rust_functions(&self) -> Result<()> {
+    fn register_rust_functions(&self) -> Result<()> {
         let globals = self.lua.globals();
 
         let vimdaw_table = match globals.get::<_, mlua::Table>("vimdaw") {

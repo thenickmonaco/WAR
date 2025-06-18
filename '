@@ -15,31 +15,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/render.rs
+// src/state.rs
 //=============================================================================
 
-use glfw::{Context, WindowHint, WindowMode};
-use glow::HasContext;
+use std::sync::RwLock;
 
-use crate::message::{send_shutdown, Message, EngineType};
-use crate::state::{Engine, State};
-use std::collections::HashMap;
-use crossbeam::channel::{Receiver, Sender};
-use std::sync::Arc;
-
-pub struct RenderEngine {
-    pub glow: glow::Context,
-    pub glfw: glfw::Glfw,
-    pub window: glfw::Window,
-    pub state: Arc<State>,
-    pub receiver: Receiver<Message>,
-    pub senders: Arc<HashMap<EngineType, Sender<Message>>>,
-}
-
-impl Engine for RenderEngine {
-    fn init(
+pub trait Engine {
+    pub fn init_render(
         receiver: Receiver<Message>,
-        senders: Arc<HashMap<EngineType, Sender<Message>>>,
+        senders: Arc<HashMap<&'static str, Sender<Message>>>,
         state: Arc<State>,
     ) -> Result<Self, String> {
         let mut glfw =
@@ -66,6 +50,7 @@ impl Engine for RenderEngine {
         };
 
         Ok(Self {
+            _events,
             glow,
             glfw,
             window,
@@ -75,45 +60,40 @@ impl Engine for RenderEngine {
         })
     }
 
-    fn handle_message(&mut self) {
-        while let Ok(message) = self.receiver.recv() {
+    pub fn handle_message(&mut self) -> bool {
+        while let Ok(message) = self.receiver.try_recv() {
             match message {
-                Message::Render(cmd) => {
+                Message::Input(cmd) => {
                     println!("Render received: {:?}", cmd);
                     // handle command variants
                 }
                 Message::Shutdown => {
                     println!("Render shutting down...");
-                    break;
+                    return true;
                 }
                 _ => {
                     println!("Render got unrelated message: {:?}", message);
                 }
             }
         }
+        false
     }
 
-    fn run(&mut self) {
-        while !self.window.should_close() {
-            self.handle_message();
-
-            self.render();
-        }
-
-        send_shutdown(&self.senders);
-    }
-
-    fn shutdown(&mut self) {}
+    pub fn run(&mut self);
 }
 
-impl RenderEngine {
-    fn render(&mut self) {
-        unsafe {
-            self.glow.clear_color(0.0, 0.0, 0.0, 0.0);
-            self.glow.clear(glow::COLOR_BUFFER_BIT);
-        }
+#[derive(Default)]
+pub struct RenderState {}
 
-        self.window.swap_buffers();
-        self.glfw.poll_events();
-    }
+#[derive(Default)]
+pub struct InputState {}
+
+#[derive(Default)]
+pub struct AudioState {}
+
+#[derive(Default)]
+pub struct State {
+    pub render: RwLock<RenderState>,
+    pub input: RwLock<InputState>,
+    pub audio: RwLock<AudioState>,
 }

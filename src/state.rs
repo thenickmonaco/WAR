@@ -18,7 +18,25 @@
 // src/state.rs
 //=============================================================================
 
-use std::sync::RwLock;
+use crate::message::{EngineType, Message};
+use std::collections::HashMap;
+use crossbeam::channel::{Receiver, Sender};
+use std::sync::Arc;
+use parking_lot::RwLock;
+
+pub trait Engine: Sized {
+    fn init(
+        receiver: Receiver<Message>,
+        senders: Arc<HashMap<EngineType, Sender<Message>>>,
+        state: Arc<State>,
+    ) -> Result<Self, String>;
+
+    fn handle_message(&mut self);
+
+    fn run(&mut self);
+
+    fn shutdown(&mut self);
+}
 
 #[derive(Default)]
 pub struct RenderState {}
@@ -30,8 +48,12 @@ pub struct InputState {}
 pub struct AudioState {}
 
 #[derive(Default)]
+pub struct ClockState {}
+
+#[derive(Default)]
 pub struct State {
     pub render: RwLock<RenderState>,
     pub input: RwLock<InputState>,
     pub audio: RwLock<AudioState>,
+    pub clock: RwLock<ClockState>,
 }

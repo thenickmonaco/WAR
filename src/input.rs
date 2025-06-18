@@ -18,23 +18,23 @@
 // src/input.rs
 //=============================================================================
 
-use crate::message::Message;
-use crate::state::State;
+use crate::message::{Message, EngineType};
+use crate::state::{Engine, State};
 use std::collections::HashMap;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use crossbeam::channel::{Receiver, Sender};
+use std::sync::Arc;
 
 pub struct InputEngine {
-    pub state: Arc<RwLock<State>>,
+    pub state: Arc<State>,
     pub receiver: Receiver<Message>,
-    pub senders: Arc<HashMap<&'static str, Sender<Message>>>,
+    pub senders: Arc<HashMap<EngineType, Sender<Message>>>,
 }
 
-impl InputEngine {
-    pub fn init_input(
+impl Engine for InputEngine {
+    fn init(
         receiver: Receiver<Message>,
-        senders: Arc<HashMap<&'static str, Sender<Message>>>,
-        state: Arc<RwLock<State>>,
+        senders: Arc<HashMap<EngineType, Sender<Message>>>,
+        state: Arc<State>,
     ) -> Result<Self, String> {
         Ok(Self {
             receiver,
@@ -43,7 +43,7 @@ impl InputEngine {
         })
     }
 
-    pub fn run(&self) {
+    fn handle_message(&mut self) {
         while let Ok(message) = self.receiver.recv() {
             match message {
                 Message::Input(cmd) => {
@@ -60,7 +60,13 @@ impl InputEngine {
             }
         }
     }
+
+    fn run(&mut self) {}
+
+    fn shutdown(&mut self) {}
 }
+
+impl InputEngine {}
 
 pub fn hello_world() {
     println!("hello world")

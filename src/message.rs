@@ -18,16 +18,7 @@
 // src/message.rs
 //=============================================================================
 
-use crossbeam::channel::Sender;
-use std::collections::HashMap;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EngineType {
-    Audio,
-    Input,
-    Render,
-    Lua
-}
+use crate::state::{EngineType, Producers};
 
 #[derive(Debug)]
 pub enum Message {
@@ -54,8 +45,9 @@ pub enum LuaCommand {}
 #[derive(Debug)]
 pub enum StateUpdate {}
 
-pub fn send_shutdown(senders: &HashMap<EngineType, Sender<Message>>) {
-    for sender in senders.values() {
-        let _ = sender.send(Message::Shutdown);
+pub fn send_shutdown(producers: &Producers) {
+    for producer_mutex in producers.values() {
+        let mut producer = producer_mutex.lock();
+        let _ = producer.push(Message::Shutdown);
     }
 }

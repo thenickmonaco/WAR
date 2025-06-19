@@ -15,31 +15,34 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/render.rs
+// src/main_engine.rs
 //=============================================================================
 
+use crate::message::{send_shutdown, Message};
+use crate::state::{
+    Engine, EngineType, InputSubsystem, LuaSubsystem, Producers,
+    RenderSubsystem, State,
+};
 use glfw::{Context, WindowHint, WindowMode};
 use glow::HasContext;
-
-use crate::message::{send_shutdown, Message, EngineType};
-use crate::state::{Engine, State};
+use ringbuf::Consumer;
 use std::collections::HashMap;
-use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
 
-pub struct RenderEngine {
-    pub glow: glow::Context,
-    pub glfw: glfw::Glfw,
-    pub window: glfw::Window,
+
+pub struct MainEngine {
+    pub render: Box<dyn RenderSubsystem>,
+    pub input: Box<dyn InputSubsystem>,
+    pub lua: Box<dyn LuaSubsystem>,
     pub state: Arc<State>,
-    pub receiver: Receiver<Message>,
-    pub senders: Arc<HashMap<EngineType, Sender<Message>>>,
+    pub consumer: Consumer<Message>,
+    pub producers: Producers,
 }
 
-impl Engine for RenderEngine {
+impl Engine for MainEngine {
     fn init(
-        receiver: Receiver<Message>,
-        senders: Arc<HashMap<EngineType, Sender<Message>>>,
+        consumer: Consumer<Message>,
+        producers: Producers,
         state: Arc<State>,
     ) -> Result<Self, String> {
         let mut glfw =
@@ -76,21 +79,21 @@ impl Engine for RenderEngine {
     }
 
     fn handle_message(&mut self) {
-        while let Ok(message) = self.receiver.recv() {
-            match message {
-                Message::Render(cmd) => {
-                    println!("Render received: {:?}", cmd);
-                    // handle command variants
-                }
-                Message::Shutdown => {
-                    println!("Render shutting down...");
-                    break;
-                }
-                _ => {
-                    println!("Render got unrelated message: {:?}", message);
-                }
-            }
-        }
+        //while let Ok(message) = self.consumer.pop() {
+        //    match message {
+        //        Message::Render(cmd) => {
+        //            println!("Render received: {:?}", cmd);
+        //            // handle command variants
+        //        }
+        //        Message::Shutdown => {
+        //            println!("Render shutting down...");
+        //            break;
+        //        }
+        //        _ => {
+        //            println!("Render got unrelated message: {:?}", message);
+        //        }
+        //    }
+        //}
     }
 
     fn run(&mut self) {
@@ -106,7 +109,7 @@ impl Engine for RenderEngine {
     fn shutdown(&mut self) {}
 }
 
-impl RenderEngine {
+impl MainEngine {
     fn render(&mut self) {
         unsafe {
             self.glow.clear_color(0.0, 0.0, 0.0, 0.0);
@@ -116,4 +119,10 @@ impl RenderEngine {
         self.window.swap_buffers();
         self.glfw.poll_events();
     }
+}
+
+pub struct Render {
+    pub glow: glow::Context,
+    pub glfw: glfw::Glfw,
+    pub window: glfw::Window,
 }

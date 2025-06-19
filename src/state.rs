@@ -18,42 +18,98 @@
 // src/state.rs
 //=============================================================================
 
-use crate::message::{EngineType, Message};
+use crate::message::Message;
+use parking_lot::{RwLock, Mutex};
+use ringbuf::{Consumer, Producer};
 use std::collections::HashMap;
-use crossbeam::channel::{Receiver, Sender};
 use std::sync::Arc;
-use parking_lot::RwLock;
 
-pub trait Engine: Sized {
+//=============================================================================
+// engine
+//=============================================================================
+
+pub type Producers = Arc<HashMap<EngineType, Mutex<Producer<Message>>>>;
+
+pub trait Engine: Send + 'static {
     fn init(
-        receiver: Receiver<Message>,
-        senders: Arc<HashMap<EngineType, Sender<Message>>>,
+        consumer: Consumer<Message>,
+        producers: Producers,
         state: Arc<State>,
-    ) -> Result<Self, String>;
-
+    ) -> Result<Self, String>
+    where
+        Self: Sized;
     fn handle_message(&mut self);
-
     fn run(&mut self);
-
     fn shutdown(&mut self);
 }
 
-#[derive(Default)]
-pub struct RenderState {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EngineType {
+    Main,
+    Audio,
+    Background,
+}
+
+//=============================================================================
+// main thread
+//=============================================================================
+
+pub trait Window {
+    fn id(&self) -> WindowType;
+    fn render(&mut self);
+    fn handle_input(&mut self, message: &Message);
+    fn update(&mut self, dt: f32);
+    fn is_active(&self) -> bool;
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum WindowType {
+    PianoRoll,
+    SamplingInterface,
+    Mixer,
+}
+
+pub trait RenderSubsystem {}
+
+pub trait InputSubsystem {}
+
+pub trait LuaSubsystem {
+    fn execute_script(&mut self, script: &str);
+    fn update(&mut self);
+}
 
 #[derive(Default)]
-pub struct InputState {}
+pub struct MainState {}
+
+//=============================================================================
+// audio thread
+//=============================================================================
+
+pub trait AudioProcessor {
+    fn process_audio(&mut self, buffer: &mut [f32]);
+}
+
+pub trait ClockSubsystem {}
 
 #[derive(Default)]
 pub struct AudioState {}
 
+//=============================================================================
+// background thread
+//=============================================================================
+
+pub trait IOSubsystem {}
+
 #[derive(Default)]
-pub struct ClockState {}
+pub struct BackgroundState {}
+
+//=============================================================================
+// state struct
+//=============================================================================
 
 #[derive(Default)]
 pub struct State {
-    pub render: RwLock<RenderState>,
-    pub input: RwLock<InputState>,
+    pub main: RwLock<MainState>,
     pub audio: RwLock<AudioState>,
-    pub clock: RwLock<ClockState>,
+    pub background: RwLock<BackgroundState>,
 }

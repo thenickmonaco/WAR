@@ -19,80 +19,83 @@
 //=============================================================================
 
 mod audio;
+mod clock;
 mod colors;
 mod font;
 mod input;
 mod lua;
 mod message;
-mod render;
 mod state;
-mod clock;
+mod main_engine;
 
-use crate::message::EngineType;
-use crate::state::{Engine, State};
-use audio::AudioEngine;
-use input::InputEngine;
-use lua::LuaEngine;
-use render::RenderEngine;
+use crate::state::{Engine, EngineType, Producers, State};
+use parking_lot::Mutex;
+use ringbuf::RingBuffer;
 use std::collections::HashMap;
-use crossbeam::channel;
 use std::sync::Arc;
 use std::thread;
+
+fn make_ring() -> (ringbuf::Producer<_>, ringbuf::Consumer<_>) {
+    // Adjust buffer size as needed
+    RingBuffer::<crate::message::Message>::new(1024).split()
+}
 
 pub fn main() {
     let state = Arc::new(State::default());
 
-    let (lua_tx, lua_rx) = crossbeam::channel::unbounded();
-    let (input_tx, input_rx) = crossbeam::channel::unbounded();
-    let (render_tx, render_rx) = crossbeam::channel::unbounded();
-    let (audio_tx, audio_rx) = crossbeam::channel::unbounded();
+    // Create a ring buffer for each engine
+    let (main_producer, main_consumer) = make_ring();
+    let (audio_producer, audio_consumer) = make_ring();
+    let (background_producer, background_consumer) = make_ring();
 
-    let mut senders_map = HashMap::new();
-    senders_map.insert(EngineType::Render, render_tx.clone());
-    senders_map.insert(EngineType::Input, input_tx.clone());
-    senders_map.insert(EngineType::Audio, audio_tx.clone());
-    senders_map.insert(EngineType::Lua, lua_tx.clone());
+    // Shared map of producers
+    let mut producers_map = HashMap::new();
+    producers_map.insert(EngineType::Main, Mutex::new(main_producer));
+    producers_map.insert(EngineType::Audio, Mutex::new(audio_producer));
+    producers_map
+        .insert(EngineType::Background, Mutex::new(background_producer));
 
-    let senders = Arc::new(senders_map);
+    let producers: Producers = Arc::new(producers_map);
 
-    let render_senders = Arc::clone(&senders);
-    let state_for_render = Arc::clone(&state);
-    let render_handle = thread::spawn(move || {
-        let mut render_engine =
-            RenderEngine::init(render_rx, render_senders, state_for_render)
+    // MainEngine runs on the main thread
+    {
+        let main_state = Arc::clone(&state);
+        let main_producers_clone = Arc::clone(&producers);
+        let mut main_engine =
+            MainEngine::init(main_consumer, main_producers_clone, main_state)
                 .unwrap();
-        render_engine.run();
-    });
+        main_engine.run();
+    }
 
-    let input_senders = Arc::clone(&senders);
-    let state_for_input = Arc::clone(&state);
-    let input_handle = thread::spawn(move || {
-        let mut input_engine =
-            InputEngine::init(input_rx, input_senders, state_for_input)
-                .unwrap();
-        input_engine.run();
-    });
-
-    let audio_senders = Arc::clone(&senders);
-    let state_for_audio = Arc::clone(&state);
-    let audio_handle = thread::spawn(move || {
-        let mut audio_engine =
-            AudioEngine::init(audio_rx, audio_senders, state_for_audio)
-                .unwrap();
+    // AudioEngine thread
+    let audio_state = Arc::clone(&state);
+    let audio_producers_clone = Arc::clone(&producers);
+    let audio_thread = thread::spawn(move || {
+        let mut audio_engine = AudioEngine::init(
+            audio_consumer,
+            audio_producers_clone,
+            audio_state,
+        )
+        .unwrap();
         audio_engine.run();
     });
 
-    // lua is not send
-    let lua_senders = Arc::clone(&senders);
-    let state_for_lua = Arc::clone(&state);
-    let lua_handle = thread::spawn(move || {
-        let mut lua_engine =
-            LuaEngine::init(lua_rx, lua_senders, state_for_lua).unwrap();
-        lua_engine.run();
+    // BackgroundEngine thread
+    let background_state = Arc::clone(&state);
+    let background_producer_clone = Arc::clone(&producers);
+    let background_thread = thread::spawn(move || {
+        let mut background_engine = BackgroundEngine::init(
+            background_consumer,
+            background_producer_clone,
+            background_state,
+        )
+        .unwrap();
+        background_engine.run();
     });
 
-    render_handle.join().expect("Render thread panicked");
-    input_handle.join().expect("Input thread panicked");
-    audio_handle.join().expect("Audio thread panicked");
-    lua_handle.join().expect("Lua thread panicked");
+    // Wait for threads
+    audio_thread.join().expect("Audio thread panicked");
+    background_thread
+        .join()
+        .expect("Background thread panicked");
 }

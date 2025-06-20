@@ -43,8 +43,6 @@ pub type Producers = Arc<HashMap<EngineType, Mutex<Producer<Message>>>>;
 
 pub trait Engine: Send + 'static {
     fn init(
-        consumer: Consumer<Message>,
-        producers: Producers,
         state: Arc<State>,
     ) -> Result<Self, String>
     where

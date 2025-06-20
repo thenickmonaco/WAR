@@ -43,13 +43,10 @@ pub struct MainEngine {
 
 impl Engine for MainEngine {
     fn init(
-        consumer: Consumer<Message>,
-        producers: Producers,
+         
         state: Arc<State>,
     ) -> Result<Self, String> {
         Ok(Self {
-            consumer,
-            producers,
             state,
         })
     }

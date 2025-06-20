@@ -20,7 +20,8 @@
 
 use crate::message::{send_shutdown, Message};
 use crate::state::{
-    Engine, InputSubsystem, LuaSubsystem, Producers, RenderSubsystem, State,
+    Engine, EngineChannels, InputSubsystem, LuaSubsystem, RenderSubsystem,
+    State, Subsystem,
 };
 use glfw::{Context, Receiver, Window, WindowEvent};
 use glow::HasContext;
@@ -30,11 +31,7 @@ use std::sync::Arc;
 pub struct MainEngine {
     pub state: Arc<State>,
 
-    pub to_audio: Producer<Message>,
-    pub from_audio: Consumer<Message>,
-
-    pub to_background: Producer<Message>,
-    pub from_background: Consumer<Message>,
+    pub channels: EngineChannels,
 
     pub render: Box<dyn RenderSubsystem>,
     pub input: Box<dyn InputSubsystem>,
@@ -43,12 +40,10 @@ pub struct MainEngine {
 
 impl Engine for MainEngine {
     fn init(
-         
+        channels: EngineChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
-        Ok(Self {
-            state,
-        })
+        Ok(Self { channels, state })
     }
 
     fn poll_message(&mut self) {
@@ -86,11 +81,15 @@ impl MainEngine {}
 pub struct Render {
     pub glow: glow::Context,
     pub glfw: glfw::Glfw,
-    pub window: glfw::PWindow,
+    pub window: glfw::Window,
     pub events: glfw::Receiver<(f64, glfw::WindowEvent)>,
 }
 
-impl RenderSubsystem for Render {
+impl Subsystem for Render {
+    fn init(&mut self) -> Result<Self, String> {}
+
+    fn handle_message(message: Message) {}
+
     fn run(&mut self) {
         unsafe {
             self.glow.clear_color(0.0, 0.0, 0.0, 0.0);
@@ -100,12 +99,34 @@ impl RenderSubsystem for Render {
         self.window.swap_buffers();
         self.glfw.poll_events();
     }
+
+    fn shutdown() {}
 }
 
-pub struct Input {
-    // fields
+pub struct Input {}
+
+impl Subsystem for Input {
+    fn init(&mut self) -> Result<Self, String> {}
+
+    fn handle_message(message: Message) {}
+
+    fn run(&mut self) {}
+
+    fn shutdown() {}
 }
 
-impl InputSubsystem for Input {
-    // fields
+impl Input {}
+
+pub struct Lua {}
+
+impl Subsystem for Lua {
+    fn init(&mut self) -> Result<Self, String> {}
+
+    fn handle_message(message: Message) {}
+
+    fn run(&mut self) {}
+
+    fn shutdown() {}
 }
+
+impl Lua {}

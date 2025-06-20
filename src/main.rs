@@ -30,7 +30,10 @@ mod message;
 mod state;
 
 use crate::message::Message;
-use crate::state::{Channels, Engine, EngineType, Producers, State};
+use crate::state::{
+    AudioEngine, BackgroundEngine, Channels, Engine, EngineChannels,
+    EngineType, MainEngine, Producers, State,
+};
 use parking_lot::Mutex;
 use ringbuf::RingBuffer;
 use std::collections::HashMap;
@@ -43,6 +46,8 @@ fn make_ring() -> (ringbuf::Producer<Message>, ringbuf::Consumer<Message>) {
 }
 
 pub fn main() {
+    let state = Arc::new(State::default());
+
     let main_to_audio = make_ring();
     let audio_to_main = make_ring();
 
@@ -52,64 +57,61 @@ pub fn main() {
     let audio_to_background = make_ring();
     let background_to_audio = make_ring();
 
-    let channels = Channels {
-        main_to_audio,
-        audio_to_main,
-        main_to_background,
-        background_to_main,
-        audio_to_background,
-        background_to_audio,
+    let main_channels = EngineChannels {
+        to_main: panic!("main can't send to its self"),
+        from_main: panic!("main can't receive from itself"),
+
+        to_audio: main_to_audio.0,
+        from_audio: audio_to_main.1,
+
+        to_background: main_to_background.0,
+        from_background: background_to_main.1,
     };
 
-    let state = Arc::new(State::default());
+    let audio_channels = EngineChannels {
+        to_main: audio_to_main.0,
+        from_main: main_to_audio.1,
 
-    // Create a ring buffer for each engine
-    let (main_producer, main_consumer) = make_ring();
-    let (audio_producer, audio_consumer) = make_ring();
-    let (background_producer, background_consumer) = make_ring();
+        to_audio: panic!("audio can't send to its self"),
+        from_audio: panic!("audio can't receive from itself"),
 
-    // Shared map of producers
-    let mut producers_map = HashMap::new();
-    producers_map.insert(EngineType::Main, Mutex::new(main_producer));
-    producers_map.insert(EngineType::Audio, Mutex::new(audio_producer));
-    producers_map
-        .insert(EngineType::Background, Mutex::new(background_producer));
+        to_background: audio_to_background.0,
+        from_background: background_to_audio.1,
+    };
 
-    let producers: Producers = Arc::new(producers_map);
+    let background_channels = EngineChannels {
+        to_main: background_to_main.0,
+        from_main: main_to_background.1,
+
+        to_audio: background_to_audio.0,
+        from_audio: audio_to_background.1,
+
+        to_background: panic!("background can't send to its self"),
+        from_background: panic!("background can't receive from itself"),
+    };
 
     // MainEngine runs on the main thread
     {
         let main_state = Arc::clone(&state);
-        let main_producers_clone = Arc::clone(&producers);
         let mut main_engine =
-            MainEngine::init(main_consumer, main_producers_clone, main_state)
-                .unwrap();
+            MainEngine::init(main_channels, main_state).unwrap();
         main_engine.run();
     }
 
     // AudioEngine thread
     let audio_state = Arc::clone(&state);
-    let audio_producers_clone = Arc::clone(&producers);
     let audio_thread = thread::spawn(move || {
-        let mut audio_engine = AudioEngine::init(
-            audio_consumer,
-            audio_producers_clone,
-            audio_state,
-        )
-        .unwrap();
+        let mut audio_engine =
+            AudioEngine::init(audio_channels, audio_state).unwrap();
         audio_engine.run();
     });
 
     // BackgroundEngine thread
     let background_state = Arc::clone(&state);
-    let background_producer_clone = Arc::clone(&producers);
     let background_thread = thread::spawn(move || {
-        let mut background_engine = BackgroundEngine::init(
-            background_consumer,
-            background_producer_clone,
-            background_state,
-        )
-        .unwrap();
+        let mut background_engine =
+            BackgroundEngine::init(background_channels, background_state)
+                .unwrap();
         background_engine.run();
     });
 

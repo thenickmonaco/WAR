@@ -28,21 +28,18 @@ use std::sync::Arc;
 // engine
 //=============================================================================
 
-pub struct Channels {
-    pub main_to_audio: (Producer<Message>, Consumer<Message>),
-    pub audio_to_main: (Producer<Message>, Consumer<Message>),
-
-    pub main_to_background: (Producer<Message>, Consumer<Message>),
-    pub background_to_main: (Producer<Message>, Consumer<Message>),
-
-    pub audio_to_background: (Producer<Message>, Consumer<Message>),
-    pub background_to_audio: (Producer<Message>, Consumer<Message>),
+pub struct EngineChannels {
+    pub to_main: Producer<Message>,
+    pub from_main: Consumer<Message>,
+    pub to_audio: Producer<Message>,
+    pub from_audio: Consumer<Message>,
+    pub to_background: Producer<Message>,
+    pub from_background: Consumer<Message>,
 }
-
-pub type Producers = Arc<HashMap<EngineType, Mutex<Producer<Message>>>>;
 
 pub trait Engine: Send + 'static {
     fn init(
+        channels: EngineChannels,
         state: Arc<State>,
     ) -> Result<Self, String>
     where
@@ -60,10 +57,6 @@ pub enum EngineType {
     Background,
 }
 
-//=============================================================================
-// main engine
-//=============================================================================
-
 pub trait Subsystem: Send {
     fn init() -> Result<Self, String>
     where
@@ -72,6 +65,10 @@ pub trait Subsystem: Send {
     fn run(&mut self);
     fn shutdown(&mut self);
 }
+
+//=============================================================================
+// main engine
+//=============================================================================
 
 pub trait Window {
     fn id(&self) -> WindowType;
@@ -88,12 +85,6 @@ pub enum WindowType {
     Mixer,
 }
 
-pub trait Renderer: Subsystem {}
-
-pub trait Input: Subsystem {}
-
-pub trait Lua: Subsystem {}
-
 #[derive(Default)]
 pub struct MainState {}
 
@@ -101,18 +92,12 @@ pub struct MainState {}
 // audio engine
 //=============================================================================
 
-pub trait Audio: Subsystem {}
-
-pub trait Clock: Subsystem {}
-
 #[derive(Default)]
 pub struct AudioState {}
 
 //=============================================================================
 // background engine
 //=============================================================================
-
-pub trait IO: Subsystem {}
 
 #[derive(Default)]
 pub struct BackgroundState {}

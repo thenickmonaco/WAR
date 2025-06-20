@@ -19,7 +19,7 @@
 //=============================================================================
 
 use crate::message::Message;
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 use ringbuf::{Consumer, Producer};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,6 +27,17 @@ use std::sync::Arc;
 //=============================================================================
 // engine
 //=============================================================================
+
+pub struct Channels {
+    pub main_to_audio: (Producer<Message>, Consumer<Message>),
+    pub audio_to_main: (Producer<Message>, Consumer<Message>),
+
+    pub main_to_background: (Producer<Message>, Consumer<Message>),
+    pub background_to_main: (Producer<Message>, Consumer<Message>),
+
+    pub audio_to_background: (Producer<Message>, Consumer<Message>),
+    pub background_to_audio: (Producer<Message>, Consumer<Message>),
+}
 
 pub type Producers = Arc<HashMap<EngineType, Mutex<Producer<Message>>>>;
 
@@ -38,7 +49,8 @@ pub trait Engine: Send + 'static {
     ) -> Result<Self, String>
     where
         Self: Sized;
-    fn handle_message(&mut self);
+    fn poll_message(&mut self);
+    fn dispatch_message(&mut self, message: Message);
     fn run(&mut self);
     fn shutdown(&mut self);
 }
@@ -51,8 +63,17 @@ pub enum EngineType {
 }
 
 //=============================================================================
-// main thread
+// main engine
 //=============================================================================
+
+pub trait Subsystem: Send {
+    fn init() -> Result<Self, String>
+    where
+        Self: Sized;
+    fn handle_message(&mut self, message: Message);
+    fn run(&mut self);
+    fn shutdown(&mut self);
+}
 
 pub trait Window {
     fn id(&self) -> WindowType;
@@ -69,36 +90,31 @@ pub enum WindowType {
     Mixer,
 }
 
-pub trait RenderSubsystem {}
+pub trait Renderer: Subsystem {}
 
-pub trait InputSubsystem {}
+pub trait Input: Subsystem {}
 
-pub trait LuaSubsystem {
-    fn execute_script(&mut self, script: &str);
-    fn update(&mut self);
-}
+pub trait Lua: Subsystem {}
 
 #[derive(Default)]
 pub struct MainState {}
 
 //=============================================================================
-// audio thread
+// audio engine
 //=============================================================================
 
-pub trait AudioProcessor {
-    fn process_audio(&mut self, buffer: &mut [f32]);
-}
+pub trait Audio: Subsystem {}
 
-pub trait ClockSubsystem {}
+pub trait Clock: Subsystem {}
 
 #[derive(Default)]
 pub struct AudioState {}
 
 //=============================================================================
-// background thread
+// background engine
 //=============================================================================
 
-pub trait IOSubsystem {}
+pub trait IO: Subsystem {}
 
 #[derive(Default)]
 pub struct BackgroundState {}

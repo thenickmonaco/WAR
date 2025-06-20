@@ -19,28 +19,48 @@
 //=============================================================================
 
 mod audio;
+mod bak;
 mod clock;
 mod colors;
 mod font;
 mod input;
 mod lua;
+mod main_engine;
 mod message;
 mod state;
-mod main_engine;
 
-use crate::state::{Engine, EngineType, Producers, State};
+use crate::message::Message;
+use crate::state::{Channels, Engine, EngineType, Producers, State};
 use parking_lot::Mutex;
 use ringbuf::RingBuffer;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 
-fn make_ring() -> (ringbuf::Producer<_>, ringbuf::Consumer<_>) {
+fn make_ring() -> (ringbuf::Producer<Message>, ringbuf::Consumer<Message>) {
     // Adjust buffer size as needed
-    RingBuffer::<crate::message::Message>::new(1024).split()
+    RingBuffer::<Message>::new(1024).split()
 }
 
 pub fn main() {
+    let main_to_audio = make_ring();
+    let audio_to_main = make_ring();
+
+    let main_to_background = make_ring();
+    let background_to_main = make_ring();
+
+    let audio_to_background = make_ring();
+    let background_to_audio = make_ring();
+
+    let channels = Channels {
+        main_to_audio,
+        audio_to_main,
+        main_to_background,
+        background_to_main,
+        audio_to_background,
+        background_to_audio,
+    };
+
     let state = Arc::new(State::default());
 
     // Create a ring buffer for each engine

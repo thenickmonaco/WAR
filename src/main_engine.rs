@@ -20,23 +20,20 @@
 
 use crate::message::{send_shutdown, Message};
 use crate::state::{
-    Engine, EngineType, InputSubsystem, LuaSubsystem, Producers,
-    RenderSubsystem, State,
+    Engine, InputSubsystem, LuaSubsystem, Producers, RenderSubsystem, State,
 };
-use glfw::{Context, WindowHint, WindowMode};
+use glfw::{Context, Receiver, Window, WindowEvent};
 use glow::HasContext;
 use ringbuf::Consumer;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-
 pub struct MainEngine {
-    pub render: Box<dyn RenderSubsystem>,
-    pub input: Box<dyn InputSubsystem>,
-    pub lua: Box<dyn LuaSubsystem>,
     pub state: Arc<State>,
     pub consumer: Consumer<Message>,
     pub producers: Producers,
+    pub render: Box<dyn RenderSubsystem>,
+    pub input: Box<dyn InputSubsystem>,
+    pub lua: Box<dyn LuaSubsystem>,
 }
 
 impl Engine for MainEngine {
@@ -45,72 +42,54 @@ impl Engine for MainEngine {
         producers: Producers,
         state: Arc<State>,
     ) -> Result<Self, String> {
-        let mut glfw =
-            glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
-
-        glfw.window_hint(WindowHint::ContextVersionMajor(3));
-        glfw.window_hint(WindowHint::ContextVersionMinor(3));
-        glfw.window_hint(WindowHint::OpenGlProfile(
-            glfw::OpenGlProfileHint::Core,
-        ));
-
-        let (mut window, _events) = glfw
-            .create_window(1920, 1080, "vimDAW", WindowMode::Windowed)
-            .expect("create_window failure");
-
-        window.make_current();
-        glfw.set_swap_interval(glfw::SwapInterval::Sync(1));
-        window.set_key_polling(true);
-
-        let glow = unsafe {
-            glow::Context::from_loader_function(|s| {
-                window.get_proc_address(s) as *const _
-            })
-        };
-
         Ok(Self {
-            glow,
-            glfw,
-            window,
-            receiver,
-            senders,
+            consumer,
+            producers,
             state,
         })
     }
 
-    fn handle_message(&mut self) {
-        //while let Ok(message) = self.consumer.pop() {
-        //    match message {
-        //        Message::Render(cmd) => {
-        //            println!("Render received: {:?}", cmd);
-        //            // handle command variants
-        //        }
-        //        Message::Shutdown => {
-        //            println!("Render shutting down...");
-        //            break;
-        //        }
-        //        _ => {
-        //            println!("Render got unrelated message: {:?}", message);
-        //        }
-        //    }
-        //}
+    fn poll_message(&mut self) {
+        while let Some(message) = self.consumer.pop() {
+            self.dispatch_message(message);
+        }
     }
 
-    fn run(&mut self) {
-        while !self.window.should_close() {
-            self.handle_message();
-
-            self.render();
+    fn dispatch_message(&mut self, message: Message) {
+        match message {
+            Message::Render(cmd) => {
+                println!("Render received: {:?}", cmd);
+                // Handle render command
+            }
+            Message::Shutdown => {
+                println!("Render shutting down...");
+                self.shutdown();
+            }
+            other => {
+                println!("Render got unrelated message: {:?}", other);
+            }
         }
-
-        send_shutdown(&self.senders);
     }
 
     fn shutdown(&mut self) {}
+
+    fn run(&mut self) {
+        while !self.window.should_close() {}
+        send_shutdown(&self.producers);
+    }
 }
 
-impl MainEngine {
-    fn render(&mut self) {
+impl MainEngine {}
+
+pub struct Render {
+    pub glow: glow::Context,
+    pub glfw: glfw::Glfw,
+    pub window: glfw::PWindow,
+    pub events: glfw::Receiver<(f64, glfw::WindowEvent)>,
+}
+
+impl RenderSubsystem for Render {
+    fn run(&mut self) {
         unsafe {
             self.glow.clear_color(0.0, 0.0, 0.0, 0.0);
             self.glow.clear(glow::COLOR_BUFFER_BIT);
@@ -121,8 +100,10 @@ impl MainEngine {
     }
 }
 
-pub struct Render {
-    pub glow: glow::Context,
-    pub glfw: glfw::Glfw,
-    pub window: glfw::Window,
+pub struct Input {
+    // fields
+}
+
+impl InputSubsystem for Input {
+    // fields
 }

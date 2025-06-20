@@ -24,13 +24,18 @@ use crate::state::{
 };
 use glfw::{Context, Receiver, Window, WindowEvent};
 use glow::HasContext;
-use ringbuf::Consumer;
+use ringbuf::{Consumer, Producer};
 use std::sync::Arc;
 
 pub struct MainEngine {
     pub state: Arc<State>,
-    pub consumer: Consumer<Message>,
-    pub producers: Producers,
+
+    pub to_audio: Producer<Message>,
+    pub from_audio: Consumer<Message>,
+
+    pub to_background: Producer<Message>,
+    pub from_background: Consumer<Message>,
+
     pub render: Box<dyn RenderSubsystem>,
     pub input: Box<dyn InputSubsystem>,
     pub lua: Box<dyn LuaSubsystem>,

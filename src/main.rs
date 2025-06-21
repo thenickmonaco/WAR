@@ -19,24 +19,19 @@
 //=============================================================================
 
 mod audio;
-mod bak;
-mod clock;
 mod colors;
 mod font;
-mod input;
-mod lua;
-mod main_engine;
+mod heart;
 mod message;
 mod state;
+mod worker;
 
+use crate::heart::Heart;
+use crate::audio::Audio;
+use crate::worker::Worker;
 use crate::message::Message;
-use crate::state::{
-    AudioEngine, BackgroundEngine, Channels, Engine, EngineChannels,
-    EngineType, MainEngine, Producers, State,
-};
-use parking_lot::Mutex;
+use crate::state::{Engine, EngineChannels, State};
 use ringbuf::RingBuffer;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 
@@ -48,76 +43,76 @@ fn make_ring() -> (ringbuf::Producer<Message>, ringbuf::Consumer<Message>) {
 pub fn main() {
     let state = Arc::new(State::default());
 
-    let main_to_audio = make_ring();
-    let audio_to_main = make_ring();
+    let heart_to_audio = make_ring();
+    let audio_to_heart = make_ring();
 
-    let main_to_background = make_ring();
-    let background_to_main = make_ring();
+    let heart_to_worker = make_ring();
+    let worker_to_heart = make_ring();
 
-    let audio_to_background = make_ring();
-    let background_to_audio = make_ring();
+    let audio_to_worker = make_ring();
+    let worker_to_audio = make_ring();
 
-    let main_channels = EngineChannels {
-        to_main: panic!("main can't send to its self"),
-        from_main: panic!("main can't receive from itself"),
+    let heart_channels = EngineChannels {
+        to_heart: panic!("heart can't send to its self"),
+        from_heart: panic!("heart can't receive from itself"),
 
-        to_audio: main_to_audio.0,
-        from_audio: audio_to_main.1,
+        to_audio: heart_to_audio.0,
+        from_audio: audio_to_heart.1,
 
-        to_background: main_to_background.0,
-        from_background: background_to_main.1,
+        to_worker: heart_to_worker.0,
+        from_worker: worker_to_heart.1,
     };
 
     let audio_channels = EngineChannels {
-        to_main: audio_to_main.0,
-        from_main: main_to_audio.1,
+        to_heart: audio_to_heart.0,
+        from_heart: heart_to_audio.1,
 
         to_audio: panic!("audio can't send to its self"),
         from_audio: panic!("audio can't receive from itself"),
 
-        to_background: audio_to_background.0,
-        from_background: background_to_audio.1,
+        to_worker: audio_to_worker.0,
+        from_worker: worker_to_audio.1,
     };
 
-    let background_channels = EngineChannels {
-        to_main: background_to_main.0,
-        from_main: main_to_background.1,
+    let worker_channels = EngineChannels {
+        to_heart: worker_to_heart.0,
+        from_heart: heart_to_worker.1,
 
-        to_audio: background_to_audio.0,
-        from_audio: audio_to_background.1,
+        to_audio: worker_to_audio.0,
+        from_audio: audio_to_worker.1,
 
-        to_background: panic!("background can't send to its self"),
-        from_background: panic!("background can't receive from itself"),
+        to_worker: panic!("worker can't send to its self"),
+        from_worker: panic!("worker can't receive from itself"),
     };
 
-    // MainEngine runs on the main thread
+    // HeartEngine runs on the heart thread
     {
-        let main_state = Arc::clone(&state);
-        let mut main_engine =
-            MainEngine::init(main_channels, main_state).unwrap();
-        main_engine.run();
+        let heart_state = Arc::clone(&state);
+        let mut heart_engine =
+            Heart::init(heart_channels, heart_state).unwrap();
+        heart_engine.run();
     }
 
     // AudioEngine thread
     let audio_state = Arc::clone(&state);
     let audio_thread = thread::spawn(move || {
         let mut audio_engine =
-            AudioEngine::init(audio_channels, audio_state).unwrap();
+            Audio::init(audio_channels, audio_state).unwrap();
         audio_engine.run();
     });
 
-    // BackgroundEngine thread
-    let background_state = Arc::clone(&state);
-    let background_thread = thread::spawn(move || {
-        let mut background_engine =
-            BackgroundEngine::init(background_channels, background_state)
+    // WorkerEngine thread
+    let worker_state = Arc::clone(&state);
+    let worker_thread = thread::spawn(move || {
+        let mut worker_engine =
+            Worker::init(worker_channels, worker_state)
                 .unwrap();
-        background_engine.run();
+        worker_engine.run();
     });
 
     // Wait for threads
     audio_thread.join().expect("Audio thread panicked");
-    background_thread
+    worker_thread
         .join()
-        .expect("Background thread panicked");
+        .expect("Worker thread panicked");
 }

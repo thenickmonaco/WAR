@@ -18,8 +18,6 @@
 // src/message.rs
 //=============================================================================
 
-use crate::state::{EngineType, Producers};
-
 #[derive(Debug)]
 pub enum Message {
     Input(InputCommand),
@@ -44,10 +42,3 @@ pub enum LuaCommand {}
 
 #[derive(Debug)]
 pub enum StateUpdate {}
-
-pub fn send_shutdown(producers: &Producers) {
-    for producer_mutex in producers.values() {
-        let mut producer = producer_mutex.lock();
-        let _ = producer.push(Message::Shutdown);
-    }
-}

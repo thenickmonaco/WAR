@@ -19,27 +19,32 @@
 //=============================================================================
 
 use crate::message::Message;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use ringbuf::{Consumer, Producer};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 //=============================================================================
 // engine
 //=============================================================================
 
-pub struct EngineChannels {
-    pub to_main: Producer<Message>,
-    pub from_main: Consumer<Message>,
-    pub to_audio: Producer<Message>,
-    pub from_audio: Consumer<Message>,
-    pub to_background: Producer<Message>,
-    pub from_background: Consumer<Message>,
+pub struct EngineChannels<'a> {
+    pub to_heart: &'a Producer<Message>,
+    pub from_heart: &'a Consumer<Message>,
+    pub to_audio: &'a Producer<Message>,
+    pub from_audio: &'a Consumer<Message>,
+    pub to_worker: &'a Producer<Message>,
+    pub from_worker: &'a Consumer<Message>,
 }
 
-pub trait Engine: Send + 'static {
+pub struct SubsystemChannels<'a> {
+    pub to_heart: &'a Producer<Message>,
+    pub to_audio: &'a Producer<Message>,
+    pub to_worker: &'a Producer<Message>,
+}
+
+pub trait Engine<'a> {
     fn init(
-        channels: EngineChannels,
+        channels: &'a EngineChannels<'a>,
         state: Arc<State>,
     ) -> Result<Self, String>
     where
@@ -50,15 +55,10 @@ pub trait Engine: Send + 'static {
     fn shutdown(&mut self);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EngineType {
-    Main,
-    Audio,
-    Background,
-}
-
-pub trait Subsystem: Send {
-    fn init() -> Result<Self, String>
+pub trait Subsystem<'a> {
+    fn init(
+        producers: &'a SubsystemChannels<'a>,
+        state: Arc<State>) -> Result<Self, String>
     where
         Self: Sized;
     fn handle_message(&mut self, message: Message);
@@ -66,8 +66,15 @@ pub trait Subsystem: Send {
     fn shutdown(&mut self);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EngineType {
+    Heart,
+    Audio,
+    Worker,
+}
+
 //=============================================================================
-// main engine
+// heart engine
 //=============================================================================
 
 pub trait Window {
@@ -85,30 +92,22 @@ pub enum WindowType {
     Mixer,
 }
 
-#[derive(Default)]
-pub struct MainState {}
-
-//=============================================================================
-// audio engine
-//=============================================================================
-
-#[derive(Default)]
-pub struct AudioState {}
-
-//=============================================================================
-// background engine
-//=============================================================================
-
-#[derive(Default)]
-pub struct BackgroundState {}
-
 //=============================================================================
 // state struct
 //=============================================================================
 
 #[derive(Default)]
+pub struct HeartState {}
+
+#[derive(Default)]
+pub struct AudioState {}
+
+#[derive(Default)]
+pub struct WorkerState {}
+
+#[derive(Default)]
 pub struct State {
-    pub main: RwLock<MainState>,
+    pub heart: RwLock<HeartState>,
     pub audio: RwLock<AudioState>,
-    pub background: RwLock<BackgroundState>,
+    pub worker: RwLock<WorkerState>,
 }

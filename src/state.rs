@@ -27,24 +27,24 @@ use std::sync::Arc;
 // engine
 //=============================================================================
 
-pub struct EngineChannels<'a> {
-    pub to_heart: &'a Producer<Message>,
-    pub from_heart: &'a Consumer<Message>,
-    pub to_audio: &'a Producer<Message>,
-    pub from_audio: &'a Consumer<Message>,
-    pub to_worker: &'a Producer<Message>,
-    pub from_worker: &'a Consumer<Message>,
+pub struct EngineChannels {
+    pub to_heart: Producer<Message>,
+    pub from_heart: Consumer<Message>,
+    pub to_audio: Producer<Message>,
+    pub from_audio: Consumer<Message>,
+    pub to_worker: Producer<Message>,
+    pub from_worker: Consumer<Message>,
 }
 
-pub struct SubsystemChannels<'a> {
-    pub to_heart: &'a Producer<Message>,
-    pub to_audio: &'a Producer<Message>,
-    pub to_worker: &'a Producer<Message>,
+pub struct SubsystemChannels {
+    pub to_heart: Producer<Message>,
+    pub to_audio: Producer<Message>,
+    pub to_worker: Producer<Message>,
 }
 
-pub trait Engine<'a> {
+pub trait Engine {
     fn init(
-        channels: &'a EngineChannels<'a>,
+        channels: EngineChannels,
         state: Arc<State>,
     ) -> Result<Self, String>
     where
@@ -55,9 +55,9 @@ pub trait Engine<'a> {
     fn shutdown(&mut self);
 }
 
-pub trait Subsystem<'a> {
+pub trait Subsystem {
     fn init(
-        producers: &'a SubsystemChannels<'a>,
+        producers: SubsystemChannels,
         state: Arc<State>) -> Result<Self, String>
     where
         Self: Sized;

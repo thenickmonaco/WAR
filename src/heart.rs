@@ -27,28 +27,28 @@ use glow::HasContext;
 use mlua::Lua as MLua;
 use std::sync::Arc;
 
-pub struct Heart<'a> {
+pub struct Heart {
     pub state: Arc<State>,
-    pub channels: &'a EngineChannels<'a>,
-    pub render: &'a RenderSubsystem<'a>,
-    pub input: &'a InputSubsystem<'a>,
-    pub lua: &'a LuaSubsystem<'a>,
+    pub channels: EngineChannels,
+    pub render: RenderSubsystem,
+    pub input: InputSubsystem,
+    pub lua: LuaSubsystem,
 }
 
-impl<'a> Engine<'a> for Heart<'a> {
+impl Engine for Heart {
     fn init(
-        channels: &'a EngineChannels<'a>,
+        channels: EngineChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
         let producers = SubsystemChannels {
-            to_heart: &channels.to_heart,
-            to_audio: &channels.to_audio,
-            to_worker: &channels.to_worker,
+            to_heart: channels.to_heart,
+            to_audio: channels.to_audio,
+            to_worker: channels.to_worker,
         };
 
-        let render = &RenderSubsystem::init(&producers, state.clone())?;
-        let input = &InputSubsystem::init(&producers, state.clone())?;
-        let lua = &LuaSubsystem::init(&producers, state.clone())?;
+        let render = RenderSubsystem::init(&producers, state.clone())?;
+        let input = InputSubsystem::init(&producers, state.clone())?;
+        let lua = LuaSubsystem::init(&producers, state.clone())?;
 
         Ok(Self {
             render,
@@ -88,24 +88,24 @@ impl<'a> Engine<'a> for Heart<'a> {
     fn run(&mut self) {}
 }
 
-impl<'a> Heart<'a> {}
+impl Heart {}
 
 //=============================================================================
 // render subsystem
 //=============================================================================
 
-pub struct RenderSubsystem<'a> {
+pub struct RenderSubsystem {
     pub glow: glow::Context,
     pub glfw: glfw::Glfw,
     pub window: glfw::Window,
     pub events: std::sync::mpsc::Receiver<(f64, WindowEvent)>,
-    pub channels: &'a SubsystemChannels<'a>, 
+    pub channels: SubsystemChannels,
     pub state: Arc<State>,
 }
 
-impl<'a> Subsystem<'a> for RenderSubsystem<'a> {
+impl Subsystem for RenderSubsystem {
     fn init(
-        channels: &'a SubsystemChannels,
+        channels: SubsystemChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
         let mut glfw =
@@ -160,17 +160,17 @@ impl<'a> Subsystem<'a> for RenderSubsystem<'a> {
 // input subsystem
 //=============================================================================
 
-pub struct InputSubsystem<'a> {
-    pub producers: &'a SubsystemChannels<'a>,
+pub struct InputSubsystem {
+    pub channels: SubsystemChannels,
     pub state: Arc<State>,
 }
 
-impl<'a> Subsystem<'a> for InputSubsystem<'a> {
+impl<'a> Subsystem for InputSubsystem {
     fn init(
-        producers: &'a SubsystemChannels,
+        channels: SubsystemChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
-        Ok(Self { producers, state })
+        Ok(Self { channels, state })
     }
 
     fn handle_message(&mut self, message: Message) {}
@@ -180,21 +180,21 @@ impl<'a> Subsystem<'a> for InputSubsystem<'a> {
     fn shutdown(&mut self) {}
 }
 
-impl<'a> InputSubsystem<'a> {}
+impl InputSubsystem {}
 
 //=============================================================================
 // lua subsystem
 //=============================================================================
 
-pub struct LuaSubsystem<'a> {
+pub struct LuaSubsystem {
     pub lua: MLua,
-    pub producers: &'a SubsystemChannels<'a>,
+    pub channels: SubsystemChannels,
     pub state: Arc<State>,
 }
 
-impl<'a> Subsystem<'a> for LuaSubsystem<'a> {
+impl Subsystem for LuaSubsystem {
     fn init(
-        producers: &'a SubsystemChannels,
+        channels: SubsystemChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
         let lua = unsafe { MLua::unsafe_new() };
@@ -208,11 +208,10 @@ impl<'a> Subsystem<'a> for LuaSubsystem<'a> {
 
         Ok(Self {
             lua,
-            producers,
+            channels,
             state,
         })
     }
-
     fn handle_message(&mut self, message: Message) {}
 
     fn run(&mut self) {}
@@ -220,7 +219,7 @@ impl<'a> Subsystem<'a> for LuaSubsystem<'a> {
     fn shutdown(&mut self) {}
 }
 
-impl LuaSubsystem<'a> {
+impl LuaSubsystem {
     //fn load_theme(&self) -> Result<Theme> {
     //    let theme: mlua::Table = self.lua.globals().get("theme")?;
     //    let default: mlua::Table = theme.get("default")?;

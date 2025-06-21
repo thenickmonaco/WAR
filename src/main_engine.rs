@@ -23,9 +23,8 @@ use crate::state::{
     Engine, EngineChannels, InputSubsystem, LuaSubsystem, RenderSubsystem,
     State, Subsystem,
 };
-use glfw::{Context, Receiver, Window, WindowEvent};
+use glfw::{Context, WindowEvent, WindowHint, WindowMode};
 use glow::HasContext;
-use ringbuf::{Consumer, Producer};
 use std::sync::Arc;
 
 pub struct MainEngine {
@@ -43,7 +42,17 @@ impl Engine for MainEngine {
         channels: EngineChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
-        Ok(Self { channels, state })
+        let render = Box::new(Render::init()?);
+        let input = Box::new(Input::init()?);
+        let lua = Box::new(Lua::init()?);
+
+        Ok(Self {
+            render,
+            input,
+            lua,
+            channels,
+            state,
+        })
     }
 
     fn poll_message(&mut self) {
@@ -82,11 +91,41 @@ pub struct Render {
     pub glow: glow::Context,
     pub glfw: glfw::Glfw,
     pub window: glfw::Window,
-    pub events: glfw::Receiver<(f64, glfw::WindowEvent)>,
+    pub events: std::sync::mpsc::Receiver<(f64, WindowEvent)>,
 }
 
 impl Subsystem for Render {
-    fn init(&mut self) -> Result<Self, String> {}
+    fn init() -> Result<Self, String> {
+        let mut glfw =
+            glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
+
+        glfw.window_hint(WindowHint::ContextVersionMajor(3));
+        glfw.window_hint(WindowHint::ContextVersionMinor(3));
+        glfw.window_hint(WindowHint::OpenGlProfile(
+            glfw::OpenGlProfileHint::Core,
+        ));
+
+        let (mut window, events) = glfw
+            .create_window(1920, 1080, "vimDAW", WindowMode::Windowed)
+            .expect("create_window failure");
+
+        window.make_current();
+        glfw.set_swap_interval(glfw::SwapInterval::Sync(1));
+        window.set_key_polling(true);
+
+        let glow = unsafe {
+            glow::Context::from_loader_function(|s| {
+                window.get_proc_address(s) as *const _
+            })
+        };
+
+        Ok(Self {
+            glow,
+            glfw,
+            window,
+            events,
+        })
+    }
 
     fn handle_message(message: Message) {}
 
@@ -106,7 +145,7 @@ impl Subsystem for Render {
 pub struct Input {}
 
 impl Subsystem for Input {
-    fn init(&mut self) -> Result<Self, String> {}
+    fn init() -> Result<Self, String> {}
 
     fn handle_message(message: Message) {}
 
@@ -120,7 +159,7 @@ impl Input {}
 pub struct Lua {}
 
 impl Subsystem for Lua {
-    fn init(&mut self) -> Result<Self, String> {}
+    fn init() -> Result<Self, String> {}
 
     fn handle_message(message: Message) {}
 

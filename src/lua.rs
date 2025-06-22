@@ -19,7 +19,7 @@
 //=============================================================================
 
 use crate::state::{State, Subsystem};
-use crate::message::Message;
+use crate::message::LuaCommand;
 use std::sync::Arc;
 use mlua::Lua as MLua;
 
@@ -29,6 +29,8 @@ pub struct LuaSubsystem {
 }
 
 impl Subsystem for LuaSubsystem {
+    type Command = LuaCommand;
+
     fn init(state: Arc<State>) -> Result<Self, String> {
         let lua = unsafe { MLua::unsafe_new() };
 
@@ -41,7 +43,7 @@ impl Subsystem for LuaSubsystem {
 
         Ok(Self { lua, state })
     }
-    fn handle_message(&mut self, message: Message) {}
+    fn handle_message(&mut self, cmd: LuaCommand) {}
 
     fn run(&mut self) {}
 

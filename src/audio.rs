@@ -26,6 +26,7 @@ pub struct Audio {
     pub state: Arc<State>,
     pub channels: EngineChannels,
     pub audio: AudioSubsystem,
+    pub should_run: bool,
 }
 
 impl Engine for Audio {
@@ -39,6 +40,7 @@ impl Engine for Audio {
             audio,
             channels,
             state,
+            should_run: true,
         })
     }
 
@@ -66,12 +68,21 @@ impl Engine for Audio {
         }
     }
 
-    fn send_message(&mut self, engine_type: EngineType, message: Message) {
+    fn send_message(&mut self, engine_type: EngineType, message: Message) {}
+
+    fn run(&mut self) {
+        while self.should_run {
+            self.audio.run();
+
+            self.poll_message();
+        }
     }
 
-    fn shutdown(&mut self) {}
+    fn shutdown(&mut self) {
+        self.should_run = false;
 
-    fn run(&mut self) {}
+        self.audio.shutdown();
+    }
 }
 
 impl Audio {}
@@ -82,22 +93,14 @@ pub struct AudioSubsystem {
 
 impl Subsystem for AudioSubsystem {
     fn init(state: Arc<State>) -> Result<Self, String> {
-        Ok(Self {
-            state
-        })
+        Ok(Self { state })
     }
 
-    fn handle_message(&mut self, message: Message) {
+    fn handle_message(&mut self, message: Message) {}
 
-    }
+    fn run(&mut self) {}
 
-    fn run(&mut self) {
-
-    }
-
-    fn shutdown(&mut self) {
-
-    }
+    fn shutdown(&mut self) {}
 }
 
 impl AudioSubsystem {}

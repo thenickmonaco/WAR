@@ -26,6 +26,7 @@ pub struct Worker {
     pub state: Arc<State>,
     pub channels: EngineChannels,
     pub worker: WorkerSubsystem,
+    pub should_run: bool,
 }
 
 impl Engine for Worker {
@@ -39,6 +40,7 @@ impl Engine for Worker {
             worker,
             channels,
             state,
+            should_run: true,
         })
     }
 
@@ -68,9 +70,19 @@ impl Engine for Worker {
 
     fn send_message(&mut self, engine_type: EngineType, message: Message) {}
 
-    fn shutdown(&mut self) {}
+    fn shutdown(&mut self) {
+        self.should_run = false;
 
-    fn run(&mut self) {}
+        self.worker.shutdown();
+    }
+
+    fn run(&mut self) {
+        while self.should_run {
+            self.worker.run();
+
+            self.poll_message();
+        }
+    }
 }
 
 impl Worker {}

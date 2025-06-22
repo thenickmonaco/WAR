@@ -20,13 +20,22 @@
 
 #[derive(Debug)]
 pub enum Message {
-    Input(InputCommand),
-    Audio(AudioCommand),
     Render(RenderCommand),
+    Input(InputCommand),
     Lua(LuaCommand),
+
+    Audio(AudioCommand),
+
+    Worker(WorkerCommand),
+
     State(StateUpdate),
+
     Shutdown,
 }
+
+//=============================================================================
+// heart
+//=============================================================================
 
 #[derive(Debug)]
 pub enum RenderCommand {}
@@ -35,10 +44,25 @@ pub enum RenderCommand {}
 pub enum InputCommand {}
 
 #[derive(Debug)]
-pub enum AudioCommand {}
+pub enum LuaCommand {}
+
+//=============================================================================
+// audio
+//=============================================================================
 
 #[derive(Debug)]
-pub enum LuaCommand {}
+pub enum AudioCommand {}
+
+//=============================================================================
+// worker
+//=============================================================================
+
+#[derive(Debug)]
+pub enum WorkerCommand {}
+
+//=============================================================================
+// state
+//=============================================================================
 
 #[derive(Debug)]
 pub enum StateUpdate {}

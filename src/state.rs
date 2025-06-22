@@ -57,10 +57,12 @@ pub trait Engine {
 }
 
 pub trait Subsystem {
+    type Command;
+
     fn init(state: Arc<State>) -> Result<Self, String>
     where
         Self: Sized;
-    fn handle_message(&mut self, message: Message);
+    fn handle_message(&mut self, cmd: Self::Command);
     fn run(&mut self);
     fn shutdown(&mut self);
 }

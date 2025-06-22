@@ -15,5 +15,89 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/audio.rs
+// audio
 //=============================================================================
+
+use crate::message::Message;
+use crate::state::{Engine, EngineChannels, EngineType, State, Subsystem};
+use std::sync::Arc;
+
+pub struct Audio {
+    pub state: Arc<State>,
+    pub channels: EngineChannels,
+    pub audio: AudioSubsystem,
+}
+
+impl Engine for Audio {
+    fn init(
+        channels: EngineChannels,
+        state: Arc<State>,
+    ) -> Result<Self, String> {
+        let audio = AudioSubsystem::init(state.clone())?;
+
+        Ok(Self {
+            audio,
+            channels,
+            state,
+        })
+    }
+
+    fn poll_message(&mut self) {
+        while let Some(message) = self.channels.from_heart.pop() {
+            self.dispatch_message(message);
+        }
+        while let Some(message) = self.channels.from_worker.pop() {
+            self.dispatch_message(message);
+        }
+    }
+
+    fn dispatch_message(&mut self, message: Message) {
+        match message {
+            Message::Render(cmd) => {
+                println!("heart received: {:?}", cmd);
+            }
+            Message::Shutdown => {
+                println!("heart shutting down...");
+                self.shutdown();
+            }
+            other => {
+                println!("heart got unrelated message: {:?}", other);
+            }
+        }
+    }
+
+    fn send_message(&mut self, engine_type: EngineType, message: Message) {
+    }
+
+    fn shutdown(&mut self) {}
+
+    fn run(&mut self) {}
+}
+
+impl Audio {}
+
+pub struct AudioSubsystem {
+    state: Arc<State>,
+}
+
+impl Subsystem for AudioSubsystem {
+    fn init(state: Arc<State>) -> Result<Self, String> {
+        Ok(Self {
+            state
+        })
+    }
+
+    fn handle_message(&mut self, message: Message) {
+
+    }
+
+    fn run(&mut self) {
+
+    }
+
+    fn shutdown(&mut self) {
+
+    }
+}
+
+impl AudioSubsystem {}

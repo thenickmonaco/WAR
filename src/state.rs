@@ -51,14 +51,13 @@ pub trait Engine {
         Self: Sized;
     fn poll_message(&mut self);
     fn dispatch_message(&mut self, message: Message);
+    fn send_message(&mut self, engine_type: EngineType, message: Message);
     fn run(&mut self);
     fn shutdown(&mut self);
 }
 
 pub trait Subsystem {
-    fn init(
-        producers: SubsystemChannels,
-        state: Arc<State>) -> Result<Self, String>
+    fn init(state: Arc<State>) -> Result<Self, String>
     where
         Self: Sized;
     fn handle_message(&mut self, message: Message);

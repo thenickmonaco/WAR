@@ -25,12 +25,15 @@ mod heart;
 mod message;
 mod state;
 mod worker;
+mod render;
+mod input;
+mod lua;
 
-use crate::heart::Heart;
 use crate::audio::Audio;
-use crate::worker::Worker;
+use crate::heart::Heart;
 use crate::message::Message;
 use crate::state::{Engine, EngineChannels, State};
+use crate::worker::Worker;
 use ringbuf::RingBuffer;
 use std::sync::Arc;
 use std::thread;
@@ -105,14 +108,11 @@ pub fn main() {
     let worker_state = Arc::clone(&state);
     let worker_thread = thread::spawn(move || {
         let mut worker_engine =
-            Worker::init(worker_channels, worker_state)
-                .unwrap();
+            Worker::init(worker_channels, worker_state).unwrap();
         worker_engine.run();
     });
 
     // Wait for threads
     audio_thread.join().expect("Audio thread panicked");
-    worker_thread
-        .join()
-        .expect("Worker thread panicked");
+    worker_thread.join().expect("Worker thread panicked");
 }

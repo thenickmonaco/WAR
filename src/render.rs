@@ -84,13 +84,13 @@ impl Subsystem for RenderSubsystem {
 }
 
 impl RenderSubsystem {
-    pub fn context(
-        &mut self,
-    ) -> (
-        &mut glfw::Glfw,
-        &mut glfw::Window,
-        &mut std::sync::mpsc::Receiver<(f64, WindowEvent)>,
-    ) {
-        (&mut self.glfw, &mut self.window, &mut self.events)
-    }
+    //pub fn context(
+    //    &mut self,
+    //) -> (
+    //    &mut glfw::Glfw,
+    //    &mut glfw::Window,
+    //    &mut std::sync::mpsc::Receiver<(f64, WindowEvent)>,
+    //) {
+    //    (&mut self.glfw, &mut self.window, &mut self.events)
+    //}
 }

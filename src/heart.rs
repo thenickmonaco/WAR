@@ -84,6 +84,9 @@ impl Engine for Heart {
         while self.should_run {
             self.render.run();
 
+            //=================================================================
+            // input subsystem polls events
+            //=================================================================
             let (glfw_mut, window_mut, events_mut) = self.render.context();
             self.input.run(glfw_mut, window_mut, events_mut);
 

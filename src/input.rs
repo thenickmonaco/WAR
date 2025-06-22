@@ -43,11 +43,11 @@ impl Subsystem for InputSubsystem {
 }
 
 impl InputSubsystem {
-    pub fn run(
-        &mut self,
-        glfw: &mut glfw::Glfw,
-        window: &mut glfw::Window,
-        events: &mut std::sync::mpsc::Receiver<(f64, WindowEvent)>,
-    ) {
-    }
+    //pub fn run(
+    //    &mut self,
+    //    glfw: &mut glfw::Glfw,
+    //    window: &mut glfw::Window,
+    //    events: &mut std::sync::mpsc::Receiver<(f64, WindowEvent)>,
+    //) {
+    //}
 }

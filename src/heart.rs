@@ -157,3 +157,30 @@ impl Heart {
         self.lua.shutdown();
     }
 }
+
+pub fn init_ui(context: HeartContext) -> Result<HeartContext<'_>, String> {
+    let mut glfw =
+        glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
+
+    glfw.window_hint(WindowHint::ContextVersionMajor(3));
+    glfw.window_hint(WindowHint::ContextVersionMinor(3));
+    glfw.window_hint(WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
+
+    let (mut window, events) = glfw
+        .create_window(1920, 1080, "vimDAW", WindowMode::Windowed)
+        .expect("create_window failure");
+
+    window.make_current();
+    glfw.set_swap_interval(glfw::SwapInterval::Sync(1));
+    window.set_key_polling(true);
+
+    window.maximize();
+
+    let glow = unsafe {
+        glow::Context::from_loader_function(|s| {
+            window.get_proc_address(s) as *const _
+        })
+    };
+
+    Ok(HeartContext { glow, glfw, window, events, None, None })
+}

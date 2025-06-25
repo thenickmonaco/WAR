@@ -33,11 +33,10 @@ impl<'a> Subsystem<'a> for InputSubsystem {
     type RunContext = GlfwContext<'a>;
 
     fn init(
-        state: Arc<State>, context: Self::InitContext
+        state: Arc<State>,
+        context: Self::InitContext,
     ) -> Result<Self, String> {
-        Ok(Self {
-            state,
-        })
+        Ok(Self { state })
     }
 
     fn handle_message(&mut self, cmd: Self::Command) {}
@@ -49,5 +48,4 @@ impl<'a> Subsystem<'a> for InputSubsystem {
     fn shutdown(&mut self) {}
 }
 
-impl InputSubsystem {
-}
+impl InputSubsystem {}

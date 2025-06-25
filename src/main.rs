@@ -22,12 +22,12 @@ mod audio;
 mod colors;
 mod font;
 mod heart;
-mod message;
-mod state;
-mod worker;
-mod render;
 mod input;
 mod lua;
+mod message;
+mod render;
+mod state;
+mod worker;
 
 use crate::audio::Audio;
 use crate::heart::Heart;

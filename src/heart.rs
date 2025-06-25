@@ -47,18 +47,10 @@ impl Engine for Heart {
 
         let lua = LuaSubsystem::init(state.clone(), ())?;
 
-        Ok(Self {
-            render,
-            input,
-            lua,
-            channels,
-            state,
-            should_run: true,
-        })
+        Ok(Self { render, input, lua, channels, state, should_run: true })
     }
 
     fn poll_message(&mut self) {
-        // Collect all messages from from_audio first
         let audio_messages =
             if let Some(from_audio) = self.channels.from_audio.as_mut() {
                 let mut messages = Vec::new();
@@ -70,7 +62,6 @@ impl Engine for Heart {
                 None
             };
 
-        // Collect all messages from from_worker first
         let worker_messages =
             if let Some(from_worker) = self.channels.from_worker.as_mut() {
                 let mut messages = Vec::new();
@@ -82,7 +73,6 @@ impl Engine for Heart {
                 None
             };
 
-        // Now process messages without holding any mutable borrows on channels
         if let Some(messages) = audio_messages {
             for message in messages {
                 self.dispatch_message(message);
@@ -101,14 +91,14 @@ impl Engine for Heart {
             Message::Render(cmd) => {
                 println!("heart received: {:?}", cmd);
                 self.render.handle_message(cmd);
-            }
+            },
             Message::Shutdown => {
                 println!("heart shutting down...");
                 self.shutdown();
-            }
+            },
             other => {
                 println!("heart got unrelated message: {:?}", other);
-            }
+            },
         }
     }
 

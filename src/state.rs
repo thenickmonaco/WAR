@@ -57,7 +57,10 @@ pub trait Subsystem<'a> {
     type InitContext;
     type RunContext;
 
-    fn init(state: Arc<State>, context: Self::InitContext) -> Result<Self, String>
+    fn init(
+        state: Arc<State>,
+        context: Self::InitContext,
+    ) -> Result<Self, String>
     where
         Self: Sized;
     fn handle_message(&mut self, cmd: Self::Command);

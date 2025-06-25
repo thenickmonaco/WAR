@@ -36,16 +36,10 @@ impl Engine for Worker {
     ) -> Result<Self, String> {
         let worker = WorkerSubsystem::init(state.clone(), ())?;
 
-        Ok(Self {
-            worker,
-            channels,
-            state,
-            should_run: true,
-        })
+        Ok(Self { worker, channels, state, should_run: true })
     }
 
     fn poll_message(&mut self) {
-        // Collect all messages from from_audio first
         let audio_messages =
             if let Some(from_audio) = self.channels.from_audio.as_mut() {
                 let mut messages = Vec::new();
@@ -57,7 +51,6 @@ impl Engine for Worker {
                 None
             };
 
-        // Collect all messages from from_worker first
         let worker_messages =
             if let Some(from_worker) = self.channels.from_worker.as_mut() {
                 let mut messages = Vec::new();
@@ -69,7 +62,6 @@ impl Engine for Worker {
                 None
             };
 
-        // Now process messages without holding any mutable borrows on channels
         if let Some(messages) = audio_messages {
             for message in messages {
                 self.dispatch_message(message);
@@ -87,14 +79,14 @@ impl Engine for Worker {
         match message {
             Message::Render(cmd) => {
                 println!("heart received: {:?}", cmd);
-            }
+            },
             Message::Shutdown => {
                 println!("heart shutting down...");
                 self.shutdown();
-            }
+            },
             other => {
                 println!("heart got unrelated message: {:?}", other);
-            }
+            },
         }
     }
 

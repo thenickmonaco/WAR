@@ -64,13 +64,7 @@ impl<'a> Subsystem<'a> for RenderSubsystem {
             })
         };
 
-        Ok(Self {
-            glow,
-            glfw,
-            window,
-            events,
-            state,
-        })
+        Ok(Self { glow, glfw, window, events, state })
     }
 
     fn handle_message(&mut self, cmd: Self::Command) {}
@@ -87,4 +81,4 @@ impl<'a> Subsystem<'a> for RenderSubsystem {
     fn shutdown(&mut self) {}
 }
 
-impl RenderSubsystem{}
+impl RenderSubsystem {}

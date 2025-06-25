@@ -1,0 +1,31 @@
+# Wrap lines longer than 79 characters
+max_width = 79
+
+# Control how function arguments and calls are wrapped
+fn_call_width = 79
+fn_args_layout = "Tall"
+
+# Control how struct fields and enum variants are wrapped
+struct_lit_width = 79
+struct_variant_width = 79
+
+# Wrap match arms if they exceed line width
+match_arm_blocks = true
+match_block_trailing_comma = true
+
+# Always put where clauses on a new line
+where_single_line = false
+
+# Break long chains like `foo.bar().baz().qux()` over multiple lines
+chain_width = 79
+overflow_delimited_expr = true
+
+# Align comments better
+normalize_comments = true
+
+# Enforce visual indentation style for blocks
+indent_style = "Block"
+
+# Use spaces (default, just to be explicit)
+hard_tabs = false
+

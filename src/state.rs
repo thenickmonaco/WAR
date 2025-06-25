@@ -97,13 +97,19 @@ pub struct GlfwContext<'a> {
 }
 
 #[derive(Default)]
-pub struct HeartState {}
+pub struct HeartState {
+
+}
 
 #[derive(Default)]
-pub struct AudioState {}
+pub struct AudioState {
+
+}
 
 #[derive(Default)]
-pub struct WorkerState {}
+pub struct WorkerState {
+
+}
 
 #[derive(Default)]
 pub struct State {

@@ -43,6 +43,28 @@ impl<'a> Subsystem<'a> for InputSubsystem {
 
     fn run(&mut self, context: Self::RunContext) {
         context.glfw.poll_events();
+
+        for (_, event) in glfw::flush_messages(context.events) {
+            match event {
+                WindowEvent::Key(key, scancode, action, modifiers) => {
+                    println!("Key: {:?}, Action: {:?}", key, action);
+                },
+                // You can optionally handle more events, like:
+                WindowEvent::Close => {
+                    println!("Window close requested");
+                },
+                WindowEvent::Size(width, height) => {
+                    println!("Window resized: {}x{}", width, height);
+                },
+                WindowEvent::Pos(x, y) => {
+                    println!("Window moved to: ({}, {})", x, y);
+                },
+                // Add more if needed...
+
+                // Catch-all for everything else
+                _ => {},
+            }
+        }
     }
 
     fn shutdown(&mut self) {}

@@ -22,6 +22,7 @@ use crate::message::Message;
 use parking_lot::RwLock;
 use ringbuf::{Consumer, Producer};
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 pub struct EngineChannels {
     pub to_heart: Option<Producer<Message>>,
@@ -52,22 +53,6 @@ pub trait Engine {
     fn shutdown(&mut self);
 }
 
-pub trait Subsystem<'a> {
-    type Command;
-    type InitContext;
-    type RunContext;
-
-    fn init(
-        state: Arc<State>,
-        context: Self::InitContext,
-    ) -> Result<Self, String>
-    where
-        Self: Sized;
-    fn handle_message(&mut self, cmd: Self::Command);
-    fn run(&mut self, context: Self::RunContext);
-    fn shutdown(&mut self);
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EngineType {
     Heart,
@@ -90,30 +75,38 @@ pub enum WindowType {
     Mixer,
 }
 
-pub struct GlfwContext<'a> {
-    pub glfw: &'a mut glfw::Glfw,
-    pub window: &'a mut glfw::Window,
-    pub events: &'a mut std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
+pub struct HeartContext<'a> {
+    pub glfw: &'a mut Option<glfw::Glfw>,
+    pub window: &'a mut Option<glfw::Window>,
+    pub events:
+        &'a mut Option<std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>>,
+
+    pub window_width: &'a mut Option<i32>,
+    pub window_height: &'a mut Option<i32>,
+
+    pub col: &'a mut Option<i32>,
+    pub row: &'a mut Option<i32>,
 }
 
-#[derive(Default)]
 pub struct HeartState {
+    pub glfw: glfw::Glfw,
+    pub window: glfw::Window,
+    pub events: std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
 
+    pub window_width: i32,
+    pub window_height: i32,
+
+    pub col: i32,
+    pub row: i32,
 }
 
-#[derive(Default)]
-pub struct AudioState {
+pub struct AudioState {}
 
-}
-
-#[derive(Default)]
-pub struct WorkerState {
-
-}
+pub struct WorkerState {}
 
 #[derive(Default)]
 pub struct State {
-    pub heart: RwLock<HeartState>,
-    pub audio: RwLock<AudioState>,
-    pub worker: RwLock<WorkerState>,
+    pub heart: OnceLock<RwLock<HeartState>>,
+    pub audio: OnceLock<RwLock<AudioState>>,
+    pub worker: OnceLock<RwLock<WorkerState>>,
 }

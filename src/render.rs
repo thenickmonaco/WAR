@@ -19,7 +19,7 @@
 //=============================================================================
 
 use crate::message::RenderCommand;
-use crate::state::{GlfwContext, State, Subsystem};
+use crate::state::{GlfwContext, HeartContext, State, Subsystem};
 use glfw::{Context, WindowEvent, WindowHint, WindowMode};
 use glow::HasContext;
 use std::sync::Arc;
@@ -29,18 +29,15 @@ pub struct RenderSubsystem {
     pub glfw: glfw::Glfw,
     pub window: glfw::Window,
     pub events: std::sync::mpsc::Receiver<(f64, WindowEvent)>,
+
     pub state: Arc<State>,
 }
 
-impl<'a> Subsystem<'a> for RenderSubsystem {
-    type Command = RenderCommand;
-    type InitContext = ();
-    type RunContext = ();
-
+impl<'a> RenderSubsystem {
     fn init(
         state: Arc<State>,
-        context: Self::InitContext,
-    ) -> Result<Self, String> {
+        context: HeartContext<'a>,
+    ) -> Result<(Self, HeartContext<'a>), String> {
         let mut glfw =
             glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
 
@@ -58,6 +55,8 @@ impl<'a> Subsystem<'a> for RenderSubsystem {
         glfw.set_swap_interval(glfw::SwapInterval::Sync(1));
         window.set_key_polling(true);
 
+        window.maximize();
+
         let glow = unsafe {
             glow::Context::from_loader_function(|s| {
                 window.get_proc_address(s) as *const _
@@ -67,9 +66,15 @@ impl<'a> Subsystem<'a> for RenderSubsystem {
         Ok(Self { glow, glfw, window, events, state })
     }
 
-    fn handle_message(&mut self, cmd: Self::Command) {}
+    fn handle_message(&mut self, cmd: RenderCommand) {}
 
-    fn run(&mut self, context: Self::RunContext) {
+    fn run(&mut self, context: HeartContext<'a>) {
+        self.render();
+    }
+
+    fn shutdown(&mut self) {}
+
+    fn render(&mut self) {
         unsafe {
             self.glow.clear_color(0.0, 0.0, 0.0, 0.0);
             self.glow.clear(glow::COLOR_BUFFER_BIT);
@@ -77,8 +82,7 @@ impl<'a> Subsystem<'a> for RenderSubsystem {
 
         self.window.swap_buffers();
     }
-
-    fn shutdown(&mut self) {}
 }
 
-impl RenderSubsystem {}
+impl RenderSubsystem {
+}

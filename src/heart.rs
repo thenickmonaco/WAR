@@ -18,36 +18,55 @@
 // src/heart.rs
 //=============================================================================
 
+//=============================================================================
+// notes
+//
+// All shared_state is located under the Engine, but HeartContext is used to pass
+// as a parameter into run functions or init functions
+//
+// HeartState (local): Owned by the engine, lives as a field in the Heart
+// struct (e.g., Option<HeartState>). Used for single-threaded, persistent
+// shared_state.
+//
+// Arc<State> (shared): Contains RwLock<HeartSharedState> for cross-thread
+// communication or shared data.
+//
+// HeartContext: A reference-based struct that gives subsystems access to the
+// local HeartState (and optionally, shared shared_state if needed).
+//=============================================================================
+
 use crate::input::InputSubsystem;
 use crate::lua::LuaSubsystem;
 use crate::message::Message;
 use crate::render::RenderSubsystem;
 use crate::state::{
-    Engine, EngineChannels, EngineType, GlfwContext, State, Subsystem,
+    Engine, EngineChannels, EngineType, HeartContext, State, Subsystem, HeartState,
 };
 use std::sync::Arc;
 
 pub struct Heart {
-    pub state: Arc<State>,
-    pub channels: EngineChannels,
     pub render: RenderSubsystem,
     pub input: InputSubsystem,
     pub lua: LuaSubsystem,
+    pub local_state: HeartState,
+
+    pub shared_state: Arc<State>,
     pub should_run: bool,
+    pub channels: EngineChannels,
 }
 
 impl Engine for Heart {
     fn init(
         channels: EngineChannels,
-        state: Arc<State>,
+        shared_state: Arc<State>,
     ) -> Result<Self, String> {
-        let render = RenderSubsystem::init(state.clone(), ())?;
+        let render = RenderSubsystem::init(shared_state.clone(), ())?;
 
-        let input = InputSubsystem::init(state.clone(), ())?;
+        let input = InputSubsystem::init(shared_state.clone(), ())?;
 
-        let lua = LuaSubsystem::init(state.clone(), ())?;
+        let lua = LuaSubsystem::init(shared_state.clone(), ())?;
 
-        Ok(Self { render, input, lua, channels, state, should_run: true })
+        Ok(Self { render, input, lua, channels, shared_state, should_run: true })
     }
 
     fn poll_message(&mut self) {
@@ -108,13 +127,14 @@ impl Engine for Heart {
         while self.should_run {
             self.poll_message();
 
-            let glfw_context = GlfwContext {
+            let heart_context = HeartContext {
                 glfw: &mut self.render.glfw,
                 window: &mut self.render.window,
                 events: &mut self.render.events,
+
             };
 
-            self.input.run(glfw_context);
+            self.input.run(HeartContext);
             self.lua.run(());
             self.render.run(());
         }

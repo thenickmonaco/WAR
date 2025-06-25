@@ -42,6 +42,14 @@ impl<'a> Subsystem<'a> for InputSubsystem {
     fn handle_message(&mut self, cmd: Self::Command) {}
 
     fn run(&mut self, context: Self::RunContext) {
+        self.poll_and_flush(context);
+    }
+
+    fn shutdown(&mut self) {}
+}
+
+impl InputSubsystem {
+    fn poll_and_flush(&mut self, context: GlfwContext) {
         context.glfw.poll_events();
 
         for (_, event) in glfw::flush_messages(context.events) {
@@ -49,7 +57,7 @@ impl<'a> Subsystem<'a> for InputSubsystem {
                 WindowEvent::Key(key, scancode, action, modifiers) => {
                     println!("Key: {:?}, Action: {:?}", key, action);
                 },
-                // You can optionally handle more events, like:
+
                 WindowEvent::Close => {
                     println!("Window close requested");
                 },
@@ -59,15 +67,9 @@ impl<'a> Subsystem<'a> for InputSubsystem {
                 WindowEvent::Pos(x, y) => {
                     println!("Window moved to: ({}, {})", x, y);
                 },
-                // Add more if needed...
 
-                // Catch-all for everything else
                 _ => {},
             }
         }
     }
-
-    fn shutdown(&mut self) {}
 }
-
-impl InputSubsystem {}

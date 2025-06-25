@@ -19,7 +19,7 @@
 //=============================================================================
 
 use crate::message::InputCommand;
-use crate::state::{GlfwContext, State, Subsystem};
+use crate::state::{HeartContext, State};
 use glfw::WindowEvent;
 use std::sync::Arc;
 
@@ -27,29 +27,23 @@ pub struct InputSubsystem {
     pub state: Arc<State>,
 }
 
-impl<'a> Subsystem<'a> for InputSubsystem {
-    type Command = InputCommand;
-    type InitContext = ();
-    type RunContext = GlfwContext<'a>;
-
-    fn init(
+impl<'a> InputSubsystem {
+    pub fn init(
         state: Arc<State>,
-        context: Self::InitContext,
+        context: HeartContext<'a>,
     ) -> Result<Self, String> {
         Ok(Self { state })
     }
 
-    fn handle_message(&mut self, cmd: Self::Command) {}
+    pub fn handle_message(&mut self, cmd: InputCommand) {}
 
-    fn run(&mut self, context: Self::RunContext) {
+    pub fn run(&mut self, context: HeartContext<'a>) {
         self.poll_and_flush(context);
     }
 
-    fn shutdown(&mut self) {}
-}
+    pub fn shutdown(&mut self) {}
 
-impl InputSubsystem {
-    fn poll_and_flush(&mut self, context: GlfwContext) {
+    pub fn poll_and_flush(&mut self, context: HeartContext<'a>) {
         context.glfw.poll_events();
 
         for (_, event) in glfw::flush_messages(context.events) {

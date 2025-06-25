@@ -32,7 +32,7 @@ mod worker;
 use crate::audio::Audio;
 use crate::heart::Heart;
 use crate::message::Message;
-use crate::state::{Engine, EngineChannels, State};
+use crate::state::{EngineChannels, State};
 use crate::worker::Worker;
 use ringbuf::RingBuffer;
 use std::sync::Arc;
@@ -88,7 +88,7 @@ pub fn main() {
         from_worker: None,
     };
 
-    // HeartEngine runs on the heart thread
+    // HeartEngine runs on the main thread
     {
         let heart_state = Arc::clone(&state);
         let mut heart_engine =

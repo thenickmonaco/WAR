@@ -39,33 +39,11 @@ pub struct SubsystemChannels {
     pub to_worker: Producer<Message>,
 }
 
-pub trait Engine {
-    fn init(
-        channels: EngineChannels,
-        state: Arc<State>,
-    ) -> Result<Self, String>
-    where
-        Self: Sized;
-    fn poll_message(&mut self);
-    fn dispatch_message(&mut self, message: Message);
-    fn send_message(&mut self, engine_type: EngineType, message: Message);
-    fn run(&mut self);
-    fn shutdown(&mut self);
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EngineType {
     Heart,
     Audio,
     Worker,
-}
-
-pub trait Window {
-    fn id(&self) -> WindowType;
-    fn render(&mut self);
-    fn handle_input(&mut self, message: &Message);
-    fn update(&mut self, dt: f32);
-    fn is_active(&self) -> bool;
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -87,6 +65,10 @@ pub struct HeartContext<'a> {
     pub col: &'a mut Option<i32>,
     pub row: &'a mut Option<i32>,
 }
+
+pub struct AudioContext {}
+
+pub struct WorkerContext {}
 
 pub struct HeartState {
     pub glfw: glfw::Glfw,

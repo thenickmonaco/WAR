@@ -40,7 +40,7 @@ use crate::lua::LuaSubsystem;
 use crate::message::Message;
 use crate::render::RenderSubsystem;
 use crate::state::{
-    Engine, EngineChannels, EngineType, HeartContext, State, Subsystem, HeartState,
+    EngineChannels, EngineType, HeartContext, HeartState, State,
 };
 use std::sync::Arc;
 
@@ -55,8 +55,8 @@ pub struct Heart {
     pub channels: EngineChannels,
 }
 
-impl Engine for Heart {
-    fn init(
+impl Heart {
+    pub fn init(
         channels: EngineChannels,
         shared_state: Arc<State>,
     ) -> Result<Self, String> {
@@ -66,10 +66,17 @@ impl Engine for Heart {
 
         let lua = LuaSubsystem::init(shared_state.clone(), ())?;
 
-        Ok(Self { render, input, lua, channels, shared_state, should_run: true })
+        Ok(Self {
+            render,
+            input,
+            lua,
+            channels,
+            shared_state,
+            should_run: true,
+        })
     }
 
-    fn poll_message(&mut self) {
+    pub fn poll_message(&mut self) {
         let audio_messages =
             if let Some(from_audio) = self.channels.from_audio.as_mut() {
                 let mut messages = Vec::new();
@@ -105,7 +112,7 @@ impl Engine for Heart {
         }
     }
 
-    fn dispatch_message(&mut self, message: Message) {
+    pub fn dispatch_message(&mut self, message: Message) {
         match message {
             Message::Render(cmd) => {
                 println!("heart received: {:?}", cmd);
@@ -121,9 +128,10 @@ impl Engine for Heart {
         }
     }
 
-    fn send_message(&mut self, engine_type: EngineType, message: Message) {}
+    pub fn send_message(&mut self, engine_type: EngineType, message: Message) {
+    }
 
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         while self.should_run {
             self.poll_message();
 
@@ -131,16 +139,15 @@ impl Engine for Heart {
                 glfw: &mut self.render.glfw,
                 window: &mut self.render.window,
                 events: &mut self.render.events,
-
             };
 
-            self.input.run(HeartContext);
+            self.input.run(());
             self.lua.run(());
             self.render.run(());
         }
     }
 
-    fn shutdown(&mut self) {
+    pub fn shutdown(&mut self) {
         self.should_run = false;
 
         self.render.shutdown();
@@ -148,5 +155,3 @@ impl Engine for Heart {
         self.lua.shutdown();
     }
 }
-
-impl Heart {}

@@ -19,7 +19,7 @@
 //=============================================================================
 
 use crate::message::RenderCommand;
-use crate::state::{GlfwContext, HeartContext, State, Subsystem};
+use crate::state::{HeartContext, State};
 use glfw::{Context, WindowEvent, WindowHint, WindowMode};
 use glow::HasContext;
 use std::sync::Arc;
@@ -34,7 +34,7 @@ pub struct RenderSubsystem {
 }
 
 impl<'a> RenderSubsystem {
-    fn init(
+    pub fn init(
         state: Arc<State>,
         context: HeartContext<'a>,
     ) -> Result<(Self, HeartContext<'a>), String> {
@@ -66,15 +66,15 @@ impl<'a> RenderSubsystem {
         Ok(Self { glow, glfw, window, events, state })
     }
 
-    fn handle_message(&mut self, cmd: RenderCommand) {}
+    pub fn handle_message(&mut self, cmd: RenderCommand) {}
 
-    fn run(&mut self, context: HeartContext<'a>) {
+    pub fn run(&mut self, context: HeartContext<'a>) {
         self.render();
     }
 
-    fn shutdown(&mut self) {}
+    pub fn shutdown(&mut self) {}
 
-    fn render(&mut self) {
+    pub fn render(&mut self) {
         unsafe {
             self.glow.clear_color(0.0, 0.0, 0.0, 0.0);
             self.glow.clear(glow::COLOR_BUFFER_BIT);
@@ -84,5 +84,4 @@ impl<'a> RenderSubsystem {
     }
 }
 
-impl RenderSubsystem {
-}
+impl RenderSubsystem {}

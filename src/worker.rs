@@ -19,7 +19,7 @@
 //=============================================================================
 
 use crate::message::{Message, WorkerCommand};
-use crate::state::{Engine, EngineChannels, EngineType, State, Subsystem};
+use crate::state::{EngineChannels, EngineType, State, WorkerContext};
 use std::sync::Arc;
 
 pub struct Worker {
@@ -29,8 +29,8 @@ pub struct Worker {
     pub should_run: bool,
 }
 
-impl Engine for Worker {
-    fn init(
+impl Worker {
+    pub fn init(
         channels: EngineChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
@@ -39,7 +39,7 @@ impl Engine for Worker {
         Ok(Self { worker, channels, state, should_run: true })
     }
 
-    fn poll_message(&mut self) {
+    pub fn poll_message(&mut self) {
         let audio_messages =
             if let Some(from_audio) = self.channels.from_audio.as_mut() {
                 let mut messages = Vec::new();
@@ -75,7 +75,7 @@ impl Engine for Worker {
         }
     }
 
-    fn dispatch_message(&mut self, message: Message) {
+    pub fn dispatch_message(&mut self, message: Message) {
         match message {
             Message::Render(cmd) => {
                 println!("heart received: {:?}", cmd);
@@ -90,15 +90,15 @@ impl Engine for Worker {
         }
     }
 
-    fn send_message(&mut self, engine_type: EngineType, message: Message) {}
+    pub fn send_message(&mut self, engine_type: EngineType, message: Message) {}
 
-    fn shutdown(&mut self) {
+    pub fn shutdown(&mut self) {
         self.should_run = false;
 
         self.worker.shutdown();
     }
 
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         while self.should_run {
             self.worker.run(());
 
@@ -107,29 +107,21 @@ impl Engine for Worker {
     }
 }
 
-impl Worker {}
-
 pub struct WorkerSubsystem {
     state: Arc<State>,
 }
 
-impl<'a> Subsystem<'a> for WorkerSubsystem {
-    type Command = WorkerCommand;
-    type InitContext = ();
-    type RunContext = ();
-
-    fn init(
+impl WorkerSubsystem {
+    pub fn init(
         state: Arc<State>,
-        context: Self::InitContext,
+        context: WorkerContext,
     ) -> Result<Self, String> {
         Ok(Self { state })
     }
 
-    fn handle_message(&mut self, cmd: Self::Command) {}
+    pub fn handle_message(&mut self, cmd: WorkerCommand) {}
 
-    fn run(&mut self, context: Self::RunContext) {}
+    pub fn run(&mut self, context: WorkerContext) {}
 
-    fn shutdown(&mut self) {}
+    pub fn shutdown(&mut self) {}
 }
-
-impl WorkerSubsystem {}

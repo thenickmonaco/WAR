@@ -33,6 +33,8 @@
 //
 // HeartContext: A reference-based struct that gives subsystems access to the
 // local HeartState (and optionally, shared shared_state if needed).
+//
+// Make subsystems stateless
 //=============================================================================
 
 use crate::input::InputSubsystem;

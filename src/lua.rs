@@ -1,16 +1,16 @@
 // vimDAW - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-// 
+//
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
@@ -18,20 +18,25 @@
 // src/lua.rs
 //=============================================================================
 
-use crate::state::{State, Subsystem};
 use crate::message::LuaCommand;
-use std::sync::Arc;
+use crate::state::{State, Subsystem};
 use mlua::Lua as MLua;
+use std::sync::Arc;
 
 pub struct LuaSubsystem {
     pub lua: MLua,
     pub state: Arc<State>,
 }
 
-impl Subsystem for LuaSubsystem {
+impl<'a> Subsystem<'a> for LuaSubsystem {
     type Command = LuaCommand;
+    type InitContext = ();
+    type RunContext = ();
 
-    fn init(state: Arc<State>) -> Result<Self, String> {
+    fn init(
+        state: Arc<State>,
+        context: Self::InitContext,
+    ) -> Result<Self, String> {
         let lua = unsafe { MLua::unsafe_new() };
 
         lua.load("jit.on()").exec().map_err(|e| e.to_string())?;
@@ -43,9 +48,9 @@ impl Subsystem for LuaSubsystem {
 
         Ok(Self { lua, state })
     }
-    fn handle_message(&mut self, cmd: LuaCommand) {}
+    fn handle_message(&mut self, cmd: Self::Command) {}
 
-    fn run(&mut self) {}
+    fn run(&mut self, context: Self::RunContext) {}
 
     fn shutdown(&mut self) {}
 }

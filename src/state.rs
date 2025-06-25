@@ -23,17 +23,13 @@ use parking_lot::RwLock;
 use ringbuf::{Consumer, Producer};
 use std::sync::Arc;
 
-//=============================================================================
-// engine
-//=============================================================================
-
 pub struct EngineChannels {
-    pub to_heart: Producer<Message>,
-    pub from_heart: Consumer<Message>,
-    pub to_audio: Producer<Message>,
-    pub from_audio: Consumer<Message>,
-    pub to_worker: Producer<Message>,
-    pub from_worker: Consumer<Message>,
+    pub to_heart: Option<Producer<Message>>,
+    pub from_heart: Option<Consumer<Message>>,
+    pub to_audio: Option<Producer<Message>>,
+    pub from_audio: Option<Consumer<Message>>,
+    pub to_worker: Option<Producer<Message>>,
+    pub from_worker: Option<Consumer<Message>>,
 }
 
 pub struct SubsystemChannels {
@@ -56,14 +52,16 @@ pub trait Engine {
     fn shutdown(&mut self);
 }
 
-pub trait Subsystem {
+pub trait Subsystem<'a> {
     type Command;
+    type InitContext;
+    type RunContext;
 
-    fn init(state: Arc<State>) -> Result<Self, String>
+    fn init(state: Arc<State>, context: Self::InitContext) -> Result<Self, String>
     where
         Self: Sized;
     fn handle_message(&mut self, cmd: Self::Command);
-    fn run(&mut self);
+    fn run(&mut self, context: Self::RunContext);
     fn shutdown(&mut self);
 }
 
@@ -73,10 +71,6 @@ pub enum EngineType {
     Audio,
     Worker,
 }
-
-//=============================================================================
-// heart engine
-//=============================================================================
 
 pub trait Window {
     fn id(&self) -> WindowType;
@@ -93,9 +87,11 @@ pub enum WindowType {
     Mixer,
 }
 
-//=============================================================================
-// state struct
-//=============================================================================
+pub struct GlfwContext<'a> {
+    pub glfw: &'a mut glfw::Glfw,
+    pub window: &'a mut glfw::Window,
+    pub events: &'a mut std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
+}
 
 #[derive(Default)]
 pub struct HeartState {}

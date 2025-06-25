@@ -56,36 +56,36 @@ pub fn main() {
     let worker_to_audio = make_ring();
 
     let heart_channels = EngineChannels {
-        to_heart: panic!("heart can't send to its self"),
-        from_heart: panic!("heart can't receive from itself"),
+        to_heart: None,
+        from_heart: None,
 
-        to_audio: heart_to_audio.0,
-        from_audio: audio_to_heart.1,
+        to_audio: Some(heart_to_audio.0),
+        from_audio: Some(audio_to_heart.1),
 
-        to_worker: heart_to_worker.0,
-        from_worker: worker_to_heart.1,
+        to_worker: Some(heart_to_worker.0),
+        from_worker: Some(worker_to_heart.1),
     };
 
     let audio_channels = EngineChannels {
-        to_heart: audio_to_heart.0,
-        from_heart: heart_to_audio.1,
+        to_heart: Some(audio_to_heart.0),
+        from_heart: Some(heart_to_audio.1),
 
-        to_audio: panic!("audio can't send to its self"),
-        from_audio: panic!("audio can't receive from itself"),
+        to_audio: None,
+        from_audio: None,
 
-        to_worker: audio_to_worker.0,
-        from_worker: worker_to_audio.1,
+        to_worker: Some(audio_to_worker.0),
+        from_worker: Some(worker_to_audio.1),
     };
 
     let worker_channels = EngineChannels {
-        to_heart: worker_to_heart.0,
-        from_heart: heart_to_worker.1,
+        to_heart: Some(worker_to_heart.0),
+        from_heart: Some(heart_to_worker.1),
 
-        to_audio: worker_to_audio.0,
-        from_audio: audio_to_worker.1,
+        to_audio: Some(worker_to_audio.0),
+        from_audio: Some(audio_to_worker.1),
 
-        to_worker: panic!("worker can't send to its self"),
-        from_worker: panic!("worker can't receive from itself"),
+        to_worker: None,
+        from_worker: None,
     };
 
     // HeartEngine runs on the heart thread

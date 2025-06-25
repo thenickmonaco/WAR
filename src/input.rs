@@ -19,35 +19,35 @@
 //=============================================================================
 
 use crate::message::InputCommand;
-use crate::state::{State, Subsystem};
-use glfw::{Context, WindowEvent, WindowHint, WindowMode};
-use glow::HasContext;
+use crate::state::{GlfwContext, State, Subsystem};
+use glfw::WindowEvent;
 use std::sync::Arc;
 
 pub struct InputSubsystem {
     pub state: Arc<State>,
 }
 
-impl Subsystem for InputSubsystem {
+impl<'a> Subsystem<'a> for InputSubsystem {
     type Command = InputCommand;
+    type InitContext = ();
+    type RunContext = GlfwContext<'a>;
 
-    fn init(state: Arc<State>) -> Result<Self, String> {
-        Ok(Self { state })
+    fn init(
+        state: Arc<State>, context: Self::InitContext
+    ) -> Result<Self, String> {
+        Ok(Self {
+            state,
+        })
     }
 
     fn handle_message(&mut self, cmd: Self::Command) {}
 
-    fn run(&mut self) {}
+    fn run(&mut self, context: Self::RunContext) {
+        context.glfw.poll_events();
+    }
 
     fn shutdown(&mut self) {}
 }
 
 impl InputSubsystem {
-    //pub fn run(
-    //    &mut self,
-    //    glfw: &mut glfw::Glfw,
-    //    window: &mut glfw::Window,
-    //    events: &mut std::sync::mpsc::Receiver<(f64, WindowEvent)>,
-    //) {
-    //}
 }

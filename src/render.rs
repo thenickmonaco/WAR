@@ -19,7 +19,7 @@
 //=============================================================================
 
 use crate::message::RenderCommand;
-use crate::state::{State, Subsystem};
+use crate::state::{GlfwContext, State, Subsystem};
 use glfw::{Context, WindowEvent, WindowHint, WindowMode};
 use glow::HasContext;
 use std::sync::Arc;
@@ -32,10 +32,15 @@ pub struct RenderSubsystem {
     pub state: Arc<State>,
 }
 
-impl Subsystem for RenderSubsystem {
+impl<'a> Subsystem<'a> for RenderSubsystem {
     type Command = RenderCommand;
+    type InitContext = ();
+    type RunContext = ();
 
-    fn init(state: Arc<State>) -> Result<Self, String> {
+    fn init(
+        state: Arc<State>,
+        context: Self::InitContext,
+    ) -> Result<Self, String> {
         let mut glfw =
             glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
 
@@ -70,27 +75,16 @@ impl Subsystem for RenderSubsystem {
 
     fn handle_message(&mut self, cmd: Self::Command) {}
 
-    fn run(&mut self) {
+    fn run(&mut self, context: Self::RunContext) {
         unsafe {
             self.glow.clear_color(0.0, 0.0, 0.0, 0.0);
             self.glow.clear(glow::COLOR_BUFFER_BIT);
         }
 
         self.window.swap_buffers();
-        self.glfw.poll_events();
     }
 
     fn shutdown(&mut self) {}
 }
 
-impl RenderSubsystem {
-    //pub fn context(
-    //    &mut self,
-    //) -> (
-    //    &mut glfw::Glfw,
-    //    &mut glfw::Window,
-    //    &mut std::sync::mpsc::Receiver<(f64, WindowEvent)>,
-    //) {
-    //    (&mut self.glfw, &mut self.window, &mut self.events)
-    //}
-}
+impl RenderSubsystem{}

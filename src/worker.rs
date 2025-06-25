@@ -18,7 +18,7 @@
 // src/worker.rs
 //=============================================================================
 
-use crate::message::Message;
+use crate::message::{Message, WorkerCommand};
 use crate::state::{Engine, EngineChannels, EngineType, State, Subsystem};
 use std::sync::Arc;
 
@@ -34,7 +34,7 @@ impl Engine for Worker {
         channels: EngineChannels,
         state: Arc<State>,
     ) -> Result<Self, String> {
-        let worker = WorkerSubsystem::init(state.clone())?;
+        let worker = WorkerSubsystem::init(state.clone(), ())?;
 
         Ok(Self {
             worker,
@@ -45,11 +45,41 @@ impl Engine for Worker {
     }
 
     fn poll_message(&mut self) {
-        while let Some(message) = self.channels.from_heart.pop() {
-            self.dispatch_message(message);
+        // Collect all messages from from_audio first
+        let audio_messages =
+            if let Some(from_audio) = self.channels.from_audio.as_mut() {
+                let mut messages = Vec::new();
+                while let Some(message) = from_audio.pop() {
+                    messages.push(message);
+                }
+                Some(messages)
+            } else {
+                None
+            };
+
+        // Collect all messages from from_worker first
+        let worker_messages =
+            if let Some(from_worker) = self.channels.from_worker.as_mut() {
+                let mut messages = Vec::new();
+                while let Some(message) = from_worker.pop() {
+                    messages.push(message);
+                }
+                Some(messages)
+            } else {
+                None
+            };
+
+        // Now process messages without holding any mutable borrows on channels
+        if let Some(messages) = audio_messages {
+            for message in messages {
+                self.dispatch_message(message);
+            }
         }
-        while let Some(message) = self.channels.from_audio.pop() {
-            self.dispatch_message(message);
+
+        if let Some(messages) = worker_messages {
+            for message in messages {
+                self.dispatch_message(message);
+            }
         }
     }
 
@@ -78,7 +108,7 @@ impl Engine for Worker {
 
     fn run(&mut self) {
         while self.should_run {
-            self.worker.run();
+            self.worker.run(());
 
             self.poll_message();
         }
@@ -91,14 +121,21 @@ pub struct WorkerSubsystem {
     state: Arc<State>,
 }
 
-impl Subsystem for WorkerSubsystem {
-    fn init(state: Arc<State>) -> Result<Self, String> {
+impl<'a> Subsystem<'a> for WorkerSubsystem {
+    type Command = WorkerCommand;
+    type InitContext = ();
+    type RunContext = ();
+
+    fn init(
+        state: Arc<State>,
+        context: Self::InitContext,
+    ) -> Result<Self, String> {
         Ok(Self { state })
     }
 
-    fn handle_message(&mut self, message: Message) {}
+    fn handle_message(&mut self, cmd: Self::Command) {}
 
-    fn run(&mut self) {}
+    fn run(&mut self, context: Self::RunContext) {}
 
     fn shutdown(&mut self) {}
 }

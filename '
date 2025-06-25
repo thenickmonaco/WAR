@@ -58,43 +58,17 @@ impl Engine for Heart {
     }
 
     fn poll_message(&mut self) {
-        // Collect all messages from from_audio first
-        let audio_messages =
-            if let Some(from_audio) = self.channels.from_audio.as_mut() {
-                let mut messages = Vec::new();
-                while let Some(message) = from_audio.pop() {
-                    messages.push(message);
-                }
-                Some(messages)
-            } else {
-                None
-            };
-
-        // Collect all messages from from_worker first
-        let worker_messages =
-            if let Some(from_worker) = self.channels.from_worker.as_mut() {
-                let mut messages = Vec::new();
-                while let Some(message) = from_worker.pop() {
-                    messages.push(message);
-                }
-                Some(messages)
-            } else {
-                None
-            };
-
-        // Now process messages without holding any mutable borrows on channels
-        if let Some(messages) = audio_messages {
-            for message in messages {
-                self.dispatch_message(message);
-            }
-        }
-
-        if let Some(messages) = worker_messages {
-            for message in messages {
-                self.dispatch_message(message);
-            }
-        }
+    if let Some(from_audio) = &mut self.channels.from_audio {
+    while let Some(message) = from_audio.pop() {
+        self.dispatch_message(message);
     }
+}
+
+if let Some(from_worker) = &mut self.channels.from_worker {
+    while let Some(message) = from_worker.pop() {
+        self.dispatch_message(message);
+    }
+}}
 
     fn dispatch_message(&mut self, message: Message) {
         match message {

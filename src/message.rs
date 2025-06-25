@@ -18,35 +18,3 @@
 // src/message.rs
 //=============================================================================
 
-#[derive(Debug)]
-pub enum Message {
-    Render(RenderCommand),
-    Input(InputCommand),
-    Lua(LuaCommand),
-
-    Audio(AudioCommand),
-
-    Worker(WorkerCommand),
-
-    State(StateUpdate),
-
-    Shutdown,
-}
-
-#[derive(Debug)]
-pub enum RenderCommand {}
-
-#[derive(Debug)]
-pub enum InputCommand {}
-
-#[derive(Debug)]
-pub enum LuaCommand {}
-
-#[derive(Debug)]
-pub enum AudioCommand {}
-
-#[derive(Debug)]
-pub enum WorkerCommand {}
-
-#[derive(Debug)]
-pub enum StateUpdate {}

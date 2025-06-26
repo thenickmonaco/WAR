@@ -18,12 +18,19 @@
 // src/main.rs
 //=============================================================================
 
-mod heart;
-mod audio;
-mod worker;
+mod input;
+mod input_data;
+mod lua;
+mod lua_data;
+mod render;
+mod render_data;
 
 pub fn main() {
+    let (mut glfw, mut window, mut events, mut glow) = render::init();
+
     loop {
-        heart::tick();
+        input::tick(&mut glfw, &mut events);
+        lua::tick();
+        render::tick(&mut glow, &mut window);
     }
 }

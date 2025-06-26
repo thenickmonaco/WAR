@@ -18,3 +18,11 @@
 // src/input.rs
 //=============================================================================
 
+use std::sync::mpsc::Receiver;
+
+pub fn tick(
+    glfw: &mut glfw::Glfw,
+    events: &mut Receiver<(f64, glfw::WindowEvent)>,
+) {
+    glfw.poll_events();
+}

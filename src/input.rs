@@ -18,11 +18,22 @@
 // src/input.rs
 //=============================================================================
 
-use std::sync::mpsc::Receiver;
+use crate::data::{CursorRect, InputState, RenderState};
 
-pub fn tick(
-    glfw: &mut glfw::Glfw,
-    events: &mut Receiver<(f64, glfw::WindowEvent)>,
-) {
+pub fn init() -> InputState {
+    let col = 0;
+    let row = 0;
+
+    let initial_cursor_rect =
+        CursorRect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 };
+
+    let cursor_rects = vec![initial_cursor_rect];
+
+    InputState { col, row, cursor_rects }
+}
+
+pub fn tick(render_state: &mut RenderState) {
+    let glfw = &mut render_state.glfw;
+
     glfw.poll_events();
 }

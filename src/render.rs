@@ -18,15 +18,11 @@
 // src/render.rs
 //=============================================================================
 
+use crate::data::{CursorRect, InputState, RenderState};
 use glfw::Context;
 use glow::HasContext;
 
-pub fn init() -> (
-    glfw::Glfw,
-    glfw::Window,
-    std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
-    glow::Context,
-) {
+pub fn init() -> RenderState {
     let mut glfw =
         glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
 
@@ -52,14 +48,22 @@ pub fn init() -> (
         })
     };
 
-    (glfw, window, events, glow)
+    RenderState { glfw, window, events, glow }
 }
 
-pub fn tick(glow: &mut glow::Context, window: &mut glfw::Window) {
+pub fn tick(render_state: &mut RenderState, input_state: &mut InputState) {
+    let glow = &mut render_state.glow;
+    let window = &mut render_state.window;
+    let cursor_rects = &input_state.cursor_rects;
+
     unsafe {
         glow.clear_color(0.0, 0.0, 0.0, 0.0);
         glow.clear(glow::COLOR_BUFFER_BIT);
+
+        draw_cursor(glow, cursor_rects);
     }
 
     window.swap_buffers();
 }
+
+pub fn draw_cursor(glow: &mut glow::Context, cursor_rects: &Vec<CursorRect>) {}

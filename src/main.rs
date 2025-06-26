@@ -19,18 +19,31 @@
 //=============================================================================
 
 mod input;
-mod input_data;
 mod lua;
-mod lua_data;
 mod render;
-mod render_data;
+
+mod data;
+
+use crate::data::{InputState, RenderState};
 
 pub fn main() {
-    let (mut glfw, mut window, mut events, mut glow) = render::init();
+    //=========================================================================
+    // ui
+    //=========================================================================
+    let mut render_state: RenderState = render::init();
+    let mut input_state: InputState = input::init();
 
     loop {
-        input::tick(&mut glfw, &mut events);
+        input::tick(&mut render_state);
         lua::tick();
-        render::tick(&mut glow, &mut window);
+        render::tick(&mut render_state, &mut input_state);
     }
+
+    //=========================================================================
+    // audio
+    //=========================================================================
+
+    //=========================================================================
+    // worker
+    //=========================================================================
 }

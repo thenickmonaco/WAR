@@ -33,12 +33,12 @@ pub fn main() {
         mut window,
         mut events,
         mut glow,
-        mut quad_vbo,
-        mut quad_ebo,
-        mut quad_vao,
-        mut text_vbo,
-        mut text_ebo,
-        mut text_vao,
+        quad_vbo,
+        quad_ebo,
+        quad_vao,
+        text_vbo,
+        text_ebo,
+        text_vao,
     ) = render::init();
 
     let (

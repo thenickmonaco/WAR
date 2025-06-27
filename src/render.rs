@@ -170,7 +170,14 @@ pub fn tick(
         glow.clear_color(0.0, 0.0, 0.0, 0.0);
         glow.clear(glow::COLOR_BUFFER_BIT);
 
-        draw_quad_batch(glow, &cursor_rects_vertices, &cursor_rects_indices, quad_vbo, quad_ebo, quad_vao);
+        draw_quad_batch(
+            glow,
+            &cursor_rects_vertices,
+            &cursor_rects_indices,
+            quad_vbo,
+            quad_ebo,
+            quad_vao,
+        );
     }
 
     window.swap_buffers();
@@ -184,4 +191,9 @@ pub fn draw_quad_batch(
     quad_ebo: glow::NativeBuffer,
     quad_vao: glow::NativeVertexArray,
 ) {
+    unsafe {
+        glow.bind_vertex_array(Some(quad_vao));
+        glow.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+        glow.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(quad_ebo));
+    }        
 }

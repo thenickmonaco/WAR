@@ -18,7 +18,7 @@
 // src/render.rs
 //=============================================================================
 
-use crate::data::SolidRects;
+use crate::data::Vertex;
 use glfw::Context;
 use glow::HasContext;
 
@@ -27,6 +27,12 @@ pub fn init() -> (
     glfw::Window,
     std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
     glow::Context,
+    glow::NativeBuffer,
+    glow::NativeBuffer,
+    glow::NativeVertexArray,
+    glow::NativeBuffer,
+    glow::NativeBuffer,
+    glow::NativeVertexArray,
 ) {
     let mut glfw =
         glfw::init(glfw::FAIL_ON_ERRORS).expect("glfw::init failure");
@@ -53,65 +59,129 @@ pub fn init() -> (
         })
     };
 
-    (glfw, window, events, glow)
+    //=========================================================================
+    // quad
+    //=========================================================================
+    let (quad_vbo, quad_ebo, quad_vao) = unsafe {
+        (
+            glow.create_buffer().unwrap(),
+            glow.create_buffer().unwrap(),
+            glow.create_vertex_array().unwrap(),
+        )
+    };
+
+    unsafe {
+        glow.bind_vertex_array(Some(quad_vao));
+        glow.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+        glow.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(quad_ebo));
+
+        // Set up vertex attribute pointers
+        // assuming Vertex { position: [f32; 2], color: u32 }
+        // position at location 0, color at location 1
+        glow.enable_vertex_attrib_array(0);
+        glow.vertex_attrib_pointer_f32(
+            0,
+            2,
+            glow::FLOAT,
+            false,
+            std::mem::size_of::<Vertex>() as i32,
+            0,
+        );
+
+        glow.enable_vertex_attrib_array(1);
+        glow.vertex_attrib_pointer_f32(
+            1,
+            4,
+            glow::UNSIGNED_BYTE,
+            true,
+            std::mem::size_of::<Vertex>() as i32,
+            8,
+        ); // color is u32 (4 bytes), normalized
+
+        glow.bind_vertex_array(None);
+        glow.bind_buffer(glow::ARRAY_BUFFER, None);
+        glow.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+    }
+
+    //=========================================================================
+    // text
+    //=========================================================================
+    let (text_vbo, text_ebo, text_vao) = unsafe {
+        (
+            glow.create_buffer().unwrap(),
+            glow.create_buffer().unwrap(),
+            glow.create_vertex_array().unwrap(),
+        )
+    };
+
+    unsafe {
+        glow.bind_vertex_array(Some(text_vao));
+        glow.bind_buffer(glow::ARRAY_BUFFER, Some(text_vbo));
+        glow.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(text_ebo));
+        // do this later...
+
+        // Set up vertex attribute pointers
+        // assuming Vertex { position: [f32; 2], color: u32 }
+        // position at location 0, color at location 1
+        // glow.enable_vertex_attrib_array(0);
+        // glow.vertex_attrib_pointer_f32(
+        //     0,
+        //     2,
+        //     glow::FLOAT,
+        //     false,
+        //     std::mem::size_of::<Vertex>() as i32,
+        //     0,
+        // );
+
+        // glow.enable_vertex_attrib_array(1);
+        // glow.vertex_attrib_pointer_f32(
+        //     1,
+        //     4,
+        //     glow::UNSIGNED_BYTE,
+        //     true,
+        //     std::mem::size_of::<Vertex>() as i32,
+        //     8,
+        // ); // color is u32 (4 bytes), normalized
+
+        glow.bind_vertex_array(None);
+        glow.bind_buffer(glow::ARRAY_BUFFER, None);
+        glow.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
+    }
+
+    (
+        glfw, window, events, glow, quad_vbo, quad_ebo, quad_vao, text_vbo,
+        text_ebo, text_vao,
+    )
 }
 
 pub fn tick(
     glow: &mut glow::Context,
     window: &mut glfw::Window,
-    cursor_rects: &SolidRects,
+    cursor_rects_vertices: &Vec<Vertex>,
+    cursor_rects_indices: &Vec<u16>,
+    quad_vbo: glow::NativeBuffer,
+    quad_ebo: glow::NativeBuffer,
+    quad_vao: glow::NativeVertexArray,
+    text_vbo: glow::NativeBuffer,
+    text_ebo: glow::NativeBuffer,
+    text_vao: glow::NativeVertexArray,
 ) {
     unsafe {
         glow.clear_color(0.0, 0.0, 0.0, 0.0);
         glow.clear(glow::COLOR_BUFFER_BIT);
 
-        // draw solid, same color cursor boxes
-        draw_solid_rects(glow, cursor_rects);
+        draw_quad_batch(glow, &cursor_rects_vertices, &cursor_rects_indices, quad_vbo, quad_ebo, quad_vao);
     }
 
     window.swap_buffers();
 }
 
-pub fn draw_solid_rects(glow: &mut glow::Context, solid_rects: &SolidRects) {
-    let mut positions: Vec<[f32; 2]> = Vec::new(); // x, y
-    let mut indices: Vec<u16> = Vec::new();
-    let mut index_offset = 0;
-
-    for i in 0..solid_rects.x.len() {
-        let x = solid_rects.x[i];
-        let y = solid_rects.y[i];
-        let w = solid_rects.width[i];
-        let h = solid_rects.height[i];
-
-        // Add 4 positions per quad
-        positions.extend_from_slice(&[
-            [x, y],         // v0: top-left
-            [x + w, y],     // v1: top-right
-            [x, y + h],     // v2: bottom-left
-            [x + w, y + h], // v3: bottom-right
-        ]);
-
-        // Add 6 indices to make 2 triangles
-        indices.extend_from_slice(&[
-            index_offset,
-            index_offset + 1,
-            index_offset + 2, // first triangle
-            index_offset + 1,
-            index_offset + 3,
-            index_offset + 2, // second triangle
-        ]);
-
-        index_offset += 4;
-    }
-
-    // Now pass `positions` and `indices` to a function that uploads to GPU
-    draw_quad_batch(glow, &positions, &indices, &solid_rects.color);
-}
-
 pub fn draw_quad_batch(
     glow: &mut glow::Context,
-    positions: &Vec<[f32; 2]>,
-    indices: &Vec<u16>,
-    color: &Vec<u32>,
+    vertices: &[Vertex],
+    indices: &[u16],
+    quad_vbo: glow::NativeBuffer,
+    quad_ebo: glow::NativeBuffer,
+    quad_vao: glow::NativeVertexArray,
 ) {
 }

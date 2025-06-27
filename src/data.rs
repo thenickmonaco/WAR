@@ -22,10 +22,10 @@
 // ui
 //=============================================================================
 
-pub struct SolidRects {
-    pub x: Vec<f32>,
-    pub y: Vec<f32>,
-    pub width: Vec<f32>,
-    pub height: Vec<f32>,
-    pub color: Vec<u32>, // Allow unique colors
+// packed
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Vertex {
+    pub position: [f32; 2],
+    pub color: u32,
 }

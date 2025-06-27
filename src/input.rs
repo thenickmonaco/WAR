@@ -18,25 +18,22 @@
 // src/input.rs
 //=============================================================================
 
-use crate::data::SolidRects;
+use crate::data::Vertex;
 
-pub fn init() -> (i32, i32, SolidRects) {
+pub fn init() -> (i32, i32, Vec<Vertex>, Vec<u16>) {
     (
         0, // col
         0, // row
-        SolidRects {
-            // cursor_rects
-            positions: Vec::new(),
-            colors: Vec::new(),
-            indices: Vec::new(),
-        },
+        Vec::new(),
+        Vec::new(),
     )
 }
 
 pub fn tick(
     glfw: &mut glfw::Glfw,
     events: &mut std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
-    cursor_rects: &mut SolidRects,
+    cursor_rects_vertices: &mut Vec<Vertex>,
+    cursor_rects_indices: &mut Vec<u16>,
     col: &mut i32,
     row: &mut i32,
 ) {

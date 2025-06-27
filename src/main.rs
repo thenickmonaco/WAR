@@ -28,19 +28,48 @@ pub fn main() {
     //=========================================================================
     // ui
     //=========================================================================
-    let (mut glfw, mut window, mut events, mut glow) = render::init();
-    let (mut col, mut row, mut cursor_rects) = input::init();
+    let (
+        mut glfw,
+        mut window,
+        mut events,
+        mut glow,
+        mut quad_vbo,
+        mut quad_ebo,
+        mut quad_vao,
+        mut text_vbo,
+        mut text_ebo,
+        mut text_vao,
+    ) = render::init();
+
+    let (
+        mut col,
+        mut row,
+        mut cursor_rects_vertices,
+        mut cursor_rects_indices,
+    ) = input::init();
 
     loop {
         input::tick(
             &mut glfw,
             &mut events,
-            &mut cursor_rects,
+            &mut cursor_rects_vertices,
+            &mut cursor_rects_indices,
             &mut col,
             &mut row,
         );
         lua::tick();
-        render::tick(&mut glow, &mut window, &cursor_rects);
+        render::tick(
+            &mut glow,
+            &mut window,
+            &cursor_rects_vertices,
+            &cursor_rects_indices,
+            quad_vbo,
+            quad_ebo,
+            quad_vao,
+            text_vbo,
+            text_ebo,
+            text_vao,
+        );
     }
 
     //=========================================================================

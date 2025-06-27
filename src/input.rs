@@ -30,12 +30,9 @@ pub fn init() -> (i32, i32, Vec<Vertex>, Vec<u16>) {
 }
 
 pub fn tick(
-    glfw: &mut glfw::Glfw,
-    events: &mut std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
-    cursor_rects_vertices: &mut Vec<Vertex>,
-    cursor_rects_indices: &mut Vec<u16>,
     col: &mut i32,
     row: &mut i32,
+    cursor_rects_vertices: &mut Vec<Vertex>,
+    cursor_rects_indices: &mut Vec<u16>,
 ) {
-    glfw.poll_events();
 }

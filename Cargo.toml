@@ -2,16 +2,18 @@
 name = "vimdaw"
 version = "0.1.0"
 edition = "2021"
-authors = ["Nick Monaco thenickmonaco@gmail.com"]
+authors = ["Nick Monaco <thenickmonaco@gmail.com>"]
 license = "AGPL-3.0"
 
 [dependencies]
-glfw = "0.45"           # Windowing, context, input
-glow = "0.11"           # Modern OpenGL wrapper
-freetype-rs = "0.26"    # FreeType font rasterization
-harfbuzz_rs = "2.0.1"     # Text shaping with HarfBuzz
-portaudio = "0.8"       # Audio I/O
-midir = "0.8"           # MIDI I/O
-parking_lot = "0.12"
+winit = "0.28"
+ash = { version = "0.41", features = ["default"] }
+freetype-rs = "0.26"
+harfbuzz_rs = "2.0.1"
+mlua = { version = "0.8", features = ["luajit"] }
+cpal = "0.15"
+midir = "0.8"
+instant = "0.1"
 ringbuf = "0.2"
-mlua = { version = "0.8", features = ["luajit"] }  # LuaJIT scripting
+tokio = { version = "1", features = ["full"] }
+parking_lot = "0.12"

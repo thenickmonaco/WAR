@@ -22,60 +22,10 @@
 // ui
 //=============================================================================
 
-pub struct RenderState {
-    pub glfw: glfw::Glfw,
-    pub window: glfw::Window,
-    pub events: std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
-    pub glow: glow::Context,
-}
-
-pub struct InputState {
-    pub col: i32,
-    pub row: i32,
-    pub cursor_rects: Vec<CursorRect>,
-}
-
-pub struct LuaState {
-    pub cursor_color: Color,
-}
-
-pub struct CursorRect {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8,
-}
-
-pub fn hex_to_rgba(hex: &str) -> Color {
-    let hex = hex.trim_start_matches('#');
-
-    let color = u32::from_str_radix(hex, 16).expect("Invalid hex string");
-
-    match hex.len() {
-        6 => Color {
-            r: u8::try_from((color >> 16) & 0xFF)
-                .expect("red channel failure"),
-            g: u8::try_from((color >> 8) & 0xFF)
-                .expect("green channel failure"),
-            b: u8::try_from(color & 0xFF).expect("blue channel failure"),
-            a: 255,
-        },
-        8 => Color {
-            r: u8::try_from((color >> 24) & 0xFF)
-                .expect("red channel failure"),
-            g: u8::try_from((color >> 16) & 0xFF)
-                .expect("green channel failure"),
-            b: u8::try_from((color >> 8) & 0xFF)
-                .expect("blue channel failure"),
-            a: u8::try_from(color & 0xFF).expect("alpha channel failure"),
-        },
-        _ => panic!("Invalid hex length, must be 6 or 8"),
-    }
+pub struct SolidRects {
+    pub x: Vec<f32>,
+    pub y: Vec<f32>,
+    pub width: Vec<f32>,
+    pub height: Vec<f32>,
+    pub color: Vec<u32>, // Allow unique colors
 }

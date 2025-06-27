@@ -18,6 +18,26 @@
 // src/lua.rs
 //=============================================================================
 
-pub fn tick() {
+pub fn tick() {}
 
+pub fn hex_to_rgba_u32(hex: &str) -> u32 {
+    let hex = hex.trim_start_matches('#');
+    let color = u32::from_str_radix(hex, 16).expect("Invalid hex string");
+
+    match hex.len() {
+        6 => {
+            let r = (color >> 16) & 0xFF;
+            let g = (color >> 8) & 0xFF;
+            let b = color & 0xFF;
+            (r << 24) | (g << 16) | (b << 8) | 0xFF
+        },
+        8 => {
+            let r = (color >> 24) & 0xFF;
+            let g = (color >> 16) & 0xFF;
+            let b = (color >> 8) & 0xFF;
+            let a = color & 0xFF;
+            (r << 24) | (g << 16) | (b << 8) | a
+        },
+        _ => panic!("Invalid hex length, must be 6 or 8"),
+    }
 }

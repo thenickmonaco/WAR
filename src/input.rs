@@ -18,22 +18,27 @@
 // src/input.rs
 //=============================================================================
 
-use crate::data::{CursorRect, InputState, RenderState};
+use crate::data::SolidRects;
 
-pub fn init() -> InputState {
-    let col = 0;
-    let row = 0;
-
-    let initial_cursor_rect =
-        CursorRect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 };
-
-    let cursor_rects = vec![initial_cursor_rect];
-
-    InputState { col, row, cursor_rects }
+pub fn init() -> (i32, i32, SolidRects) {
+    (
+        0, // col
+        0, // row
+        SolidRects {
+            // cursor_rects
+            positions: Vec::new(),
+            colors: Vec::new(),
+            indices: Vec::new(),
+        },
+    )
 }
 
-pub fn tick(render_state: &mut RenderState) {
-    let glfw = &mut render_state.glfw;
-
+pub fn tick(
+    glfw: &mut glfw::Glfw,
+    events: &mut std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
+    cursor_rects: &mut SolidRects,
+    col: &mut i32,
+    row: &mut i32,
+) {
     glfw.poll_events();
 }

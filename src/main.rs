@@ -24,19 +24,23 @@ mod render;
 
 mod data;
 
-use crate::data::{InputState, RenderState};
-
 pub fn main() {
     //=========================================================================
     // ui
     //=========================================================================
-    let mut render_state: RenderState = render::init();
-    let mut input_state: InputState = input::init();
+    let (mut glfw, mut window, mut events, mut glow) = render::init();
+    let (mut col, mut row, mut cursor_rects) = input::init();
 
     loop {
-        input::tick(&mut render_state);
+        input::tick(
+            &mut glfw,
+            &mut events,
+            &mut cursor_rects,
+            &mut col,
+            &mut row,
+        );
         lua::tick();
-        render::tick(&mut render_state, &mut input_state);
+        render::tick(&mut glow, &mut window, &cursor_rects);
     }
 
     //=========================================================================

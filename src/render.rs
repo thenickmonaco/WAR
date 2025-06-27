@@ -23,9 +23,7 @@ use crate::data::Vertex;
 pub fn init() -> () {}
 
 pub fn tick(cursor_rects_vertices: &[Vertex], cursor_rects_indices: &[u16]) {
-    draw_quad_batch(&cursor_rects_vertices, &cursor_rects_indices);
-
-    window.swap_buffers();
+    alsdkl
 }
 
 pub fn draw_quad_batch(vertices: &[Vertex], indices: &[u16]) {}

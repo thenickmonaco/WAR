@@ -19,11 +19,6 @@
 //=============================================================================
 
 use crate::data::Vertex;
-use ash::{version::EntryV1_0, version::InstanceV1_0, vk, Entry, Instance};
-use winit::{
-    event_loop::EventLoop,
-    window::{Window, WindowBuilder},
-};
 
 pub fn init() -> () {}
 

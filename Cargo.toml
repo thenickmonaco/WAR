@@ -6,9 +6,9 @@ authors = ["Nick Monaco <thenickmonaco@gmail.com>"]
 license = "AGPL-3.0"
 
 [dependencies]
-winit = "0.28"
-raw-window-handle = "0.5"
-ash = { version = "0.38", features = ["default"] }
+winit = "0.30"
+raw-window-handle = "0.6"
+ash = { version = "0.38", features = ["linked"] }
 ash-window = "0.12"
 freetype-rs = "0.26"
 harfbuzz_rs = "2.0.1"

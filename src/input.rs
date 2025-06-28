@@ -20,18 +20,9 @@
 
 use crate::data::Vertex;
 
-pub fn init() -> (i32, i32, Vec<Vertex>, Vec<u16>) {
-    (
-        0,          // col
-        0,          // row
-        Vec::new(), // cursor_rects_vertices
-        Vec::new(), // cursor_rects_indices
-    )
-}
-
 pub fn tick(
-    col: &mut i32,
-    row: &mut i32,
+    col: &mut u32,
+    row: &mut u32,
     cursor_rects_vertices: &mut Vec<Vertex>,
     cursor_rects_indices: &mut Vec<u16>,
 ) {

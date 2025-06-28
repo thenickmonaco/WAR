@@ -6,16 +6,11 @@ authors = ["Nick Monaco <thenickmonaco@gmail.com>"]
 license = "AGPL-3.0"
 
 [dependencies]
-winit = "0.30"
-raw-window-handle = "0.6"
+alsa-sys = "0.3"
 ash = { version = "0.38", features = ["linked"] }
-ash-window = "0.12"
-freetype-rs = "0.26"
-harfbuzz_rs = "2.0.1"
-mlua = { version = "0.8", features = ["luajit"] }
-cpal = "0.15"
-midir = "0.8"
+mlua = { version = "0.9", features = ["luajit"] }
+wayland-client = "0.31"
+wayland-protocols = "0.31"
 instant = "0.1"
-ringbuf = "0.2"
-parking_lot = "0.12"
-tokio = { version = "1", features = ["full"] }
+mio = "0.8"
+ringbuf = "0.3"

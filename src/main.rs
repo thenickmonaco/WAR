@@ -24,15 +24,31 @@ mod render;
 
 mod data;
 
+use data::Vertex;
+use wayland_client::Connection;
+
 pub fn main() {
-    let () = render::init();
+    let connection = Connection::connect_to_env().unwrap();
 
     let (
         mut col,
         mut row,
         mut cursor_rects_vertices,
         mut cursor_rects_indices,
-    ) = input::init();
+    ): (u32, u32, Vec<Vertex>, Vec<u16>) = (
+        0,          // col
+        0,          // row
+        Vec::new(), // cursor_rects_vertices
+        Vec::new(), // cursor_rects_indices
+    );
+
+    //=========================================================================
+    // init render
+    //=========================================================================
+
+    //=========================================================================
+    // init input
+    //=========================================================================
 
     loop {
         input::tick(

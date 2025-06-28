@@ -19,13 +19,14 @@
 //=============================================================================
 
 use crate::data::Vertex;
+use ash::{version::EntryV1_0, version::InstanceV1_0, vk, Entry, Instance};
+use winit::{
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
+};
 
 pub fn init() -> () {}
 
-pub fn tick(cursor_rects_vertices: &[Vertex], cursor_rects_indices: &[u16]) {
-    
-}
+pub fn tick(cursor_rects_vertices: &[Vertex], cursor_rects_indices: &[u16]) {}
 
-pub fn draw_quad_batch(vertices: &[Vertex], indices: &[u16]) {
-
-}
+pub fn draw_quad_batch(vertices: &[Vertex], indices: &[u16]) {}

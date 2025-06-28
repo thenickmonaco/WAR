@@ -22,8 +22,8 @@ use crate::data::Vertex;
 
 pub fn init() -> (i32, i32, Vec<Vertex>, Vec<u16>) {
     (
-        0, // col
-        0, // row
+        0,          // col
+        0,          // row
         Vec::new(), // cursor_rects_vertices
         Vec::new(), // cursor_rects_indices
     )

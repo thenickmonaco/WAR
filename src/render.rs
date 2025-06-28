@@ -23,7 +23,9 @@ use crate::data::Vertex;
 pub fn init() -> () {}
 
 pub fn tick(cursor_rects_vertices: &[Vertex], cursor_rects_indices: &[u16]) {
-    alsdkl
+    
 }
 
-pub fn draw_quad_batch(vertices: &[Vertex], indices: &[u16]) {}
+pub fn draw_quad_batch(vertices: &[Vertex], indices: &[u16]) {
+
+}

@@ -7,7 +7,9 @@ license = "AGPL-3.0"
 
 [dependencies]
 winit = "0.28"
-ash = { version = "0.41", features = ["default"] }
+raw-window-handle = "0.5"
+ash = { version = "0.38", features = ["default"] }
+ash-window = "0.12"
 freetype-rs = "0.26"
 harfbuzz_rs = "2.0.1"
 mlua = { version = "0.8", features = ["luajit"] }
@@ -15,5 +17,5 @@ cpal = "0.15"
 midir = "0.8"
 instant = "0.1"
 ringbuf = "0.2"
-tokio = { version = "1", features = ["full"] }
 parking_lot = "0.12"
+tokio = { version = "1", features = ["full"] }

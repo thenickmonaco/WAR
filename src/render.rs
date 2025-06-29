@@ -19,15 +19,6 @@
 //=============================================================================
 
 use crate::data::Vertex;
-use wayland_client::Connection;
-
-pub fn init() -> Connection {
-    let connection = Connection::connect_to_env().unwrap();
-
-    // logic
-
-    connection // and other vbo related stuff
-}
 
 pub fn tick(cursor_rects_vertices: &[Vertex], cursor_rects_indices: &[u16]) {}
 

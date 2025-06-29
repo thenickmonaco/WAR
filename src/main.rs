@@ -25,10 +25,19 @@ mod render;
 mod data;
 
 use data::Vertex;
-use wayland_client::Connection;
+use std::ptr;
+use wayland_sys::client::wayland_client_handle;
 
 pub fn main() {
-    let connection = Connection::connect_to_env().unwrap();
+    let wl = wayland_client_handle();
+
+    unsafe {
+        let display = (wl.wl_display_connect)(ptr::null());
+        if display.is_null() {
+            eprintln!("Failed to connect to Wayland display");
+            return;
+        }
+    }
 
     let (
         mut col,
@@ -41,14 +50,6 @@ pub fn main() {
         Vec::new(), // cursor_rects_vertices
         Vec::new(), // cursor_rects_indices
     );
-
-    //=========================================================================
-    // init render
-    //=========================================================================
-
-    //=========================================================================
-    // init input
-    //=========================================================================
 
     loop {
         input::tick(

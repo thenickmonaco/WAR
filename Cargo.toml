@@ -8,9 +8,8 @@ license = "AGPL-3.0"
 [dependencies]
 alsa-sys = "0.3"
 ash = { version = "0.38", features = ["linked"] }
+wayland-sys = { version = "0.31", features = ["client", "dlopen"] }
+libc = "0.2"
 mlua = { version = "0.9", features = ["luajit"] }
-wayland-client = "0.31"
-wayland-protocols = "0.31"
 instant = "0.1"
-mio = "0.8"
 ringbuf = "0.3"

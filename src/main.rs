@@ -26,16 +26,44 @@ mod data;
 
 use data::Vertex;
 use libc::{poll, pollfd, read, POLLIN}; // low-level syscalls
+use std::fs::File;
+use std::io::{self, Read, Write};
+use std::os::unix::io::FromRawFd;
+use std::os::unix::io::RawFd;
 use std::{
     os::raw::{c_char, c_int, c_void},
     ptr,
 };
 use wayland_sys::client::wayland_client_handle;
 
-#[repr(C)]
-pub struct WaylandInterface {
-    name: *const c_char,
-    version: u32,
+pub fn read_wayland_message(fd: RawFd) -> io::Result<()> {
+    // First read the 8-byte header (object_id u32 + opcode u16 + size u16)
+    let mut header = [0u8; 8];
+    read_exact_bytes(fd, &mut header)?;
+
+    // Parse header fields (assuming little endian)
+    let object_id = u32::from_le_bytes(header[0..4].try_into().unwrap());
+    let opcode = u16::from_le_bytes(header[4..6].try_into().unwrap());
+    let size = u16::from_le_bytes(header[6..8].try_into().unwrap());
+
+    println!("object_id={} opcode={} size={}", object_id, opcode, size);
+
+    // size includes the header size (8 bytes), so subtract that for arg bytes
+    let arg_size = size as usize - 8;
+    let mut args_buf = vec![0u8; arg_size];
+    read_exact_bytes(fd, &mut args_buf)?;
+
+    // Now args_buf contains the raw arguments you need to decode
+
+    Ok(())
+}
+
+pub fn read_exact_bytes(fd: RawFd, buf: &mut [u8]) -> io::Result<()> {
+    let mut file = unsafe { File::from_raw_fd(fd) };
+    let result = file.read_exact(buf);
+    // Prevent closing fd when file goes out of scope:
+    std::mem::forget(file);
+    result
 }
 
 pub fn main() {
@@ -57,36 +85,18 @@ pub fn main() {
             return;
         }
 
-        // 3. Prepare to read events without dispatching them
-        let ret = (wl.wl_display_prepare_read)(display);
-        if ret < 0 {
-            eprintln!("Prepare read failed");
-            (wl.wl_display_cancel_read)(display); // must cancel on failure
-            (wl.wl_display_disconnect)(display);
-            return;
+        loop {
+            println!("start of loop");
+
+            let mut fds = [pollfd { fd, events: POLLIN, revents: 0 }];
+            let poll_ret = poll(fds.as_mut_ptr(), 1, -1);
+            if poll_ret > 0 {
+                println!("message: ");
+                read_wayland_message(fd).unwrap();
+            } else {
+                break;
+            }
         }
-
-        // 4. Poll the fd for readability
-        let mut fds = [pollfd { fd, events: POLLIN, revents: 0 }];
-        if poll(fds.as_mut_ptr(), 1, -1) < 0 {
-            eprintln!("Poll failed");
-            (wl.wl_display_cancel_read)(display);
-            (wl.wl_display_disconnect)(display);
-            return;
-        }
-
-        // 5. Read the event buffer into Wayland's internal queue
-        if (wl.wl_display_read_events)(display) < 0 {
-            eprintln!("Failed to read Wayland events");
-            (wl.wl_display_disconnect)(display);
-            return;
-        }
-
-        // 6. DO NOT call wl_display_dispatch_pending — no callbacks
-
-        // 7. At this point, you'd normally parse the Wayland event buffer manually
-        // NOTE: To read raw bytes from the socket directly yourself instead of using `read_events`,
-        // you must skip wl_display_read_events and perform `read(fd, ...)` and decode the protocol.
 
         // Cleanup
         (wl.wl_display_disconnect)(display);

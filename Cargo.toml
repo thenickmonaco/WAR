@@ -13,3 +13,6 @@ libc = "0.2"
 mlua = { version = "0.9", features = ["luajit"] }
 instant = "0.1"
 ringbuf = "0.3"
+
+[build-dependencies]
+xmltree = "0.11"

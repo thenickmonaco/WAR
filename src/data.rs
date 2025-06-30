@@ -24,3 +24,11 @@ pub struct Vertex {
     pub position: [f32; 2],
     pub color: u32,
 }
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct WlSurface {
+    pub id: u32,
+    // optionally add fields if Vulkan’s Wayland extension expects more, but usually
+    // just a pointer to this struct representing the wl_surface is enough
+}

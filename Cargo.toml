@@ -6,13 +6,9 @@ authors = ["Nick Monaco <thenickmonaco@gmail.com>"]
 license = "AGPL-3.0"
 
 [dependencies]
-alsa-sys = "0.3"
 ash = { version = "0.38", features = ["linked"] }
 wayland-sys = { version = "0.31", features = ["client", "dlopen"] }
 libc = "0.2"
-mlua = { version = "0.9", features = ["luajit"] }
-instant = "0.1"
-ringbuf = "0.3"
 
 [build-dependencies]
 xmltree = "0.11"

@@ -85,7 +85,7 @@ pub fn main() {
             #[cfg(debug_assertions)]
             {
                 println!("- [src/main.rs]");
-                println!("    - start loop");
+                println!("    - waiting for poll_result");
             }
 
             let poll_result = poll(fds.as_mut_ptr(), 1, -1);
@@ -95,6 +95,7 @@ pub fn main() {
             }
 
             if fds[0].revents & POLLIN != 0 {
+                // handle partial reads
                 let bytes_read = match file.read(&mut temp_buf) {
                     Ok(0) => {
                         // EOF
@@ -141,6 +142,14 @@ pub fn main() {
 
                     let body = &message_bytes[8..];
 
+                    let name_len =
+                        u32::from_le_bytes(body[4..8].try_into().unwrap())
+                            as usize;
+                    let name_bytes = &body[8..8 + name_len];
+                    let name = String::from_utf8_lossy(name_bytes);
+
+                    
+
                     #[cfg(debug_assertions)]
                     {
                         println!("- [src/main.rs]");
@@ -149,12 +158,13 @@ pub fn main() {
                         println!("    - size: {}", _msg_size);
                         println!("    - body bytes: {:?}", body);
                         println!(
-                            "Raw body (hex): [{}]",
+                            "    - raw body (hex): [{}]",
                             body.iter()
                                 .map(|b| format!("{:02X}", b))
                                 .collect::<Vec<_>>()
                                 .join(" ")
                         );
+                        println!("    - interface name: {}", name);
                     }
                 }
             }

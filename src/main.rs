@@ -123,6 +123,7 @@ pub fn main() {
                         continue;
                     }
 
+                    // keep polling till message is completed
                     if buffer.len() < size {
                         break;
                     }
@@ -146,9 +147,18 @@ pub fn main() {
                         u32::from_le_bytes(body[4..8].try_into().unwrap())
                             as usize;
                     let name_bytes = &body[8..8 + name_len];
-                    let name = String::from_utf8_lossy(name_bytes);
 
-                    
+                    let mut end = name_bytes.len();
+                    // Move end backward while byte is zero
+                    while end > 0 && name_bytes[end - 1] == 0 {
+                        end -= 1;
+                    }
+                    let trimmed_name_bytes = &name_bytes[..end];
+
+                    if trimmed_name_bytes == b"wl_compositor" {
+                        println!("compositor detected");
+                    }
+
 
                     #[cfg(debug_assertions)]
                     {
@@ -164,7 +174,7 @@ pub fn main() {
                                 .collect::<Vec<_>>()
                                 .join(" ")
                         );
-                        println!("    - interface name: {}", name);
+                        //println!("    - interface name: {}", name);
                     }
                 }
             }

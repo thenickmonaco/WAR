@@ -56,7 +56,7 @@ pub fn main() {
         // Send get_registry message
         let mut msg = Vec::<u8>::new();
         msg.extend(&1u32.to_le_bytes()); // sender_id = 1 (display)
-        msg.extend(&0u16.to_le_bytes()); // opcode = 0 (get_registry)
+        msg.extend(&1u16.to_le_bytes()); // opcode = 1 (get_registry), order of requests in wayland repo: protocol/wayland.xml
         msg.extend(&12u16.to_le_bytes()); // message size
         msg.extend(&registry_id.to_le_bytes()); // new object id
 

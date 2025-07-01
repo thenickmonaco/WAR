@@ -50,67 +50,6 @@ pub unsafe fn write_all(fd: i32, mut buf: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-pub unsafe fn request_bind(
-    fd: i32,
-    wl: &WaylandClient,
-    display: *mut wl_display,
-    global_name: u32,
-    interface_len: usize,
-    interface: &[u8],
-    version: u32,
-    new_id: u32,
-) -> Result<(), std::io::Error> {
-    let send_id = 2u32; // registry id
-    let opcode = 0u16; // bind opcode
-
-    let padded_interface_len = (interface_len + 3) & !3;
-    let size = 8 + 4 + padded_interface_len + 4 + 4;
-    let size_u16 = size as u16;
-
-    let mut msg = Vec::<u8>::with_capacity(size);
-
-    // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
-    msg.extend_from_slice(&send_id.to_le_bytes());
-    msg.extend_from_slice(&opcode.to_le_bytes());
-    msg.extend_from_slice(&size_u16.to_le_bytes());
-
-    // Body:
-    // global_name (4 bytes LE)
-    msg.extend_from_slice(&global_name.to_le_bytes());
-
-    let mut interface_bytes = interface.to_vec();
-    interface_bytes.push(0); // Null-terminate
-    let interface_len = interface_bytes.len();
-    let padded_len = (interface_len + 3) & !3;
-    msg.extend_from_slice(&interface_bytes);
-    // Pad with zeroes to 4-byte alignment
-    for _ in interface_len..padded_len {
-        msg.push(0);
-    }
-
-    msg.extend_from_slice(&version.to_le_bytes());
-    msg.extend_from_slice(&new_id.to_le_bytes());
-
-    // Try to write all bytes
-    unsafe { write_all(fd, &msg)? };
-
-    // Flush the display buffer
-    if (wl.wl_display_flush)(display) < 0 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::BrokenPipe,
-            "wl_display_flush failed",
-        ));
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        println!("- [src/main.rs]");
-        println!("    - bind request message: {:?}", msg);
-    }
-
-    Ok(())
-}
-
 pub fn main() {
     #[cfg(debug_assertions)]
     println!("\n# [src/main.rs] Wayland Initialization\n");
@@ -180,6 +119,9 @@ pub fn main() {
             let mut found = [false; 5]; // 5 total interfaces
         }
         let mut found = [false; 4]; // 4 total interfaces
+        let mut message_pending = false;
+        let mut bind_messages = Vec::<Vec<u8>>::new();
+        let mut interface_index = 0;
 
         loop {
             #[cfg(debug_assertions)]
@@ -225,8 +167,10 @@ pub fn main() {
 
                     // keep polling till message is completed
                     if buffer.len() < size {
+                        message_pending = true;
                         break;
                     }
+                    message_pending = false;
 
                     let message_bytes: Vec<u8> =
                         buffer.drain(..size).collect();
@@ -270,7 +214,8 @@ pub fn main() {
 
                     match interface {
                         WL_COMPOSITOR => {
-                            found[0] = true;
+                            found[interface_index] = true;
+                            interface_index += 1;
                             #[cfg(debug_assertions)]
                             {
                                 println!("- [src/main.rs]");
@@ -283,13 +228,18 @@ pub fn main() {
                                 println!("    - interface: {:?}", interface);
                                 println!("    - version: {:?}", version);
                             }
-                            // global name, interface, version
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind opcode
 
-                            let padded_interface_len =
-                                (interface_len + 3) & !3;
-                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind
+
+                            let mut interface_bytes = interface.to_vec();
+                            if !interface_bytes.ends_with(&[0]) {
+                                interface_bytes.push(0); // Ensure null-termination
+                            }
+                            let padded_len = (interface_bytes.len() + 3) & !3;
+
+                            // Now safe to calculate message size
+                            let size = 8 + 4 + padded_len + 4 + 4;
                             let size_u16 = size as u16;
 
                             let new_id = next_id;
@@ -297,35 +247,31 @@ pub fn main() {
 
                             let mut msg = Vec::<u8>::with_capacity(size);
 
-                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            // Temporarily fill header with zeroes; we’ll patch later if needed
                             msg.extend_from_slice(&send_id.to_le_bytes());
                             msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
 
-                            // Body:
-                            // global_name (4 bytes LE)
                             msg.extend_from_slice(&global_name.to_le_bytes());
-
-                            let mut interface_bytes = interface.to_vec();
-                            interface_bytes.push(0); // Null-terminate
-                            let interface_len = interface_bytes.len();
-                            let padded_len = (interface_len + 3) & !3;
                             msg.extend_from_slice(&interface_bytes);
-                            // Pad with zeroes to 4-byte alignment
-                            for _ in interface_len..padded_len {
-                                msg.push(0);
-                            }
+                            msg.resize(
+                                msg.len()
+                                    + (padded_len - interface_bytes.len()),
+                                0,
+                            ); // pad with 0
 
                             msg.extend_from_slice(&version.to_le_bytes());
                             msg.extend_from_slice(&new_id.to_le_bytes());
 
-                            // Try to write all bytes
-                            write_all(fd, &msg).unwrap();
+                            bind_messages.push(msg);
 
-                            // Flush the display buffer
-                            if (wl.wl_display_flush)(display) < 0 {
-                                break;
-                            }
+                            // Try to write all bytes
+                            //write_all(fd, &msg).unwrap();
+
+                            //// Flush the display buffer
+                            //if (wl.wl_display_flush)(display) < 0 {
+                            //    break;
+                            //}
 
                             #[cfg(debug_assertions)]
                             {
@@ -334,14 +280,15 @@ pub fn main() {
                                     "    - sending to {:?}...",
                                     std::str::from_utf8(interface)
                                 );
-                                println!(
-                                    "    - bind request message: {:?}",
-                                    msg
-                                );
+                                //println!(
+                                //    "    - bind request message: {:?}",
+                                //    msg
+                                //);
                             }
                         },
                         WL_SEAT => {
-                            found[1] = true;
+                            found[interface_index] = true;
+                            interface_index += 1;
                             #[cfg(debug_assertions)]
                             {
                                 println!("- [src/main.rs]");
@@ -357,13 +304,18 @@ pub fn main() {
                                 println!("    - interface: {:?}", interface);
                                 println!("    - version: {:?}", version);
                             }
-                            // global name, interface, version
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind opcode
 
-                            let padded_interface_len =
-                                (interface_len + 3) & !3;
-                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind
+
+                            let mut interface_bytes = interface.to_vec();
+                            if !interface_bytes.ends_with(&[0]) {
+                                interface_bytes.push(0); // Ensure null-termination
+                            }
+                            let padded_len = (interface_bytes.len() + 3) & !3;
+
+                            // Now safe to calculate message size
+                            let size = 8 + 4 + padded_len + 4 + 4;
                             let size_u16 = size as u16;
 
                             let new_id = next_id;
@@ -371,35 +323,31 @@ pub fn main() {
 
                             let mut msg = Vec::<u8>::with_capacity(size);
 
-                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            // Temporarily fill header with zeroes; we’ll patch later if needed
                             msg.extend_from_slice(&send_id.to_le_bytes());
                             msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
 
-                            // Body:
-                            // global_name (4 bytes LE)
                             msg.extend_from_slice(&global_name.to_le_bytes());
-
-                            let mut interface_bytes = interface.to_vec();
-                            interface_bytes.push(0); // Null-terminate
-                            let interface_len = interface_bytes.len();
-                            let padded_len = (interface_len + 3) & !3;
                             msg.extend_from_slice(&interface_bytes);
-                            // Pad with zeroes to 4-byte alignment
-                            for _ in interface_len..padded_len {
-                                msg.push(0);
-                            }
+                            msg.resize(
+                                msg.len()
+                                    + (padded_len - interface_bytes.len()),
+                                0,
+                            ); // pad with 0
 
                             msg.extend_from_slice(&version.to_le_bytes());
                             msg.extend_from_slice(&new_id.to_le_bytes());
 
-                            // Try to write all bytes
-                            write_all(fd, &msg).unwrap();
+                            bind_messages.push(msg);
 
-                            // Flush the display buffer
-                            if (wl.wl_display_flush)(display) < 0 {
-                                break;
-                            }
+                            // Try to write all bytes
+                            //write_all(fd, &msg).unwrap();
+
+                            //// Flush the display buffer
+                            //if (wl.wl_display_flush)(display) < 0 {
+                            //    break;
+                            //}
 
                             #[cfg(debug_assertions)]
                             {
@@ -408,14 +356,15 @@ pub fn main() {
                                     "    - sending to {:?}...",
                                     std::str::from_utf8(interface)
                                 );
-                                println!(
-                                    "    - bind request message: {:?}",
-                                    msg
-                                );
+                                //println!(
+                                //    "    - bind request message: {:?}",
+                                //    msg
+                                //);
                             }
                         },
                         WL_SHM => {
-                            found[2] = true;
+                            found[interface_index] = true;
+                            interface_index += 1;
                             #[cfg(debug_assertions)]
                             {
                                 println!("- [src/main.rs]");
@@ -432,13 +381,17 @@ pub fn main() {
                                 println!("    - version: {:?}", version);
                             }
 
-                            // global name, interface, version
                             let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind opcode
+                            let opcode = 0u16; // bind
 
-                            let padded_interface_len =
-                                (interface_len + 3) & !3;
-                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let mut interface_bytes = interface.to_vec();
+                            if !interface_bytes.ends_with(&[0]) {
+                                interface_bytes.push(0); // Ensure null-termination
+                            }
+                            let padded_len = (interface_bytes.len() + 3) & !3;
+
+                            // Now safe to calculate message size
+                            let size = 8 + 4 + padded_len + 4 + 4;
                             let size_u16 = size as u16;
 
                             let new_id = next_id;
@@ -446,35 +399,31 @@ pub fn main() {
 
                             let mut msg = Vec::<u8>::with_capacity(size);
 
-                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            // Temporarily fill header with zeroes; we’ll patch later if needed
                             msg.extend_from_slice(&send_id.to_le_bytes());
                             msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
 
-                            // Body:
-                            // global_name (4 bytes LE)
                             msg.extend_from_slice(&global_name.to_le_bytes());
-
-                            let mut interface_bytes = interface.to_vec();
-                            interface_bytes.push(0); // Null-terminate
-                            let interface_len = interface_bytes.len();
-                            let padded_len = (interface_len + 3) & !3;
                             msg.extend_from_slice(&interface_bytes);
-                            // Pad with zeroes to 4-byte alignment
-                            for _ in interface_len..padded_len {
-                                msg.push(0);
-                            }
+                            msg.resize(
+                                msg.len()
+                                    + (padded_len - interface_bytes.len()),
+                                0,
+                            ); // pad with 0
 
                             msg.extend_from_slice(&version.to_le_bytes());
                             msg.extend_from_slice(&new_id.to_le_bytes());
 
-                            // Try to write all bytes
-                            write_all(fd, &msg).unwrap();
+                            bind_messages.push(msg);
 
-                            // Flush the display buffer
-                            if (wl.wl_display_flush)(display) < 0 {
-                                break;
-                            }
+                            // Try to write all bytes
+                            //write_all(fd, &msg).unwrap();
+
+                            //// Flush the display buffer
+                            //if (wl.wl_display_flush)(display) < 0 {
+                            //    break;
+                            //}
 
                             #[cfg(debug_assertions)]
                             {
@@ -483,14 +432,15 @@ pub fn main() {
                                     "    - sending to {:?}...",
                                     std::str::from_utf8(interface)
                                 );
-                                println!(
-                                    "    - bind request message: {:?}",
-                                    msg
-                                );
+                                //println!(
+                                //    "    - bind request message: {:?}",
+                                //    msg
+                                //);
                             }
                         },
                         XDG_WM_BASE => {
-                            found[3] = true;
+                            found[interface_index] = true;
+                            interface_index += 1;
                             #[cfg(debug_assertions)]
                             {
                                 println!("- [src/main.rs]");
@@ -507,13 +457,17 @@ pub fn main() {
                                 println!("    - version: {:?}", version);
                             }
 
-                            // global name, interface, version
                             let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind opcode
+                            let opcode = 0u16; // bind
 
-                            let padded_interface_len =
-                                (interface_len + 3) & !3;
-                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let mut interface_bytes = interface.to_vec();
+                            if !interface_bytes.ends_with(&[0]) {
+                                interface_bytes.push(0); // Ensure null-termination
+                            }
+                            let padded_len = (interface_bytes.len() + 3) & !3;
+
+                            // Now safe to calculate message size
+                            let size = 8 + 4 + padded_len + 4 + 4;
                             let size_u16 = size as u16;
 
                             let new_id = next_id;
@@ -521,35 +475,31 @@ pub fn main() {
 
                             let mut msg = Vec::<u8>::with_capacity(size);
 
-                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            // Temporarily fill header with zeroes; we’ll patch later if needed
                             msg.extend_from_slice(&send_id.to_le_bytes());
                             msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
 
-                            // Body:
-                            // global_name (4 bytes LE)
                             msg.extend_from_slice(&global_name.to_le_bytes());
-
-                            let mut interface_bytes = interface.to_vec();
-                            interface_bytes.push(0); // Null-terminate
-                            let interface_len = interface_bytes.len();
-                            let padded_len = (interface_len + 3) & !3;
                             msg.extend_from_slice(&interface_bytes);
-                            // Pad with zeroes to 4-byte alignment
-                            for _ in interface_len..padded_len {
-                                msg.push(0);
-                            }
+                            msg.resize(
+                                msg.len()
+                                    + (padded_len - interface_bytes.len()),
+                                0,
+                            ); // pad with 0
 
                             msg.extend_from_slice(&version.to_le_bytes());
                             msg.extend_from_slice(&new_id.to_le_bytes());
 
-                            // Try to write all bytes
-                            write_all(fd, &msg).unwrap();
+                            bind_messages.push(msg);
 
-                            // Flush the display buffer
-                            if (wl.wl_display_flush)(display) < 0 {
-                                break;
-                            }
+                            // Try to write all bytes
+                            //write_all(fd, &msg).unwrap();
+
+                            //// Flush the display buffer
+                            //if (wl.wl_display_flush)(display) < 0 {
+                            //    break;
+                            //}
 
                             #[cfg(debug_assertions)]
                             {
@@ -558,15 +508,16 @@ pub fn main() {
                                     "    - sending to {:?}...",
                                     std::str::from_utf8(interface)
                                 );
-                                println!(
-                                    "    - bind request message: {:?}",
-                                    msg
-                                );
+                                //println!(
+                                //    "    - bind request message: {:?}",
+                                //    msg
+                                //);
                             }
                         },
                         #[cfg(features = "zwp_linux_dmabuf_v1")]
                         ZWP_LINUX_DMABUF_V1 => {
-                            found[4] = true;
+                            found[interface_index] = true;
+                            interface_index += 1;
                             #[cfg(debug_assertions)]
                             {
                                 println!("- [src/main.rs]");
@@ -582,13 +533,18 @@ pub fn main() {
                                 println!("    - interface: {:?}", interface);
                                 println!("    - version: {:?}", version);
                             }
-                            // global name, interface, version
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind opcode
 
-                            let padded_interface_len =
-                                (interface_len + 3) & !3;
-                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind
+
+                            let mut interface_bytes = interface.to_vec();
+                            if !interface_bytes.ends_with(&[0]) {
+                                interface_bytes.push(0); // Ensure null-termination
+                            }
+                            let padded_len = (interface_bytes.len() + 3) & !3;
+
+                            // Now safe to calculate message size
+                            let size = 8 + 4 + padded_len + 4 + 4;
                             let size_u16 = size as u16;
 
                             let new_id = next_id;
@@ -596,35 +552,31 @@ pub fn main() {
 
                             let mut msg = Vec::<u8>::with_capacity(size);
 
-                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            // Temporarily fill header with zeroes; we’ll patch later if needed
                             msg.extend_from_slice(&send_id.to_le_bytes());
                             msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
 
-                            // Body:
-                            // global_name (4 bytes LE)
                             msg.extend_from_slice(&global_name.to_le_bytes());
-
-                            let mut interface_bytes = interface.to_vec();
-                            interface_bytes.push(0); // Null-terminate
-                            let interface_len = interface_bytes.len();
-                            let padded_len = (interface_len + 3) & !3;
                             msg.extend_from_slice(&interface_bytes);
-                            // Pad with zeroes to 4-byte alignment
-                            for _ in interface_len..padded_len {
-                                msg.push(0);
-                            }
+                            msg.resize(
+                                msg.len()
+                                    + (padded_len - interface_bytes.len()),
+                                0,
+                            ); // pad with 0
 
                             msg.extend_from_slice(&version.to_le_bytes());
                             msg.extend_from_slice(&new_id.to_le_bytes());
 
-                            // Try to write all bytes
-                            write_all(fd, &msg).unwrap();
+                            bind_messages.push(msg);
 
-                            // Flush the display buffer
-                            if (wl.wl_display_flush)(display) < 0 {
-                                break;
-                            }
+                            // Try to write all bytes
+                            //write_all(fd, &msg).unwrap();
+
+                            //// Flush the display buffer
+                            //if (wl.wl_display_flush)(display) < 0 {
+                            //    break;
+                            //}
 
                             #[cfg(debug_assertions)]
                             {
@@ -633,21 +585,21 @@ pub fn main() {
                                     "    - sending to {:?}...",
                                     std::str::from_utf8(interface)
                                 );
-                                println!(
-                                    "    - bind request message: {:?}",
-                                    msg
-                                );
+                                //println!(
+                                //    "    - bind request message: {:?}",
+                                //    msg
+                                //);
                             }
                         },
                         _ => {},
                     }
                 }
                 // After the match, check if all are found:
-                if found.iter().all(|&f| f) {
+                if found.iter().all(|&f| f) && !message_pending {
                     #[cfg(debug_assertions)]
                     {
                         println!("- [src/main.rs]");
-                        println!("    - found all, attempted binds");
+                        println!("    - found all, will attempt binds...");
                     }
 
                     break; // exit the loop once all found
@@ -656,51 +608,52 @@ pub fn main() {
         }
         // finally free
 
-        // ids interfaces interfaces_start_len versions
-        //for i in 0..ids.len() {
-        //    let [start, len] = interfaces_start_len[i];
-        //    let interface_bytes =
-        //        &interfaces[start as usize..(start + len) as usize];
-        //    let global_name = ids[i];
-        //    let version = versions[i];
-        //    let new_id = next_id;
-        //    next_id += 1;
+        for msg in &bind_messages {
+            #[cfg(debug_assertions)]
+            {
+                // Validate message size
+                let msg_len = msg.len();
+                let expected_size =
+                    u16::from_le_bytes([msg[6], msg[7]]) as usize;
 
-        //    match request_bind(
-        //        fd,
-        //        &wl,
-        //        display,
-        //        global_name,
-        //        len as usize,
-        //        interface_bytes,
-        //        version,
-        //        new_id,
-        //    ) {
-        //        Ok(_) => {
-        //            #[cfg(debug_assertions)]
-        //            {
-        //                if i == 0 {
-        //                    println!("- [src/main.rs]");
-        //                }
-        //                // Try to print as UTF-8 string for readability, fallback to bytes
-        //                let interface_str =
-        //                    match std::str::from_utf8(interface_bytes) {
-        //                        Ok(s) => s.trim_end_matches('\0'),
-        //                        Err(_) => "<invalid utf8>",
-        //                    };
+                let interface_bytes = &msg[12..msg_len - 8];
+                let interface_str = std::str::from_utf8(interface_bytes)
+                    .unwrap_or("<invalid utf8>")
+                    .trim_end_matches('\0');
 
-        //                println!(
-        //                    "    - Interface: {:<25} ID: {:<4} Version: {}",
-        //                    interface_str, global_name, version
-        //                );
-        //            }
-        //        },
-        //        Err(e) => {
-        //            eprintln!("ERROR: request_bind failed: {}", e);
-        //            break;
-        //        },
-        //    }
-        //}
+                println!("- [src/main.rs]");
+                println!(
+                    "    - {:?} bind: size={} (header says {}), send_id={}, opcode={}",
+                    interface_str,
+                    msg_len,
+                    expected_size,
+                    u32::from_le_bytes([msg[0], msg[1], msg[2], msg[3]]),
+                    u16::from_le_bytes([msg[4], msg[5]])
+                );
+
+                if msg_len != expected_size {
+                    println!("    - ❌ size mismatch!");
+                }
+
+                println!(
+                    "    - global_name={}, new_id={}",
+                    u32::from_le_bytes([msg[8], msg[9], msg[10], msg[11]]),
+                    u32::from_le_bytes([
+                        msg[msg.len() - 4],
+                        msg[msg.len() - 3],
+                        msg[msg.len() - 2],
+                        msg[msg.len() - 1]
+                    ])
+                );
+            }
+
+            write_all(fd, &msg).unwrap();
+
+            if (wl.wl_display_flush)(display) < 0 {
+                break;
+            }
+
+        }
 
         (wl.wl_display_disconnect)(display);
     }

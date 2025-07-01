@@ -12,3 +12,9 @@ libc = "0.2"
 
 [build-dependencies]
 xmltree = "0.11"
+
+[profile.dev]
+debug_assertions = true
+
+[profile.release]
+debug_assertions = false

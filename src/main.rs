@@ -174,8 +174,12 @@ pub fn main() {
         const WL_SEAT: &[u8] = b"wl_seat\0";
         const WL_SHM: &[u8] = b"wl_shm\0";
         const XDG_WM_BASE: &[u8] = b"xdg_wm_base\0";
-        const ZWP_LINUX_DMABUF_V1: &[u8] = b"zwp_linux_dmabuf_v1\0";
-        let mut found = [false; 5]; // 5 total interfaces
+        #[cfg(features = "zwp_linux_dmabuf_v1")]
+        {
+            const ZWP_LINUX_DMABUF_V1: &[u8] = b"zwp_linux_dmabuf_v1\0";
+            let mut found = [false; 5]; // 5 total interfaces
+        }
+        let mut found = [false; 4]; // 4 total interfaces
 
         loop {
             #[cfg(debug_assertions)]
@@ -252,138 +256,400 @@ pub fn main() {
                             .unwrap(),
                     );
 
-                    //#[cfg(debug_assertions)]
-                    //{
-                    //    println!("- [src/main.rs]");
-                    //    println!("    - object_id: {:?}", object_id);
-                    //    println!("    - global_name: {:?}", global_name);
-                    //    println!("    - interface: {:?}", interface);
-                    //    println!("    - version: {:?}", version);
-                    //}
+                    #[cfg(debug_assertions)]
+                    {
+                        //println!("- [src/main.rs]");
+                        //println!("    - object_id: {:?}", object_id);
+                        //println!("    - global_name: {:?}", global_name);
+                        //println!(
+                        //    "    - interface: {:?}",
+                        //    std::str::from_utf8(interface)
+                        //);
+                        //println!("    - version: {:?}", version);
+                    }
 
                     match interface {
                         WL_COMPOSITOR => {
+                            found[0] = true;
                             #[cfg(debug_assertions)]
                             {
-                                //println!("- [src/main.rs]");
-                                //println!("    - found WL_COMPOSITOR");
-                                //println!("    - object_id: {:?}", object_id);
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!("    - interface: {:?}", interface);
-                                //println!("    - version: {:?}", version);
+                                println!("- [src/main.rs]");
+                                println!("    - found WL_COMPOSITOR");
+                                println!("    - object_id: {:?}", object_id);
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!("    - interface: {:?}", interface);
+                                println!("    - version: {:?}", version);
                             }
-                            ids.push(global_name);
-                            let start = interfaces.len() as u16;
-                            interfaces.extend_from_slice(interface);
-                            let len = interface_len as u16;
-                            interfaces_start_len.push([start, len]);
-                            versions.push(version);
-                            found[0] = true;
+                            // global name, interface, version
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind opcode
+
+                            let padded_interface_len =
+                                (interface_len + 3) & !3;
+                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let size_u16 = size as u16;
+
+                            let new_id = next_id;
+                            next_id += 1;
+
+                            let mut msg = Vec::<u8>::with_capacity(size);
+
+                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            msg.extend_from_slice(&send_id.to_le_bytes());
+                            msg.extend_from_slice(&opcode.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes());
+
+                            // Body:
+                            // global_name (4 bytes LE)
+                            msg.extend_from_slice(&global_name.to_le_bytes());
+
+                            let mut interface_bytes = interface.to_vec();
+                            interface_bytes.push(0); // Null-terminate
+                            let interface_len = interface_bytes.len();
+                            let padded_len = (interface_len + 3) & !3;
+                            msg.extend_from_slice(&interface_bytes);
+                            // Pad with zeroes to 4-byte alignment
+                            for _ in interface_len..padded_len {
+                                msg.push(0);
+                            }
+
+                            msg.extend_from_slice(&version.to_le_bytes());
+                            msg.extend_from_slice(&new_id.to_le_bytes());
+
+                            // Try to write all bytes
+                            write_all(fd, &msg).unwrap();
+
+                            // Flush the display buffer
+                            if (wl.wl_display_flush)(display) < 0 {
+                                break;
+                            }
+
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("- [src/main.rs]");
+                                println!(
+                                    "    - sending to {:?}...",
+                                    std::str::from_utf8(interface)
+                                );
+                                println!(
+                                    "    - bind request message: {:?}",
+                                    msg
+                                );
+                            }
                         },
                         WL_SEAT => {
+                            found[1] = true;
                             #[cfg(debug_assertions)]
                             {
-                                //println!("- [src/main.rs]");
-                                //println!("    - found WL_SEAT");
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!("    - interface: {:?}", interface);
-                                //println!("    - version: {:?}", version);
+                                println!("- [src/main.rs]");
+                                println!("    - found WL_SEAT");
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!("    - interface: {:?}", interface);
+                                println!("    - version: {:?}", version);
                             }
-                            ids.push(global_name);
-                            let start = interfaces.len() as u16;
-                            interfaces.extend_from_slice(interface);
-                            let len = interface_len as u16;
-                            interfaces_start_len.push([start, len]);
-                            versions.push(version);
-                            found[1] = true;
+                            // global name, interface, version
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind opcode
+
+                            let padded_interface_len =
+                                (interface_len + 3) & !3;
+                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let size_u16 = size as u16;
+
+                            let new_id = next_id;
+                            next_id += 1;
+
+                            let mut msg = Vec::<u8>::with_capacity(size);
+
+                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            msg.extend_from_slice(&send_id.to_le_bytes());
+                            msg.extend_from_slice(&opcode.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes());
+
+                            // Body:
+                            // global_name (4 bytes LE)
+                            msg.extend_from_slice(&global_name.to_le_bytes());
+
+                            let mut interface_bytes = interface.to_vec();
+                            interface_bytes.push(0); // Null-terminate
+                            let interface_len = interface_bytes.len();
+                            let padded_len = (interface_len + 3) & !3;
+                            msg.extend_from_slice(&interface_bytes);
+                            // Pad with zeroes to 4-byte alignment
+                            for _ in interface_len..padded_len {
+                                msg.push(0);
+                            }
+
+                            msg.extend_from_slice(&version.to_le_bytes());
+                            msg.extend_from_slice(&new_id.to_le_bytes());
+
+                            // Try to write all bytes
+                            write_all(fd, &msg).unwrap();
+
+                            // Flush the display buffer
+                            if (wl.wl_display_flush)(display) < 0 {
+                                break;
+                            }
+
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("- [src/main.rs]");
+                                println!(
+                                    "    - sending to {:?}...",
+                                    std::str::from_utf8(interface)
+                                );
+                                println!(
+                                    "    - bind request message: {:?}",
+                                    msg
+                                );
+                            }
                         },
                         WL_SHM => {
+                            found[2] = true;
                             #[cfg(debug_assertions)]
                             {
-                                //println!("- [src/main.rs]");
-                                //println!("    - found WL_SHM");
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!("    - interface: {:?}", interface);
-                                //println!("    - version: {:?}", version);
+                                println!("- [src/main.rs]");
+                                println!("    - found WL_SHM");
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!("    - interface: {:?}", interface);
+                                println!("    - version: {:?}", version);
                             }
-                            ids.push(global_name);
-                            let start = interfaces.len() as u16;
-                            interfaces.extend_from_slice(interface);
-                            let len = interface_len as u16;
-                            interfaces_start_len.push([start, len]);
-                            versions.push(version);
-                            found[2] = true;
+
+                            // global name, interface, version
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind opcode
+
+                            let padded_interface_len =
+                                (interface_len + 3) & !3;
+                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let size_u16 = size as u16;
+
+                            let new_id = next_id;
+                            next_id += 1;
+
+                            let mut msg = Vec::<u8>::with_capacity(size);
+
+                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            msg.extend_from_slice(&send_id.to_le_bytes());
+                            msg.extend_from_slice(&opcode.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes());
+
+                            // Body:
+                            // global_name (4 bytes LE)
+                            msg.extend_from_slice(&global_name.to_le_bytes());
+
+                            let mut interface_bytes = interface.to_vec();
+                            interface_bytes.push(0); // Null-terminate
+                            let interface_len = interface_bytes.len();
+                            let padded_len = (interface_len + 3) & !3;
+                            msg.extend_from_slice(&interface_bytes);
+                            // Pad with zeroes to 4-byte alignment
+                            for _ in interface_len..padded_len {
+                                msg.push(0);
+                            }
+
+                            msg.extend_from_slice(&version.to_le_bytes());
+                            msg.extend_from_slice(&new_id.to_le_bytes());
+
+                            // Try to write all bytes
+                            write_all(fd, &msg).unwrap();
+
+                            // Flush the display buffer
+                            if (wl.wl_display_flush)(display) < 0 {
+                                break;
+                            }
+
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("- [src/main.rs]");
+                                println!(
+                                    "    - sending to {:?}...",
+                                    std::str::from_utf8(interface)
+                                );
+                                println!(
+                                    "    - bind request message: {:?}",
+                                    msg
+                                );
+                            }
                         },
                         XDG_WM_BASE => {
-                            #[cfg(debug_assertions)]
-                            {
-                                //println!("- [src/main.rs]");
-                                //println!("    - found XDG_WM_BASE");
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!("    - interface: {:?}", interface);
-                                //println!("    - version: {:?}", version);
-                            }
-                            ids.push(global_name);
-                            let start = interfaces.len() as u16;
-                            interfaces.extend_from_slice(interface);
-                            let len = interface_len as u16;
-                            interfaces_start_len.push([start, len]);
-                            versions.push(version);
                             found[3] = true;
-                        },
-                        ZWP_LINUX_DMABUF_V1 => {
                             #[cfg(debug_assertions)]
                             {
-                                //println!("- [src/main.rs]");
-                                //println!("    - found ZWP_LINUX_DMABUF_V1");
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!(
-                                //    "    - global_name: {:?}",
-                                //    global_name
-                                //);
-                                //println!("    - interface: {:?}", interface);
-                                //println!("    - version: {:?}", version);
+                                println!("- [src/main.rs]");
+                                println!("    - found XDG_WM_BASE");
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!("    - interface: {:?}", interface);
+                                println!("    - version: {:?}", version);
                             }
-                            ids.push(global_name);
-                            let start = interfaces.len() as u16;
-                            interfaces.extend_from_slice(interface);
-                            let len = interface_len as u16;
-                            interfaces_start_len.push([start, len]);
-                            versions.push(version);
+
+                            // global name, interface, version
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind opcode
+
+                            let padded_interface_len =
+                                (interface_len + 3) & !3;
+                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let size_u16 = size as u16;
+
+                            let new_id = next_id;
+                            next_id += 1;
+
+                            let mut msg = Vec::<u8>::with_capacity(size);
+
+                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            msg.extend_from_slice(&send_id.to_le_bytes());
+                            msg.extend_from_slice(&opcode.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes());
+
+                            // Body:
+                            // global_name (4 bytes LE)
+                            msg.extend_from_slice(&global_name.to_le_bytes());
+
+                            let mut interface_bytes = interface.to_vec();
+                            interface_bytes.push(0); // Null-terminate
+                            let interface_len = interface_bytes.len();
+                            let padded_len = (interface_len + 3) & !3;
+                            msg.extend_from_slice(&interface_bytes);
+                            // Pad with zeroes to 4-byte alignment
+                            for _ in interface_len..padded_len {
+                                msg.push(0);
+                            }
+
+                            msg.extend_from_slice(&version.to_le_bytes());
+                            msg.extend_from_slice(&new_id.to_le_bytes());
+
+                            // Try to write all bytes
+                            write_all(fd, &msg).unwrap();
+
+                            // Flush the display buffer
+                            if (wl.wl_display_flush)(display) < 0 {
+                                break;
+                            }
+
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("- [src/main.rs]");
+                                println!(
+                                    "    - sending to {:?}...",
+                                    std::str::from_utf8(interface)
+                                );
+                                println!(
+                                    "    - bind request message: {:?}",
+                                    msg
+                                );
+                            }
+                        },
+                        #[cfg(features = "zwp_linux_dmabuf_v1")]
+                        ZWP_LINUX_DMABUF_V1 => {
                             found[4] = true;
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("- [src/main.rs]");
+                                println!("    - found ZWP_LINUX_DMABUF_V1");
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!(
+                                    "    - global_name: {:?}",
+                                    global_name
+                                );
+                                println!("    - interface: {:?}", interface);
+                                println!("    - version: {:?}", version);
+                            }
+                            // global name, interface, version
+                            let send_id = 2u32; // registry id
+                            let opcode = 0u16; // bind opcode
+
+                            let padded_interface_len =
+                                (interface_len + 3) & !3;
+                            let size = 8 + 4 + padded_interface_len + 4 + 4;
+                            let size_u16 = size as u16;
+
+                            let new_id = next_id;
+                            next_id += 1;
+
+                            let mut msg = Vec::<u8>::with_capacity(size);
+
+                            // Header: send_id (4 bytes LE), opcode (2 bytes LE), size (2 bytes LE)
+                            msg.extend_from_slice(&send_id.to_le_bytes());
+                            msg.extend_from_slice(&opcode.to_le_bytes());
+                            msg.extend_from_slice(&size_u16.to_le_bytes());
+
+                            // Body:
+                            // global_name (4 bytes LE)
+                            msg.extend_from_slice(&global_name.to_le_bytes());
+
+                            let mut interface_bytes = interface.to_vec();
+                            interface_bytes.push(0); // Null-terminate
+                            let interface_len = interface_bytes.len();
+                            let padded_len = (interface_len + 3) & !3;
+                            msg.extend_from_slice(&interface_bytes);
+                            // Pad with zeroes to 4-byte alignment
+                            for _ in interface_len..padded_len {
+                                msg.push(0);
+                            }
+
+                            msg.extend_from_slice(&version.to_le_bytes());
+                            msg.extend_from_slice(&new_id.to_le_bytes());
+
+                            // Try to write all bytes
+                            write_all(fd, &msg).unwrap();
+
+                            // Flush the display buffer
+                            if (wl.wl_display_flush)(display) < 0 {
+                                break;
+                            }
+
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("- [src/main.rs]");
+                                println!(
+                                    "    - sending to {:?}...",
+                                    std::str::from_utf8(interface)
+                                );
+                                println!(
+                                    "    - bind request message: {:?}",
+                                    msg
+                                );
+                            }
                         },
                         _ => {},
                     }
                 }
                 // After the match, check if all are found:
                 if found.iter().all(|&f| f) {
+                    #[cfg(debug_assertions)]
+                    {
+                        println!("- [src/main.rs]");
+                        println!("    - found all, attempted binds");
+                    }
+
                     break; // exit the loop once all found
                 }
             }
@@ -391,50 +657,50 @@ pub fn main() {
         // finally free
 
         // ids interfaces interfaces_start_len versions
-        for i in 0..ids.len() {
-            let [start, len] = interfaces_start_len[i];
-            let interface_bytes =
-                &interfaces[start as usize..(start + len) as usize];
-            let global_name = ids[i];
-            let version = versions[i];
-            let new_id = next_id;
-            next_id += 1;
+        //for i in 0..ids.len() {
+        //    let [start, len] = interfaces_start_len[i];
+        //    let interface_bytes =
+        //        &interfaces[start as usize..(start + len) as usize];
+        //    let global_name = ids[i];
+        //    let version = versions[i];
+        //    let new_id = next_id;
+        //    next_id += 1;
 
-            match request_bind(
-                fd,
-                &wl,
-                display,
-                global_name,
-                len as usize,
-                interface_bytes,
-                version,
-                new_id,
-            ) {
-                Ok(_) => {
-                    #[cfg(debug_assertions)]
-                    {
-                        if i == 0 {
-                            println!("- [src/main.rs]");
-                        }
-                        // Try to print as UTF-8 string for readability, fallback to bytes
-                        let interface_str =
-                            match std::str::from_utf8(interface_bytes) {
-                                Ok(s) => s.trim_end_matches('\0'),
-                                Err(_) => "<invalid utf8>",
-                            };
+        //    match request_bind(
+        //        fd,
+        //        &wl,
+        //        display,
+        //        global_name,
+        //        len as usize,
+        //        interface_bytes,
+        //        version,
+        //        new_id,
+        //    ) {
+        //        Ok(_) => {
+        //            #[cfg(debug_assertions)]
+        //            {
+        //                if i == 0 {
+        //                    println!("- [src/main.rs]");
+        //                }
+        //                // Try to print as UTF-8 string for readability, fallback to bytes
+        //                let interface_str =
+        //                    match std::str::from_utf8(interface_bytes) {
+        //                        Ok(s) => s.trim_end_matches('\0'),
+        //                        Err(_) => "<invalid utf8>",
+        //                    };
 
-                        println!(
-                            "    - Interface: {:<25} ID: {:<4} Version: {}",
-                            interface_str, global_name, version
-                        );
-                    }
-                },
-                Err(e) => {
-                    eprintln!("ERROR: request_bind failed: {}", e);
-                    break;
-                },
-            }
-        }
+        //                println!(
+        //                    "    - Interface: {:<25} ID: {:<4} Version: {}",
+        //                    interface_str, global_name, version
+        //                );
+        //            }
+        //        },
+        //        Err(e) => {
+        //            eprintln!("ERROR: request_bind failed: {}", e);
+        //            break;
+        //        },
+        //    }
+        //}
 
         (wl.wl_display_disconnect)(display);
     }

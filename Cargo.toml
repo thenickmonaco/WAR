@@ -18,3 +18,7 @@ debug_assertions = true
 
 [profile.release]
 debug_assertions = false
+
+[features]
+default = []
+zwp_linux_dmabuf_v1 = []

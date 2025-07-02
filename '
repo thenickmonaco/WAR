@@ -76,12 +76,11 @@ pub fn make_bind_message(
     msg.extend_from_slice(&new_id.to_le_bytes()); // 4 bytes
 
     debug!(
-        "Binding interface '{}' (version {}), global_name={}, new_id={}, msg_bytes={:?}, msg_len={}",
-        // Use interface_bytes here to reflect the actual bytes sent (with null terminator)
-        String::from_utf8_lossy(&interface_bytes),
+        "Binding interface '{}' (version {}), global_name={}, new_id={}, msg_bytes={:?}, msg={}",
+        String::from_utf8_lossy(interface),
         version,
         global_name,
-        new_id,              // use new_id BEFORE increment
+        *next_id,
         msg,
         msg.len(),
     );
@@ -108,9 +107,7 @@ pub unsafe fn write_message(fd: i32, mut buf: &[u8]) -> Result<(), Error> {
                         "write would block",
                     ));
                 },
-                _ => {
-                    return Err(Error::last_os_error());
-                },
+                _ => return Err(Error::last_os_error()),
             }
         } else if written == 0 {
             // Avoid infinite loop
@@ -124,7 +121,6 @@ pub unsafe fn write_message(fd: i32, mut buf: &[u8]) -> Result<(), Error> {
         }
     }
 
-    debug!("something written");
     Ok(())
 }
 
@@ -172,11 +168,6 @@ pub unsafe fn request_bind(
             "interface_index out of bounds",
         ));
     }
-
-    assert!(
-        interface.ends_with(&[0]),
-        "Interface name must be null-terminated"
-    );
 
     found[*interface_index] = true;
 
@@ -292,10 +283,12 @@ pub fn main() {
                 let bytes_read = match file.read(&mut temp_buf) {
                     Ok(0) => {
                         // EOF
+                        eprintln!("EOF reached");
                         break;
                     },
                     Ok(n) => n,
                     Err(e) => {
+                        eprintln!("Read error: {}", e);
                         break;
                     },
                 };
@@ -334,7 +327,7 @@ pub fn main() {
 
                     let body = &message_bytes[8..];
 
-                    // global message, opcode 0 (for bind requests)
+                    // global message, ignores anything other than opcode 0
                     if object_id == registry_id && opcode == 0 {
                         let global_name =
                             u32::from_le_bytes(body[0..4].try_into().unwrap());
@@ -366,12 +359,12 @@ pub fn main() {
                                 .unwrap(),
                         );
 
-                        //debug!(
-                        //    "offered global: name={} interface={} version={}",
-                        //    global_name,
-                        //    String::from_utf8_lossy(interface),
-                        //    version
-                        //);
+                        debug!(
+                            "offered global: name={} interface={} version={}",
+                            global_name,
+                            String::from_utf8_lossy(interface),
+                            version
+                        );
 
                         let is_relevant_interface = interface == WL_COMPOSITOR
                             || interface == WL_SEAT
@@ -411,13 +404,11 @@ pub fn main() {
                                 eprintln!("request_bind failed {}", e);
                                 break;
                             }
-                        } else {
-                            continue; // skip!
                         }
                     } else if object_id == registry_id && opcode == 1 {
-                        //debug!("Unhandled global_remove message: object_id = {}, opcode = {}, bytes = {:?}", object_id, opcode, message_bytes);
+                        println!("Unhandled global_remove message: object_id = {}, opcode = {}, bytes = {:?}, interface = {:?}", object_id, opcode, message_bytes);
                     } else {
-                        debug!(
+                        println!(
                             "Unhandled non-global message: object_id = {}, opcode = {}, bytes = {:?}",
                             object_id, opcode, message_bytes
                         );

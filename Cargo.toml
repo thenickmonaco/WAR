@@ -22,3 +22,5 @@ debug_assertions = false
 [features]
 default = []
 zwp_linux_dmabuf_v1 = []
+blocking = []
+nonblocking = []

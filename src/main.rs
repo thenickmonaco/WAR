@@ -18,42 +18,165 @@
 // src/main.rs
 //=============================================================================
 
+#[macro_use]
+mod macros;
+
 mod input;
 mod lua;
 mod render;
 
 mod data;
 
+use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 use libc::{poll, pollfd, POLLIN};
 use std::io::{Error, ErrorKind, Read};
 use std::{fs::File, mem::ManuallyDrop, os::unix::io::FromRawFd, ptr};
 use wayland_sys::client::{wayland_client_handle, wl_display, WaylandClient};
 
-pub unsafe fn write_all(fd: i32, mut buf: &[u8]) -> Result<(), Error> {
+pub fn make_bind_message(
+    interface: &[u8],
+    next_id: &mut u32,
+    global_name: u32,
+    version: u32,
+) -> Vec<u8> {
+    let send_id = 2u32; // registry id
+    let opcode = 0u16; // bind
+
+    let mut interface_bytes = interface.to_vec();
+    if !interface_bytes.ends_with(&[0]) {
+        interface_bytes.push(0); // Ensure null-termination
+    }
+    let padded_len = (interface_bytes.len() + 3) & !3;
+
+    // Now safe to calculate message size
+    let size = 8 + 4 + padded_len + 4 + 4;
+    let size_u16 = size as u16;
+
+    let new_id = *next_id;
+    *next_id += 1;
+
+    let mut msg = Vec::<u8>::with_capacity(size);
+
+    // Temporarily fill header with zeroes; we’ll patch later if needed
+    msg.extend_from_slice(&send_id.to_le_bytes());
+    msg.extend_from_slice(&opcode.to_le_bytes());
+    msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
+
+    msg.extend_from_slice(&global_name.to_le_bytes());
+    msg.extend_from_slice(&interface_bytes);
+    msg.resize(msg.len() + (padded_len - interface_bytes.len()), 0); // pad with 0
+
+    msg.extend_from_slice(&version.to_le_bytes());
+    msg.extend_from_slice(&new_id.to_le_bytes());
+
+    msg
+}
+
+pub unsafe fn write_message(fd: i32, mut buf: &[u8]) -> Result<(), Error> {
     while !buf.is_empty() {
         let written = libc::write(fd, buf.as_ptr() as *const _, buf.len());
+
         if written < 0 {
             let err = *libc::__errno_location();
-            if err == libc::EPIPE {
-                return Err(Error::new(
-                    ErrorKind::BrokenPipe,
-                    "connection closed",
-                ));
-            } else {
-                return Err(Error::last_os_error());
+            match err {
+                libc::EPIPE => {
+                    return Err(Error::new(
+                        ErrorKind::BrokenPipe,
+                        "connection closed",
+                    ));
+                },
+                libc::EAGAIN | libc::EWOULDBLOCK => {
+                    return Err(Error::new(
+                        ErrorKind::WouldBlock,
+                        "write would block",
+                    ));
+                },
+                _ => return Err(Error::last_os_error()),
             }
+        } else if written == 0 {
+            // Avoid infinite loop
+            return Err(Error::new(
+                ErrorKind::WriteZero,
+                "write returned zero bytes",
+            ));
         } else {
             let written = written as usize;
             buf = &buf[written..];
         }
     }
+
+    Ok(())
+}
+
+pub unsafe fn set_fd_flags(fd: i32) -> std::io::Result<()> {
+    #[cfg(feature = "nonblocking")]
+    {
+        let flags = fcntl(fd, F_GETFL);
+        if flags < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        if fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    #[cfg(feature = "blocking")]
+    {
+        let flags = fcntl(fd, F_GETFL);
+        if flags < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        if fcntl(fd, F_SETFL, flags & !O_NONBLOCK) < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
+pub unsafe fn request_bind(
+    found: &mut [bool],
+    interface_index: usize,
+    interface: &[u8],
+    next_id: &mut u32,
+    global_name: u32,
+    version: u32,
+    fd: i32,
+    wl: &WaylandClient,
+    display: *mut wl_display,
+) -> Result<(), std::io::Error> {
+    if interface_index >= found.len() {
+        println!("iface index out of bounds in request_bind");
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "interface_index out of bounds",
+        ));
+    }
+
+    found[interface_index] = true;
+    // interface_index is passed by value, so no need to increment here
+
+    let msg = &make_bind_message(interface, next_id, global_name, version);
+
+    match write_message(fd, msg) {
+        Ok(_) => (),
+        Err(e) => {
+            println!("write_message failed: {}", e);
+            return Err(e);
+        },
+    }
+
+    debug!("msg: {:?}", msg);
+
+    if (wl.wl_display_flush)(display) < 0 {
+        println!("flush fail in request_bind");
+        return Err(std::io::Error::last_os_error());
+    }
+
     Ok(())
 }
 
 pub fn main() {
-    #[cfg(debug_assertions)]
-    println!("\n# [src/main.rs] Wayland Initialization\n");
-
     let wl = wayland_client_handle();
 
     unsafe {
@@ -64,6 +187,7 @@ pub fn main() {
         }
 
         let fd = (wl.wl_display_get_fd)(display);
+        set_fd_flags(fd).expect("Failed to set nonblocking fd");
         if fd < 0 {
             eprintln!("ERROR: Invalid file descriptor from Wayland");
             (wl.wl_display_disconnect)(display);
@@ -71,7 +195,7 @@ pub fn main() {
         }
 
         let mut next_id: u32 = 2;
-        let registry_id = next_id;
+        let registry_id = next_id; // 2
         next_id += 1;
 
         // Send get_registry message
@@ -83,15 +207,27 @@ pub fn main() {
 
         let written = libc::write(fd, msg.as_ptr() as *const _, msg.len());
 
-        #[cfg(debug_assertions)]
-        {
-            //println!("- [src/main.rs]");
-            //println!("    - written get_registry message size: {:?}", written);
-            //println!("    - message contents: {:?}", msg);
+        if written < 0 {
+            let err = *libc::__errno_location();
+
+            if err == libc::EAGAIN || err == libc::EWOULDBLOCK {
+                eprintln!("INFO: write would block — buffer and retry later");
+                // TODO: buffer `msg` for later retry when fd is writable
+                return;
+            }
+
+            if err == libc::EPIPE {
+                eprintln!("ERROR: broken pipe — connection closed");
+            } else {
+                eprintln!("ERROR: write failed with errno {}", err);
+            }
+
+            (wl.wl_display_disconnect)(display);
+            return;
         }
 
-        if written < 0 || (wl.wl_display_flush)(display) < 0 {
-            eprintln!("ERROR: write/flush failed");
+        if (wl.wl_display_flush)(display) < 0 {
+            eprintln!("ERROR: wl_display_flush failed");
             (wl.wl_display_disconnect)(display);
             return;
         }
@@ -102,34 +238,23 @@ pub fn main() {
         let mut buffer = Vec::<u8>::new();
         let mut temp_buf = [0u8; 4096];
 
-        let (mut ids, mut interfaces, mut interfaces_start_len, mut versions) = (
-            Vec::<u32>::new(),
-            Vec::<u8>::new(),
-            Vec::<[u16; 2]>::new(),
-            Vec::<u32>::new(),
-        );
-
         const WL_COMPOSITOR: &[u8] = b"wl_compositor\0";
         const WL_SEAT: &[u8] = b"wl_seat\0";
         const WL_SHM: &[u8] = b"wl_shm\0";
         const XDG_WM_BASE: &[u8] = b"xdg_wm_base\0";
-        #[cfg(features = "zwp_linux_dmabuf_v1")]
-        {
-            const ZWP_LINUX_DMABUF_V1: &[u8] = b"zwp_linux_dmabuf_v1\0";
-            let mut found = [false; 5]; // 5 total interfaces
-        }
-        let mut found = [false; 4]; // 4 total interfaces
+        const ZWP_LINUX_DMABUF_V1: &[u8] = b"zwp_linux_dmabuf_v1\0";
+
+        #[cfg(feature = "zwp_linux_dmabuf_v1")]
+        const INTERFACE_COUNT: usize = 5;
+
+        #[cfg(not(feature = "zwp_linux_dmabuf_v1"))]
+        const INTERFACE_COUNT: usize = 4;
+
+        let mut found = [false; INTERFACE_COUNT];
         let mut message_pending = false;
-        let mut bind_messages = Vec::<Vec<u8>>::new();
-        let mut interface_index = 0;
+        let interface_index = 0;
 
         loop {
-            #[cfg(debug_assertions)]
-            {
-                //println!("- [src/main.rs]");
-                //println!("    - waiting for poll_result");
-            }
-
             let poll_result = poll(fds.as_mut_ptr(), 1, -1);
             if poll_result < 0 {
                 eprintln!("poll() failed");
@@ -187,473 +312,76 @@ pub fn main() {
 
                     let body = &message_bytes[8..];
 
-                    let global_name =
-                        u32::from_le_bytes(body[0..4].try_into().unwrap());
-                    let interface_len =
-                        u32::from_le_bytes(body[4..8].try_into().unwrap())
-                            as usize;
-                    let interface = &body[8..8 + interface_len];
-                    let padded_len = (interface_len + 3) & !3;
-                    let version = u32::from_le_bytes(
-                        body[8 + padded_len..8 + padded_len + 4]
-                            .try_into()
-                            .unwrap(),
-                    );
+                    // global message
+                    if object_id == registry_id && opcode == 0 {
+                        let global_name =
+                            u32::from_le_bytes(body[0..4].try_into().unwrap());
 
-                    #[cfg(debug_assertions)]
-                    {
-                        //println!("- [src/main.rs]");
-                        //println!("    - object_id: {:?}", object_id);
-                        //println!("    - global_name: {:?}", global_name);
-                        //println!(
-                        //    "    - interface: {:?}",
-                        //    std::str::from_utf8(interface)
-                        //);
-                        //println!("    - version: {:?}", version);
+                        if body.len() < 8 {
+                            eprintln!("Message body too short: expected at least 8 bytes, got {}", body.len());
+                            break; // or handle error
+                        }
+
+                        let interface_len =
+                            u32::from_le_bytes(body[4..8].try_into().unwrap())
+                                as usize;
+                        let padded_len = (interface_len + 3) & !3;
+
+                        // Ensure body is big enough to hold interface string + version
+                        if body.len() < 8 + padded_len + 4 {
+                            eprintln!(
+                                "Body too short: expected at least {} bytes but got {}",
+                                8 + padded_len + 4,
+                                body.len()
+                            );
+                            break; // or handle error
+                        }
+
+                        let interface = &body[8..8 + interface_len];
+                        let version = u32::from_le_bytes(
+                            body[8 + padded_len..8 + padded_len + 4]
+                                .try_into()
+                                .unwrap(),
+                        );
+
+                        let is_relevant_interface = interface == WL_COMPOSITOR
+                            || interface == WL_SEAT
+                            || interface == WL_SHM
+                            || interface == XDG_WM_BASE
+                            || {
+                                #[cfg(feature = "zwp_linux_dmabuf_v1")]
+                                {
+                                    interface == ZWP_LINUX_DMABUF_V1
+                                }
+                                #[cfg(not(feature = "zwp_linux_dmabuf_v1"))]
+                                {
+                                    false
+                                }
+                            };
+
+                        if is_relevant_interface {
+                            if let Err(e) = request_bind(
+                                &mut found,
+                                interface_index,
+                                interface,
+                                &mut next_id,
+                                global_name,
+                                version,
+                                fd,
+                                wl,
+                                display,
+                            ) {
+                                eprintln!("request_bind failed {}", e);
+                                break;
+                            }
+                        }
+                    } else {
+                        println!("other message");
                     }
-
-                    match interface {
-                        WL_COMPOSITOR => {
-                            found[interface_index] = true;
-                            interface_index += 1;
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!("    - found WL_COMPOSITOR");
-                                println!("    - object_id: {:?}", object_id);
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!("    - interface: {:?}", interface);
-                                println!("    - version: {:?}", version);
-                            }
-
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind
-
-                            let mut interface_bytes = interface.to_vec();
-                            if !interface_bytes.ends_with(&[0]) {
-                                interface_bytes.push(0); // Ensure null-termination
-                            }
-                            let padded_len = (interface_bytes.len() + 3) & !3;
-
-                            // Now safe to calculate message size
-                            let size = 8 + 4 + padded_len + 4 + 4;
-                            let size_u16 = size as u16;
-
-                            let new_id = next_id;
-                            next_id += 1;
-
-                            let mut msg = Vec::<u8>::with_capacity(size);
-
-                            // Temporarily fill header with zeroes; we’ll patch later if needed
-                            msg.extend_from_slice(&send_id.to_le_bytes());
-                            msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
-
-                            msg.extend_from_slice(&global_name.to_le_bytes());
-                            msg.extend_from_slice(&interface_bytes);
-                            msg.resize(
-                                msg.len()
-                                    + (padded_len - interface_bytes.len()),
-                                0,
-                            ); // pad with 0
-
-                            msg.extend_from_slice(&version.to_le_bytes());
-                            msg.extend_from_slice(&new_id.to_le_bytes());
-
-                            bind_messages.push(msg);
-
-                            // Try to write all bytes
-                            //write_all(fd, &msg).unwrap();
-
-                            //// Flush the display buffer
-                            //if (wl.wl_display_flush)(display) < 0 {
-                            //    break;
-                            //}
-
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!(
-                                    "    - sending to {:?}...",
-                                    std::str::from_utf8(interface)
-                                );
-                                //println!(
-                                //    "    - bind request message: {:?}",
-                                //    msg
-                                //);
-                            }
-                        },
-                        WL_SEAT => {
-                            found[interface_index] = true;
-                            interface_index += 1;
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!("    - found WL_SEAT");
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!("    - interface: {:?}", interface);
-                                println!("    - version: {:?}", version);
-                            }
-
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind
-
-                            let mut interface_bytes = interface.to_vec();
-                            if !interface_bytes.ends_with(&[0]) {
-                                interface_bytes.push(0); // Ensure null-termination
-                            }
-                            let padded_len = (interface_bytes.len() + 3) & !3;
-
-                            // Now safe to calculate message size
-                            let size = 8 + 4 + padded_len + 4 + 4;
-                            let size_u16 = size as u16;
-
-                            let new_id = next_id;
-                            next_id += 1;
-
-                            let mut msg = Vec::<u8>::with_capacity(size);
-
-                            // Temporarily fill header with zeroes; we’ll patch later if needed
-                            msg.extend_from_slice(&send_id.to_le_bytes());
-                            msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
-
-                            msg.extend_from_slice(&global_name.to_le_bytes());
-                            msg.extend_from_slice(&interface_bytes);
-                            msg.resize(
-                                msg.len()
-                                    + (padded_len - interface_bytes.len()),
-                                0,
-                            ); // pad with 0
-
-                            msg.extend_from_slice(&version.to_le_bytes());
-                            msg.extend_from_slice(&new_id.to_le_bytes());
-
-                            bind_messages.push(msg);
-
-                            // Try to write all bytes
-                            //write_all(fd, &msg).unwrap();
-
-                            //// Flush the display buffer
-                            //if (wl.wl_display_flush)(display) < 0 {
-                            //    break;
-                            //}
-
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!(
-                                    "    - sending to {:?}...",
-                                    std::str::from_utf8(interface)
-                                );
-                                //println!(
-                                //    "    - bind request message: {:?}",
-                                //    msg
-                                //);
-                            }
-                        },
-                        WL_SHM => {
-                            found[interface_index] = true;
-                            interface_index += 1;
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!("    - found WL_SHM");
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!("    - interface: {:?}", interface);
-                                println!("    - version: {:?}", version);
-                            }
-
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind
-
-                            let mut interface_bytes = interface.to_vec();
-                            if !interface_bytes.ends_with(&[0]) {
-                                interface_bytes.push(0); // Ensure null-termination
-                            }
-                            let padded_len = (interface_bytes.len() + 3) & !3;
-
-                            // Now safe to calculate message size
-                            let size = 8 + 4 + padded_len + 4 + 4;
-                            let size_u16 = size as u16;
-
-                            let new_id = next_id;
-                            next_id += 1;
-
-                            let mut msg = Vec::<u8>::with_capacity(size);
-
-                            // Temporarily fill header with zeroes; we’ll patch later if needed
-                            msg.extend_from_slice(&send_id.to_le_bytes());
-                            msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
-
-                            msg.extend_from_slice(&global_name.to_le_bytes());
-                            msg.extend_from_slice(&interface_bytes);
-                            msg.resize(
-                                msg.len()
-                                    + (padded_len - interface_bytes.len()),
-                                0,
-                            ); // pad with 0
-
-                            msg.extend_from_slice(&version.to_le_bytes());
-                            msg.extend_from_slice(&new_id.to_le_bytes());
-
-                            bind_messages.push(msg);
-
-                            // Try to write all bytes
-                            //write_all(fd, &msg).unwrap();
-
-                            //// Flush the display buffer
-                            //if (wl.wl_display_flush)(display) < 0 {
-                            //    break;
-                            //}
-
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!(
-                                    "    - sending to {:?}...",
-                                    std::str::from_utf8(interface)
-                                );
-                                //println!(
-                                //    "    - bind request message: {:?}",
-                                //    msg
-                                //);
-                            }
-                        },
-                        XDG_WM_BASE => {
-                            found[interface_index] = true;
-                            interface_index += 1;
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!("    - found XDG_WM_BASE");
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!("    - interface: {:?}", interface);
-                                println!("    - version: {:?}", version);
-                            }
-
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind
-
-                            let mut interface_bytes = interface.to_vec();
-                            if !interface_bytes.ends_with(&[0]) {
-                                interface_bytes.push(0); // Ensure null-termination
-                            }
-                            let padded_len = (interface_bytes.len() + 3) & !3;
-
-                            // Now safe to calculate message size
-                            let size = 8 + 4 + padded_len + 4 + 4;
-                            let size_u16 = size as u16;
-
-                            let new_id = next_id;
-                            next_id += 1;
-
-                            let mut msg = Vec::<u8>::with_capacity(size);
-
-                            // Temporarily fill header with zeroes; we’ll patch later if needed
-                            msg.extend_from_slice(&send_id.to_le_bytes());
-                            msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
-
-                            msg.extend_from_slice(&global_name.to_le_bytes());
-                            msg.extend_from_slice(&interface_bytes);
-                            msg.resize(
-                                msg.len()
-                                    + (padded_len - interface_bytes.len()),
-                                0,
-                            ); // pad with 0
-
-                            msg.extend_from_slice(&version.to_le_bytes());
-                            msg.extend_from_slice(&new_id.to_le_bytes());
-
-                            bind_messages.push(msg);
-
-                            // Try to write all bytes
-                            //write_all(fd, &msg).unwrap();
-
-                            //// Flush the display buffer
-                            //if (wl.wl_display_flush)(display) < 0 {
-                            //    break;
-                            //}
-
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!(
-                                    "    - sending to {:?}...",
-                                    std::str::from_utf8(interface)
-                                );
-                                //println!(
-                                //    "    - bind request message: {:?}",
-                                //    msg
-                                //);
-                            }
-                        },
-                        #[cfg(features = "zwp_linux_dmabuf_v1")]
-                        ZWP_LINUX_DMABUF_V1 => {
-                            found[interface_index] = true;
-                            interface_index += 1;
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!("    - found ZWP_LINUX_DMABUF_V1");
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!(
-                                    "    - global_name: {:?}",
-                                    global_name
-                                );
-                                println!("    - interface: {:?}", interface);
-                                println!("    - version: {:?}", version);
-                            }
-
-                            let send_id = 2u32; // registry id
-                            let opcode = 0u16; // bind
-
-                            let mut interface_bytes = interface.to_vec();
-                            if !interface_bytes.ends_with(&[0]) {
-                                interface_bytes.push(0); // Ensure null-termination
-                            }
-                            let padded_len = (interface_bytes.len() + 3) & !3;
-
-                            // Now safe to calculate message size
-                            let size = 8 + 4 + padded_len + 4 + 4;
-                            let size_u16 = size as u16;
-
-                            let new_id = next_id;
-                            next_id += 1;
-
-                            let mut msg = Vec::<u8>::with_capacity(size);
-
-                            // Temporarily fill header with zeroes; we’ll patch later if needed
-                            msg.extend_from_slice(&send_id.to_le_bytes());
-                            msg.extend_from_slice(&opcode.to_le_bytes());
-                            msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
-
-                            msg.extend_from_slice(&global_name.to_le_bytes());
-                            msg.extend_from_slice(&interface_bytes);
-                            msg.resize(
-                                msg.len()
-                                    + (padded_len - interface_bytes.len()),
-                                0,
-                            ); // pad with 0
-
-                            msg.extend_from_slice(&version.to_le_bytes());
-                            msg.extend_from_slice(&new_id.to_le_bytes());
-
-                            bind_messages.push(msg);
-
-                            // Try to write all bytes
-                            //write_all(fd, &msg).unwrap();
-
-                            //// Flush the display buffer
-                            //if (wl.wl_display_flush)(display) < 0 {
-                            //    break;
-                            //}
-
-                            #[cfg(debug_assertions)]
-                            {
-                                println!("- [src/main.rs]");
-                                println!(
-                                    "    - sending to {:?}...",
-                                    std::str::from_utf8(interface)
-                                );
-                                //println!(
-                                //    "    - bind request message: {:?}",
-                                //    msg
-                                //);
-                            }
-                        },
-                        _ => {},
-                    }
-                }
-                // After the match, check if all are found:
-                if found.iter().all(|&f| f) && !message_pending {
-                    #[cfg(debug_assertions)]
-                    {
-                        println!("- [src/main.rs]");
-                        println!("    - found all, will attempt binds...");
-                    }
-
-                    break; // exit the loop once all found
                 }
             }
         }
         // finally free
-
-        for msg in &bind_messages {
-            #[cfg(debug_assertions)]
-            {
-                // Validate message size
-                let msg_len = msg.len();
-                let expected_size =
-                    u16::from_le_bytes([msg[6], msg[7]]) as usize;
-
-                let interface_bytes = &msg[12..msg_len - 8];
-                let interface_str = std::str::from_utf8(interface_bytes)
-                    .unwrap_or("<invalid utf8>")
-                    .trim_end_matches('\0');
-
-                println!("- [src/main.rs]");
-                println!(
-                    "    - {:?} bind: size={} (header says {}), send_id={}, opcode={}",
-                    interface_str,
-                    msg_len,
-                    expected_size,
-                    u32::from_le_bytes([msg[0], msg[1], msg[2], msg[3]]),
-                    u16::from_le_bytes([msg[4], msg[5]])
-                );
-
-                if msg_len != expected_size {
-                    println!("    - ❌ size mismatch!");
-                }
-
-                println!(
-                    "    - global_name={}, new_id={}",
-                    u32::from_le_bytes([msg[8], msg[9], msg[10], msg[11]]),
-                    u32::from_le_bytes([
-                        msg[msg.len() - 4],
-                        msg[msg.len() - 3],
-                        msg[msg.len() - 2],
-                        msg[msg.len() - 1]
-                    ])
-                );
-            }
-
-            write_all(fd, &msg).unwrap();
-
-            if (wl.wl_display_flush)(display) < 0 {
-                break;
-            }
-
-        }
 
         (wl.wl_display_disconnect)(display);
     }

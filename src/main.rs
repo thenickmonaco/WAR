@@ -34,18 +34,19 @@ use std::{fs::File, mem::ManuallyDrop, os::unix::io::FromRawFd, ptr};
 use wayland_sys::client::{wayland_client_handle, wl_display, WaylandClient};
 
 pub fn make_bind_message(
+    send_id: u32,
     interface: &[u8],
     next_id: &mut u32,
     global_name: u32,
     version: u32,
 ) -> Vec<u8> {
-    let send_id = 2u32; // make sure this is the actual wl_registry id
     let opcode = 0u16; // wl_registry.bind
 
     let mut interface_bytes = interface.to_vec();
     if !interface_bytes.ends_with(&[0]) {
         interface_bytes.push(0);
     }
+    let interface_len = interface_bytes.len() as u32;
 
     let padded_len = (interface_bytes.len() + 3) & !3;
 
@@ -57,17 +58,32 @@ pub fn make_bind_message(
 
     let mut msg = Vec::with_capacity(size);
 
-    let header = ((send_id as u32) << 16) | (opcode as u32);
-    msg.extend_from_slice(&header.to_le_bytes()); // u32 header
-    msg.extend_from_slice(&size_u16.to_le_bytes()); // u16 size
-    msg.extend_from_slice(&[0u8; 2]); // 2-byte padding
+    // object_id: 4 bytes (u32 little endian)
+    msg.extend_from_slice(&send_id.to_le_bytes());
+
+    // opcode: 2 bytes (u16 little endian)
+    msg.extend_from_slice(&opcode.to_le_bytes());
+
+    // size: 2 bytes (u16 little endian)
+    msg.extend_from_slice(&size_u16.to_le_bytes());
 
     msg.extend_from_slice(&global_name.to_le_bytes()); // 4 bytes
+    msg.extend_from_slice(&interface_len.to_le_bytes());
     msg.extend_from_slice(&interface_bytes); // iface string
     msg.resize(msg.len() + (padded_len - interface_bytes.len()), 0); // pad iface
 
     msg.extend_from_slice(&version.to_le_bytes()); // 4 bytes
     msg.extend_from_slice(&new_id.to_le_bytes()); // 4 bytes
+
+    debug!(
+        "Binding interface '{}' (version {}), global_name={}, new_id={}, msg_bytes={:?}, msg={}",
+        String::from_utf8_lossy(interface),
+        version,
+        global_name,
+        *next_id,
+        msg,
+        msg.len(),
+    );
 
     msg
 }
@@ -135,8 +151,9 @@ pub unsafe fn set_fd_flags(fd: i32) -> std::io::Result<()> {
 }
 
 pub unsafe fn request_bind(
+    registry_id: u32,
     found: &mut [bool],
-    interface_index: usize,
+    interface_index: &mut usize,
     interface: &[u8],
     next_id: &mut u32,
     global_name: u32,
@@ -145,18 +162,22 @@ pub unsafe fn request_bind(
     wl: &WaylandClient,
     display: *mut wl_display,
 ) -> Result<(), std::io::Error> {
-    if interface_index >= found.len() {
-        println!("iface index out of bounds in request_bind");
+    if *interface_index >= found.len() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "interface_index out of bounds",
         ));
     }
 
-    found[interface_index] = true;
-    // interface_index is passed by value, so no need to increment here
+    found[*interface_index] = true;
 
-    let msg = &make_bind_message(interface, next_id, global_name, version);
+    let msg = &make_bind_message(
+        registry_id,
+        interface,
+        next_id,
+        global_name,
+        version,
+    );
 
     match write_message(fd, msg) {
         Ok(_) => (),
@@ -166,10 +187,7 @@ pub unsafe fn request_bind(
         },
     }
 
-    debug!("msg: {:?}", msg);
-
     if (wl.wl_display_flush)(display) < 0 {
-        println!("flush fail in request_bind");
         return Err(std::io::Error::last_os_error());
     }
 
@@ -251,8 +269,7 @@ pub fn main() {
         const INTERFACE_COUNT: usize = 4;
 
         let mut found = [false; INTERFACE_COUNT];
-        let mut message_pending = false;
-        let interface_index = 0;
+        let mut interface_index = 0;
 
         loop {
             let poll_result = poll(fds.as_mut_ptr(), 1, -1);
@@ -292,10 +309,8 @@ pub fn main() {
 
                     // keep polling till message is completed
                     if buffer.len() < size {
-                        message_pending = true;
                         break;
                     }
-                    message_pending = false;
 
                     let message_bytes: Vec<u8> =
                         buffer.drain(..size).collect();
@@ -312,7 +327,7 @@ pub fn main() {
 
                     let body = &message_bytes[8..];
 
-                    // global message
+                    // global message, ignores anything other than opcode 0
                     if object_id == registry_id && opcode == 0 {
                         let global_name =
                             u32::from_le_bytes(body[0..4].try_into().unwrap());
@@ -344,6 +359,13 @@ pub fn main() {
                                 .unwrap(),
                         );
 
+                        debug!(
+                            "offered global: name={} interface={} version={}",
+                            global_name,
+                            String::from_utf8_lossy(interface),
+                            version
+                        );
+
                         let is_relevant_interface = interface == WL_COMPOSITOR
                             || interface == WL_SEAT
                             || interface == WL_SHM
@@ -359,10 +381,18 @@ pub fn main() {
                                 }
                             };
 
+                        //debug!(
+                        //    "Global found: name = {}, interface = {:?}, version = {}",
+                        //    global_name,
+                        //    std::str::from_utf8(interface).unwrap_or("<invalid utf8>"),
+                        //    version
+                        //);
+
                         if is_relevant_interface {
                             if let Err(e) = request_bind(
+                                registry_id,
                                 &mut found,
-                                interface_index,
+                                &mut interface_index,
                                 interface,
                                 &mut next_id,
                                 global_name,
@@ -375,8 +405,13 @@ pub fn main() {
                                 break;
                             }
                         }
+                    } else if object_id == registry_id && opcode == 1 {
+                        println!("Unhandled global_remove message: object_id = {}, opcode = {}, bytes = {:?}", object_id, opcode, message_bytes);
                     } else {
-                        println!("other message");
+                        println!(
+                            "Unhandled non-global message: object_id = {}, opcode = {}, bytes = {:?}",
+                            object_id, opcode, message_bytes
+                        );
                     }
                 }
             }

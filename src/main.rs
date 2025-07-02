@@ -39,35 +39,35 @@ pub fn make_bind_message(
     global_name: u32,
     version: u32,
 ) -> Vec<u8> {
-    let send_id = 2u32; // registry id
-    let opcode = 0u16; // bind
+    let send_id = 2u32; // make sure this is the actual wl_registry id
+    let opcode = 0u16; // wl_registry.bind
 
     let mut interface_bytes = interface.to_vec();
     if !interface_bytes.ends_with(&[0]) {
-        interface_bytes.push(0); // Ensure null-termination
+        interface_bytes.push(0);
     }
-    let padded_len = (interface_bytes.len() + 3) & !3;
 
-    // Now safe to calculate message size
-    let size = 8 + 4 + padded_len + 4 + 4;
-    let size_u16 = size as u16;
+    let padded_len = (interface_bytes.len() + 3) & !3;
 
     let new_id = *next_id;
     *next_id += 1;
 
-    let mut msg = Vec::<u8>::with_capacity(size);
+    let size = 8 + 4 + padded_len + 4 + 4; // header + name + iface + version + new_id
+    let size_u16 = size as u16;
 
-    // Temporarily fill header with zeroes; we’ll patch later if needed
-    msg.extend_from_slice(&send_id.to_le_bytes());
-    msg.extend_from_slice(&opcode.to_le_bytes());
-    msg.extend_from_slice(&size_u16.to_le_bytes()); // Now correct
+    let mut msg = Vec::with_capacity(size);
 
-    msg.extend_from_slice(&global_name.to_le_bytes());
-    msg.extend_from_slice(&interface_bytes);
-    msg.resize(msg.len() + (padded_len - interface_bytes.len()), 0); // pad with 0
+    let header = ((send_id as u32) << 16) | (opcode as u32);
+    msg.extend_from_slice(&header.to_le_bytes()); // u32 header
+    msg.extend_from_slice(&size_u16.to_le_bytes()); // u16 size
+    msg.extend_from_slice(&[0u8; 2]); // 2-byte padding
 
-    msg.extend_from_slice(&version.to_le_bytes());
-    msg.extend_from_slice(&new_id.to_le_bytes());
+    msg.extend_from_slice(&global_name.to_le_bytes()); // 4 bytes
+    msg.extend_from_slice(&interface_bytes); // iface string
+    msg.resize(msg.len() + (padded_len - interface_bytes.len()), 0); // pad iface
+
+    msg.extend_from_slice(&version.to_le_bytes()); // 4 bytes
+    msg.extend_from_slice(&new_id.to_le_bytes()); // 4 bytes
 
     msg
 }

@@ -22,7 +22,6 @@
 const wayland = @import("wayland.zig");
 
 // libraries
-const std = @import("std");
 
 pub fn main() !void {
     try wayland.init();

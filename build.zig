@@ -15,25 +15,26 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/main.rs
+// build.zig
 //=============================================================================
 
-#[macro_use]
-mod macros;
-mod error;
+const std = @import("std");
 
-mod input;
-mod lua;
-mod render;
-mod wayland;
+pub fn build(b: *std.build.Builder) void {
+    const target = b.standardTargetOptions(.{});
+    const mode = b.standardReleaseOptions();
 
-mod data;
+    const exe = b.addExecutable("vimDAW", "src/main.zig");
+    exe.setTarget(target); // e.g., x86_64, aarch64, wasm32
+    exe.setBuildMode(mode); // debug, release-safe, release-fast, etc.
 
-use crate::error::CallCarmack;
+    // Optional: Add include paths for C headers if needed
+    // exe.addIncludePath(.{ .path = "src/audio" });
 
-// pub so it can be called anywhere, trust me
-pub fn main() -> Result<(), CallCarmack> {
-    wayland::init()?;
+    // Optional: Link system libraries like ALSA, Vulkan, Wayland
+    // exe.linkSystemLibrary("asound");
+    // exe.linkSystemLibrary("wayland-client");
+    // exe.linkSystemLibrary("vulkan");
 
-    Ok(())
+    exe.install();
 }

@@ -15,13 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/error.rs
+// src/main.zig
 //=============================================================================
 
-use thiserror::Error;
+const std = @import("std");
 
-#[derive(Error, Debug)]
-pub enum CallCarmack {
-    #[error("VarError: {0}")]
-    Var(#[from] std::env::VarError),
+pub fn main() void {
+    std.debug.print("Hello from Zig!\n");
 }

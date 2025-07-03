@@ -21,7 +21,12 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+    const target = std.Target {
+        .arch = .x86_64,
+        .os = .linux,
+        .abi = .gnu,
+    };
+
     const optimize = b.standardOptimizeOption(.{});
 
     // Normal executable build

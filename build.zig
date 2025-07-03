@@ -21,11 +21,27 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    // Normal executable build
     const exe = b.addExecutable(.{
         .name = "vimDAW",
         .root_source_file = b.path("src/main.zig"),
-        .target = b.graph.host,
+        .target = target,
+        .optimize = optimize,
+    });
+    b.installArtifact(exe);
+
+    // Dedicated "check" executable build, usually same config
+    const exe_check = b.addExecutable(.{
+        .name = "vimDAW",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
-    b.installArtifact(exe);
+    // Step named "check" that depends on compiling exe_check
+    const check = b.step("check", "Check if vimDAW compiles");
+    check.dependOn(&exe_check.step);
 }

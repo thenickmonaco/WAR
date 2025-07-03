@@ -15,13 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/main.zig
+// src/wayland.zig
 //=============================================================================
 
 const std = @import("std");
-const wayland = @import("wayland.zig");
 
-pub fn main() !void {
-    std.debug.print("Hello from Zig!", .{});
-    try wayland.init();
+pub fn init() !void {
+    std.debug.print("Hi from wayland", .{});
 }

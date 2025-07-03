@@ -30,10 +30,8 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
-
-    // includes
-    exe.addIncludePath(b.path("/usr/include"));
 
     b.installArtifact(exe);
 
@@ -43,6 +41,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     // Step named "check" that depends on compiling exe_check

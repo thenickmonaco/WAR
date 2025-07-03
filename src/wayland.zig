@@ -45,7 +45,10 @@ pub const color_channels: u32 = 4;
 // modules
 
 // libraries
-const std = @cImport("std"); 
+const stdio = @cImport({
+    @cInclude("stdio.h");
+});
 
 pub fn init() !void {
+    _ = stdio.printf("hello world");
 }

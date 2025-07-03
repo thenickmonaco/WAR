@@ -20,21 +20,12 @@
 
 const std = @import("std");
 
-pub fn build(b: *std.build.Builder) void {
-    const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
+pub fn build(b: *std.Build) void {
+    const exe = b.addExecutable(.{
+        .name = "vimDAW",
+        .root_source_file = b.path("src/main.zig"),
+        .target = b.graph.host,
+    });
 
-    const exe = b.addExecutable("vimDAW", "src/main.zig");
-    exe.setTarget(target); // e.g., x86_64, aarch64, wasm32
-    exe.setBuildMode(mode); // debug, release-safe, release-fast, etc.
-
-    // Optional: Add include paths for C headers if needed
-    // exe.addIncludePath(.{ .path = "src/audio" });
-
-    // Optional: Link system libraries like ALSA, Vulkan, Wayland
-    // exe.linkSystemLibrary("asound");
-    // exe.linkSystemLibrary("wayland-client");
-    // exe.linkSystemLibrary("vulkan");
-
-    exe.install();
+    b.installArtifact(exe);
 }

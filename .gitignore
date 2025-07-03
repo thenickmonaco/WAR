@@ -4,6 +4,11 @@
 # rustfmt config
 /rustfmt.toml
 
+# zig
+.zig-cache/
+zig-out/
+build.zig
+
 # neovim swap and backup files
 *.swp
 *.swo

@@ -6,12 +6,8 @@ authors = ["Nick Monaco <thenickmonaco@gmail.com>"]
 license = "AGPL-3.0"
 
 [dependencies]
-ash = { version = "0.38", features = ["linked"] }
-wayland-sys = { version = "0.31", features = ["client", "dlopen"] }
 libc = "0.2"
-
-[build-dependencies]
-xmltree = "0.11"
+thiserror = "1.0"
 
 [profile.dev]
 debug_assertions = true

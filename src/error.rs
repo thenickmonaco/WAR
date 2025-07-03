@@ -15,25 +15,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/main.rs
+// src/error.rs
 //=============================================================================
 
-#[macro_use]
-mod macros;
-mod error;
+use thiserror::Error;
 
-mod input;
-mod lua;
-mod render;
-mod wayland;
-
-mod data;
-
-use crate::error::CallCarmack;
-
-// pub so it can be called anywhere, trust me
-pub fn main() -> Result<(), CallCarmack> {
-    wayland::init()?;
-
-    Ok(())
+#[derive(Error, Debug)]
+pub enum CallCarmack {
+    #[error("VarError: {0}")]
+    Var(#[from] std::env::VarError),
 }

@@ -21,12 +21,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const target = std.Target {
-        .arch = .x86_64,
-        .os = .linux,
-        .abi = .gnu,
-    };
-
+    const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     // Normal executable build
@@ -36,6 +31,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    // includes
+    exe.addIncludePath(b.path("/usr/include"));
+
     b.installArtifact(exe);
 
     // Dedicated "check" executable build, usually same config

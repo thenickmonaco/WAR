@@ -18,8 +18,11 @@
 // src/main.zig
 //=============================================================================
 
-const std = @import("std");
+// modules
 const wayland = @import("wayland.zig");
+
+// libraries
+const std = @import("std");
 
 pub fn main() !void {
     try wayland.init();

@@ -48,47 +48,47 @@ int wayland_init() {
 }
 
 int wayland_create_fd() {
-    //const uint8_t XDG_RUNTIME_DIR[] = "XDG_RUNTIME_DIR";
-    //const uint8_t* xdg_runtime
-    //    = (const uint8_t*)getenv((const char*)XDG_RUNTIME_DIR);
-    //if (xdg_runtime == NULL) {
-    //    fprintf(stderr, "$%s is not set\n", XDG_RUNTIME_DIR);
-    //    return 1;
-    //}
+    const uint8_t XDG_RUNTIME_DIR[] = "XDG_RUNTIME_DIR";
+    const uint8_t* xdg_runtime
+        = (const uint8_t*)getenv((const char*)XDG_RUNTIME_DIR);
+    if (xdg_runtime == NULL) {
+        fprintf(stderr, "$%s is not set\n", XDG_RUNTIME_DIR);
+        return 1;
+    }
 
-    //const uint8_t WAYLAND_DISPLAY[] = "WAYLAND_DISPLAY";
-    //const uint8_t DEFAULT_WAYLAND_DISPLAY[] = "/wayland-0";
-    //const uint8_t* wayland_display
-    //    = (const uint8_t*)getenv((const char*)WAYLAND_DISPLAY);
-    //if (wayland_display == NULL) {
-    //    wayland_display = DEFAULT_WAYLAND_DISPLAY;
-    //    fprintf(stderr,
-    //            "$%s is not set\ndefaulting to %s",
-    //            WAYLAND_DISPLAY,
-    //            wayland_display);
-    //}
+    const uint8_t WAYLAND_DISPLAY[] = "WAYLAND_DISPLAY";
+    const uint8_t DEFAULT_WAYLAND_DISPLAY[] = "/wayland-0";
+    const uint8_t* wayland_display
+        = (const uint8_t*)getenv((const char*)WAYLAND_DISPLAY);
+    if (wayland_display == NULL) {
+        wayland_display = DEFAULT_WAYLAND_DISPLAY;
+        fprintf(stderr,
+                "$%s is not set\ndefaulting to %s",
+                WAYLAND_DISPLAY,
+                wayland_display);
+    }
 
-    //const size_t unix_max_path = sizeof(((struct sockaddr_un*)0)->sun_path);
-    //char socket_path[unix_max_path];
+    const size_t unix_max_path = sizeof(((struct sockaddr_un*)0)->sun_path);
+    char socket_path[unix_max_path];
 
-    //int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    //if (!fd) {
-    //    perror("socket");
-    //    return -errno;
-    //}
-    //memcpy(socket_path, xdg_runtime, strlen(xdg_runtime) - 1);
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (!fd) {
+        perror("socket");
+        return -errno;
+    }
+    memcpy(socket_path, xdg_runtime, strlen(xdg_runtime) - 1);
 
-    //struct sockaddr_un addr = {
-    //    .sun_family = AF_UNIX,
-    //};
-    //memcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
+    struct sockaddr_un addr = {
+        .sun_family = AF_UNIX,
+    };
+    memcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
 
-    //// strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
-    //// addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
+    // strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
+    // addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
-    //if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-    //    connected = 1;
-    //}
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+        connected = 1;
+    }
 
     return 0;
 }

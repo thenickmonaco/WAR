@@ -18,16 +18,14 @@
 // src/main.c
 //=============================================================================
 
-// modules
-#include "wayland.h"
+// module files
+#include "wayland.c"
 
 // libraries
 #include <stdint.h>
 #include <stdio.h>
 
 int main() {
-    printf("\n");
-
     int result = wayland_init();
     printf("end of main");
 }

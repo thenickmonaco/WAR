@@ -1,5 +1,4 @@
 CC := gcc
-
 DEBUG ?= 0
 
 ifeq ($(DEBUG), 1)
@@ -12,44 +11,63 @@ SRC_DIR := src
 BUILD_DIR := build
 PRE_DIR := $(BUILD_DIR)/pre
 INCLUDE_DIR := include
-
-SRC := $(shell find $(SRC_DIR) -type f -name '*.c')
-OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRC))
-DEP := $(OBJ:.o=.d)
-
-# Preprocessed files (.i) in build/pre/
-IPRE := $(patsubst $(SRC_DIR)/%.c,$(PRE_DIR)/%.i,$(SRC))
-# Header files under include/
-HDRS := $(patsubst $(SRC_DIR)/%.c,$(INCLUDE_DIR)/%.h,$(SRC))
-
 TARGET := vimDAW
 
-.PHONY: all headers clean
+SRC := $(shell find $(SRC_DIR) -type f -name '*.c')
+HDRS := $(patsubst $(SRC_DIR)/%.c,$(INCLUDE_DIR)/%.h,$(SRC))
 
-# All target depends on headers and target
-all: headers $(TARGET)
+UNITY_C := $(SRC_DIR)/main.c
+UNITY_O := $(BUILD_DIR)/main.o
+DEP := $(UNITY_O:.o=.d)
 
-# Link object files to create the final target
-$(TARGET): $(OBJ)
+.PHONY: all headers clean guard empty_headers
+
+all: empty_headers headers $(TARGET)
+
+# Create empty header placeholders if they don't exist
+empty_headers:
+	@echo "Ensuring header placeholders exist..."
+	@$(foreach hdr,$(HDRS), \
+		if [ ! -f $(hdr) ]; then \
+			mkdir -p $$(dirname $(hdr)); \
+			echo "/* Placeholder for $${hdr} */" > $(hdr); \
+		fi; \
+	)
+
+# Compile unity build main.c (after headers generated)
+$(UNITY_O): headers
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
+
+# Link final executable from unity.o only
+$(TARGET): $(UNITY_O)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# Compile each source file into an object file
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-# Generate headers for each source file
+# Generate headers from all .c files using cproto
 headers:
-	@echo "Generating individual headers under $(INCLUDE_DIR)"
+	@echo "Generating headers in $(INCLUDE_DIR)..."
 	$(foreach f,$(SRC), \
 		mkdir -p $(dir $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h))); \
 		mkdir -p $(dir $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f))); \
 		$(CC) -E $(f) -I $(SRC_DIR) -I $(INCLUDE_DIR) -o $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)); \
-		cproto -a $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)) > $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h));)
-	@echo "Cleaning up .i files"
-	@rm -f $(IPRE)  # Remove all the .i files after generating the headers
+		cproto -a $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)) > $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)); \
+		$(MAKE) guard HEADER=$(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)); \
+	)
 
-# Clean target
+# Add include guards with format VIMDAW_FILENAME_H
+guard:
+	@header=$(HEADER); \
+	filename=$$(basename "$${header}"); \
+	filename_no_ext=$${filename%.*}; \
+	guard_macro=$$(echo "VIMDAW_$${filename_no_ext}_H" | tr 'a-z' 'A-Z'); \
+	tmpfile="$${header}.tmp"; \
+	echo "#ifndef $${guard_macro}" > "$${tmpfile}"; \
+	echo "#define $${guard_macro}" >> "$${tmpfile}"; \
+	cat "$${header}" >> "$${tmpfile}"; \
+	echo "#endif /* $${guard_macro} */" >> "$${tmpfile}"; \
+	mv "$${tmpfile}" "$${header}"
+
+# Clean all build artifacts and generated headers
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET) $(HDRS)
 

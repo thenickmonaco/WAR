@@ -68,27 +68,5 @@ int wayland_create_fd() {
                 wayland_display);
     }
 
-    const size_t unix_max_path = sizeof(((struct sockaddr_un*)0)->sun_path);
-    char socket_path[unix_max_path];
-
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (!fd) {
-        perror("socket");
-        return -errno;
-    }
-    memcpy(socket_path, xdg_runtime, strlen(xdg_runtime) - 1);
-
-    struct sockaddr_un addr = {
-        .sun_family = AF_UNIX,
-    };
-    memcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
-
-    // strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
-    // addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
-
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-        connected = 1;
-    }
-
     return 0;
 }

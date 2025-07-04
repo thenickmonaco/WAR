@@ -37,9 +37,11 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-int wayland_init() {
+int wayland_init()
+{
     int fd = wayland_create_fd();
-    if (fd < 0) {
+    if (fd < 0)
+    {
         fprintf(stderr, "Error: %d\n", fd);
         return fd;
     }
@@ -47,26 +49,42 @@ int wayland_init() {
     return 0;
 }
 
-int wayland_create_fd() {
-    const uint8_t XDG_RUNTIME_DIR[] = "XDG_RUNTIME_DIR";
-    const uint8_t* xdg_runtime
-        = (const uint8_t*)getenv((const char*)XDG_RUNTIME_DIR);
-    if (xdg_runtime == NULL) {
-        fprintf(stderr, "$%s is not set\n", XDG_RUNTIME_DIR);
+int wayland_create_fd()
+{
+    const uint8_t env_xdg_runtime_dir[] = "XDG_RUNTIME_DIR";
+    const uint8_t* xdg_runtime_dir =
+        (const uint8_t*)getenv((const char*)env_xdg_runtime_dir);
+    if (xdg_runtime_dir == NULL)
+    {
+        fprintf(stderr, "$%s is not set\n", env_xdg_runtime_dir);
         return 1;
     }
 
-    const uint8_t WAYLAND_DISPLAY[] = "WAYLAND_DISPLAY";
-    const uint8_t DEFAULT_WAYLAND_DISPLAY[] = "/wayland-0";
-    const uint8_t* wayland_display
-        = (const uint8_t*)getenv((const char*)WAYLAND_DISPLAY);
-    if (wayland_display == NULL) {
-        wayland_display = DEFAULT_WAYLAND_DISPLAY;
+    const uint8_t env_wayland_display[] = "WAYLAND_DISPLAY";
+    const uint8_t default_wayland_display_dir[] = "/wayland-0";
+    const uint8_t* wayland_display =
+        (const uint8_t*)getenv((const char*)env_wayland_display);
+    if (wayland_display == NULL)
+    {
+        wayland_display = default_wayland_display_dir;
         fprintf(stderr,
                 "$%s is not set\ndefaulting to %s",
-                WAYLAND_DISPLAY,
+                env_wayland_display,
                 wayland_display);
+        if (wayland_display == NULL)
+        {
+            fprintf(stderr,
+                    "default fallback %s not found",
+                    default_wayland_display_dir);
+            return errno;
+        }
     }
+
+    // cast null to a pointer to struct sockaddr_un (points to nothing)
+    // to access the compiler's layout information and compute the size of the
+    // sun_path field.
+    const size_t max_sun_path = sizeof(((struct sockaddr_un*)NULL)->sun_path);
+    const uint8_t socket_buffer[max_sun_path];
 
     return 0;
 }

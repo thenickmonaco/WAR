@@ -18,14 +18,17 @@
 // src/main.c
 //=============================================================================
 
-// module files
+// module files for jumbo build
 #include "wayland.c"
 
 // libraries
 #include <stdint.h>
 #include <stdio.h>
 
-int main() {
+int main()
+{
     int result = wayland_init();
     printf("end of main");
+
+    return 0;
 }

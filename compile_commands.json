@@ -1,0 +1,24 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-Wextra",
+      "-O3",
+      "-march=native",
+      "-std=c99",
+      "-DNDEBUG",
+      "-I",
+      "src",
+      "-I",
+      "include",
+      "-c",
+      "-o",
+      "build/main.o",
+      "src/main.c"
+    ],
+    "directory": "/home/monaco/Projects/vimDAW",
+    "file": "/home/monaco/Projects/vimDAW/src/main.c",
+    "output": "/home/monaco/Projects/vimDAW/build/main.o"
+  }
+]

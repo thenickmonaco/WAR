@@ -15,36 +15,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// build.zig
+// src/main.c
 //=============================================================================
 
-const std = @import("std");
+#include <stdio.h>
+#include <stdint.h>
+#include "wayland.h"
 
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    // Normal executable build
-    const exe = b.addExecutable(.{
-        .name = "vimDAW",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-
-    b.installArtifact(exe);
-
-    // Dedicated "check" executable build, usually same config
-    const exe_check = b.addExecutable(.{
-        .name = "vimDAW",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-
-    // Step named "check" that depends on compiling exe_check
-    const check = b.step("check", "Check if vimDAW compiles");
-    check.dependOn(&exe_check.step);
+int main() { 
+    wayland_init();
 }

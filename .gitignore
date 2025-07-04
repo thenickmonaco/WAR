@@ -9,6 +9,10 @@
 zig-out/
 build.zig
 
+# c
+vimdaw
+/build/
+
 # neovim swap and backup files
 *.swp
 *.swo

@@ -15,14 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/main.zig
+// src/wayland.c
 //=============================================================================
 
-// modules
-const wayland = @import("wayland.zig");
+#include <stdio.h>
 
-// libraries
-
-pub fn main() !void {
-    try wayland.init();
+void wayland_init() {
+    
 }

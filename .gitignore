@@ -12,6 +12,7 @@ build.zig
 # c
 vimdaw
 /build/
+.cache/
 
 # neovim swap and backup files
 *.swp

@@ -10,7 +10,7 @@ zig-out/
 build.zig
 
 # c
-vimDAW
+/vimDAW
 /build/
 .cache/
 

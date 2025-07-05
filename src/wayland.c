@@ -76,14 +76,15 @@ int wayland_make_fd() {
 #endif
 
     enum {
-        max_xdg_runtime_dir = (sizeof((struct sockaddr_un*)0)->sun_path),
         max_wayland_display = (64),
+        max_xdg_runtime_dir =
+            (sizeof((struct sockaddr_un*)0)->sun_path) - max_wayland_display,
     };
 
     char xdg_runtime_dir[max_xdg_runtime_dir] = {0};
     char wayland_display[max_wayland_display] = {0};
-    size_t size_xdg_runtime_dir;
-    size_t size_wayland_display;
+    size_t size_xdg_runtime_dir = 0;
+    size_t size_wayland_display = 0;
 
     extern char** environ;
     for (char** env = environ;
@@ -115,6 +116,8 @@ int wayland_make_fd() {
         }
     }
 
+    assert(size_xdg_runtime_dir > 0);
+    assert(size_wayland_display > 0);
     assert(found_xdg_runtime_dir);
 
     if (!found_wayland_display) {
@@ -127,11 +130,13 @@ int wayland_make_fd() {
         memcpy(wayland_display, default_wayland_display, size_wayland_display);
     }
 
-    struct sockaddr_un addr = {.sun_family = AF_UNIX};
     if (xdg_runtime_dir[size_xdg_runtime_dir - 1] != '/') {
+        assert(size_xdg_runtime_dir < max_xdg_runtime_dir);
         xdg_runtime_dir[size_xdg_runtime_dir] = '/';
         size_xdg_runtime_dir++;
     }
+
+    struct sockaddr_un addr = {.sun_family = AF_UNIX};
     memcpy(addr.sun_path, xdg_runtime_dir, size_xdg_runtime_dir);
     memcpy(addr.sun_path + size_xdg_runtime_dir,
            wayland_display,

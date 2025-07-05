@@ -18,10 +18,8 @@
 // src/main.c
 //=============================================================================
 
-// module files for jumbo build
 #include "wayland.c"
 
-// libraries
 #include <stdint.h>
 #include <stdio.h>
 

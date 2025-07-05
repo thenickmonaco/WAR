@@ -18,10 +18,8 @@
 // src/wayland.c
 //=============================================================================
 
-// module headers
-#include "wayland.h" // for calling before implementing
+#include "wayland.h"
 
-// libraries
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -41,7 +39,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-// wayland client initialization
 int wayland_init() {
     int fd = wayland_make_fd();
     assert(fd >= 0);
@@ -66,7 +63,6 @@ int wayland_make_fd() {
     bool found_xdg_runtime_dir = false;
     bool found_wayland_display = false;
 
-    // automatically null terminated
     const char default_wayland_display[] = "wayland-0";
     const char env_xdg_runtime_dir_prefix[] = "XDG_RUNTIME_DIR=";
     const char env_wayland_display_prefix[] = "WAYLAND_DISPLAY=";
@@ -80,8 +76,6 @@ int wayland_make_fd() {
 #endif
 
     enum {
-        // cast null to a pointer to struct sockaddr_un (points to nothing)
-        // to access the compiler's layout information for path length
         max_xdg_runtime_dir = (sizeof((struct sockaddr_un*)0)->sun_path),
         max_wayland_display = (64),
     };
@@ -99,7 +93,7 @@ int wayland_make_fd() {
             strncmp(*env, env_xdg_runtime_dir_prefix, xdg_prefix_size - 1) ==
                 0) {
             found_xdg_runtime_dir = true;
-            const char* val = *env + xdg_prefix_size - 1; // null terminator
+            const char* val = *env + xdg_prefix_size - 1;
 #ifdef DEBUG
             printf("val: %s\n", val);
 #endif
@@ -111,7 +105,7 @@ int wayland_make_fd() {
                            env_wayland_display_prefix,
                            wayland_prefix_size - 1) == 0) {
             found_wayland_display = true;
-            const char* val = *env + wayland_prefix_size - 1; // null terminator
+            const char* val = *env + wayland_prefix_size - 1;
 #ifdef DEBUG
             printf("val: %s\n", val);
 #endif

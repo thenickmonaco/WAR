@@ -1,28 +1,9 @@
-// vimDAW - make music with vim motions
-// Copyright (C) 2025 Nick Monaco
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-//=============================================================================
-// src/macros.h
-//=============================================================================
-
-#include <stdio.h>
-
 #ifndef VIMDAW_MACROS_H
 #define VIMDAW_MACROS_H
 
+#include <stdio.h>
+
+// Define month detection macros fully:
 #define MONTH_IS_JAN (__DATE__[0] == 'J' && __DATE__[1] == 'a')
 #define MONTH_IS_FEB (__DATE__[0] == 'F')
 #define MONTH_IS_MAR                                                           \
@@ -63,6 +44,8 @@
 #define YEAR_CHAR3 (__DATE__[9])
 #define YEAR_CHAR4 (__DATE__[10])
 
+#ifdef DEBUG
+
 #define PRINT_DATE_NUMERIC()                                                   \
     fprintf(stderr,                                                            \
             "%02d-%c%c-%c%c%c%c",                                              \
@@ -76,9 +59,9 @@
 
 #define CALL_CARMACK(fmt, ...)                                                 \
     do {                                                                       \
-        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                                   \
+        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
         if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
-            fputc('\b', stderr); /* remove \n visually */                      \
+            fputc('\b', stderr); /* remove trailing newline visually */        \
         fprintf(stderr,                                                        \
                 " [%s:%d:%s, %s, ",                                            \
                 __FILE__,                                                      \
@@ -92,48 +75,34 @@
 #define header(fmt, ...)                                                       \
     do {                                                                       \
         fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
-        if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
-            fputc('\b', stderr); /* remove \n visually */                      \
-        fprintf(stderr, " [%s:%d:%s", __FILE__, __LINE__, __func__);           \
-        fprintf(stderr, "]\n");                                                \
+        if ((fmt)[sizeof(fmt) - 2] == '\n') fputc('\b', stderr);               \
+        fprintf(stderr, " [%s:%d:%s]\n", __FILE__, __LINE__, __func__);        \
     } while (0)
 
-#define end(fmt, ...)                                                          \
-    do {                                                                       \
-        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
-        if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
-            fputc('\b', stderr); /* remove \n visually */                      \
-        fprintf(stderr, " [%s:%d:%s", __FILE__, __LINE__, __func__);           \
-        fprintf(stderr, "]\n");                                                \
-    } while (0)
+#define end(fmt, ...) header(fmt, ##__VA_ARGS__)
+#define END(fmt, ...) CALL_CARMACK(fmt, ##__VA_ARGS__)
 
-#define END(fmt, ...)                                                          \
-    do {                                                                       \
-        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                                   \
-        if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
-            fputc('\b', stderr); /* remove \n visually */                      \
-        fprintf(stderr,                                                        \
-                " [%s:%d:%s, %s, ",                                            \
-                __FILE__,                                                      \
-                __LINE__,                                                      \
-                __func__,                                                      \
-                __TIME__);                                                     \
-        PRINT_DATE_NUMERIC();                                                  \
-        fprintf(stderr, "]\n");                                                \
-    } while (0)
-
+// Add an extra newline after header for sub_header
 #define sub_header(fmt, ...)                                                   \
     do {                                                                       \
-        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
-        if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
-            fputc('\b', stderr); /* remove \n visually */                      \
-        fprintf(stderr, " [%s:%d:%s", __FILE__, __LINE__, __func__);           \
-        fprintf(stderr, "]\n\n");                                              \
+        header(fmt, ##__VA_ARGS__);                                            \
+        fprintf(stderr, "\n");                                                 \
     } while (0)
 
-#define call_carmack(fmt, ...)                                                 \
-    do { fprintf(stderr, "- " fmt "\n", ##__VA_ARGS__); } while (0)
+#define call_carmack(fmt, ...) fprintf(stderr, "- " fmt "\n", ##__VA_ARGS__)
+#define nl() fprintf(stderr, "\n")
 
-#define nl()                                                                   \
-    do { fprintf(stderr, "\n"); } while (0)
+#else // DEBUG not defined
+
+#define CALL_CARMACK(fmt, ...) ((void)0)
+#define header(fmt, ...) ((void)0)
+#define end(fmt, ...) ((void)0)
+#define END(fmt, ...) ((void)0)
+#define sub_header(fmt, ...) ((void)0)
+#define call_carmack(fmt, ...) ((void)0)
+#define nl() ((void)0)
+#define PRINT_DATE_NUMERIC() ((void)0)
+
+#endif // DEBUG
+
 #endif // VIMDAW_MACROS_H

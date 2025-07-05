@@ -80,6 +80,8 @@ int wayland_make_fd() {
 #endif
 
     enum {
+        // cast null to a pointer to struct sockaddr_un (points to nothing)
+        // to access the compiler's layout information for path length
         max_xdg_runtime_dir = (sizeof((struct sockaddr_un*)0)->sun_path),
         max_wayland_display = (64),
     };

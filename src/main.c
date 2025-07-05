@@ -18,14 +18,16 @@
 // src/main.c
 //=============================================================================
 
+#include "macros.h"
 #include "wayland.c"
 
 #include <stdint.h>
 #include <stdio.h>
 
 int main() {
+    CALL_CARMACK("# vimDAW");
     int ret = wayland_init();
 
-    printf("%i: end of main\n", ret);
+    header("# END vimDAW");
     return 0;
 }

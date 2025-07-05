@@ -19,6 +19,7 @@
 //=============================================================================
 
 #include "wayland.h"
+#include "macros.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -54,9 +55,7 @@ int wayland_init() {
 }
 
 int wayland_make_fd() {
-#ifdef DEBUG
-    printf("# make fd\n");
-#endif
+    header("## make fd");
     int fd = syscall(SYS_socket, AF_UNIX, SOCK_STREAM, 0);
     assert(fd >= 0);
 
@@ -67,13 +66,9 @@ int wayland_make_fd() {
     const char env_xdg_runtime_dir_prefix[] = "XDG_RUNTIME_DIR=";
     const char env_wayland_display_prefix[] = "WAYLAND_DISPLAY=";
     const size_t xdg_prefix_size = sizeof(env_xdg_runtime_dir_prefix);
-#ifdef DEBUG
-    printf("xdg_prefix_size: %lu\n", xdg_prefix_size);
-#endif
+    call_carmack("xdg_prefix_size: %lu", xdg_prefix_size);
     const size_t wayland_prefix_size = sizeof(env_wayland_display_prefix);
-#ifdef DEBUG
-    printf("wayland_prefix_size: %lu\n", wayland_prefix_size);
-#endif
+    call_carmack("wayland_prefix_size: %lu", wayland_prefix_size);
 
     enum {
         max_wayland_display = (64),
@@ -95,9 +90,7 @@ int wayland_make_fd() {
                 0) {
             found_xdg_runtime_dir = true;
             const char* val = *env + xdg_prefix_size - 1;
-#ifdef DEBUG
-            printf("val: %s\n", val);
-#endif
+            call_carmack("val: %s", val);
             size_xdg_runtime_dir = strlen(val);
             assert(size_xdg_runtime_dir <= max_xdg_runtime_dir);
             memcpy(xdg_runtime_dir, val, size_xdg_runtime_dir);
@@ -107,9 +100,7 @@ int wayland_make_fd() {
                            wayland_prefix_size - 1) == 0) {
             found_wayland_display = true;
             const char* val = *env + wayland_prefix_size - 1;
-#ifdef DEBUG
-            printf("val: %s\n", val);
-#endif
+            call_carmack("val: %s", val);
             size_wayland_display = strlen(val);
             assert(size_wayland_display <= max_wayland_display);
             memcpy(wayland_display, val, size_wayland_display);
@@ -121,11 +112,8 @@ int wayland_make_fd() {
     assert(found_xdg_runtime_dir);
 
     if (!found_wayland_display) {
-#ifdef DEBUG
-        fprintf(stderr,
-                "could not find wayland_display, setting to default: %s",
-                default_wayland_display);
-#endif
+        call_carmack("could not find wayland_display, setting to default: %s",
+                     default_wayland_display);
         size_wayland_display = sizeof(default_wayland_display);
         memcpy(wayland_display, default_wayland_display, size_wayland_display);
     }
@@ -145,19 +133,13 @@ int wayland_make_fd() {
     size_t path_len = size_xdg_runtime_dir + size_wayland_display;
     size_t addr_len = offsetof(struct sockaddr_un, sun_path) + path_len;
 
-#ifdef DEBUG
-    printf("path: %s\npath_len: %lu\naddr_len: %lu\n",
-           addr.sun_path,
-           path_len,
-           addr_len);
-#endif
+    call_carmack("path: %s", addr.sun_path);
+    call_carmack("path_len: %lu", path_len);
+    call_carmack("addr_len: %lu", addr_len);
 
     int ret = connect(fd, (struct sockaddr*)&addr, addr_len);
     assert(ret >= 0);
 
-#ifdef DEBUG
-    printf("fd: %i\n", fd);
-#endif
-
+    header("## END make fd");
     return fd;
 }

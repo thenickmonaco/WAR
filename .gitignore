@@ -31,6 +31,7 @@ Session.vim
 
 # logs
 *.log
+/log.md
 
 # mistake
 \'

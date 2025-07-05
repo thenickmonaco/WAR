@@ -41,6 +41,7 @@
 #include <unistd.h>
 
 int wayland_init() {
+    header("## wayland initialization");
     int fd = wayland_make_fd();
     assert(fd >= 0);
 
@@ -51,11 +52,13 @@ int wayland_init() {
 
     uint64_t body;
 
+    end("## END wayland initialization");
     return 0;
 }
 
 int wayland_make_fd() {
-    header("## make fd");
+    sub_header("### make fd");
+
     int fd = syscall(SYS_socket, AF_UNIX, SOCK_STREAM, 0);
     assert(fd >= 0);
 
@@ -140,6 +143,6 @@ int wayland_make_fd() {
     int ret = connect(fd, (struct sockaddr*)&addr, addr_len);
     assert(ret >= 0);
 
-    header("## END make fd");
+    end("### END make fd");
     return fd;
 }

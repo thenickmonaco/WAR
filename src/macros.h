@@ -76,7 +76,7 @@
 
 #define CALL_CARMACK(fmt, ...)                                                 \
     do {                                                                       \
-        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
+        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                                   \
         if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
             fputc('\b', stderr); /* remove \n visually */                      \
         fprintf(stderr,                                                        \
@@ -86,10 +86,43 @@
                 __func__,                                                      \
                 __TIME__);                                                     \
         PRINT_DATE_NUMERIC();                                                  \
-        fprintf(stderr, "]\n\n");                                              \
+        fprintf(stderr, "]\n");                                                \
     } while (0)
 
 #define header(fmt, ...)                                                       \
+    do {                                                                       \
+        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
+        if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
+            fputc('\b', stderr); /* remove \n visually */                      \
+        fprintf(stderr, " [%s:%d:%s", __FILE__, __LINE__, __func__);           \
+        fprintf(stderr, "]\n");                                                \
+    } while (0)
+
+#define end(fmt, ...)                                                          \
+    do {                                                                       \
+        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
+        if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
+            fputc('\b', stderr); /* remove \n visually */                      \
+        fprintf(stderr, " [%s:%d:%s", __FILE__, __LINE__, __func__);           \
+        fprintf(stderr, "]\n");                                                \
+    } while (0)
+
+#define END(fmt, ...)                                                          \
+    do {                                                                       \
+        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                                   \
+        if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
+            fputc('\b', stderr); /* remove \n visually */                      \
+        fprintf(stderr,                                                        \
+                " [%s:%d:%s, %s, ",                                            \
+                __FILE__,                                                      \
+                __LINE__,                                                      \
+                __func__,                                                      \
+                __TIME__);                                                     \
+        PRINT_DATE_NUMERIC();                                                  \
+        fprintf(stderr, "]\n");                                                \
+    } while (0)
+
+#define sub_header(fmt, ...)                                                   \
     do {                                                                       \
         fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
         if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
@@ -101,6 +134,6 @@
 #define call_carmack(fmt, ...)                                                 \
     do { fprintf(stderr, "- " fmt "\n", ##__VA_ARGS__); } while (0)
 
-#define newline()                                                              \
+#define nl()                                                                   \
     do { fprintf(stderr, "\n"); } while (0)
 #endif // VIMDAW_MACROS_H

@@ -28,6 +28,6 @@ int main() {
     CALL_CARMACK("# vimDAW");
     int ret = wayland_init();
 
-    header("# END vimDAW");
+    END("# END vimDAW");
     return 0;
 }

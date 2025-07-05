@@ -97,7 +97,7 @@ int wayland_make_fd() {
 #ifdef DEBUG
             printf("val: %s\n", val);
 #endif
-            size_xdg_runtime_dir = strlen(val);
+            size_xdg_runtime_dir = wayland_strlen(val, xdg_prefix_size - 1);
             assert(size_xdg_runtime_dir <= max_xdg_runtime_dir);
             memcpy(xdg_runtime_dir, val, size_xdg_runtime_dir);
         } else if (!found_wayland_display &&
@@ -123,7 +123,7 @@ int wayland_make_fd() {
                 "could not find wayland_display, setting to default: %s",
                 default_wayland_display);
 #endif
-        size_wayland_display = sizeof(default_wayland_display);
+        size_wayland_display = strlen(default_wayland_display);
         memcpy(wayland_display, default_wayland_display, size_wayland_display);
     }
 
@@ -155,4 +155,10 @@ int wayland_make_fd() {
 #endif
 
     return fd;
+}
+
+int wayland_strlen(char* val, int min) {
+    int len = min;
+    for (char* str = val + min; *str != '\0'; str++) { len++; }
+    return len;
 }

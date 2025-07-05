@@ -25,10 +25,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-int main()
-{
-    int result = wayland_init();
-    printf("end of main");
+int main() {
+    int ret = wayland_init();
 
+    printf("%i: end of main\n", ret);
     return 0;
 }

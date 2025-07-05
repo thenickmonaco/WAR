@@ -19,13 +19,15 @@
 //=============================================================================
 
 // module headers
-#include "wayland.h"
+#include "wayland.h" // for calling before implementing
 
 // libraries
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <linux/socket.h> // For socket constants like AF_UNIX, SOCK_STREAM
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -33,58 +35,128 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
 
-int wayland_init()
-{
-    int fd = wayland_create_fd();
-    if (fd < 0)
-    {
-        fprintf(stderr, "Error: %d\n", fd);
-        return fd;
-    }
+// wayland client initialization
+int wayland_init() {
+    int fd = wayland_make_fd();
+    assert(fd >= 0);
+
+    const uint8_t header[64] = {0};
+    const uint8_t object_id[32] = {0};
+    const uint8_t opcode[16] = {0};
+    const uint8_t body_size[16] = {0};
+
+    uint64_t body;
 
     return 0;
 }
 
-int wayland_create_fd()
-{
-    const uint8_t env_xdg_runtime_dir[] = "XDG_RUNTIME_DIR";
-    const uint8_t* xdg_runtime_dir =
-        (const uint8_t*)getenv((const char*)env_xdg_runtime_dir);
-    if (xdg_runtime_dir == NULL)
-    {
-        fprintf(stderr, "$%s is not set\n", env_xdg_runtime_dir);
-        return 1;
-    }
+int wayland_make_fd() {
+#ifdef DEBUG
+    printf("# make fd\n");
+#endif
+    int fd = syscall(SYS_socket, AF_UNIX, SOCK_STREAM, 0);
+    assert(fd >= 0);
 
-    const uint8_t env_wayland_display[] = "WAYLAND_DISPLAY";
-    const uint8_t default_wayland_display_dir[] = "/wayland-0";
-    const uint8_t* wayland_display =
-        (const uint8_t*)getenv((const char*)env_wayland_display);
-    if (wayland_display == NULL)
-    {
-        wayland_display = default_wayland_display_dir;
-        fprintf(stderr,
-                "$%s is not set\ndefaulting to %s",
-                env_wayland_display,
-                wayland_display);
-        if (wayland_display == NULL)
-        {
-            fprintf(stderr,
-                    "default fallback %s not found",
-                    default_wayland_display_dir);
-            return errno;
+    bool found_xdg_runtime_dir = false;
+    bool found_wayland_display = false;
+
+    // automatically null terminated
+    const char default_wayland_display[] = "wayland-0";
+    const char env_xdg_runtime_dir_prefix[] = "XDG_RUNTIME_DIR=";
+    const char env_wayland_display_prefix[] = "WAYLAND_DISPLAY=";
+    const size_t xdg_prefix_size = sizeof(env_xdg_runtime_dir_prefix);
+#ifdef DEBUG
+    printf("xdg_prefix_size: %lu\n", xdg_prefix_size);
+#endif
+    const size_t wayland_prefix_size = sizeof(env_wayland_display_prefix);
+#ifdef DEBUG
+    printf("wayland_prefix_size: %lu\n", wayland_prefix_size);
+#endif
+
+    enum {
+        max_xdg_runtime_dir = (sizeof((struct sockaddr_un*)0)->sun_path),
+        max_wayland_display = (64),
+    };
+
+    char xdg_runtime_dir[max_xdg_runtime_dir] = {0};
+    char wayland_display[max_wayland_display] = {0};
+    size_t size_xdg_runtime_dir;
+    size_t size_wayland_display;
+
+    extern char** environ;
+    for (char** env = environ;
+         *env != NULL && (!found_xdg_runtime_dir || !found_wayland_display);
+         env++) {
+        if (!found_xdg_runtime_dir &&
+            strncmp(*env, env_xdg_runtime_dir_prefix, xdg_prefix_size - 1) ==
+                0) {
+            found_xdg_runtime_dir = true;
+            const char* val = *env + xdg_prefix_size - 1; // null terminator
+#ifdef DEBUG
+            printf("val: %s\n", val);
+#endif
+            size_xdg_runtime_dir = strlen(val);
+            assert(size_xdg_runtime_dir <= max_xdg_runtime_dir);
+            memcpy(xdg_runtime_dir, val, size_xdg_runtime_dir);
+        } else if (!found_wayland_display &&
+                   strncmp(*env,
+                           env_wayland_display_prefix,
+                           wayland_prefix_size - 1) == 0) {
+            found_wayland_display = true;
+            const char* val = *env + wayland_prefix_size - 1; // null terminator
+#ifdef DEBUG
+            printf("val: %s\n", val);
+#endif
+            size_wayland_display = strlen(val);
+            assert(size_wayland_display <= max_wayland_display);
+            memcpy(wayland_display, val, size_wayland_display);
         }
     }
 
-    // cast null to a pointer to struct sockaddr_un (points to nothing)
-    // to access the compiler's layout information and compute the size of the
-    // sun_path field.
-    const size_t max_sun_path = sizeof(((struct sockaddr_un*)NULL)->sun_path);
-    const uint8_t socket_buffer[max_sun_path];
+    assert(found_xdg_runtime_dir);
 
-    return 0;
+    if (!found_wayland_display) {
+#ifdef DEBUG
+        fprintf(stderr,
+                "could not find wayland_display, setting to default: %s",
+                default_wayland_display);
+#endif
+        size_wayland_display = strlen(default_wayland_display);
+        memcpy(wayland_display, default_wayland_display, size_wayland_display);
+    }
+
+    struct sockaddr_un addr = {.sun_family = AF_UNIX};
+    if (xdg_runtime_dir[size_xdg_runtime_dir - 1] != '/') {
+        xdg_runtime_dir[size_xdg_runtime_dir] = '/';
+        size_xdg_runtime_dir++;
+    }
+    memcpy(addr.sun_path, xdg_runtime_dir, size_xdg_runtime_dir);
+    memcpy(addr.sun_path + size_xdg_runtime_dir,
+           wayland_display,
+           size_wayland_display);
+
+    size_t path_len = size_xdg_runtime_dir + size_wayland_display;
+    size_t addr_len = offsetof(struct sockaddr_un, sun_path) + path_len;
+
+#ifdef DEBUG
+    printf("path: %s\npath_len: %lu\naddr_len: %lu\n",
+           addr.sun_path,
+           path_len,
+           addr_len);
+#endif
+
+    int ret = connect(fd, (struct sockaddr*)&addr, addr_len);
+    assert(ret >= 0);
+
+#ifdef DEBUG
+    printf("fd: %i\n", fd);
+#endif
+
+    return fd;
 }

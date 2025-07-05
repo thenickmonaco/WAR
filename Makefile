@@ -1,10 +1,20 @@
 CC := gcc
 DEBUG ?= 0
+VERBOSE ?= 0
+
+ifeq ($(VERBOSE), 1)
+    Q :=
+else
+    Q := @
+    MAKEFLAGS += --no-print-directory
+endif
 
 ifeq ($(DEBUG), 1)
-	CFLAGS := -Wall -Wextra -O0 -g -std=c99 -I src -I include
+    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -g -march=native -std=c99 -MMD -I src -I include
+else ifeq ($(DEBUG), 2)
+    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -g -march=native -std=c99 -MMD -DDEBUG -I src -I include
 else
-	CFLAGS := -Wall -Wextra -O3 -march=native -std=c99 -MMD -DNDEBUG -I src -I include
+    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -march=native -std=c99 -MMD -DNDEBUG -I src -I include
 endif
 
 SRC_DIR := src
@@ -20,43 +30,48 @@ UNITY_C := $(SRC_DIR)/main.c
 UNITY_O := $(BUILD_DIR)/main.o
 DEP := $(UNITY_O:.o=.d)
 
-.PHONY: all headers clean guard empty_headers
+.PHONY: all headers clean guard empty_headers gcc_check
 
 all: empty_headers headers $(TARGET)
 
 # Create empty header placeholders if they don't exist
 empty_headers:
-	@echo "Ensuring header placeholders exist..."
-	@$(foreach hdr,$(HDRS), \
+ifeq ($(VERBOSE),1)
+	$(Q)echo "Ensuring header placeholders exist..."
+endif
+	$(Q)$(foreach hdr,$(HDRS), \
 		if [ ! -f $(hdr) ]; then \
 			mkdir -p $$(dirname $(hdr)); \
 			echo "/* Placeholder for $${hdr} */" > $(hdr); \
 		fi; \
 	)
 
-# Compile unity build main.c (after headers generated)
+# Compile unity build main.c
 $(UNITY_O): headers
-	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
+	$(Q)mkdir -p $(dir $@)
+	$(Q)$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
 
-# Link final executable from unity.o only
+# Link final binary
 $(TARGET): $(UNITY_O)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(Q)$(CC) $(CFLAGS) -o $@ $^
 
 # Generate headers from all .c files using cproto
 headers:
-	@echo "Generating headers in $(INCLUDE_DIR)..."
-	$(foreach f,$(SRC), \
+ifeq ($(VERBOSE),1)
+	$(Q)echo "Generating headers in $(INCLUDE_DIR)..."
+endif
+	$(Q)$(foreach f,$(SRC), \
 		mkdir -p $(dir $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h))); \
 		mkdir -p $(dir $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f))); \
-		$(CC) -E $(f) -I $(SRC_DIR) -I $(INCLUDE_DIR) -o $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)); \
-		cproto -a $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)) > $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)); \
-		$(MAKE) guard HEADER=$(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)); \
+		$(CC) -E -w $(f) -I $(SRC_DIR) -I $(INCLUDE_DIR) -o $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)) 2>/dev/null; \
+		cproto -a $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)) > $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)) 2>/dev/null; \
+		$(MAKE) guard HEADER=$(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)) VERBOSE=$(VERBOSE); \
+		$(MAKE) prepend_std_headers HEADER=$(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)); \
 	)
 
 # Add include guards with format VIMDAW_FILENAME_H
 guard:
-	@header=$(HEADER); \
+	$(Q)header=$(HEADER); \
 	filename=$$(basename "$${header}"); \
 	filename_no_ext=$${filename%.*}; \
 	guard_macro=$$(echo "VIMDAW_$${filename_no_ext}_H" | tr 'a-z' 'A-Z'); \
@@ -67,9 +82,24 @@ guard:
 	echo "#endif /* $${guard_macro} */" >> "$${tmpfile}"; \
 	mv "$${tmpfile}" "$${header}"
 
-# Clean all build artifacts and generated headers
+# Prepend standard includes to generated headers
+prepend_std_headers:
+	$(Q)header=$(HEADER); \
+	tmpfile="$${header}.tmp2"; \
+	echo "#include <stdint.h>" > "$${tmpfile}"; \
+	echo "#include <stddef.h>" >> "$${tmpfile}"; \
+	echo "#include <stdbool.h>" >> "$${tmpfile}"; \
+	echo "#include <stdio.h>" >> "$${tmpfile}"; \
+	cat "$${header}" >> "$${tmpfile}"; \
+	mv "$${tmpfile}" "$${header}"
+
+# Clean everything
 clean:
-	rm -rf $(BUILD_DIR) $(TARGET) $(HDRS)
+	$(Q)rm -rf $(BUILD_DIR) $(TARGET) $(HDRS)
+
+# Syntax check only
+gcc_check:
+	$(Q)$(CC) $(CFLAGS) -fsyntax-only $(SRC)
 
 -include $(DEP)
 

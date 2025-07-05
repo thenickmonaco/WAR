@@ -1,15 +1,13 @@
-Language: C
-BasedOnStyle: Google
+BasedOnStyle: LLVM
 IndentWidth: 4
-ColumnLimit: 79
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AllowAllParametersOfDeclarationOnNextLine: true
-AllowAllArgumentsOnNextLine: true
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
+PointerAlignment: Left
+AlignAfterOpenBracket: Align
 BinPackArguments: false
 BinPackParameters: false
-AlignOperands: false
-AlignTrailingComments: false
-BreakBeforeBraces: Allman
-SpaceBeforeParens: ControlStatements
+AllowShortIfStatementsOnASingleLine: true
+AllowShortBlocksOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
+BreakBeforeBinaryOperators: None    # Keep binary operators with their left operand
+BreakBeforeTernaryOperators: false
+

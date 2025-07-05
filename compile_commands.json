@@ -2,6 +2,7 @@
   {
     "arguments": [
       "/usr/bin/gcc",
+      "-D_GNU_SOURCE",
       "-Wall",
       "-Wextra",
       "-O3",

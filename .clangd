@@ -1,0 +1,14 @@
+CompileFlags:
+  Add: [
+    -std=c99,
+    -D_GNU_SOURCE,
+    --gcc-toolchain=/usr/lib/gcc/x86_64-linux-gnu/13,
+    -Wall,
+    -Wextra,
+    -Werror=gnu-folding-constant,
+    -Werror=vla,
+    -Wno-error=unused-variable,
+    -I src,
+    -I include,
+  ]
+

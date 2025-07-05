@@ -26,7 +26,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <linux/socket.h> // For socket constants like AF_UNIX, SOCK_STREAM
+#include <linux/socket.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

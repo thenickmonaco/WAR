@@ -79,6 +79,14 @@
         fprintf(stderr, " [%s:%d:%s]\n", __FILE__, __LINE__, __func__);          \
     } while (0)
 
+#define dump_bytes(label, arr, len)                                            \
+    do {                                                                       \
+        fprintf(stderr, "%s (%zu bytes):", (label), (size_t)(len));          \
+        for (size_t _i = 0; _i < (size_t)(len); ++_i)                          \
+            fprintf(stderr, " %02X", (arr)[_i]);                               \
+        fprintf(stderr, "\n");                                                 \
+    } while (0)
+
 #define end(fmt, ...) header("END " fmt, ##__VA_ARGS__)
 #define END(fmt, ...) CALL_CARMACK("END " fmt, ##__VA_ARGS__)
 
@@ -92,8 +100,8 @@
 #define END(fmt, ...) ((void)0)
 #define sub_header(fmt, ...) ((void)0)
 #define call_carmack(fmt, ...) ((void)0)
-#define nl() ((void)0)
 #define PRINT_DATE_NUMERIC() ((void)0)
+#define dump_bytes(label, arr, len) ((void)0)
 
 #endif // DEBUG
 

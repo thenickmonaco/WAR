@@ -69,7 +69,8 @@ int wayland_init() {
     memcpy(get_registry + 8, body, 4);
 
     ssize_t written = write(fd, get_registry, 12);
-    call_carmack("written: %lu", written);
+    call_carmack("written size: %lu", written);
+    dump_bytes("written", get_registry, 12);
     assert(written == 12);
 
     end("wayland init");

@@ -19,6 +19,7 @@
 //=============================================================================
 
 #include "wayland.h"
+#include "debug_macros.h"
 #include "macros.h"
 
 #include <assert.h>
@@ -26,6 +27,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <linux/socket.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -40,38 +42,102 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+enum {
+    max_objects = 128,
+    max_opcodes = 64,
+};
+
 int wayland_init() {
     header("wayland init");
+
     int fd = wayland_make_fd();
     assert(fd >= 0);
 
-    const uint32_t object_id = 1;
-    const uint16_t opcode = 1;
-    uint8_t header[8];
-    header[0] = object_id & 0xFF;
-    header[1] = (object_id >> 8) & 0xFF;
-    header[2] = (object_id >> 16) & 0xFF;
-    header[3] = (object_id >> 24) & 0xFF;
-    header[4] = opcode & 0xFF;
-    header[5] = (opcode >> 8) & 0xFF;
-    header[6] = 12 & 0xFF;
-    header[7] = (12 >> 8) & 0xFF;
-
-    const uint32_t new_id = 2;
-    uint8_t body[4];
-    body[0] = new_id & 0xFF;
-    body[1] = (new_id >> 8) & 0xFF;
-    body[2] = (new_id >> 16) & 0xFF;
-    body[3] = (new_id >> 24) & 0xFF;
-
     uint8_t get_registry[12];
-    memcpy(get_registry, header, 8);
-    memcpy(get_registry + 8, body, 4);
+
+    enum {
+        registry_id = 1,
+        new_id = 2,
+    };
+    uint16_t opcode = 1;
+    *(uint32_t*)(get_registry) = registry_id;
+    *(uint16_t*)(get_registry + 4) = opcode;
+    *(uint16_t*)(get_registry + 6) = 12;
+
+    *(uint32_t*)(get_registry + 8) = new_id;
 
     ssize_t written = write(fd, get_registry, 12);
     call_carmack("written size: %lu", written);
     dump_bytes("written", get_registry, 12);
     assert(written == 12);
+
+    uint8_t buffer[4096] = {0};
+    size_t buffer_size = 0;
+
+    struct pollfd pfd = {
+        .fd = fd,
+        .events = POLLIN,
+    };
+
+    void* obj_op[max_objects * max_opcodes] = {0};
+    obj_op[obj_op_index(2, 0)] = &&wl_registry_global;
+    obj_op[obj_op_index(2, 1)] = &&wl_registry_global_remove;
+
+    while (1) {
+        int ret = poll(&pfd, 1, 16);
+        assert(ret >= 0);
+        if (ret == 0) call_carmack("timeout");
+
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            call_carmack("wayland socket error or hangup: %s", strerror(errno));
+            break;
+        }
+
+        if (pfd.events & POLLIN) {
+            ssize_t size_read =
+                read(fd, buffer + buffer_size, sizeof(buffer) - buffer_size);
+            assert(size_read > 0);
+            buffer_size += size_read;
+
+            size_t offset = 0;
+            while (buffer_size - offset >= 8) {
+                uint16_t size = *(uint16_t*)(buffer + offset + 6);
+
+                if (size < 8 || size > buffer_size - offset) { break; };
+
+                uint32_t object_id = (*(uint32_t*)(buffer + offset));
+                uint16_t opcode = (*(uint16_t*)(buffer + offset + 4));
+
+                dump_bytes("msg", buffer + offset, size);
+                call_carmack("object_id: %i", object_id);
+                call_carmack("opcode: %i", opcode);
+
+                offset += size;
+
+                size_t idx = obj_op_index(object_id, opcode);
+                if (obj_op[idx]) {
+                    goto* obj_op[idx];
+                } else {
+                    goto wayland_default;
+                }
+
+            wl_registry_global:
+                call_carmack("global");
+                continue;
+            wl_registry_global_remove:
+                call_carmack("global_remove");
+                continue;
+            wayland_default:
+                call_carmack("default");
+                continue;
+            }
+
+            if (offset > 0) {
+                memmove(buffer, buffer + offset, buffer_size - offset);
+                buffer_size -= offset;
+            }
+        }
+    }
 
     end("wayland init");
     return 0;
@@ -83,8 +149,8 @@ int wayland_make_fd() {
     int fd = syscall(SYS_socket, AF_UNIX, SOCK_STREAM, 0);
     assert(fd >= 0);
 
-    bool found_xdg_runtime_dir = false;
-    bool found_wayland_display = false;
+    char found_xdg_runtime_dir = 0;
+    char found_wayland_display = 0;
 
     const char default_wayland_display[] = "wayland-0";
     const char env_xdg_runtime_dir_prefix[] = "XDG_RUNTIME_DIR=";
@@ -112,7 +178,7 @@ int wayland_make_fd() {
         if (!found_xdg_runtime_dir &&
             strncmp(*env, env_xdg_runtime_dir_prefix, xdg_prefix_size - 1) ==
                 0) {
-            found_xdg_runtime_dir = true;
+            found_xdg_runtime_dir = 1;
             const char* val = *env + xdg_prefix_size - 1;
             call_carmack("val: %s", val);
             size_xdg_runtime_dir = strlen(val);
@@ -122,7 +188,7 @@ int wayland_make_fd() {
                    strncmp(*env,
                            env_wayland_display_prefix,
                            wayland_prefix_size - 1) == 0) {
-            found_wayland_display = true;
+            found_wayland_display = 1;
             const char* val = *env + wayland_prefix_size - 1;
             call_carmack("val: %s", val);
             size_wayland_display = strlen(val);

@@ -18,6 +18,7 @@
 // src/main.c
 //=============================================================================
 
+#include "debug_macros.h"
 #include "macros.h"
 #include "wayland.c"
 

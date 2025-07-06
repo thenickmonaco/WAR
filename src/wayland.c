@@ -41,23 +41,43 @@
 #include <unistd.h>
 
 int wayland_init() {
-    header("## wayland initialization");
+    header("wayland init");
     int fd = wayland_make_fd();
     assert(fd >= 0);
 
-    const uint8_t header[64] = {0};
-    const uint8_t object_id[32] = {0};
-    const uint8_t opcode[16] = {0};
-    const uint8_t body_size[16] = {0};
+    const uint32_t object_id = 1;
+    const uint16_t opcode = 1;
+    uint8_t header[8];
+    header[0] = object_id & 0xFF;
+    header[1] = (object_id >> 8) & 0xFF;
+    header[2] = (object_id >> 16) & 0xFF;
+    header[3] = (object_id >> 24) & 0xFF;
+    header[4] = opcode & 0xFF;
+    header[5] = (opcode >> 8) & 0xFF;
+    header[6] = 12 & 0xFF;
+    header[7] = (12 >> 8) & 0xFF;
 
-    uint64_t body;
+    const uint32_t new_id = 2;
+    uint8_t body[4];
+    body[0] = new_id & 0xFF;
+    body[1] = (new_id >> 8) & 0xFF;
+    body[2] = (new_id >> 16) & 0xFF;
+    body[3] = (new_id >> 24) & 0xFF;
 
-    end("## END wayland initialization");
+    uint8_t get_registry[12];
+    memcpy(get_registry, header, 8);
+    memcpy(get_registry + 8, body, 4);
+
+    ssize_t written = write(fd, get_registry, 12);
+    call_carmack("written: %lu", written);
+    assert(written == 12);
+
+    end("wayland init");
     return 0;
 }
 
 int wayland_make_fd() {
-    sub_header("### make fd");
+    header("make fd");
 
     int fd = syscall(SYS_socket, AF_UNIX, SOCK_STREAM, 0);
     assert(fd >= 0);
@@ -143,6 +163,6 @@ int wayland_make_fd() {
     int ret = connect(fd, (struct sockaddr*)&addr, addr_len);
     assert(ret >= 0);
 
-    end("### END make fd");
+    end("make fd");
     return fd;
 }

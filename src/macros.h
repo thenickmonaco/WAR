@@ -59,7 +59,7 @@
 
 #define CALL_CARMACK(fmt, ...)                                                 \
     do {                                                                       \
-        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
+        fprintf(stderr, "# " fmt, ##__VA_ARGS__);                                   \
         if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
             fputc('\b', stderr); /* remove trailing newline visually */        \
         fprintf(stderr,                                                        \
@@ -69,28 +69,20 @@
                 __func__,                                                      \
                 __TIME__);                                                     \
         PRINT_DATE_NUMERIC();                                                  \
-        fprintf(stderr, "]\n");                                                \
+        fprintf(stderr, "]\n");                                                  \
     } while (0)
 
 #define header(fmt, ...)                                                       \
     do {                                                                       \
-        fprintf(stderr, "\n" fmt, ##__VA_ARGS__);                              \
+        fprintf(stderr, "## " fmt, ##__VA_ARGS__);                                   \
         if ((fmt)[sizeof(fmt) - 2] == '\n') fputc('\b', stderr);               \
-        fprintf(stderr, " [%s:%d:%s]\n", __FILE__, __LINE__, __func__);        \
+        fprintf(stderr, " [%s:%d:%s]\n", __FILE__, __LINE__, __func__);          \
     } while (0)
 
-#define end(fmt, ...) header(fmt, ##__VA_ARGS__)
-#define END(fmt, ...) CALL_CARMACK(fmt, ##__VA_ARGS__)
+#define end(fmt, ...) header("END " fmt, ##__VA_ARGS__)
+#define END(fmt, ...) CALL_CARMACK("END " fmt, ##__VA_ARGS__)
 
-// Add an extra newline after header for sub_header
-#define sub_header(fmt, ...)                                                   \
-    do {                                                                       \
-        header(fmt, ##__VA_ARGS__);                                            \
-        fprintf(stderr, "\n");                                                 \
-    } while (0)
-
-#define call_carmack(fmt, ...) fprintf(stderr, "- " fmt "\n", ##__VA_ARGS__)
-#define nl() fprintf(stderr, "\n")
+#define call_carmack(fmt, ...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
 
 #else // DEBUG not defined
 

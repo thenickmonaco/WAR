@@ -25,9 +25,9 @@
 #include <stdio.h>
 
 int main() {
-    CALL_CARMACK("# vimDAW");
+    CALL_CARMACK("vimDAW");
     int ret = wayland_init();
 
-    END("# END vimDAW");
+    END("vimDAW");
     return 0;
 }

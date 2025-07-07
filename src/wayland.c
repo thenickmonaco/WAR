@@ -62,6 +62,9 @@ int wayland_init() {
     uint32_t xdg_wm_base_id = 0;
     uint32_t wl_output_id = 0;
     uint32_t wl_seat_id = 0;
+    uint32_t wl_keyboard_id = 0;
+    uint32_t wl_pointer_id = 0;
+    uint32_t wl_touch_id = 0;
     uint32_t zwp_linux_dmabuf_v1_id = 0;
     uint32_t wp_linux_drm_syncobj_manager_v1_id = 0;
     uint32_t zwp_idle_inhibit_manager_v1_id = 0;
@@ -137,11 +140,10 @@ int wayland_init() {
 
                 if (object_id >= max_objects || opcode >= max_opcodes) {
                     //---------------------------------------------------------
-                    // INVALID OBJECT/OP (27 TIMES!)
+                    // INVALID OBJECT/OP (27 TIMES!) CONCERN
                     //---------------------------------------------------------
-                    // call_carmack(
-                    //     "invalid object/op: id=%u, op=%u", object_id,
-                    //     opcode);
+                    call_carmack(
+                        "invalid object/op: id=%u, op=%u", object_id, opcode);
                     goto done;
                 }
 
@@ -153,7 +155,7 @@ int wayland_init() {
                 }
 
             wl_registry_global:
-                dump_bytes("global msg", buffer + offset, size);
+                dump_bytes("global event", buffer + offset, size);
                 call_carmack("iname: %s", (const char*)buffer + offset + 16);
 
                 const char* iname = (const char*)buffer + offset + 16;
@@ -307,132 +309,302 @@ int wayland_init() {
                 }
                 goto done;
             wl_registry_global_remove:
-                dump_bytes("global_rm msg", buffer + offset, size);
+                dump_bytes("global_rm event", buffer + offset, size);
                 goto done;
             wl_shm_format:
-                dump_bytes("wl_shm_fmt msg", buffer + offset, size);
+                dump_bytes("wl_shm_fmt event", buffer + offset, size);
                 goto done;
             xdg_wm_base_ping:
-                dump_bytes("xdg_wm_base ping msg", buffer + offset, size);
+                dump_bytes("xdg_wm_base ping event", buffer + offset, size);
                 assert(size == 12);
                 uint8_t pong[12];
                 write_le32(pong, xdg_wm_base_id);
                 write_le16(pong + 4, 3);
                 write_le16(pong + 6, 12);
                 write_le32(pong + 8, read_le32(buffer + offset + 8));
-                dump_bytes("pong msg", pong, size);
+                dump_bytes("pong event", pong, 12);
                 ssize_t pong_written = write(fd, pong, 12);
                 assert(pong_written == 12);
                 goto done;
             zwp_linux_dmabuf_v1_jump:
                 dump_bytes(
-                    "zwp_linux_dmabuf_v1_jump msg", buffer + offset, size);
+                    "zwp_linux_dmabuf_v1_jump event", buffer + offset, size);
                 goto done;
             wp_linux_drm_syncobj_manager_v1_jump:
-                dump_bytes("wp_linux_drm_syncobj_manager_v1_jump msg",
+                dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             wl_compositor_jump:
-                dump_bytes("wl_compositor_jump msg", buffer + offset, size);
+                dump_bytes("wl_compositor_jump event", buffer + offset, size);
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
-                dump_bytes("zwp_idle_inhibit_manager_v1_jump msg",
+                dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             zwlr_layer_shell_v1_jump:
                 dump_bytes(
-                    "zwlr_layer_shell_v1_jump msg", buffer + offset, size);
+                    "zwlr_layer_shell_v1_jump event", buffer + offset, size);
                 goto done;
             zxdg_decoration_manager_v1_jump:
-                dump_bytes("zxdg_decoration_manager_v1_jump msg",
+                dump_bytes("zxdg_decoration_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             zwp_relative_pointer_manager_v1_jump:
-                dump_bytes("zwp_relative_pointer_manager_v1_jump msg",
+                dump_bytes("zwp_relative_pointer_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             zwp_pointer_constraints_v1_jump:
-                dump_bytes("zwp_pointer_constraints_v1_jump msg",
+                dump_bytes("zwp_pointer_constraints_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             wp_presentation_clock_id:
                 dump_bytes(
-                    "wp_presentation_clock_id msg", buffer + offset, size);
+                    "wp_presentation_clock_id event", buffer + offset, size);
                 goto done;
             zwlr_output_manager_v1_head:
                 dump_bytes(
-                    "zwlr_output_manager_v1_head msg", buffer + offset, size);
+                    "zwlr_output_manager_v1_head event", buffer + offset, size);
                 goto done;
             zwlr_output_manager_v1_done:
                 dump_bytes(
-                    "zwlr_output_manager_v1_done msg", buffer + offset, size);
+                    "zwlr_output_manager_v1_done event", buffer + offset, size);
                 goto done;
             ext_foreign_toplevel_list_v1_toplevel:
-                dump_bytes("ext_foreign_toplevel_list_v1_toplevel msg",
+                dump_bytes("ext_foreign_toplevel_list_v1_toplevel event",
                            buffer + offset,
                            size);
                 goto done;
             zwlr_data_control_manager_v1_jump:
-                dump_bytes("zwlr_data_control_manager_v1_jump msg",
+                dump_bytes("zwlr_data_control_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             wp_viewporter_jump:
-                dump_bytes("wp_viewporter_jump msg", buffer + offset, size);
+                dump_bytes("wp_viewporter_jump event", buffer + offset, size);
                 goto done;
             wp_content_type_manager_v1_jump:
-                dump_bytes("wp_content_type_manager_v1_jump msg",
+                dump_bytes("wp_content_type_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             wp_fractional_scale_manager_v1_jump:
-                dump_bytes("wp_fractional_scale_manager_v1_jump msg",
+                dump_bytes("wp_fractional_scale_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             xdg_activation_v1_jump:
-                dump_bytes("xdg_activation_v1_jump msg", buffer + offset, size);
+                dump_bytes(
+                    "xdg_activation_v1_jump event", buffer + offset, size);
                 goto done;
             zwp_virtual_keyboard_manager_v1_jump:
-                dump_bytes("zwp_virtual_keyboard_manager_v1_jump msg",
+                dump_bytes("zwp_virtual_keyboard_manager_v1_jump event",
                            buffer + offset,
                            size);
                 goto done;
             zwp_pointer_gestures_v1_jump:
-                dump_bytes(
-                    "zwp_pointer_gestures_v1_jump msg", buffer + offset, size);
+                dump_bytes("zwp_pointer_gestures_v1_jump event",
+                           buffer + offset,
+                           size);
                 goto done;
             wl_seat_capabilities:
-                dump_bytes("wl_seat_capabilities msg", buffer + offset, size);
+                dump_bytes("wl_seat_capabilities event", buffer + offset, size);
+                enum {
+                    wl_seat_pointer = 0x01,
+                    wl_seat_keyboard = 0x02,
+                    wl_seat_touch = 0x04,
+                };
+
+                uint32_t capabilities = read_le32(buffer + offset + 8);
+                if (capabilities & wl_seat_keyboard) {
+                    call_carmack("keyboard detected");
+                    assert(size == 12);
+                    uint8_t get_keyboard[12];
+                    write_le32(get_keyboard, wl_seat_id);
+                    write_le16(get_keyboard + 4, 1);
+                    write_le16(get_keyboard + 6, 12);
+                    write_le32(get_keyboard + 8, new_id);
+                    dump_bytes("get_keyboard request", get_keyboard, 12);
+                    ssize_t get_keyboard_written = write(fd, get_keyboard, 12);
+                    assert(get_keyboard_written == 12);
+                    wl_keyboard_id = new_id;
+                    obj_op[obj_op_index(wl_keyboard_id, 0)] =
+                        &&wl_keyboard_keymap;
+                    obj_op[obj_op_index(wl_keyboard_id, 1)] =
+                        &&wl_keyboard_enter;
+                    obj_op[obj_op_index(wl_keyboard_id, 2)] =
+                        &&wl_keyboard_leave;
+                    obj_op[obj_op_index(wl_keyboard_id, 3)] = &&wl_keyboard_key;
+                    obj_op[obj_op_index(wl_keyboard_id, 4)] =
+                        &&wl_keyboard_modifiers;
+                    obj_op[obj_op_index(wl_keyboard_id, 5)] =
+                        &&wl_keyboard_repeat_info;
+                    new_id++;
+                }
+                if (capabilities & wl_seat_pointer) {
+                    call_carmack("pointer detected");
+                    assert(size == 12);
+                    uint8_t get_pointer[12];
+                    write_le32(get_pointer, wl_seat_id);
+                    write_le16(get_pointer + 4, 0);
+                    write_le16(get_pointer + 6, 12);
+                    write_le32(get_pointer + 8, new_id);
+                    dump_bytes("get_pointer request", get_pointer, 12);
+                    ssize_t get_pointer_written = write(fd, get_pointer, 12);
+                    assert(get_pointer_written == 12);
+                    wl_pointer_id = new_id;
+                    obj_op[obj_op_index(wl_pointer_id, 0)] = &&wl_pointer_enter;
+                    obj_op[obj_op_index(wl_pointer_id, 1)] = &&wl_pointer_leave;
+                    obj_op[obj_op_index(wl_pointer_id, 2)] =
+                        &&wl_pointer_motion;
+                    obj_op[obj_op_index(wl_pointer_id, 3)] =
+                        &&wl_pointer_button;
+                    obj_op[obj_op_index(wl_pointer_id, 4)] = &&wl_pointer_axis;
+                    obj_op[obj_op_index(wl_pointer_id, 5)] = &&wl_pointer_frame;
+                    obj_op[obj_op_index(wl_pointer_id, 6)] =
+                        &&wl_pointer_axis_source;
+                    obj_op[obj_op_index(wl_pointer_id, 7)] =
+                        &&wl_pointer_axis_stop;
+                    obj_op[obj_op_index(wl_pointer_id, 8)] =
+                        &&wl_pointer_axis_discrete;
+                    obj_op[obj_op_index(wl_pointer_id, 9)] =
+                        &&wl_pointer_axis_value120;
+                    obj_op[obj_op_index(wl_pointer_id, 10)] =
+                        &&wl_pointer_axis_relative_direction;
+                    new_id++;
+                }
+                if (capabilities & wl_seat_touch) {
+                    call_carmack("touch detected");
+                    assert(size == 12);
+                    uint8_t get_touch[12];
+                    write_le32(get_touch, wl_seat_id);
+                    write_le16(get_touch + 4, 2);
+                    write_le16(get_touch + 6, 12);
+                    write_le32(get_touch + 8, new_id);
+                    dump_bytes("get_touch request", get_touch, 12);
+                    ssize_t get_touch_written = write(fd, get_touch, 12);
+                    assert(get_touch_written == 12);
+                    wl_touch_id = new_id;
+                    obj_op[obj_op_index(wl_touch_id, 0)] = &&wl_touch_down;
+                    obj_op[obj_op_index(wl_touch_id, 1)] = &&wl_touch_up;
+                    obj_op[obj_op_index(wl_touch_id, 2)] = &&wl_touch_motion;
+                    obj_op[obj_op_index(wl_touch_id, 3)] = &&wl_touch_frame;
+                    obj_op[obj_op_index(wl_touch_id, 4)] = &&wl_touch_cancel;
+                    obj_op[obj_op_index(wl_touch_id, 5)] = &&wl_touch_shape;
+                    obj_op[obj_op_index(wl_touch_id, 6)] =
+                        &&wl_touch_orientation;
+                    new_id++;
+                }
                 goto done;
             wl_seat_name:
-                dump_bytes("wl_seat_name msg", buffer + offset, size);
+                dump_bytes("wl_seat_name event", buffer + offset, size);
+                call_carmack(
+                    "seat: %s", (const char*)buffer + offset + 12, size);
+                goto done;
+            wl_keyboard_keymap:
+                dump_bytes("wl_keyboard_keymap event", buffer + offset, size);
+                goto done;
+            wl_keyboard_enter:
+                dump_bytes("wl_keyboard_enter event", buffer + offset, size);
+                goto done;
+            wl_keyboard_leave:
+                dump_bytes("wl_keyboard_leave event", buffer + offset, size);
+                goto done;
+            wl_keyboard_key:
+                dump_bytes("wl_keyboard_key event", buffer + offset, size);
+                goto done;
+            wl_keyboard_modifiers:
+                dump_bytes(
+                    "wl_keyboard_modifiers event", buffer + offset, size);
+                goto done;
+            wl_keyboard_repeat_info:
+                dump_bytes(
+                    "wl_keyboard_repeat_info event", buffer + offset, size);
+                goto done;
+            wl_pointer_enter:
+                dump_bytes("wl_pointer_enter event", buffer + offset, size);
+                goto done;
+            wl_pointer_leave:
+                dump_bytes("wl_pointer_leave event", buffer + offset, size);
+                goto done;
+            wl_pointer_motion:
+                dump_bytes("wl_pointer_motion event", buffer + offset, size);
+                goto done;
+            wl_pointer_button:
+                dump_bytes("wl_pointer_button event", buffer + offset, size);
+                goto done;
+            wl_pointer_axis:
+                dump_bytes("wl_pointer_axis event", buffer + offset, size);
+                goto done;
+            wl_pointer_frame:
+                dump_bytes("wl_pointer_frame event", buffer + offset, size);
+                goto done;
+            wl_pointer_axis_source:
+                dump_bytes(
+                    "wl_pointer_axis_source event", buffer + offset, size);
+                goto done;
+            wl_pointer_axis_stop:
+                dump_bytes("wl_pointer_axis_stop event", buffer + offset, size);
+                goto done;
+            wl_pointer_axis_discrete:
+                dump_bytes(
+                    "wl_pointer_axis_discrete event", buffer + offset, size);
+                goto done;
+            wl_pointer_axis_value120:
+                dump_bytes(
+                    "wl_pointer_axis_value120 event", buffer + offset, size);
+                goto done;
+            wl_pointer_axis_relative_direction:
+                dump_bytes("wl_pointer_axis_relative_direction event",
+                           buffer + offset,
+                           size);
+                goto done;
+            wl_touch_down:
+                dump_bytes("wl_touch_down event", buffer + offset, size);
+                goto done;
+            wl_touch_up:
+                dump_bytes("wl_touch_up event", buffer + offset, size);
+                goto done;
+            wl_touch_motion:
+                dump_bytes("wl_touch_motion event", buffer + offset, size);
+                goto done;
+            wl_touch_frame:
+                dump_bytes("wl_touch_frame event", buffer + offset, size);
+                goto done;
+            wl_touch_cancel:
+                dump_bytes("wl_touch_cancel event", buffer + offset, size);
+                goto done;
+            wl_touch_shape:
+                dump_bytes("wl_touch_shape event", buffer + offset, size);
+                goto done;
+            wl_touch_orientation:
+                dump_bytes("wl_touch_orientation event", buffer + offset, size);
                 goto done;
             wl_output_geometry:
-                dump_bytes("wl_output_geometry msg", buffer + offset, size);
+                dump_bytes("wl_output_geometry event", buffer + offset, size);
                 goto done;
             wl_output_mode:
-                dump_bytes("wl_output_mode msg", buffer + offset, size);
+                dump_bytes("wl_output_mode event", buffer + offset, size);
                 goto done;
             wl_output_done:
-                dump_bytes("wl_output_done msg", buffer + offset, size);
+                dump_bytes("wl_output_done event", buffer + offset, size);
                 goto done;
             wl_output_scale:
-                dump_bytes("wl_output_scale msg", buffer + offset, size);
+                dump_bytes("wl_output_scale event", buffer + offset, size);
                 goto done;
             wl_output_name:
-                dump_bytes("wl_output_name msg", buffer + offset, size);
+                dump_bytes("wl_output_name event", buffer + offset, size);
                 goto done;
             wl_output_description:
-                dump_bytes("wl_output_description msg", buffer + offset, size);
+                dump_bytes(
+                    "wl_output_description event", buffer + offset, size);
                 goto done;
             wayland_default:
-                dump_bytes("default msg", buffer + offset, size);
+                dump_bytes("default event", buffer + offset, size);
                 goto done;
             done:
                 offset += size;
@@ -452,7 +624,7 @@ int wayland_init() {
 
 void wayland_registry_bind(
     int fd, uint8_t* buffer, size_t offset, uint16_t size, uint16_t new_id) {
-    header("reg bind request");
+    header("reg_bind request");
 
     uint8_t bind[128];
     assert(size + 4 <= 128); // add 4 for new_id
@@ -463,14 +635,14 @@ void wayland_registry_bind(
     write_le16(bind + 6, total_size);
     write_le32(bind + size, new_id);
 
-    dump_bytes("bind msg", bind, size + 4);
+    dump_bytes("bind request", bind, size + 4);
     call_carmack("bound: %s", (const char*)buffer + offset + 16);
     call_carmack("to id: %u", new_id);
 
     ssize_t bind_written = write(fd, bind, size + 4);
     assert(bind_written == size + 4);
 
-    end("reg bind request");
+    end("reg_bind request");
 }
 
 int wayland_make_fd() {

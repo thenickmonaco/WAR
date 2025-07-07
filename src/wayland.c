@@ -53,13 +53,14 @@ int wayland_init() {
     int fd = wayland_make_fd();
     assert(fd >= 0);
 
-    uint8_t get_registry[12];
-
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
     uint32_t wl_shm_id = 0;
     uint32_t wl_compositor_id = 0;
+    uint32_t wl_surface_id = 0;
     uint32_t xdg_wm_base_id = 0;
+    uint32_t xdg_surface_id = 0;
+    uint32_t xdg_toplevel_id = 0;
     uint32_t wl_output_id = 0;
     uint32_t wl_seat_id = 0;
     uint32_t wl_keyboard_id = 0;
@@ -82,13 +83,14 @@ int wayland_init() {
     uint32_t zwlr_layer_shell_v1_id = 0;
     uint32_t ext_foreign_toplevel_list_v1_id = 0;
     uint32_t wp_content_type_manager_v1_id = 0;
-    // uint32_t wl_surface_id = 0;
     // uint32_t wl_keyboard_id = 0;
     // uint32_t wl_pointer_id = 0;
     // uint32_t wl_callback_id = 0;
     // uint32_t wl_buffer_id = 0;
     // uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
     // uint32_t zwp_linux_explicit_synchronization_v1_id = 0;
+
+    uint8_t get_registry[12];
 
     write_le32(get_registry, wl_display_id);
     write_le16(get_registry + 4, 1);
@@ -142,8 +144,8 @@ int wayland_init() {
                     //---------------------------------------------------------
                     // INVALID OBJECT/OP (27 TIMES!) CONCERN
                     //---------------------------------------------------------
-                    call_carmack(
-                        "invalid object/op: id=%u, op=%u", object_id, opcode);
+                    // call_carmack(
+                    //    "invalid object/op: id=%u, op=%u", object_id, opcode);
                     goto done;
                 }
 
@@ -170,6 +172,7 @@ int wayland_init() {
                     obj_op[obj_op_index(wl_compositor_id, 0)] =
                         &&wl_compositor_jump;
                     new_id++;
+
                 } else if (strcmp(iname, "wl_output") == 0) {
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_output_id = new_id;
@@ -307,6 +310,64 @@ int wayland_init() {
                         &&wp_content_type_manager_v1_jump;
                     new_id++;
                 }
+                if (wl_surface_id == 0 && wl_compositor_id != 0) {
+                    uint8_t create_surface[12];
+                    write_le32(create_surface, wl_compositor_id);
+                    write_le16(create_surface + 4, 0);
+                    write_le16(create_surface + 6, 12);
+                    write_le32(create_surface + 8, new_id);
+                    dump_bytes("create_surface request", create_surface, 12);
+                    call_carmack("bound: wl_surface");
+                    ssize_t create_surface_written =
+                        write(fd, create_surface, 12);
+                    assert(create_surface_written == 12);
+                    wl_surface_id = new_id;
+                    obj_op[obj_op_index(wl_surface_id, 0)] = &&wl_surface_enter;
+                    obj_op[obj_op_index(wl_surface_id, 1)] = &&wl_surface_leave;
+                    obj_op[obj_op_index(wl_surface_id, 2)] =
+                        &&wl_surface_preferred_buffer_scale;
+                    obj_op[obj_op_index(wl_surface_id, 3)] =
+                        &&wl_surface_preferred_buffer_transform;
+                    new_id++;
+                }
+                if (xdg_surface_id == 0 && xdg_wm_base_id != 0 &&
+                    wl_surface_id != 0) {
+                    uint8_t get_xdg_surface[16];
+                    write_le32(get_xdg_surface, xdg_wm_base_id);
+                    write_le16(get_xdg_surface + 4, 2);
+                    write_le16(get_xdg_surface + 6, 16);
+                    write_le32(get_xdg_surface + 8, new_id);
+                    write_le32(get_xdg_surface + 12, wl_surface_id);
+                    dump_bytes("get_xdg_surface request", get_xdg_surface, 16);
+                    call_carmack("bound: xdg_surface");
+                    ssize_t get_xdg_surface_written =
+                        write(fd, get_xdg_surface, 16);
+                    assert(get_xdg_surface_written == 16);
+                    xdg_surface_id = new_id;
+                    obj_op[obj_op_index(xdg_surface_id, 0)] =
+                        &&xdg_surface_configure;
+                    new_id++;
+
+                    uint8_t get_toplevel[12];
+                    write_le32(get_toplevel, xdg_surface_id);
+                    write_le16(get_toplevel + 4, 1);
+                    write_le16(get_toplevel + 6, 12);
+                    write_le32(get_toplevel + 8, new_id);
+                    dump_bytes("get_xdg_toplevel request", get_toplevel, 12);
+                    call_carmack("bound: xdg_toplevel");
+                    ssize_t get_toplevel_written = write(fd, get_toplevel, 12);
+                    assert(get_toplevel_written == 12);
+                    xdg_toplevel_id = new_id;
+                    obj_op[obj_op_index(xdg_toplevel_id, 0)] =
+                        &&xdg_toplevel_configure;
+                    obj_op[obj_op_index(xdg_toplevel_id, 1)] =
+                        &&xdg_toplevel_close;
+                    obj_op[obj_op_index(xdg_toplevel_id, 2)] =
+                        &&xdg_toplevel_configure_bounds;
+                    obj_op[obj_op_index(xdg_toplevel_id, 3)] =
+                        &&xdg_toplevel_wm_capabilities;
+                    new_id++;
+                }
                 goto done;
             wl_registry_global_remove:
                 dump_bytes("global_rm event", buffer + offset, size);
@@ -315,16 +376,37 @@ int wayland_init() {
                 dump_bytes("wl_shm_fmt event", buffer + offset, size);
                 goto done;
             xdg_wm_base_ping:
-                dump_bytes("xdg_wm_base ping event", buffer + offset, size);
+                dump_bytes("xdg_wm_base_ping event", buffer + offset, size);
                 assert(size == 12);
                 uint8_t pong[12];
                 write_le32(pong, xdg_wm_base_id);
                 write_le16(pong + 4, 3);
                 write_le16(pong + 6, 12);
                 write_le32(pong + 8, read_le32(buffer + offset + 8));
-                dump_bytes("pong event", pong, 12);
+                dump_bytes("xdg_wm_base_pong request", pong, 12);
                 ssize_t pong_written = write(fd, pong, 12);
                 assert(pong_written == 12);
+                goto done;
+            xdg_surface_configure:
+                dump_bytes(
+                    "xdg_surface_configure event", buffer + offset, size);
+                goto done;
+            xdg_toplevel_configure:
+                dump_bytes(
+                    "xdg_toplevel_configure event", buffer + offset, size);
+                goto done;
+            xdg_toplevel_close:
+                dump_bytes("xdg_toplevel_close event", buffer + offset, size);
+                goto done;
+            xdg_toplevel_configure_bounds:
+                dump_bytes("xdg_toplevel_configure_bounds event",
+                           buffer + offset,
+                           size);
+                goto done;
+            xdg_toplevel_wm_capabilities:
+                dump_bytes("xdg_toplevel_wm_capabilities event",
+                           buffer + offset,
+                           size);
                 goto done;
             zwp_linux_dmabuf_v1_jump:
                 dump_bytes(
@@ -337,6 +419,22 @@ int wayland_init() {
                 goto done;
             wl_compositor_jump:
                 dump_bytes("wl_compositor_jump event", buffer + offset, size);
+                goto done;
+            wl_surface_enter:
+                dump_bytes("wl_surface_enter event", buffer + offset, size);
+                goto done;
+            wl_surface_leave:
+                dump_bytes("wl_surface_leave event", buffer + offset, size);
+                goto done;
+            wl_surface_preferred_buffer_scale:
+                dump_bytes("wl_surface_preferred_buffer_scale event",
+                           buffer + offset,
+                           size);
+                goto done;
+            wl_surface_preferred_buffer_transform:
+                dump_bytes("wl_surface_preferred_buffer_transform event",
+                           buffer + offset,
+                           size);
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
@@ -418,7 +516,6 @@ int wayland_init() {
                     wl_seat_keyboard = 0x02,
                     wl_seat_touch = 0x04,
                 };
-
                 uint32_t capabilities = read_le32(buffer + offset + 8);
                 if (capabilities & wl_seat_keyboard) {
                     call_carmack("keyboard detected");
@@ -429,6 +526,8 @@ int wayland_init() {
                     write_le16(get_keyboard + 6, 12);
                     write_le32(get_keyboard + 8, new_id);
                     dump_bytes("get_keyboard request", get_keyboard, 12);
+                    call_carmack("bound: wl_keyboard",
+                                 (const char*)buffer + offset + 12);
                     ssize_t get_keyboard_written = write(fd, get_keyboard, 12);
                     assert(get_keyboard_written == 12);
                     wl_keyboard_id = new_id;
@@ -454,6 +553,7 @@ int wayland_init() {
                     write_le16(get_pointer + 6, 12);
                     write_le32(get_pointer + 8, new_id);
                     dump_bytes("get_pointer request", get_pointer, 12);
+                    call_carmack("bound: wl_pointer");
                     ssize_t get_pointer_written = write(fd, get_pointer, 12);
                     assert(get_pointer_written == 12);
                     wl_pointer_id = new_id;
@@ -486,6 +586,7 @@ int wayland_init() {
                     write_le16(get_touch + 6, 12);
                     write_le32(get_touch + 8, new_id);
                     dump_bytes("get_touch request", get_touch, 12);
+                    call_carmack("bound: wl_touch");
                     ssize_t get_touch_written = write(fd, get_touch, 12);
                     assert(get_touch_written == 12);
                     wl_touch_id = new_id;

@@ -53,9 +53,35 @@ int wayland_init() {
     int fd = wayland_make_fd();
     assert(fd >= 0);
 
+    enum {
+        width = 1920,
+        height = 1080,
+        stride = width * 4,
+        ARGB8888 = 0,
+    };
+
+#ifdef WL_SHM
+    int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
+
+    if (shm_fd < 0) {
+        call_carmack("error: memfd_create");
+        return -1;
+    }
+
+    if (syscall(SYS_ftruncate, shm_fd, stride * height) < 0) {
+        call_carmack("error: ftruncate");
+        close(shm_fd);
+        return -1;
+    }
+#endif
+
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
+#ifdef WL_SHM
     uint32_t wl_shm_id = 0;
+    uint32_t wl_shm_pool_id = 0;
+    uint32_t wl_buffer_id = 0;
+#endif
     uint32_t wl_compositor_id = 0;
     uint32_t wl_surface_id = 0;
     uint32_t xdg_wm_base_id = 0;
@@ -86,7 +112,6 @@ int wayland_init() {
     // uint32_t wl_keyboard_id = 0;
     // uint32_t wl_pointer_id = 0;
     // uint32_t wl_callback_id = 0;
-    // uint32_t wl_buffer_id = 0;
     // uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
     // uint32_t zwp_linux_explicit_synchronization_v1_id = 0;
 
@@ -162,10 +187,12 @@ int wayland_init() {
 
                 const char* iname = (const char*)buffer + offset + 16;
                 if (strcmp(iname, "wl_shm") == 0) {
+#ifdef WL_SHM
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_shm_id = new_id;
                     obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
                     new_id++;
+#endif
                 } else if (strcmp(iname, "wl_compositor") == 0) {
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_compositor_id = new_id;
@@ -380,9 +407,67 @@ int wayland_init() {
             wl_registry_global_remove:
                 dump_bytes("global_rm event", buffer + offset, size);
                 goto done;
+#ifdef WL_SHM
             wl_shm_format:
-                dump_bytes("wl_shm_fmt event", buffer + offset, size);
+                dump_bytes("wl_shm_format event", buffer + offset, size);
+                if (read_le32(buffer + offset + 8) == ARGB8888) {
+                    uint8_t create_pool[12];
+                    write_le32(create_pool, wl_shm_id); // object id
+                    write_le16(create_pool + 4, 0);     // opcode 0
+                    write_le16(create_pool + 6,
+                               16); // message size = 12 + 4 bytes for pool size
+                    write_le32(create_pool + 8, new_id); // new pool id
+                    uint32_t pool_size = stride * height;
+                    struct iovec iov[2] = {
+                        {.iov_base = create_pool, .iov_len = 12},
+                        {.iov_base = &pool_size, .iov_len = 4}};
+                    char cmsgbuf[CMSG_SPACE(sizeof(int))];
+                    memset(cmsgbuf, 0, sizeof(cmsgbuf));
+                    struct msghdr msg = {0};
+                    msg.msg_iov = iov;
+                    msg.msg_iovlen = 2;
+                    msg.msg_control = cmsgbuf;
+                    msg.msg_controllen = sizeof(cmsgbuf);
+                    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+                    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+                    cmsg->cmsg_level = SOL_SOCKET;
+                    cmsg->cmsg_type = SCM_RIGHTS;
+                    *((int*)CMSG_DATA(cmsg)) = shm_fd;
+                    ssize_t sent = sendmsg(fd, &msg, 0);
+                    if (sent < 0) perror("sendmsg");
+                    assert(sent == 16);
+                    dump_bytes("wl_shm_create_pool request",
+                               create_pool,
+                               sizeof(create_pool));
+                    call_carmack("bound wl_shm_pool");
+                    wl_shm_pool_id = new_id;
+                    new_id++;
+
+                    uint8_t create_buffer[32];
+                    write_le32(create_buffer, wl_shm_pool_id);
+                    write_le16(create_buffer + 4, 0);
+                    write_le16(create_buffer + 6, 32);
+                    write_le32(create_buffer + 8, new_id);
+                    write_le32(create_buffer + 12, 0); // offset
+                    write_le32(create_buffer + 16, width);
+                    write_le32(create_buffer + 20, height);
+                    write_le32(create_buffer + 24, stride);
+                    write_le32(create_buffer + 28, ARGB8888);
+                    dump_bytes(
+                        "wl_shm_pool_create_buffer request", create_buffer, 32);
+                    call_carmack("bound wl_buffer");
+                    ssize_t create_buffer_written =
+                        write(fd, create_buffer, 32);
+                    assert(create_buffer_written == 32);
+                    wl_buffer_id = new_id;
+                    obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
+                    new_id++;
+                }
                 goto done;
+            wl_buffer_release:
+                dump_bytes("wl_buffer_release event", buffer + offset, size);
+                goto done;
+#endif
             xdg_wm_base_ping:
                 dump_bytes("xdg_wm_base_ping event", buffer + offset, size);
                 assert(size == 12);

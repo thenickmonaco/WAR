@@ -1,6 +1,7 @@
 CC := gcc
 DEBUG ?= 0
 VERBOSE ?= 0
+WL_SHM ?= 0
 
 ifeq ($(VERBOSE), 1)
     Q :=
@@ -19,6 +20,8 @@ else
 	# Release build: no asserts, no debug symbols
     CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -march=native -std=c99 -MMD -DNDEBUG -I src -I include
 endif
+
+CFLAGS += -DWL_SHM=$(WL_SHM)
 
 SRC_DIR := src
 BUILD_DIR := build

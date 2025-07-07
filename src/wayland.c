@@ -127,8 +127,6 @@ int wayland_init() {
             assert(size_read > 0);
             buffer_size += size_read;
 
-            dump_bytes("buffer", buffer, buffer_size);
-
             size_t offset = 0;
             while (buffer_size - offset >= 8) {
                 uint16_t size = read_le16(buffer + offset + 6);
@@ -139,9 +137,10 @@ int wayland_init() {
                 uint16_t opcode = read_le16(buffer + offset + 4);
 
                 if (object_id >= max_objects || opcode >= max_opcodes) {
-                    call_carmack(
-                        "invalid object/op: id=%u, op=%u", object_id, opcode);
-                    goto wayland_default;
+                    // call_carmack(
+                    //     "invalid object/op: id=%u, op=%u", object_id,
+                    //     opcode);
+                    goto done;
                 }
 
                 size_t idx = obj_op_index(object_id, opcode);
@@ -173,7 +172,8 @@ int wayland_init() {
                     wayland_registry_bind_request(
                         fd, buffer, offset, size, new_id);
                     wl_output_id = new_id;
-                    obj_op[obj_op_index(wl_output_id, 0)] = &&wl_output_jump;
+                    obj_op[obj_op_index(wl_output_id, 0)] =
+                        &&wl_output_geometry;
                     new_id++;
                 } else if (strcmp(iname, "wl_seat") == 0) {
                     wayland_registry_bind_request(
@@ -409,11 +409,11 @@ int wayland_init() {
             wl_seat_jump:
                 dump_bytes("wl_seat_jump msg", buffer + offset, size);
                 goto done;
-            wl_output_jump:
-                dump_bytes("wl_output_jump msg", buffer + offset, size);
+            wl_output_geometry:
+                dump_bytes("wl_output_geometry msg", buffer + offset, size);
                 goto done;
             wayland_default:
-                dump_bytes("default msg msg", buffer + offset, size);
+                dump_bytes("default msg", buffer + offset, size);
                 goto done;
             done:
                 offset += size;

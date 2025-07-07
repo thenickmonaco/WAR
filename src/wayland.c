@@ -137,6 +137,9 @@ int wayland_init() {
                 uint16_t opcode = read_le16(buffer + offset + 4);
 
                 if (object_id >= max_objects || opcode >= max_opcodes) {
+                    //---------------------------------------------------------
+                    // INVALID OBJECT/OP (27 TIMES!)
+                    //---------------------------------------------------------
                     // call_carmack(
                     //     "invalid object/op: id=%u, op=%u", object_id,
                     //     opcode);
@@ -174,12 +177,20 @@ int wayland_init() {
                     wl_output_id = new_id;
                     obj_op[obj_op_index(wl_output_id, 0)] =
                         &&wl_output_geometry;
+                    obj_op[obj_op_index(wl_output_id, 1)] = &&wl_output_mode;
+                    obj_op[obj_op_index(wl_output_id, 2)] = &&wl_output_done;
+                    obj_op[obj_op_index(wl_output_id, 3)] = &&wl_output_scale;
+                    obj_op[obj_op_index(wl_output_id, 4)] = &&wl_output_name;
+                    obj_op[obj_op_index(wl_output_id, 5)] =
+                        &&wl_output_description;
                     new_id++;
                 } else if (strcmp(iname, "wl_seat") == 0) {
                     wayland_registry_bind_request(
                         fd, buffer, offset, size, new_id);
                     wl_seat_id = new_id;
-                    obj_op[obj_op_index(wl_seat_id, 0)] = &&wl_seat_jump;
+                    obj_op[obj_op_index(wl_seat_id, 0)] =
+                        &&wl_seat_capabilities;
+                    obj_op[obj_op_index(wl_seat_id, 1)] = &&wl_seat_name;
                     new_id++;
                 } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
                     wayland_registry_bind_request(
@@ -239,7 +250,9 @@ int wayland_init() {
                         fd, buffer, offset, size, new_id);
                     zwlr_output_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwlr_output_manager_v1_id, 0)] =
-                        &&zwlr_output_manager_v1_jump;
+                        &&zwlr_output_manager_v1_head;
+                    obj_op[obj_op_index(zwlr_output_manager_v1_id, 1)] =
+                        &&zwlr_output_manager_v1_done;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_data_control_manager_v1") == 0) {
                     wayland_registry_bind_request(
@@ -291,7 +304,7 @@ int wayland_init() {
                         fd, buffer, offset, size, new_id);
                     wp_presentation_id = new_id;
                     obj_op[obj_op_index(wp_presentation_id, 0)] =
-                        &&wp_presentation_jump;
+                        &&wp_presentation_clock_id;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
                     wayland_registry_bind_request(
@@ -305,7 +318,7 @@ int wayland_init() {
                         fd, buffer, offset, size, new_id);
                     ext_foreign_toplevel_list_v1_id = new_id;
                     obj_op[obj_op_index(ext_foreign_toplevel_list_v1_id, 0)] =
-                        &&ext_foreign_toplevel_list_v1_jump;
+                        &&ext_foreign_toplevel_list_v1_toplevel;
                     new_id++;
                 } else if (strcmp(iname, "wp_content_type_manager_v1") == 0) {
                     wayland_registry_bind_request(
@@ -364,15 +377,20 @@ int wayland_init() {
                            buffer + offset,
                            size);
                 goto done;
-            wp_presentation_jump:
-                dump_bytes("wp_presentation_jump msg", buffer + offset, size);
-                goto done;
-            zwlr_output_manager_v1_jump:
+            wp_presentation_clock_id:
                 dump_bytes(
-                    "zwlr_output_manager_v1_jump msg", buffer + offset, size);
+                    "wp_presentation_clock_id msg", buffer + offset, size);
                 goto done;
-            ext_foreign_toplevel_list_v1_jump:
-                dump_bytes("ext_foreign_toplevel_list_v1_jump msg",
+            zwlr_output_manager_v1_head:
+                dump_bytes(
+                    "zwlr_output_manager_v1_head msg", buffer + offset, size);
+                goto done;
+            zwlr_output_manager_v1_done:
+                dump_bytes(
+                    "zwlr_output_manager_v1_done msg", buffer + offset, size);
+                goto done;
+            ext_foreign_toplevel_list_v1_toplevel:
+                dump_bytes("ext_foreign_toplevel_list_v1_toplevel msg",
                            buffer + offset,
                            size);
                 goto done;
@@ -406,11 +424,29 @@ int wayland_init() {
                 dump_bytes(
                     "zwp_pointer_gestures_v1_jump msg", buffer + offset, size);
                 goto done;
-            wl_seat_jump:
-                dump_bytes("wl_seat_jump msg", buffer + offset, size);
+            wl_seat_capabilities:
+                dump_bytes("wl_seat_capabilities msg", buffer + offset, size);
+                goto done;
+            wl_seat_name:
+                dump_bytes("wl_seat_name msg", buffer + offset, size);
                 goto done;
             wl_output_geometry:
                 dump_bytes("wl_output_geometry msg", buffer + offset, size);
+                goto done;
+            wl_output_mode:
+                dump_bytes("wl_output_mode msg", buffer + offset, size);
+                goto done;
+            wl_output_done:
+                dump_bytes("wl_output_done msg", buffer + offset, size);
+                goto done;
+            wl_output_scale:
+                dump_bytes("wl_output_scale msg", buffer + offset, size);
+                goto done;
+            wl_output_name:
+                dump_bytes("wl_output_name msg", buffer + offset, size);
+                goto done;
+            wl_output_description:
+                dump_bytes("wl_output_description msg", buffer + offset, size);
                 goto done;
             wayland_default:
                 dump_bytes("default msg", buffer + offset, size);

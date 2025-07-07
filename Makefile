@@ -1,7 +1,15 @@
 CC := gcc
 DEBUG ?= 0
 VERBOSE ?= 0
+
 WL_SHM ?= 0
+DMABUF ?= 0
+
+ifeq ($(DMABUF),0)
+ifeq ($(WL_SHM),0)
+	DMABUF := 1
+endif
+endif
 
 ifeq ($(VERBOSE), 1)
     Q :=
@@ -22,6 +30,7 @@ else
 endif
 
 CFLAGS += -DWL_SHM=$(WL_SHM)
+CFLAGS += -DDMABUF=$(DMABUF)
 
 SRC_DIR := src
 BUILD_DIR := build

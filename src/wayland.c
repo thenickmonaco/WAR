@@ -77,6 +77,9 @@ int wayland_init() {
 
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
+#ifdef DMABUF
+    uint32_t zwp_linux_dmabuf_v1_id = 0;
+#endif
 #ifdef WL_SHM
     uint32_t wl_shm_id = 0;
     uint32_t wl_shm_pool_id = 0;
@@ -92,7 +95,6 @@ int wayland_init() {
     uint32_t wl_keyboard_id = 0;
     uint32_t wl_pointer_id = 0;
     uint32_t wl_touch_id = 0;
-    uint32_t zwp_linux_dmabuf_v1_id = 0;
     uint32_t wp_linux_drm_syncobj_manager_v1_id = 0;
     uint32_t zwp_idle_inhibit_manager_v1_id = 0;
     uint32_t zxdg_decoration_manager_v1_id = 0;
@@ -220,11 +222,15 @@ int wayland_init() {
                     obj_op[obj_op_index(wl_seat_id, 1)] = &&wl_seat_name;
                     new_id++;
                 } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
+#ifdef DMABUF
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_linux_dmabuf_v1_id = new_id;
                     obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
-                        &&zwp_linux_dmabuf_v1_jump;
+                        &&zwp_linux_dmabuf_v1_format;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 1)] =
+                        &&zwp_linux_dmabuf_v1_modifier;
                     new_id++;
+#endif
                 } else if (strcmp(iname, "xdg_wm_base") == 0) {
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     xdg_wm_base_id = new_id;
@@ -542,9 +548,14 @@ int wayland_init() {
                            buffer + offset,
                            size);
                 goto done;
-            zwp_linux_dmabuf_v1_jump:
+            zwp_linux_dmabuf_v1_format:
                 dump_bytes(
-                    "zwp_linux_dmabuf_v1_jump event", buffer + offset, size);
+                    "zwp_linux_dmabuf_v1_format event", buffer + offset, size);
+                goto done;
+            zwp_linux_dmabuf_v1_modifier:
+                dump_bytes("zwp_linux_dmabuf_v1_modifier event",
+                           buffer + offset,
+                           size);
                 goto done;
             wp_linux_drm_syncobj_manager_v1_jump:
                 dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",

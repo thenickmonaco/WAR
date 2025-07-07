@@ -101,9 +101,9 @@
 
 #define dump_bytes(label, arr, len)                                            \
     do {                                                                       \
-        fprintf(stderr, "- %s (%zu bytes):", (label), (size_t)(len));          \
-        for (size_t _i = 0; _i < (size_t)(len); ++_i)                          \
-            fprintf(stderr, " %02X", (arr)[_i]);                               \
+        fprintf(stderr, "- %-13s (%3zu bytes):", (label), (size_t)(len));      \
+        for (size_t _i = 0; _i < (size_t)(len); ++_i)                         \
+            fprintf(stderr, " %02X", (arr)[_i]);                              \
         fprintf(stderr, "\n");                                                 \
     } while (0)
 

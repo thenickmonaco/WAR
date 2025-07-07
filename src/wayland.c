@@ -44,7 +44,7 @@
 
 enum {
     max_objects = 128,
-    max_opcodes = 64,
+    max_opcodes = 128,
 };
 
 int wayland_init() {
@@ -55,16 +55,42 @@ int wayland_init() {
 
     uint8_t get_registry[12];
 
-    enum {
-        registry_id = 1,
-        new_id = 2,
-    };
-    uint16_t opcode = 1;
-    *(uint32_t*)(get_registry) = registry_id;
-    *(uint16_t*)(get_registry + 4) = opcode;
-    *(uint16_t*)(get_registry + 6) = 12;
+    uint32_t wl_display_id = 1;
+    uint32_t wl_registry_id = 2;
+    uint32_t wl_shm_id = 0;
+    uint32_t wl_compositor_id = 0;
+    uint32_t xdg_wm_base_id = 0;
+    uint32_t wl_output_id = 0;
+    uint32_t wl_seat_id = 0;
+    uint32_t zwp_linux_dmabuf_v1_id = 0;
+    uint32_t wp_linux_drm_syncobj_manager_v1_id = 0;
+    uint32_t zwp_idle_inhibit_manager_v1_id = 0;
+    uint32_t zxdg_decoration_manager_v1_id = 0;
+    uint32_t zwp_relative_pointer_manager_v1_id = 0;
+    uint32_t zwp_pointer_constraints_v1_id = 0;
+    uint32_t zwlr_output_manager_v1_id = 0;
+    uint32_t zwlr_data_control_manager_v1_id = 0;
+    uint32_t zwp_virtual_keyboard_manager_v1_id = 0;
+    uint32_t wp_viewporter_id = 0;
+    uint32_t wp_fractional_scale_manager_v1_id = 0;
+    uint32_t zwp_pointer_gestures_v1_id = 0;
+    uint32_t xdg_activation_v1_id = 0;
+    uint32_t wp_presentation_id = 0;
+    uint32_t zwlr_layer_shell_v1_id = 0;
+    uint32_t ext_foreign_toplevel_list_v1_id = 0;
+    uint32_t wp_content_type_manager_v1_id = 0;
+    // uint32_t wl_surface_id = 0;
+    // uint32_t wl_keyboard_id = 0;
+    // uint32_t wl_pointer_id = 0;
+    // uint32_t wl_callback_id = 0;
+    // uint32_t wl_buffer_id = 0;
+    // uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
+    // uint32_t zwp_linux_explicit_synchronization_v1_id = 0;
 
-    *(uint32_t*)(get_registry + 8) = new_id;
+    write_le32(get_registry, wl_display_id);
+    write_le16(get_registry + 4, 1);
+    write_le16(get_registry + 6, 12);
+    write_le32(get_registry + 8, wl_registry_id);
 
     ssize_t written = write(fd, get_registry, 12);
     call_carmack("written size: %lu", written);
@@ -80,9 +106,11 @@ int wayland_init() {
     };
 
     void* obj_op[max_objects * max_opcodes] = {0};
-    obj_op[obj_op_index(2, 0)] = &&wl_registry_global;
-    obj_op[obj_op_index(2, 1)] = &&wl_registry_global_remove;
+    obj_op[obj_op_index(wl_registry_id, 0)] = &&wl_registry_global;
+    obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
+    obj_op[obj_op_index(wl_display_id, 0)] = &&wl_display_ping;
 
+    uint32_t new_id = wl_registry_id + 1;
     while (1) {
         int ret = poll(&pfd, 1, 16);
         assert(ret >= 0);
@@ -93,26 +121,28 @@ int wayland_init() {
             break;
         }
 
-        if (pfd.events & POLLIN) {
+        if (pfd.revents & POLLIN) {
             ssize_t size_read =
                 read(fd, buffer + buffer_size, sizeof(buffer) - buffer_size);
             assert(size_read > 0);
             buffer_size += size_read;
 
+            dump_bytes("buffer", buffer, buffer_size);
+
             size_t offset = 0;
             while (buffer_size - offset >= 8) {
-                uint16_t size = *(uint16_t*)(buffer + offset + 6);
+                uint16_t size = read_le16(buffer + offset + 6);
 
-                if (size < 8 || size > buffer_size - offset) { break; };
+                if ((size < 8) || (size > (buffer_size - offset))) { break; };
 
-                uint32_t object_id = (*(uint32_t*)(buffer + offset));
-                uint16_t opcode = (*(uint16_t*)(buffer + offset + 4));
+                uint32_t object_id = read_le32(buffer + offset);
+                uint16_t opcode = read_le16(buffer + offset + 4);
 
-                dump_bytes("msg", buffer + offset, size);
-                call_carmack("object_id: %i", object_id);
-                call_carmack("opcode: %i", opcode);
-
-                offset += size;
+                if (object_id >= max_objects || opcode >= max_opcodes) {
+                    call_carmack(
+                        "invalid object/op: id=%u, op=%u", object_id, opcode);
+                    goto wayland_default;
+                }
 
                 size_t idx = obj_op_index(object_id, opcode);
                 if (obj_op[idx]) {
@@ -122,13 +152,271 @@ int wayland_init() {
                 }
 
             wl_registry_global:
-                call_carmack("global");
-                continue;
+                dump_bytes("global msg", buffer + offset, size);
+                call_carmack("iname: %s", (const char*)buffer + offset + 16);
+
+                const char* iname = (const char*)buffer + offset + 16;
+                if (strcmp(iname, "wl_shm") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wl_shm_id = new_id;
+                    obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
+                    new_id++;
+                } else if (strcmp(iname, "wl_compositor") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wl_compositor_id = new_id;
+                    obj_op[obj_op_index(wl_compositor_id, 0)] =
+                        &&wl_compositor_jump;
+                    new_id++;
+                } else if (strcmp(iname, "wl_output") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wl_output_id = new_id;
+                    obj_op[obj_op_index(wl_output_id, 0)] = &&wl_output_jump;
+                    new_id++;
+                } else if (strcmp(iname, "wl_seat") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wl_seat_id = new_id;
+                    obj_op[obj_op_index(wl_seat_id, 0)] = &&wl_seat_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwp_linux_dmabuf_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
+                        &&zwp_linux_dmabuf_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "xdg_wm_base") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    xdg_wm_base_id = new_id;
+                    obj_op[obj_op_index(xdg_wm_base_id, 0)] =
+                        &&xdg_wm_base_ping;
+                    new_id++;
+                } else if (strcmp(iname, "wp_linux_drm_syncobj_manager_v1") ==
+                           0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wp_linux_drm_syncobj_manager_v1_id = new_id;
+                    obj_op[obj_op_index(wp_linux_drm_syncobj_manager_v1_id,
+                                        0)] =
+                        &&wp_linux_drm_syncobj_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwp_idle_inhibit_manager_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwp_idle_inhibit_manager_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_idle_inhibit_manager_v1_id, 0)] =
+                        &&zwp_idle_inhibit_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zxdg_decoration_manager_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zxdg_decoration_manager_v1_id = new_id;
+                    obj_op[obj_op_index(zxdg_decoration_manager_v1_id, 0)] =
+                        &&zxdg_decoration_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwp_relative_pointer_manager_v1") ==
+                           0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwp_relative_pointer_manager_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_relative_pointer_manager_v1_id,
+                                        0)] =
+                        &&zwp_relative_pointer_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwp_pointer_constraints_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwp_pointer_constraints_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_pointer_constraints_v1_id, 0)] =
+                        &&zwp_pointer_constraints_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwlr_output_manager_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwlr_output_manager_v1_id = new_id;
+                    obj_op[obj_op_index(zwlr_output_manager_v1_id, 0)] =
+                        &&zwlr_output_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwlr_data_control_manager_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwlr_data_control_manager_v1_id = new_id;
+                    obj_op[obj_op_index(zwlr_data_control_manager_v1_id, 0)] =
+                        &&zwlr_data_control_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwp_virtual_keyboard_manager_v1") ==
+                           0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwp_virtual_keyboard_manager_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_virtual_keyboard_manager_v1_id,
+                                        0)] =
+                        &&zwp_virtual_keyboard_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "wp_viewporter") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wp_viewporter_id = new_id;
+                    obj_op[obj_op_index(wp_viewporter_id, 0)] =
+                        &&wp_viewporter_jump;
+                    new_id++;
+                } else if (strcmp(iname, "wp_fractional_scale_manager_v1") ==
+                           0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wp_fractional_scale_manager_v1_id = new_id;
+                    obj_op[obj_op_index(wp_fractional_scale_manager_v1_id, 0)] =
+                        &&wp_fractional_scale_manager_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwp_pointer_gestures_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwp_pointer_gestures_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_pointer_gestures_v1_id, 0)] =
+                        &&zwp_pointer_gestures_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "xdg_activation_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    xdg_activation_v1_id = new_id;
+                    obj_op[obj_op_index(xdg_activation_v1_id, 0)] =
+                        &&xdg_activation_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "wp_presentation") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wp_presentation_id = new_id;
+                    obj_op[obj_op_index(wp_presentation_id, 0)] =
+                        &&wp_presentation_jump;
+                    new_id++;
+                } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    zwlr_layer_shell_v1_id = new_id;
+                    obj_op[obj_op_index(zwlr_layer_shell_v1_id, 0)] =
+                        &&zwlr_layer_shell_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "ext_foreign_toplevel_list_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    ext_foreign_toplevel_list_v1_id = new_id;
+                    obj_op[obj_op_index(ext_foreign_toplevel_list_v1_id, 0)] =
+                        &&ext_foreign_toplevel_list_v1_jump;
+                    new_id++;
+                } else if (strcmp(iname, "wp_content_type_manager_v1") == 0) {
+                    wayland_registry_bind_request(
+                        fd, buffer, offset, size, new_id);
+                    wp_content_type_manager_v1_id = new_id;
+                    obj_op[obj_op_index(wp_content_type_manager_v1_id, 0)] =
+                        &&wp_content_type_manager_v1_jump;
+                    new_id++;
+                }
+                goto done;
             wl_registry_global_remove:
-                call_carmack("global_remove");
-                continue;
+                dump_bytes("global_rm msg", buffer + offset, size);
+                goto done;
+            wl_display_ping:
+                dump_bytes("wl_display_ping msg", buffer + offset, size);
+                goto done;
+            wl_shm_format:
+                dump_bytes("wl_shm_fmt msg", buffer + offset, size);
+                goto done;
+            xdg_wm_base_ping:
+                dump_bytes("xdg_wm_base ping msg", buffer + offset, size);
+                goto done;
+            zwp_linux_dmabuf_v1_jump:
+                dump_bytes(
+                    "zwp_linux_dmabuf_v1_jump msg", buffer + offset, size);
+                goto done;
+            wp_linux_drm_syncobj_manager_v1_jump:
+                dump_bytes("wp_linux_drm_syncobj_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            wl_compositor_jump:
+                dump_bytes("wl_compositor_jump msg", buffer + offset, size);
+                goto done;
+            zwp_idle_inhibit_manager_v1_jump:
+                dump_bytes("zwp_idle_inhibit_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwlr_layer_shell_v1_jump:
+                dump_bytes(
+                    "zwlr_layer_shell_v1_jump msg", buffer + offset, size);
+                goto done;
+            zxdg_decoration_manager_v1_jump:
+                dump_bytes("zxdg_decoration_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_relative_pointer_manager_v1_jump:
+                dump_bytes("zwp_relative_pointer_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_pointer_constraints_v1_jump:
+                dump_bytes("zwp_pointer_constraints_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            wp_presentation_jump:
+                dump_bytes("wp_presentation_jump msg", buffer + offset, size);
+                goto done;
+            zwlr_output_manager_v1_jump:
+                dump_bytes(
+                    "zwlr_output_manager_v1_jump msg", buffer + offset, size);
+                goto done;
+            ext_foreign_toplevel_list_v1_jump:
+                dump_bytes("ext_foreign_toplevel_list_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwlr_data_control_manager_v1_jump:
+                dump_bytes("zwlr_data_control_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            wp_viewporter_jump:
+                dump_bytes("wp_viewporter_jump msg", buffer + offset, size);
+                goto done;
+            wp_content_type_manager_v1_jump:
+                dump_bytes("wp_content_type_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            wp_fractional_scale_manager_v1_jump:
+                dump_bytes("wp_fractional_scale_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            xdg_activation_v1_jump:
+                dump_bytes("xdg_activation_v1_jump msg", buffer + offset, size);
+                goto done;
+            zwp_virtual_keyboard_manager_v1_jump:
+                dump_bytes("zwp_virtual_keyboard_manager_v1_jump msg",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_pointer_gestures_v1_jump:
+                dump_bytes(
+                    "zwp_pointer_gestures_v1_jump msg", buffer + offset, size);
+                goto done;
+            wl_seat_jump:
+                dump_bytes("wl_seat_jump msg", buffer + offset, size);
+                goto done;
+            wl_output_jump:
+                dump_bytes("wl_output_jump msg", buffer + offset, size);
+                goto done;
             wayland_default:
-                call_carmack("default");
+                dump_bytes("default msg msg", buffer + offset, size);
+                goto done;
+            done:
+                offset += size;
                 continue;
             }
 
@@ -141,6 +429,29 @@ int wayland_init() {
 
     end("wayland init");
     return 0;
+}
+
+void wayland_registry_bind_request(
+    int fd, uint8_t* buffer, size_t offset, uint16_t size, uint16_t new_id) {
+    header("reg bind request");
+
+    uint8_t bind[128];
+    assert(size + 4 <= 128); // add 4 for new_id
+    memcpy(bind, buffer + offset, size);
+    write_le32(bind, 2);
+    write_le16(bind + 4, 0);
+    uint16_t total_size = read_le16(bind + 6) + 4;
+    write_le16(bind + 6, total_size);
+    write_le32(bind + size, new_id);
+
+    dump_bytes("bind msg", bind, size + 4);
+    call_carmack("bound: %s", (const char*)buffer + offset + 16);
+    call_carmack("to id: %u", new_id);
+
+    ssize_t bind_written = write(fd, bind, size + 4);
+    assert(bind_written == size + 4);
+
+    end("reg bind request");
 }
 
 int wayland_make_fd() {

@@ -60,7 +60,7 @@ int wayland_init() {
         ARGB8888 = 0,
     };
 
-#ifdef WL_SHM
+#if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
 
     if (shm_fd < 0) {
@@ -77,10 +77,10 @@ int wayland_init() {
 
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
-#ifdef DMABUF
+#if DMABUF
     uint32_t zwp_linux_dmabuf_v1_id = 0;
 #endif
-#ifdef WL_SHM
+#if WL_SHM
     uint32_t wl_shm_id = 0;
     uint32_t wl_shm_pool_id = 0;
     uint32_t wl_buffer_id = 0;
@@ -189,7 +189,7 @@ int wayland_init() {
 
                 const char* iname = (const char*)buffer + offset + 16;
                 if (strcmp(iname, "wl_shm") == 0) {
-#ifdef WL_SHM
+#if WL_SHM
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_shm_id = new_id;
                     obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
@@ -222,7 +222,7 @@ int wayland_init() {
                     obj_op[obj_op_index(wl_seat_id, 1)] = &&wl_seat_name;
                     new_id++;
                 } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
-#ifdef DMABUF
+#if DMABUF
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_linux_dmabuf_v1_id = new_id;
                     obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
@@ -413,7 +413,7 @@ int wayland_init() {
             wl_registry_global_remove:
                 dump_bytes("global_rm event", buffer + offset, size);
                 goto done;
-#ifdef WL_SHM
+#if WL_SHM
             wl_shm_format:
                 dump_bytes("wl_shm_format event", buffer + offset, size);
                 if (read_le32(buffer + offset + 8) == ARGB8888) {
@@ -499,7 +499,7 @@ int wayland_init() {
                     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
                 assert(ack_configure_written == 12);
-#ifdef WL_SHM
+#if WL_SHM
                 uint8_t attach[20];
                 write_le32(attach, wl_surface_id);
                 write_le16(attach + 4, 1);

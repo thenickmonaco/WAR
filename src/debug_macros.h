@@ -64,7 +64,7 @@
 #define YEAR_CHAR3 (__DATE__[9])
 #define YEAR_CHAR4 (__DATE__[10])
 
-#ifdef DEBUG
+#if DEBUG
 
 #define PRINT_DATE_NUMERIC()                                                   \
     fprintf(stderr,                                                            \
@@ -102,8 +102,8 @@
 #define dump_bytes(label, arr, len)                                            \
     do {                                                                       \
         fprintf(stderr, "- %-13s (%3zu bytes):", (label), (size_t)(len));      \
-        for (size_t _i = 0; _i < (size_t)(len); ++_i)                         \
-            fprintf(stderr, " %02X", (arr)[_i]);                              \
+        for (size_t _i = 0; _i < (size_t)(len); ++_i)                          \
+            fprintf(stderr, " %02X", (arr)[_i]);                               \
         fprintf(stderr, "\n");                                                 \
     } while (0)
 

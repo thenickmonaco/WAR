@@ -493,7 +493,30 @@ int wayland_init() {
                     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
                 assert(ack_configure_written == 12);
+#ifdef WL_SHM
+                uint8_t attach[20];
+                write_le32(attach, wl_surface_id);
+                write_le16(attach + 4, 1);
+                write_le16(attach + 6, 20);
+                write_le32(attach + 8, wl_buffer_id);
+                write_le32(attach + 12, 0);
+                write_le32(attach + 16, 0);
+                dump_bytes("wl_surface_attach request", attach, 20);
+                ssize_t attach_written = write(fd, attach, 20);
+                assert(attach_written == 20);
 
+                uint8_t damage[24];
+                write_le32(damage, wl_surface_id);
+                write_le16(damage + 4, 2);
+                write_le16(damage + 6, 24);
+                write_le32(damage + 8, 0);
+                write_le32(damage + 12, 0);
+                write_le32(damage + 16, width);
+                write_le32(damage + 20, height);
+                dump_bytes("wl_surface_damage request", damage, 24);
+                ssize_t damage_written = write(fd, damage, 24);
+                assert(damage_written == 24);
+#endif
                 uint8_t commit[8];
                 write_le32(commit, wl_surface_id);
                 write_le16(commit + 4, 6);
@@ -501,7 +524,6 @@ int wayland_init() {
                 dump_bytes("wl_surface_commit request", commit, 8);
                 ssize_t commit_written = write(fd, commit, 8);
                 assert(commit_written == 8);
-
                 goto done;
             xdg_toplevel_configure:
                 dump_bytes(

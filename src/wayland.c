@@ -367,6 +367,14 @@ int wayland_init() {
                     obj_op[obj_op_index(xdg_toplevel_id, 3)] =
                         &&xdg_toplevel_wm_capabilities;
                     new_id++;
+
+                    uint8_t commit[8];
+                    write_le32(commit, wl_surface_id);
+                    write_le16(commit + 4, 6);
+                    write_le16(commit + 6, 8);
+                    dump_bytes("wl_surface_commit request", commit, 8);
+                    ssize_t commit_written = write(fd, commit, 8);
+                    assert(commit_written == 8);
                 }
                 goto done;
             wl_registry_global_remove:
@@ -390,6 +398,25 @@ int wayland_init() {
             xdg_surface_configure:
                 dump_bytes(
                     "xdg_surface_configure event", buffer + offset, size);
+                assert(size == 12);
+                uint8_t ack_configure[12];
+                write_le32(ack_configure, xdg_surface_id);
+                write_le16(ack_configure + 4, 4);
+                write_le16(ack_configure + 6, 12);
+                write_le32(ack_configure + 8, read_le32(buffer + offset + 8));
+                dump_bytes(
+                    "xdg_surface_ack_configure request", ack_configure, 12);
+                ssize_t ack_configure_written = write(fd, ack_configure, 12);
+                assert(ack_configure_written == 12);
+
+                uint8_t commit[8];
+                write_le32(commit, wl_surface_id);
+                write_le16(commit + 4, 6);
+                write_le16(commit + 6, 8);
+                dump_bytes("wl_surface_commit request", commit, 8);
+                ssize_t commit_written = write(fd, commit, 8);
+                assert(commit_written == 8);
+
                 goto done;
             xdg_toplevel_configure:
                 dump_bytes(

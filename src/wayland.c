@@ -27,6 +27,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <libdrm/drm_fourcc.h> // DRM_FORMAT_ARGB8888
+#include <libdrm/drm_mode.h>   // DRM_FORMAT_MOD_LINEAR
 #include <linux/socket.h>
 #include <poll.h>
 #include <stdbool.h>
@@ -58,10 +60,13 @@ int wayland_init() {
         width = 1920,
         height = 1080,
         stride = width * 4,
+#if WL_SHM
         ARGB8888 = 0,
+#endif
     };
 #if DMABUF
     int dmabuf_fd = wayland_make_dma_fd();
+    uint8_t has_ARGB8888 = 0;
 #endif
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
@@ -78,6 +83,8 @@ int wayland_init() {
     }
 #endif
 
+    uint8_t changed = 1;
+
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
 #if DMABUF
@@ -87,8 +94,8 @@ int wayland_init() {
 #if WL_SHM
     uint32_t wl_shm_id = 0;
     uint32_t wl_shm_pool_id = 0;
-    uint32_t wl_buffer_id = 0;
 #endif
+    uint32_t wl_buffer_id = 0;
     uint32_t wl_compositor_id = 0;
     uint32_t wl_surface_id = 0;
     uint32_t xdg_wm_base_id = 0;
@@ -347,7 +354,7 @@ int wayland_init() {
                         &&wp_content_type_manager_v1_jump;
                     new_id++;
                 }
-                if (wl_surface_id == 0 && wl_compositor_id != 0) {
+                if (!wl_surface_id && wl_compositor_id) {
                     uint8_t create_surface[12];
                     write_le32(create_surface, wl_compositor_id);
                     write_le16(create_surface + 4, 0);
@@ -367,8 +374,7 @@ int wayland_init() {
                         &&wl_surface_preferred_buffer_transform;
                     new_id++;
                 }
-                if (xdg_surface_id == 0 && xdg_wm_base_id != 0 &&
-                    wl_surface_id != 0) {
+                if (!xdg_surface_id && xdg_wm_base_id && wl_surface_id) {
                     uint8_t get_xdg_surface[16];
                     write_le32(get_xdg_surface, xdg_wm_base_id);
                     write_le16(get_xdg_surface + 4, 2);
@@ -474,10 +480,10 @@ int wayland_init() {
                     new_id++;
                 }
                 goto done;
+#endif
             wl_buffer_release:
                 dump_bytes("wl_buffer_release event", buffer + offset, size);
                 goto done;
-#endif
             xdg_wm_base_ping:
                 dump_bytes("xdg_wm_base_ping event", buffer + offset, size);
                 assert(size == 12);
@@ -503,56 +509,41 @@ int wayland_init() {
                     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
                 assert(ack_configure_written == 12);
-#if DMABUF
-                uint8_t create_params[12];
-                write_le32(create_params, zwp_linux_dmabuf_v1_id);
-                write_le16(create_params + 4, 1);
-                write_le16(create_params + 6, 12);
-                write_le32(create_params + 8, new_id);
-                dump_bytes("zwp_linux_dmabuf_v1_create_params request",
-                           create_params,
-                           12);
-                call_carmack("bound: zwp_linux_buffer_params_v1");
-                ssize_t create_params_written = write(fd, create_params, 12);
-                assert(create_params_written == 12);
-                zwp_linux_buffer_params_v1_id = new_id;
-                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
-                    &&zwp_linux_buffer_params_v1_created;
-                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
-                    &&zwp_linux_buffer_params_v1_failed;
-                new_id++;
-#endif
+                if (changed) {
 #if WL_SHM
-                uint8_t attach[20];
-                write_le32(attach, wl_surface_id);
-                write_le16(attach + 4, 1);
-                write_le16(attach + 6, 20);
-                write_le32(attach + 8, wl_buffer_id);
-                write_le32(attach + 12, 0);
-                write_le32(attach + 16, 0);
-                dump_bytes("wl_surface_attach request", attach, 20);
-                ssize_t attach_written = write(fd, attach, 20);
-                assert(attach_written == 20);
+                    uint8_t shm_attach[20];
+                    write_le32(shm_attach, wl_surface_id);
+                    write_le16(shm_attach + 4, 1);
+                    write_le16(shm_attach + 6, 20);
+                    write_le32(shm_attach + 8, wl_buffer_id);
+                    write_le32(shm_attach + 12, 0);
+                    write_le32(shm_attach + 16, 0);
+                    dump_bytes("wl_surface_attach request", shm_attach, 20);
+                    ssize_t shm_attach_written = write(fd, shm_attach, 20);
+                    assert(shm_attach_written == 20);
 
-                uint8_t damage[24];
-                write_le32(damage, wl_surface_id);
-                write_le16(damage + 4, 2);
-                write_le16(damage + 6, 24);
-                write_le32(damage + 8, 0);
-                write_le32(damage + 12, 0);
-                write_le32(damage + 16, width);
-                write_le32(damage + 20, height);
-                dump_bytes("wl_surface_damage request", damage, 24);
-                ssize_t damage_written = write(fd, damage, 24);
-                assert(damage_written == 24);
+                    uint8_t shm_damage[24];
+                    write_le32(shm_damage, wl_surface_id);
+                    write_le16(shm_damage + 4, 2);
+                    write_le16(shm_damage + 6, 24);
+                    write_le32(shm_damage + 8, 0);
+                    write_le32(shm_damage + 12, 0);
+                    write_le32(shm_damage + 16, width);
+                    write_le32(shm_damage + 20, height);
+                    dump_bytes("wl_surface_damage request", shm_damage, 24);
+                    ssize_t shm_damage_written = write(fd, shm_damage, 24);
+                    assert(shm_damage_written == 24);
+
+                    uint8_t shm_commit[8];
+                    write_le32(shm_commit, wl_surface_id);
+                    write_le16(shm_commit + 4, 6);
+                    write_le16(shm_commit + 6, 8);
+                    dump_bytes("wl_surface_commit request", shm_commit, 8);
+                    ssize_t shm_commit_written = write(fd, shm_commit, 8);
+                    assert(shm_commit_written == 8);
+                    changed = 0;
 #endif
-                uint8_t commit[8];
-                write_le32(commit, wl_surface_id);
-                write_le16(commit + 4, 6);
-                write_le16(commit + 6, 8);
-                dump_bytes("wl_surface_commit request", commit, 8);
-                ssize_t commit_written = write(fd, commit, 8);
-                assert(commit_written == 8);
+                }
                 goto done;
             xdg_toplevel_configure:
                 dump_bytes(
@@ -575,6 +566,85 @@ int wayland_init() {
             zwp_linux_dmabuf_v1_format:
                 dump_bytes(
                     "zwp_linux_dmabuf_v1_format event", buffer + offset, size);
+                if (!has_ARGB8888) {
+                    has_ARGB8888 =
+                        read_le32(buffer + offset + 8) == DRM_FORMAT_ARGB8888;
+                }
+                if (has_ARGB8888 && zwp_linux_buffer_params_v1_id &&
+                    !wl_buffer_id) {
+
+                    uint8_t create_params[12]; // REFACTOR: zero initialize
+                    write_le32(create_params, zwp_linux_dmabuf_v1_id);
+                    write_le16(create_params + 4, 1);
+                    write_le16(create_params + 6, 12);
+                    write_le32(create_params + 8, new_id);
+                    dump_bytes("zwp_linux_dmabuf_v1_create_params request",
+                               create_params,
+                               12);
+                    call_carmack("bound: zwp_linux_buffer_params_v1");
+                    ssize_t create_params_written =
+                        write(fd, create_params, 12);
+                    assert(create_params_written == 12);
+                    zwp_linux_buffer_params_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
+                        &&zwp_linux_buffer_params_v1_created;
+                    obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
+                        &&zwp_linux_buffer_params_v1_failed;
+                    new_id++; // REFACTOR: move increment to declaration (one
+                              // line it)
+
+                    uint8_t header[8];
+                    write_le32(header, zwp_linux_buffer_params_v1_id);
+                    write_le16(header + 4, 0);
+                    write_le16(header + 6, 28);
+
+                    uint8_t tail[20];
+                    write_le32(tail + 0, 0);
+                    write_le32(tail + 4, 0);
+                    write_le32(tail + 8, stride);
+                    write_le32(tail + 12, 0);
+                    write_le32(tail + 16, 0);
+                    struct iovec iov[2] = {
+                        {.iov_base = header, .iov_len = 8},
+                        {.iov_base = tail, .iov_len = 20},
+                    };
+                    char cmsgbuf[CMSG_SPACE(sizeof(int))] = {0};
+                    struct msghdr msg = {0};
+                    msg.msg_iov = iov;
+                    msg.msg_iovlen = 2;
+                    msg.msg_control = cmsgbuf;
+                    msg.msg_controllen = sizeof(cmsgbuf);
+                    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+                    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+                    cmsg->cmsg_level = SOL_SOCKET;
+                    cmsg->cmsg_type = SCM_RIGHTS;
+                    *((int*)CMSG_DATA(cmsg)) = dmabuf_fd;
+                    ssize_t sent = sendmsg(fd, &msg, 0);
+                    if (sent < 0) perror("sendmsg");
+                    assert(sent == 28);
+#if DEBUG
+                    uint8_t full_msg[32] = {0};
+                    memcpy(full_msg, header, 8);
+                    memcpy(full_msg + 8, tail, 20);
+#endif
+                    dump_bytes("zwp_linux_buffer_params_v1::add request",
+                               full_msg,
+                               28);
+
+                    uint8_t create[24]; // REFACTOR: maybe 0 initialize
+                    write_le32(create, zwp_linux_buffer_params_v1_id);
+                    write_le16(create + 4, 2);
+                    write_le16(create + 6, 24);
+                    write_le32(create + 8, width);
+                    write_le32(create + 12, height);
+                    write_le32(create + 16, DRM_FORMAT_ARGB8888);
+                    write_le32(create + 20, 0);
+                    dump_bytes("zwp_linux_buffer_params_v1_create request",
+                               create,
+                               24);
+                    ssize_t create_written = write(fd, create, 24);
+                    assert(create_written == 24);
+                }
                 goto done;
             zwp_linux_dmabuf_v1_modifier:
                 dump_bytes("zwp_linux_dmabuf_v1_modifier event",
@@ -582,9 +652,54 @@ int wayland_init() {
                            size);
                 goto done;
             zwp_linux_buffer_params_v1_created:
-                dump_bytes("zwp_linux_buffer_params_v1_created",
-                           buffer + offset,
-                           size);
+                dump_bytes(
+                    "zwp_linux_buffer_params_v1_created", // REFACTOR to ::
+                    buffer + offset,
+                    size);
+                uint8_t destroy[8];
+                write_le32(destroy, zwp_linux_buffer_params_v1_id);
+                write_le16(destroy + 4, 0);
+                write_le16(destroy + 6, 8);
+                ssize_t sent = write(fd, destroy, 8);
+                assert(sent == 8);
+                dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
+                           destroy,
+                           8);
+                wl_buffer_id = read_le32(buffer + offset + 8);
+                if (new_id <= wl_buffer_id) { new_id = wl_buffer_id + 1; }
+                call_carmack("bound wl_buffer");
+                obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
+
+                uint8_t attach[20];
+                write_le32(attach, wl_surface_id);
+                write_le16(attach + 4, 1);
+                write_le16(attach + 6, 20);
+                write_le32(attach + 8, wl_buffer_id);
+                write_le32(attach + 12, 0);
+                write_le32(attach + 16, 0);
+                dump_bytes("wl_surface_attach request", attach, 20);
+                ssize_t attach_written = write(fd, attach, 20);
+                assert(attach_written == 20);
+
+                uint8_t damage[24];
+                write_le32(damage, wl_surface_id);
+                write_le16(damage + 4, 2);
+                write_le16(damage + 6, 24);
+                write_le32(damage + 8, 0);
+                write_le32(damage + 12, 0);
+                write_le32(damage + 16, width);
+                write_le32(damage + 20, height);
+                dump_bytes("wl_surface_damage request", damage, 24);
+                ssize_t damage_written = write(fd, damage, 24);
+                assert(damage_written == 24);
+
+                uint8_t commit[8];
+                write_le32(commit, wl_surface_id);
+                write_le16(commit + 4, 6);
+                write_le16(commit + 6, 8);
+                dump_bytes("wl_surface_commit request", commit, 8);
+                ssize_t commit_written = write(fd, commit, 8);
+                assert(commit_written == 8);
                 goto done;
             zwp_linux_buffer_params_v1_failed:
                 dump_bytes(

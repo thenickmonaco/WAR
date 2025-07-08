@@ -920,7 +920,7 @@ int wayland_make_dma_fd() {
 
             fd = open(path, O_RDWR | O_CLOEXEC);
             if (fd >= 0) {
-                printf("Opened render node: %s\n", path);
+                call_carmack("node: %s", path);
                 break;
             }
         }

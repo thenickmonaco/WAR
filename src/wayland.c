@@ -23,6 +23,7 @@
 #include "macros.h"
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -59,7 +60,9 @@ int wayland_init() {
         stride = width * 4,
         ARGB8888 = 0,
     };
-
+#if DMABUF
+    int dmabuf_fd = wayland_make_dma_fd();
+#endif
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
 
@@ -79,6 +82,7 @@ int wayland_init() {
     uint32_t wl_registry_id = 2;
 #if DMABUF
     uint32_t zwp_linux_dmabuf_v1_id = 0;
+    uint32_t zwp_linux_buffer_params_v1_id = 0;
 #endif
 #if WL_SHM
     uint32_t wl_shm_id = 0;
@@ -499,6 +503,25 @@ int wayland_init() {
                     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
                 assert(ack_configure_written == 12);
+#if DMABUF
+                uint8_t create_params[12];
+                write_le32(create_params, zwp_linux_dmabuf_v1_id);
+                write_le16(create_params + 4, 1);
+                write_le16(create_params + 6, 12);
+                write_le32(create_params + 8, new_id);
+                dump_bytes("zwp_linux_dmabuf_v1_create_params request",
+                           create_params,
+                           12);
+                call_carmack("bound: zwp_linux_buffer_params_v1");
+                ssize_t create_params_written = write(fd, create_params, 12);
+                assert(create_params_written == 12);
+                zwp_linux_buffer_params_v1_id = new_id;
+                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
+                    &&zwp_linux_buffer_params_v1_created;
+                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
+                    &&zwp_linux_buffer_params_v1_failed;
+                new_id++;
+#endif
 #if WL_SHM
                 uint8_t attach[20];
                 write_le32(attach, wl_surface_id);
@@ -548,6 +571,7 @@ int wayland_init() {
                            buffer + offset,
                            size);
                 goto done;
+#if DMABUF
             zwp_linux_dmabuf_v1_format:
                 dump_bytes(
                     "zwp_linux_dmabuf_v1_format event", buffer + offset, size);
@@ -557,6 +581,16 @@ int wayland_init() {
                            buffer + offset,
                            size);
                 goto done;
+            zwp_linux_buffer_params_v1_created:
+                dump_bytes("zwp_linux_buffer_params_v1_created",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_linux_buffer_params_v1_failed:
+                dump_bytes(
+                    "zwp_linux_buffer_params_v1_failed", buffer + offset, size);
+                goto done;
+#endif
             wp_linux_drm_syncobj_manager_v1_jump:
                 dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",
                            buffer + offset,
@@ -866,6 +900,34 @@ int wayland_init() {
 
     end("wayland init");
     return 0;
+}
+
+int wayland_make_dma_fd() {
+    const char* dri_path = "/dev/dri";
+    DIR* dir = opendir(dri_path);
+    if (!dir) {
+        perror("opendir /dev/dri");
+        return -1;
+    }
+
+    struct dirent* entry;
+    int fd = -1;
+
+    while ((entry = readdir(dir))) {
+        if (strncmp(entry->d_name, "renderD", 7) == 0) {
+            char path[PATH_MAX];
+            snprintf(path, sizeof(path), "%s/%s", dri_path, entry->d_name);
+
+            fd = open(path, O_RDWR | O_CLOEXEC);
+            if (fd >= 0) {
+                printf("Opened render node: %s\n", path);
+                break;
+            }
+        }
+    }
+
+    closedir(dir);
+    return fd;
 }
 
 void wayland_registry_bind(

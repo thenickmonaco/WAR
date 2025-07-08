@@ -10,5 +10,7 @@ CompileFlags:
     -Wno-error=unused-variable,
     -I src,
     -I include,
+    -DDMABUF=1,
+    -DWL_SHM=1,
   ]
 

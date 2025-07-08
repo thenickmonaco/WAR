@@ -25,7 +25,7 @@ ifeq ($(DEBUG), 1)
     CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -g -march=native -std=c99 -MMD -I src -I include
 else ifeq ($(DEBUG), 2)
 	# Debug verbose build: asserts, debug symbols and DEBUG preprocessor
-    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -g -march=native -std=c99 -MMD -DDEBUG -I src -I include
+    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O0 -g -march=native -std=c99 -MMD -DDEBUG -I src -I include
 else
 	# Release build: no asserts, no debug symbols
     CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -march=native -std=c99 -MMD -DNDEBUG -I src -I include
@@ -33,6 +33,9 @@ endif
 
 CFLAGS += -DWL_SHM=$(WL_SHM)
 CFLAGS += -DDMABUF=$(DMABUF)
+CFLAGS += $(shell pkg-config --cflags libdrm)
+
+LDFLAGS += $(shell pkg-config --libs libdrm)
 
 SRC_DIR := src
 BUILD_DIR := build
@@ -70,7 +73,7 @@ $(UNITY_O): headers
 
 # Link final binary
 $(TARGET): $(UNITY_O)
-	$(Q)$(CC) $(CFLAGS) -o $@ $^
+	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 # Generate headers from all .c files using cproto
 headers:

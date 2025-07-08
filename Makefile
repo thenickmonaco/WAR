@@ -3,13 +3,14 @@ DEBUG ?= 0
 VERBOSE ?= 0
 
 WL_SHM ?= 0
-DMABUF ?= 1
+DMABUF ?= 0
 
 ifeq ($(WL_SHM),1)
-	ifeq ($(DMABUF),1)
-		$(error Both WL_SHM and DMABUF cannot be enabled at the same time)
-	endif
 	DMABUF := 0
+else ifeq ($(DMABUF),1)
+	WL_SHM := 0
+else
+	DMABUF := 1
 endif
 
 ifeq ($(VERBOSE), 1)

@@ -6,7 +6,7 @@
 #define VIMDAW_WAYLAND_H
 /* build/pre/wayland.i */
 int wayland_init(void);
-int open_dgpu_render_node_fd(void);
+int wayland_make_dma_fd(void);
 void wayland_registry_bind(int fd, uint8_t *buffer, size_t offset, uint16_t size, uint16_t new_id);
 int wayland_make_fd(void);
 #endif /* VIMDAW_WAYLAND_H */

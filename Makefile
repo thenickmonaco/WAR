@@ -33,9 +33,6 @@ endif
 
 CFLAGS += -DWL_SHM=$(WL_SHM)
 CFLAGS += -DDMABUF=$(DMABUF)
-CFLAGS += $(shell pkg-config --cflags libdrm)
-
-LDFLAGS += $(shell pkg-config --libs libdrm)
 
 SRC_DIR := src
 BUILD_DIR := build
@@ -73,7 +70,7 @@ $(UNITY_O): headers
 
 # Link final binary
 $(TARGET): $(UNITY_O)
-	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	$(Q)$(CC) $(CFLAGS) -o $@ $^
 
 # Generate headers from all .c files using cproto
 headers:

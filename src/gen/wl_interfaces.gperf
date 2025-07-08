@@ -1,0 +1,101 @@
+%{
+/* Auto-generated Wayland interface perfect hash */
+
+enum wl_interface {
+    WL_COMPOSITOR = 1,
+    WL_SHELL = 2,
+    WL_SURFACE = 3,
+    WL_BUFFER = 4,
+    WL_SEAT = 5,
+    WL_POINTER = 6,
+    WL_KEYBOARD = 7,
+    WL_TOUCH = 8,
+    WL_OUTPUT = 9,
+    WL_REGISTRY = 10,
+    WL_SHM = 11,
+    WL_CALLBACK = 12,
+    WL_SUBCOMPOSITOR = 13,
+    WL_DATA_DEVICE_MANAGER = 14,
+    WL_DATA_DEVICE = 15,
+    WL_DATA_OFFER = 16,
+    WL_DATA_SOURCE = 17,
+    WL_DRAG_AND_DROP = 18,
+    XDG_WM_BASE = 19,
+    XDG_SURFACE = 20,
+    XDG_TOPLEVEL = 21,
+    XDG_POPUP = 22,
+    XDG_POSITIONER = 23,
+    XDG_ACTIVATION_V1 = 24,
+    ZXDG_DECORATION_MANAGER_V1 = 25,
+    ZXDG_TOPLEVEL_DECORATION_V1 = 26,
+    ZWP_LINUX_DMABUF_V1 = 27,
+    ZWP_LINUX_EXPLICIT_SYNCHRONIZATION_V1 = 28,
+    WP_LINUX_DRM_SYNCOBJ_MANAGER_V1 = 29,
+    ZWP_RELATIVE_POINTER_MANAGER_V1 = 30,
+    ZWP_POINTER_CONSTRAINTS_V1 = 31,
+    ZWP_POINTER_GESTURES_V1 = 32,
+    ZWLR_OUTPUT_MANAGER_V1 = 33,
+    ZWLR_DATA_CONTROL_MANAGER_V1 = 34,
+    ZWP_VIRTUAL_KEYBOARD_MANAGER_V1 = 35,
+    WP_PRESENTATION = 36,
+    WP_VIEWPORTER = 37,
+    WP_FRACTIONAL_SCALE_MANAGER_V1 = 38,
+    EXT_FOREIGN_TOPLEVEL_LIST_V1 = 39,
+    ZWP_IDLE_INHIBIT_MANAGER_V1 = 40,
+    WP_CONTENT_TYPE_MANAGER_V1 = 41,
+    WP_LINUX_SURFACE_LOOKUP = 42,
+    WP_VIEWPORT = 43,
+    WP_PRESENTATION_FEEDBACK = 44,
+    WL_SHELL_SURFACE = 45
+};
+
+%%
+
+wl_compositor, WL_COMPOSITOR
+wl_shell, WL_SHELL
+wl_surface, WL_SURFACE
+wl_buffer, WL_BUFFER
+wl_seat, WL_SEAT
+wl_pointer, WL_POINTER
+wl_keyboard, WL_KEYBOARD
+wl_touch, WL_TOUCH
+wl_output, WL_OUTPUT
+wl_registry, WL_REGISTRY
+wl_shm, WL_SHM
+wl_callback, WL_CALLBACK
+wl_subcompositor, WL_SUBCOMPOSITOR
+wl_data_device_manager, WL_DATA_DEVICE_MANAGER
+wl_data_device, WL_DATA_DEVICE
+wl_data_offer, WL_DATA_OFFER
+wl_data_source, WL_DATA_SOURCE
+wl_drag_and_drop, WL_DRAG_AND_DROP
+xdg_wm_base, XDG_WM_BASE
+xdg_surface, XDG_SURFACE
+xdg_toplevel, XDG_TOPLEVEL
+xdg_popup, XDG_POPUP
+xdg_positioner, XDG_POSITIONER
+xdg_activation_v1, XDG_ACTIVATION_V1
+zxdg_decoration_manager_v1, ZXDG_DECORATION_MANAGER_V1
+zxdg_toplevel_decoration_v1, ZXDG_TOPLEVEL_DECORATION_V1
+zwp_linux_dmabuf_v1, ZWP_LINUX_DMABUF_V1
+zwp_linux_explicit_synchronization_v1, ZWP_LINUX_EXPLICIT_SYNCHRONIZATION_V1
+wp_linux_drm_syncobj_manager_v1, WP_LINUX_DRM_SYNCOBJ_MANAGER_V1
+zwp_relative_pointer_manager_v1, ZWP_RELATIVE_POINTER_MANAGER_V1
+zwp_pointer_constraints_v1, ZWP_POINTER_CONSTRAINTS_V1
+zwp_pointer_gestures_v1, ZWP_POINTER_GESTURES_V1
+zwlr_output_manager_v1, ZWLR_OUTPUT_MANAGER_V1
+zwlr_data_control_manager_v1, ZWLR_DATA_CONTROL_MANAGER_V1
+zwp_virtual_keyboard_manager_v1, ZWP_VIRTUAL_KEYBOARD_MANAGER_V1
+wp_presentation, WP_PRESENTATION
+wp_viewporter, WP_VIEWPORTER
+wp_fractional_scale_manager_v1, WP_FRACTIONAL_SCALE_MANAGER_V1
+ext_foreign_toplevel_list_v1, EXT_FOREIGN_TOPLEVEL_LIST_V1
+zwp_idle_inhibit_manager_v1, ZWP_IDLE_INHIBIT_MANAGER_V1
+wp_content_type_manager_v1, WP_CONTENT_TYPE_MANAGER_V1
+wp_linux_surface_lookup, WP_LINUX_SURFACE_LOOKUP
+wp_viewport, WP_VIEWPORT
+wp_presentation_feedback, WP_PRESENTATION_FEEDBACK
+wl_shell_surface, WL_SHELL_SURFACE
+
+%%
+

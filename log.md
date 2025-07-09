@@ -1,0 +1,599 @@
+# vimDAW [src/main.c:29:main, 11:41:54, 07-08-2025]
+## wayland init [src/wayland.c:54:wayland_init]
+## make fd [src/wayland.c:1072:wayland_make_fd]
+- xdg_prefix_size: 17
+- wayland_prefix_size: 17
+- val: wayland-0
+- val: /run/user/1000
+- path: /run/user/1000/wayland-0
+- path_len: 24
+- addr_len: 26
+## END make fd [src/wayland.c:1158:wayland_make_fd]
+- written size: 12
+- written       ( 12 bytes): 01 00 00 00 01 00 0C 00 02 00 00 00
+- global event  ( 36 bytes): 02 00 00 00 00 00 24 00 01 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 04 00 00 00
+- iname: wl_compositor
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 01 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 04 00 00 00 03 00 00 00
+- bound: wl_compositor
+- to id: 3
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- create_surface request ( 12 bytes): 03 00 00 00 00 00 0C 00 04 00 00 00
+- bound: wl_surface
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 02 00 00 00 11 00 00 00 77 6C 5F 73 75 62 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 00 01 00 00 00
+- iname: wl_subcompositor
+- global event  ( 36 bytes): 02 00 00 00 00 00 24 00 03 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00
+- iname: wp_viewporter
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 03 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00 05 00 00 00
+- bound: wp_viewporter
+- to id: 5
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 04 00 00 00 17 00 00 00 7A 78 64 67 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 02 00 00 00
+- iname: zxdg_output_manager_v1
+- global event  ( 36 bytes): 02 00 00 00 00 00 24 00 05 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 01 00 00 00
+- iname: wp_presentation
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 05 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 01 00 00 00 06 00 00 00
+- bound: wp_presentation
+- to id: 6
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 06 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: zwp_relative_pointer_manager_v1
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 06 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 07 00 00 00
+- bound: zwp_relative_pointer_manager_v1
+- to id: 7
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 07 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00
+- iname: zwp_pointer_constraints_v1
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 07 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00 08 00 00 00
+- bound: zwp_pointer_constraints_v1
+- to id: 8
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 08 00 00 00 20 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 74 69 6D 65 73 74 61 6D 70 73 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: zwp_input_timestamps_manager_v1
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 09 00 00 00 17 00 00 00 77 6C 5F 64 61 74 61 5F 64 65 76 69 63 65 5F 6D 61 6E 61 67 65 72 00 00 03 00 00 00
+- iname: wl_data_device_manager
+- global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 0A 00 00 00 07 00 00 00 77 6C 5F 73 68 6D 00 00 01 00 00 00
+- iname: wl_shm
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 32 bytes): 02 00 00 00 00 00 20 00 0A 00 00 00 07 00 00 00 77 6C 5F 73 68 6D 00 00 01 00 00 00 09 00 00 00
+- bound: wl_shm
+- to id: 9
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 32 bytes): 02 00 00 00 00 00 20 00 0B 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 03 00 00 00
+- iname: wl_output
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 0B 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 03 00 00 00 0A 00 00 00
+- bound: wl_output
+- to id: 10
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 0C 00 00 00 13 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 70 61 6E 65 6C 5F 76 31 00 00 01 00 00 00
+- iname: zwp_input_panel_v1
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0D 00 00 00 1A 00 00 00 7A 77 70 5F 74 65 78 74 5F 69 6E 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: zwp_text_input_manager_v1
+- global event  ( 32 bytes): 02 00 00 00 00 00 20 00 0E 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 01 00 00 00
+- iname: xdg_wm_base
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 0E 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 01 00 00 00 0B 00 00 00
+- bound: xdg_wm_base
+- to id: 11
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- get_xdg_surface request ( 16 bytes): 0B 00 00 00 02 00 10 00 0C 00 00 00 04 00 00 00
+- bound: xdg_surface
+- get_xdg_toplevel request ( 12 bytes): 0C 00 00 00 01 00 0C 00 0D 00 00 00
+- bound: xdg_toplevel
+- wl_surface_commit request (  8 bytes): 04 00 00 00 06 00 08 00
+- global event  ( 36 bytes): 02 00 00 00 00 00 24 00 0F 00 00 00 0E 00 00 00 7A 78 64 67 5F 73 68 65 6C 6C 5F 76 36 00 00 00 01 00 00 00
+- iname: zxdg_shell_v6
+- global event  ( 32 bytes): 02 00 00 00 00 00 20 00 10 00 00 00 09 00 00 00 77 6C 5F 73 68 65 6C 6C 00 00 00 00 01 00 00 00
+- iname: wl_shell
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 11 00 00 00 15 00 00 00 77 65 73 74 6F 6E 5F 72 64 70 72 61 69 6C 5F 73 68 65 6C 6C 00 00 00 00 01 00 00 00
+- iname: weston_rdprail_shell
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 12 00 00 00 15 00 00 00 77 65 73 74 6F 6E 5F 73 63 72 65 65 6E 73 68 6F 6F 74 65 72 00 00 00 00 01 00 00 00
+- iname: weston_screenshooter
+- global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 3B 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 07 00 00 00
+- iname: wl_seat
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 32 bytes): 02 00 00 00 00 00 20 00 3B 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 07 00 00 00 0E 00 00 00
+- bound: wl_seat
+- to id: 14
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 3C 00 00 00 14 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 6D 65 74 68 6F 64 5F 76 31 00 01 00 00 00
+- iname: zwp_input_method_v1
+- wp_presentation_clock_id event ( 12 bytes): 06 00 00 00 00 00 0C 00 04 00 00 00
+- wl_shm_format event ( 12 bytes): 09 00 00 00 00 00 0C 00 00 00 00 00
+- wl_shm_create_pool request ( 12 bytes): 09 00 00 00 00 00 10 00 0F 00 00 00
+- bound wl_shm_pool
+- wl_shm_pool_create_buffer request ( 32 bytes): 0F 00 00 00 00 00 20 00 10 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00 00 1E 00 00 00 00 00 00
+- bound wl_buffer
+- wl_shm_format event ( 12 bytes): 09 00 00 00 00 00 0C 00 01 00 00 00
+- wl_shm_format event ( 12 bytes): 09 00 00 00 00 00 0C 00 52 47 31 36
+- wl_output_geometry event ( 52 bytes): 0A 00 00 00 00 00 34 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 00 00 00 77 65 73 74 6F 6E 00 00 04 00 00 00 72 64 70 00 00 00 00 00
+- wl_output_scale event ( 12 bytes): 0A 00 00 00 03 00 0C 00 01 00 00 00
+- wl_output_mode event ( 24 bytes): 0A 00 00 00 01 00 18 00 03 00 00 00 80 07 00 00 38 04 00 00 60 EA 00 00
+- wl_output_done event (  8 bytes): 0A 00 00 00 02 00 08 00
+- xdg_toplevel_configure event ( 20 bytes): 0D 00 00 00 00 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0C 00 00 00 00 00 0C 00 B2 02 00 00
+- xdg_surface_ack_configure request ( 12 bytes): 0C 00 00 00 04 00 0C 00 B2 02 00 00
+- wl_surface_attach request ( 20 bytes): 04 00 00 00 01 00 14 00 10 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 04 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 04 00 00 00 06 00 08 00
+- wl_seat_capabilities event ( 12 bytes): 0E 00 00 00 00 00 0C 00 03 00 00 00
+- keyboard detected
+- get_keyboard request ( 12 bytes): 0E 00 00 00 01 00 0C 00 11 00 00 00
+- bound: wl_keyboard
+- pointer detected
+- get_pointer request ( 12 bytes): 0E 00 00 00 00 00 0C 00 12 00 00 00
+- bound: wl_pointer
+- wl_seat_name event ( 32 bytes): 0E 00 00 00 01 00 20 00 11 00 00 00 52 44 50 20 41 54 53 47 35 30 30 30 30 31 31 31 00 00 00 00
+- seat: RDP ATSG50000111
+- wl_surface_enter event ( 12 bytes): 04 00 00 00 00 00 0C 00 0A 00 00 00
+- xdg_toplevel_configure event ( 24 bytes): 0D 00 00 00 00 00 18 00 00 00 00 00 00 00 00 00 04 00 00 00 04 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0C 00 00 00 00 00 0C 00 B3 02 00 00
+- xdg_surface_ack_configure request ( 12 bytes): 0C 00 00 00 04 00 0C 00 B3 02 00 00
+- wl_keyboard_repeat_info event ( 16 bytes): 11 00 00 00 05 00 10 00 28 00 00 00 90 01 00 00
+- wl_keyboard_keymap event ( 16 bytes): 11 00 00 00 00 00 10 00 01 00 00 00 C2 B8 00 00
+- wl_keyboard_enter event ( 20 bytes): 11 00 00 00 01 00 14 00 00 00 00 00 04 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 11 00 00 00 04 00 1C 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- timeout
+- timeout
+- timeout
+- timeout
+- wl_pointer_enter event ( 24 bytes): 12 00 00 00 00 00 18 00 B4 02 00 00 04 00 00 00 00 64 00 00 00 64 00 00
+- wl_pointer_frame event (  8 bytes): 12 00 00 00 05 00 08 00
+- xdg_wm_base_ping event ( 12 bytes): 0B 00 00 00 00 00 0C 00 B5 02 00 00
+- xdg_wm_base_pong request ( 12 bytes): 0B 00 00 00 03 00 0C 00 B5 02 00 00
+- timeout
+- timeout
+- timeout
+- timeout
+- wl_pointer_motion event ( 20 bytes): 12 00 00 00 02 00 14 00 F6 66 B3 EA 00 27 03 00 00 8F 03 00
+- wl_pointer_frame event (  8 bytes): 12 00 00 00 05 00 08 00
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- wl_keyboard_leave event ( 16 bytes): 11 00 00 00 02 00 10 00 B7 02 00 00 04 00 00 00
+- wl_pointer_leave event ( 16 bytes): 12 00 00 00 01 00 10 00 B8 02 00 00 04 00 00 00
+- wl_pointer_frame event (  8 bytes): 12 00 00 00 05 00 08 00
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- wl_seat_capabilities event ( 12 bytes): 0E 00 00 00 00 00 0C 00 01 00 00 00
+- pointer detected
+- get_pointer request ( 12 bytes): 0E 00 00 00 00 00 0C 00 13 00 00 00
+- bound: wl_pointer
+- wl_seat_capabilities event ( 12 bytes): 0E 00 00 00 00 00 0C 00 00 00 00 00
+- global_rm event ( 12 bytes): 02 00 00 00 01 00 0C 00 3B 00 00 00
+- global_rm event ( 12 bytes): 02 00 00 00 01 00 0C 00 3C 00 00 00
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 3D 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 07 00 00 00
+- iname: wl_seat
+## reg_bind request [src/wayland.c:1050:wayland_registry_bind]
+- bind request  ( 32 bytes): 02 00 00 00 00 00 20 00 3D 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 07 00 00 00 14 00 00 00
+- bound: wl_seat
+- to id: 20
+## END reg_bind request [src/wayland.c:1068:wayland_registry_bind]
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 3E 00 00 00 14 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 6D 65 74 68 6F 64 5F 76 31 00 01 00 00 00
+- iname: zwp_input_method_v1
+- wl_seat_capabilities event ( 12 bytes): 14 00 00 00 00 00 0C 00 03 00 00 00
+- keyboard detected
+- get_keyboard request ( 12 bytes): 14 00 00 00 01 00 0C 00 15 00 00 00
+- bound: wl_keyboard
+- pointer detected
+- get_pointer request ( 12 bytes): 14 00 00 00 00 00 0C 00 16 00 00 00
+- bound: wl_pointer
+- wl_seat_name event ( 32 bytes): 14 00 00 00 01 00 20 00 11 00 00 00 52 44 50 20 41 54 53 47 35 30 30 30 30 31 31 31 00 00 00 00
+- seat: RDP ATSG50000111
+- wl_keyboard_repeat_info event ( 16 bytes): 15 00 00 00 05 00 10 00 28 00 00 00 90 01 00 00
+- wl_keyboard_keymap event ( 16 bytes): 15 00 00 00 00 00 10 00 01 00 00 00 C2 B8 00 00
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout
+- timeout

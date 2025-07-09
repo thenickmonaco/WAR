@@ -83,13 +83,16 @@ int wayland_init() {
     }
 #endif
 
-    uint8_t changed = 1;
+#if DMABUF
+    uint32_t serial = 0;
+#endif
 
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
 #if DMABUF
     uint32_t zwp_linux_dmabuf_v1_id = 0;
     uint32_t zwp_linux_buffer_params_v1_id = 0;
+    uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
 #endif
 #if WL_SHM
     uint32_t wl_shm_id = 0;
@@ -124,17 +127,13 @@ int wayland_init() {
     uint32_t wp_content_type_manager_v1_id = 0;
     // uint32_t wl_keyboard_id = 0;
     // uint32_t wl_pointer_id = 0;
-    // uint32_t wl_callback_id = 0;
-    // uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
     // uint32_t zwp_linux_explicit_synchronization_v1_id = 0;
 
     uint8_t get_registry[12];
-
     write_le32(get_registry, wl_display_id);
     write_le16(get_registry + 4, 1);
     write_le16(get_registry + 6, 12);
     write_le32(get_registry + 8, wl_registry_id);
-
     ssize_t written = write(fd, get_registry, 12);
     call_carmack("written size: %lu", written);
     dump_bytes("written", get_registry, 12);
@@ -154,7 +153,7 @@ int wayland_init() {
 
     uint32_t new_id = wl_registry_id + 1;
     while (1) {
-        int ret = poll(&pfd, 1, 16);
+        int ret = poll(&pfd, 1, -1);
         assert(ret >= 0);
         if (ret == 0) call_carmack("timeout");
 
@@ -180,7 +179,7 @@ int wayland_init() {
 
                 if (object_id >= max_objects || opcode >= max_opcodes) {
                     //---------------------------------------------------------
-                    // INVALID OBJECT/OP (27 TIMES!) CONCERN
+                    // CONCERN: INVALID OBJECT/OP 27 TIMES!
                     //---------------------------------------------------------
                     // call_carmack(
                     //    "invalid object/op: id=%u, op=%u", object_id, opcode);
@@ -212,7 +211,6 @@ int wayland_init() {
                     obj_op[obj_op_index(wl_compositor_id, 0)] =
                         &&wl_compositor_jump;
                     new_id++;
-
                 } else if (strcmp(iname, "wl_output") == 0) {
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_output_id = new_id;
@@ -241,6 +239,49 @@ int wayland_init() {
                     obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 1)] =
                         &&zwp_linux_dmabuf_v1_modifier;
                     new_id++;
+
+                    //---------------------------------------------------------
+                    // COMMENT: prob not needed since i have surface feedback
+                    //---------------------------------------------------------
+                    // uint8_t get_default_feedback[12];
+                    // write_le32(get_default_feedback, zwp_linux_dmabuf_v1_id);
+                    // write_le16(get_default_feedback + 4, 2);
+                    // write_le16(get_default_feedback + 6, 12);
+                    // write_le32(get_default_feedback + 8, new_id);
+                    // dump_bytes("get_default_feedback request",
+                    //            get_default_feedback,
+                    //            12);
+                    // call_carmack(
+                    //     "bound: zwp_linux_dmabuf_feedback_v1"); // REFACTOR:
+                    //     ":"
+                    //                                             // after
+                    //                                             bound
+                    // ssize_t get_default_feedback_written =
+                    //     write(fd, get_default_feedback, 12);
+                    // assert(get_default_feedback_written == 12);
+                    // zwp_linux_dmabuf_feedback_v1_id = new_id;
+                    // obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 0)]
+                    // =
+                    //     &&zwp_linux_dmabuf_feedback_v1_done;
+                    // obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 1)]
+                    // =
+                    //     &&zwp_linux_dmabuf_feedback_v1_format_table;
+                    // obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 2)]
+                    // =
+                    //     &&zwp_linux_dmabuf_feedback_v1_main_device;
+                    // obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 3)]
+                    // =
+                    //     &&zwp_linux_dmabuf_feedback_v1_tranche_done;
+                    // obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 4)]
+                    // =
+                    //     &&zwp_linux_dmabuf_feedback_v1_tranche_target_device;
+                    // obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 5)]
+                    // =
+                    //     &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
+                    // obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 6)]
+                    // =
+                    //     &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
+                    // new_id++;
 #endif
                 } else if (strcmp(iname, "xdg_wm_base") == 0) {
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
@@ -374,6 +415,42 @@ int wayland_init() {
                         &&wl_surface_preferred_buffer_transform;
                     new_id++;
                 }
+#if DMABUF
+                if (!zwp_linux_dmabuf_feedback_v1_id &&
+                    zwp_linux_dmabuf_v1_id && wl_surface_id) {
+                    uint8_t get_surface_feedback[16];
+                    write_le32(get_surface_feedback, zwp_linux_dmabuf_v1_id);
+                    write_le16(get_surface_feedback + 4, 3);
+                    write_le16(get_surface_feedback + 6, 16);
+                    write_le32(get_surface_feedback + 8, new_id);
+                    write_le32(get_surface_feedback + 12, wl_surface_id);
+                    dump_bytes(
+                        "zwp_linux_dmabuf_v1::get_surface_feedback request",
+                        get_surface_feedback,
+                        16);
+                    call_carmack("bound: xdg_surface");
+                    ssize_t get_surface_feedback_written =
+                        write(fd, get_surface_feedback, 16);
+                    assert(get_surface_feedback_written == 16);
+                    zwp_linux_dmabuf_feedback_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 0)] =
+                        &&zwp_linux_dmabuf_feedback_v1_done;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 1)] =
+                        &&zwp_linux_dmabuf_feedback_v1_format_table;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 2)] =
+                        &&zwp_linux_dmabuf_feedback_v1_main_device;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 3)] =
+                        &&zwp_linux_dmabuf_feedback_v1_tranche_done;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 4)] =
+                        &&zwp_linux_dmabuf_feedback_v1_tranche_target_device;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 5)] =
+                        &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
+                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 6)] =
+                        &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
+                    new_id++;
+                }
+#endif
+#if WL_SHM
                 if (!xdg_surface_id && xdg_wm_base_id && wl_surface_id) {
                     uint8_t get_xdg_surface[16];
                     write_le32(get_xdg_surface, xdg_wm_base_id);
@@ -419,9 +496,13 @@ int wayland_init() {
                     ssize_t commit_written = write(fd, commit, 8);
                     assert(commit_written == 8);
                 }
+#endif
                 goto done;
             wl_registry_global_remove:
                 dump_bytes("global_rm event", buffer + offset, size);
+                goto done;
+            wl_callback_done:
+                dump_bytes("wl_callback::done event", buffer + offset, size);
                 goto done;
 #if WL_SHM
             wl_shm_format:
@@ -500,6 +581,56 @@ int wayland_init() {
                 dump_bytes(
                     "xdg_surface_configure event", buffer + offset, size);
                 assert(size == 12);
+#if DMABUF
+                if (!serial) {
+                    serial = read_le32(buffer + offset + 8);
+                    goto done;
+                }
+                uint8_t attach[20];
+                write_le32(attach, wl_surface_id);
+                write_le16(attach + 4, 1);
+                write_le16(attach + 6, 20);
+                write_le32(attach + 8, wl_buffer_id);
+                write_le32(attach + 12, 0);
+                write_le32(attach + 16, 0);
+                dump_bytes("wl_surface_attach request", attach, 20);
+                ssize_t attach_written = write(fd, attach, 20);
+                assert(attach_written == 20);
+
+                uint8_t damage[24];
+                write_le32(damage, wl_surface_id);
+                write_le16(damage + 4, 2);
+                write_le16(damage + 6, 24);
+                write_le32(damage + 8, 0);
+                write_le32(damage + 12, 0);
+                write_le32(damage + 16, width);
+                write_le32(damage + 20, height);
+                dump_bytes("wl_surface_damage request", damage, 24);
+                ssize_t damage_written = write(fd, damage, 24);
+                assert(damage_written == 24);
+
+                uint8_t dmabuf_ack_configure[12];
+                write_le32(dmabuf_ack_configure, xdg_surface_id);
+                write_le16(dmabuf_ack_configure + 4, 4);
+                write_le16(dmabuf_ack_configure + 6, 12);
+                write_le32(dmabuf_ack_configure + 8,
+                           read_le32(buffer + offset + 8));
+                dump_bytes("xdg_surface_ack_configure request",
+                           dmabuf_ack_configure,
+                           12);
+                ssize_t dmabuf_ack_configure_written =
+                    write(fd, dmabuf_ack_configure, 12);
+                assert(dmabuf_ack_configure_written == 12);
+
+                uint8_t commit[8];
+                write_le32(commit, wl_surface_id);
+                write_le16(commit + 4, 6);
+                write_le16(commit + 6, 8);
+                dump_bytes("wl_surface_commit request", commit, 8);
+                ssize_t commit_written = write(fd, commit, 8);
+                assert(commit_written == 8);
+#endif
+#if WL_SHM
                 uint8_t ack_configure[12];
                 write_le32(ack_configure, xdg_surface_id);
                 write_le16(ack_configure + 4, 4);
@@ -509,41 +640,38 @@ int wayland_init() {
                     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
                 assert(ack_configure_written == 12);
-                if (changed) {
-#if WL_SHM
-                    uint8_t shm_attach[20];
-                    write_le32(shm_attach, wl_surface_id);
-                    write_le16(shm_attach + 4, 1);
-                    write_le16(shm_attach + 6, 20);
-                    write_le32(shm_attach + 8, wl_buffer_id);
-                    write_le32(shm_attach + 12, 0);
-                    write_le32(shm_attach + 16, 0);
-                    dump_bytes("wl_surface_attach request", shm_attach, 20);
-                    ssize_t shm_attach_written = write(fd, shm_attach, 20);
-                    assert(shm_attach_written == 20);
 
-                    uint8_t shm_damage[24];
-                    write_le32(shm_damage, wl_surface_id);
-                    write_le16(shm_damage + 4, 2);
-                    write_le16(shm_damage + 6, 24);
-                    write_le32(shm_damage + 8, 0);
-                    write_le32(shm_damage + 12, 0);
-                    write_le32(shm_damage + 16, width);
-                    write_le32(shm_damage + 20, height);
-                    dump_bytes("wl_surface_damage request", shm_damage, 24);
-                    ssize_t shm_damage_written = write(fd, shm_damage, 24);
-                    assert(shm_damage_written == 24);
+                uint8_t shm_attach[20];
+                write_le32(shm_attach, wl_surface_id);
+                write_le16(shm_attach + 4, 1);
+                write_le16(shm_attach + 6, 20);
+                write_le32(shm_attach + 8, wl_buffer_id);
+                write_le32(shm_attach + 12, 0);
+                write_le32(shm_attach + 16, 0);
+                dump_bytes("wl_surface_attach request", shm_attach, 20);
+                ssize_t shm_attach_written = write(fd, shm_attach, 20);
+                assert(shm_attach_written == 20);
 
-                    uint8_t shm_commit[8];
-                    write_le32(shm_commit, wl_surface_id);
-                    write_le16(shm_commit + 4, 6);
-                    write_le16(shm_commit + 6, 8);
-                    dump_bytes("wl_surface_commit request", shm_commit, 8);
-                    ssize_t shm_commit_written = write(fd, shm_commit, 8);
-                    assert(shm_commit_written == 8);
-                    changed = 0;
+                uint8_t shm_damage[24];
+                write_le32(shm_damage, wl_surface_id);
+                write_le16(shm_damage + 4, 2);
+                write_le16(shm_damage + 6, 24);
+                write_le32(shm_damage + 8, 0);
+                write_le32(shm_damage + 12, 0);
+                write_le32(shm_damage + 16, width);
+                write_le32(shm_damage + 20, height);
+                dump_bytes("wl_surface_damage request", shm_damage, 24);
+                ssize_t shm_damage_written = write(fd, shm_damage, 24);
+                assert(shm_damage_written == 24);
+
+                uint8_t shm_commit[8];
+                write_le32(shm_commit, wl_surface_id);
+                write_le16(shm_commit + 4, 6);
+                write_le16(shm_commit + 6, 8);
+                dump_bytes("wl_surface_commit request", shm_commit, 8);
+                ssize_t shm_commit_written = write(fd, shm_commit, 8);
+                assert(shm_commit_written == 8);
 #endif
-                }
                 goto done;
             xdg_toplevel_configure:
                 dump_bytes(
@@ -566,13 +694,11 @@ int wayland_init() {
             zwp_linux_dmabuf_v1_format:
                 dump_bytes(
                     "zwp_linux_dmabuf_v1_format event", buffer + offset, size);
-                if (!has_ARGB8888) {
-                    has_ARGB8888 =
-                        read_le32(buffer + offset + 8) == DRM_FORMAT_ARGB8888;
-                }
-                if (has_ARGB8888 && zwp_linux_buffer_params_v1_id &&
-                    !wl_buffer_id) {
-
+                //-------------------------------------------------------------
+                // REMOVE
+                //-------------------------------------------------------------
+                // obsolete code
+                if (!zwp_linux_buffer_params_v1_id) {
                     uint8_t create_params[12]; // REFACTOR: zero initialize
                     write_le32(create_params, zwp_linux_dmabuf_v1_id);
                     write_le16(create_params + 4, 1);
@@ -590,14 +716,13 @@ int wayland_init() {
                         &&zwp_linux_buffer_params_v1_created;
                     obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
                         &&zwp_linux_buffer_params_v1_failed;
-                    new_id++; // REFACTOR: move increment to declaration (one
-                              // line it)
+                    new_id++; // REFACTOR: move increment to declaration
+                              // (one line it)
 
                     uint8_t header[8];
                     write_le32(header, zwp_linux_buffer_params_v1_id);
                     write_le16(header + 4, 0);
                     write_le16(header + 6, 28);
-
                     uint8_t tail[20];
                     write_le32(tail + 0, 0);
                     write_le32(tail + 4, 0);
@@ -670,40 +795,93 @@ int wayland_init() {
                 call_carmack("bound wl_buffer");
                 obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
 
-                uint8_t attach[20];
-                write_le32(attach, wl_surface_id);
-                write_le16(attach + 4, 1);
-                write_le16(attach + 6, 20);
-                write_le32(attach + 8, wl_buffer_id);
-                write_le32(attach + 12, 0);
-                write_le32(attach + 16, 0);
-                dump_bytes("wl_surface_attach request", attach, 20);
-                ssize_t attach_written = write(fd, attach, 20);
-                assert(attach_written == 20);
+                uint8_t first_attach[20];
+                write_le32(first_attach, wl_surface_id);
+                write_le16(first_attach + 4, 1);
+                write_le16(first_attach + 6, 20);
+                write_le32(first_attach + 8, wl_buffer_id);
+                write_le32(first_attach + 12, 0);
+                write_le32(first_attach + 16, 0);
+                dump_bytes("wl_surface_attach request", first_attach, 20);
+                ssize_t first_attach_written = write(fd, first_attach, 20);
+                assert(first_attach_written == 20);
 
-                uint8_t damage[24];
-                write_le32(damage, wl_surface_id);
-                write_le16(damage + 4, 2);
-                write_le16(damage + 6, 24);
-                write_le32(damage + 8, 0);
-                write_le32(damage + 12, 0);
-                write_le32(damage + 16, width);
-                write_le32(damage + 20, height);
-                dump_bytes("wl_surface_damage request", damage, 24);
-                ssize_t damage_written = write(fd, damage, 24);
-                assert(damage_written == 24);
+                uint8_t first_damage[24];
+                write_le32(first_damage, wl_surface_id);
+                write_le16(first_damage + 4, 2);
+                write_le16(first_damage + 6, 24);
+                write_le32(first_damage + 8, 0);
+                write_le32(first_damage + 12, 0);
+                write_le32(first_damage + 16, width);
+                write_le32(first_damage + 20, height);
+                dump_bytes("wl_surface_damage request", first_damage, 24);
+                ssize_t first_damage_written = write(fd, first_damage, 24);
+                assert(first_damage_written == 24);
 
-                uint8_t commit[8];
-                write_le32(commit, wl_surface_id);
-                write_le16(commit + 4, 6);
-                write_le16(commit + 6, 8);
-                dump_bytes("wl_surface_commit request", commit, 8);
-                ssize_t commit_written = write(fd, commit, 8);
-                assert(commit_written == 8);
+                if (serial) {
+                    uint8_t first_dmabuf_ack_configure[12];
+                    write_le32(first_dmabuf_ack_configure, xdg_surface_id);
+                    write_le16(first_dmabuf_ack_configure + 4, 4);
+                    write_le16(first_dmabuf_ack_configure + 6, 12);
+                    write_le32(first_dmabuf_ack_configure + 8, serial);
+                    dump_bytes("xdg_surface_ack_configure request",
+                               first_dmabuf_ack_configure,
+                               12);
+                    ssize_t first_dmabuf_ack_configure_written =
+                        write(fd, first_dmabuf_ack_configure, 12);
+                    assert(first_dmabuf_ack_configure_written == 12);
+                }
+
+                uint8_t first_commit[8];
+                write_le32(first_commit, wl_surface_id);
+                write_le16(first_commit + 4, 6);
+                write_le16(first_commit + 6, 8);
+                dump_bytes("wl_surface_commit request", first_commit, 8);
+                ssize_t first_commit_written = write(fd, first_commit, 8);
+                assert(first_commit_written == 8);
                 goto done;
             zwp_linux_buffer_params_v1_failed:
+                dump_bytes("zwp_linux_buffer_params_v1_failed event",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_linux_dmabuf_feedback_v1_done:
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
+                           buffer + offset,
+                           size);
+                
+                // logic for creat params
+                goto done;
+            zwp_linux_dmabuf_feedback_v1_format_table:
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event",
+                           buffer + offset,
+                           size); // REFACTOR: event
+                goto done;
+            zwp_linux_dmabuf_feedback_v1_main_device:
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_main_device event",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_linux_dmabuf_feedback_v1_tranche_done:
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_done event",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_linux_dmabuf_feedback_v1_tranche_target_device:
                 dump_bytes(
-                    "zwp_linux_buffer_params_v1_failed", buffer + offset, size);
+                    "zwp_linux_dmabuf_feedback_v1_tranche_target_device event",
+                    buffer + offset,
+                    size);
+                goto done;
+            zwp_linux_dmabuf_feedback_v1_tranche_formats:
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_formats event",
+                           buffer + offset,
+                           size);
+                goto done;
+            zwp_linux_dmabuf_feedback_v1_tranche_flags:
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_flags event",
+                           buffer + offset,
+                           size);
                 goto done;
 #endif
             wp_linux_drm_syncobj_manager_v1_jump:

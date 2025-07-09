@@ -740,6 +740,7 @@ int wayland_init() {
                 ssize_t first_damage_written = write(fd, first_damage, 24);
                 assert(first_damage_written == 24);
 
+                assert(serial);
                 uint8_t first_dmabuf_ack_configure[12];
                 write_le32(first_dmabuf_ack_configure, xdg_surface_id);
                 write_le16(first_dmabuf_ack_configure + 4, 4);

@@ -178,9 +178,7 @@ int wayland_init() {
                 uint16_t opcode = read_le16(buffer + offset + 4);
 
                 if (object_id >= max_objects || opcode >= max_opcodes) {
-                    //---------------------------------------------------------
                     // CONCERN: INVALID OBJECT/OP 27 TIMES!
-                    //---------------------------------------------------------
                     // call_carmack(
                     //    "invalid object/op: id=%u, op=%u", object_id, opcode);
                     goto done;
@@ -197,7 +195,8 @@ int wayland_init() {
                 dump_bytes("global event", buffer + offset, size);
                 call_carmack("iname: %s", (const char*)buffer + offset + 16);
 
-                const char* iname = (const char*)buffer + offset + 16;
+                const char* iname =
+                    (const char*)buffer + offset + 16; // OPTIMIZE: perfect hash
                 if (strcmp(iname, "wl_shm") == 0) {
 #if WL_SHM
                     wayland_registry_bind(fd, buffer, offset, size, new_id);
@@ -240,9 +239,7 @@ int wayland_init() {
                         &&zwp_linux_dmabuf_v1_modifier;
                     new_id++;
 
-                    //---------------------------------------------------------
                     // COMMENT: prob not needed since i have surface feedback
-                    //---------------------------------------------------------
                     // uint8_t get_default_feedback[12];
                     // write_le32(get_default_feedback, zwp_linux_dmabuf_v1_id);
                     // write_le16(get_default_feedback + 4, 2);
@@ -582,6 +579,7 @@ int wayland_init() {
                     "xdg_surface_configure event", buffer + offset, size);
                 assert(size == 12);
 #if DMABUF
+                // CONCERN COMMENT: unsure
                 if (!serial) {
                     serial = read_le32(buffer + offset + 8);
                     goto done;
@@ -694,82 +692,6 @@ int wayland_init() {
             zwp_linux_dmabuf_v1_format:
                 dump_bytes(
                     "zwp_linux_dmabuf_v1_format event", buffer + offset, size);
-                //-------------------------------------------------------------
-                // REMOVE
-                //-------------------------------------------------------------
-                // obsolete code
-                if (!zwp_linux_buffer_params_v1_id) {
-                    uint8_t create_params[12]; // REFACTOR: zero initialize
-                    write_le32(create_params, zwp_linux_dmabuf_v1_id);
-                    write_le16(create_params + 4, 1);
-                    write_le16(create_params + 6, 12);
-                    write_le32(create_params + 8, new_id);
-                    dump_bytes("zwp_linux_dmabuf_v1_create_params request",
-                               create_params,
-                               12);
-                    call_carmack("bound: zwp_linux_buffer_params_v1");
-                    ssize_t create_params_written =
-                        write(fd, create_params, 12);
-                    assert(create_params_written == 12);
-                    zwp_linux_buffer_params_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
-                        &&zwp_linux_buffer_params_v1_created;
-                    obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
-                        &&zwp_linux_buffer_params_v1_failed;
-                    new_id++; // REFACTOR: move increment to declaration
-                              // (one line it)
-
-                    uint8_t header[8];
-                    write_le32(header, zwp_linux_buffer_params_v1_id);
-                    write_le16(header + 4, 0);
-                    write_le16(header + 6, 28);
-                    uint8_t tail[20];
-                    write_le32(tail + 0, 0);
-                    write_le32(tail + 4, 0);
-                    write_le32(tail + 8, stride);
-                    write_le32(tail + 12, 0);
-                    write_le32(tail + 16, 0);
-                    struct iovec iov[2] = {
-                        {.iov_base = header, .iov_len = 8},
-                        {.iov_base = tail, .iov_len = 20},
-                    };
-                    char cmsgbuf[CMSG_SPACE(sizeof(int))] = {0};
-                    struct msghdr msg = {0};
-                    msg.msg_iov = iov;
-                    msg.msg_iovlen = 2;
-                    msg.msg_control = cmsgbuf;
-                    msg.msg_controllen = sizeof(cmsgbuf);
-                    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
-                    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-                    cmsg->cmsg_level = SOL_SOCKET;
-                    cmsg->cmsg_type = SCM_RIGHTS;
-                    *((int*)CMSG_DATA(cmsg)) = dmabuf_fd;
-                    ssize_t sent = sendmsg(fd, &msg, 0);
-                    if (sent < 0) perror("sendmsg");
-                    assert(sent == 28);
-#if DEBUG
-                    uint8_t full_msg[32] = {0};
-                    memcpy(full_msg, header, 8);
-                    memcpy(full_msg + 8, tail, 20);
-#endif
-                    dump_bytes("zwp_linux_buffer_params_v1::add request",
-                               full_msg,
-                               28);
-
-                    uint8_t create[24]; // REFACTOR: maybe 0 initialize
-                    write_le32(create, zwp_linux_buffer_params_v1_id);
-                    write_le16(create + 4, 2);
-                    write_le16(create + 6, 24);
-                    write_le32(create + 8, width);
-                    write_le32(create + 12, height);
-                    write_le32(create + 16, DRM_FORMAT_ARGB8888);
-                    write_le32(create + 20, 0);
-                    dump_bytes("zwp_linux_buffer_params_v1_create request",
-                               create,
-                               24);
-                    ssize_t create_written = write(fd, create, 24);
-                    assert(create_written == 24);
-                }
                 goto done;
             zwp_linux_dmabuf_v1_modifier:
                 dump_bytes("zwp_linux_dmabuf_v1_modifier event",
@@ -785,13 +707,13 @@ int wayland_init() {
                 write_le32(destroy, zwp_linux_buffer_params_v1_id);
                 write_le16(destroy + 4, 0);
                 write_le16(destroy + 6, 8);
-                ssize_t sent = write(fd, destroy, 8);
-                assert(sent == 8);
+                ssize_t destroy_written = write(fd, destroy, 8);
+                assert(destroy_written == 8);
                 dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
                            destroy,
                            8);
+
                 wl_buffer_id = read_le32(buffer + offset + 8);
-                if (new_id <= wl_buffer_id) { new_id = wl_buffer_id + 1; }
                 call_carmack("bound wl_buffer");
                 obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
 
@@ -818,19 +740,17 @@ int wayland_init() {
                 ssize_t first_damage_written = write(fd, first_damage, 24);
                 assert(first_damage_written == 24);
 
-                if (serial) {
-                    uint8_t first_dmabuf_ack_configure[12];
-                    write_le32(first_dmabuf_ack_configure, xdg_surface_id);
-                    write_le16(first_dmabuf_ack_configure + 4, 4);
-                    write_le16(first_dmabuf_ack_configure + 6, 12);
-                    write_le32(first_dmabuf_ack_configure + 8, serial);
-                    dump_bytes("xdg_surface_ack_configure request",
-                               first_dmabuf_ack_configure,
-                               12);
-                    ssize_t first_dmabuf_ack_configure_written =
-                        write(fd, first_dmabuf_ack_configure, 12);
-                    assert(first_dmabuf_ack_configure_written == 12);
-                }
+                uint8_t first_dmabuf_ack_configure[12];
+                write_le32(first_dmabuf_ack_configure, xdg_surface_id);
+                write_le16(first_dmabuf_ack_configure + 4, 4);
+                write_le16(first_dmabuf_ack_configure + 6, 12);
+                write_le32(first_dmabuf_ack_configure + 8, serial);
+                dump_bytes("xdg_surface_ack_configure request",
+                           first_dmabuf_ack_configure,
+                           12);
+                ssize_t first_dmabuf_ack_configure_written =
+                    write(fd, first_dmabuf_ack_configure, 12);
+                assert(first_dmabuf_ack_configure_written == 12);
 
                 uint8_t first_commit[8];
                 write_le32(first_commit, wl_surface_id);
@@ -849,8 +769,80 @@ int wayland_init() {
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
                            buffer + offset,
                            size);
-                
-                // logic for creat params
+                uint8_t create_params[12]; // REFACTOR: zero initialize
+                write_le32(create_params, zwp_linux_dmabuf_v1_id);
+                write_le16(create_params + 4, 1);
+                write_le16(create_params + 6, 12);
+                write_le32(create_params + 8, new_id);
+                dump_bytes("zwp_linux_dmabuf_v1_create_params request",
+                           create_params,
+                           12);
+                call_carmack("bound: zwp_linux_buffer_params_v1");
+                ssize_t create_params_written = write(fd, create_params, 12);
+                assert(create_params_written == 12);
+                zwp_linux_buffer_params_v1_id = new_id;
+                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
+                    &&zwp_linux_buffer_params_v1_created;
+                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
+                    &&zwp_linux_buffer_params_v1_failed;
+                new_id++; // REFACTOR: move increment to declaration
+                          // (one line it)
+
+                uint8_t header[8];
+                write_le32(header, zwp_linux_buffer_params_v1_id);
+                write_le16(header + 4, 0);
+                write_le16(header + 6, 28);
+                uint8_t tail[20];
+                write_le32(tail + 0, 0);
+                write_le32(tail + 4, 0);
+                write_le32(tail + 8, stride);
+                write_le32(tail + 12, 0);
+                write_le32(tail + 16, 0);
+                struct iovec iov[2] = {
+                    {.iov_base = header, .iov_len = 8},
+                    {.iov_base = tail, .iov_len = 20},
+                };
+                char cmsgbuf[CMSG_SPACE(sizeof(int))] = {0};
+                struct msghdr msg = {0};
+                msg.msg_iov = iov;
+                msg.msg_iovlen = 2;
+                msg.msg_control = cmsgbuf;
+                msg.msg_controllen = sizeof(cmsgbuf);
+                struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+                cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+                cmsg->cmsg_level = SOL_SOCKET;
+                cmsg->cmsg_type = SCM_RIGHTS;
+                *((int*)CMSG_DATA(cmsg)) = dmabuf_fd;
+                ssize_t dmabuf_sent = sendmsg(fd, &msg, 0);
+                if (dmabuf_sent < 0) perror("sendmsg");
+                assert(dmabuf_sent == 28);
+#if DEBUG
+                uint8_t full_msg[32] = {0};
+                memcpy(full_msg, header, 8);
+                memcpy(full_msg + 8, tail, 20);
+#endif
+                dump_bytes(
+                    "zwp_linux_buffer_params_v1::add request", full_msg, 28);
+
+                uint8_t create[24]; // REFACTOR: maybe 0 initialize
+                write_le32(
+                    create,
+                    zwp_linux_buffer_params_v1_id); // REFACTOR: is it faster to
+                                                    // copy the incoming message
+                                                    // header and increment
+                                                    // accordingly?
+                write_le16(
+                    create + 4,
+                    2); // REFACTOR CONCERN: check for duplicate variables names
+                write_le16(create + 6, 24);
+                write_le32(create + 8, width);
+                write_le32(create + 12, height);
+                write_le32(create + 16, DRM_FORMAT_ARGB8888);
+                write_le32(create + 20, 0);
+                dump_bytes(
+                    "zwp_linux_buffer_params_v1_create request", create, 24);
+                ssize_t create_written = write(fd, create, 24);
+                assert(create_written == 24);
                 goto done;
             zwp_linux_dmabuf_feedback_v1_format_table:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event",

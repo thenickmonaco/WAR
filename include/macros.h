@@ -28,6 +28,8 @@
 
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
+// OPTIMIZE: Duff's Device + SIMD (intrinsics)
+
 static inline uint32_t read_le32(const uint8_t* p) {
     return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);

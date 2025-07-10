@@ -1,16 +1,16 @@
-// vimDAW - make music with vim motions
+// WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-//
+// 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-//
+// 
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
-//
+// 
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
@@ -18,8 +18,8 @@
 // src/debug_macros.h
 //=============================================================================
 
-#ifndef VIMDAW_DEBUG_MACROS_H
-#define VIMDAW_DEBUG_MACROS_H
+#ifndef WAR_DEBUG_MACROS_H
+#define WAR_DEBUG_MACROS_H
 
 #include <stdio.h>
 
@@ -125,4 +125,4 @@
 
 #endif // DEBUG
 
-#endif // VIMDAW_MACROS_H
+#endif // WAR_MACROS_H

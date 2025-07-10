@@ -1,4 +1,4 @@
--- vimDAW - make music with vim motions
+-- WAR - make music with vim motions
 -- Copyright (C) 2025 Nick Monaco
 -- 
 -- This program is free software: you can redistribute it and/or modify

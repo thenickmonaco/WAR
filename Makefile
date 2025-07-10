@@ -38,7 +38,7 @@ SRC_DIR := src
 BUILD_DIR := build
 PRE_DIR := $(BUILD_DIR)/pre
 INCLUDE_DIR := include
-TARGET := vimDAW
+TARGET := WAR
 
 SRC := $(shell find $(SRC_DIR) -type f -name '*.c')
 HDRS := $(patsubst $(SRC_DIR)/%.c,$(INCLUDE_DIR)/%.h,$(SRC))

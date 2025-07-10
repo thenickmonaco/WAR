@@ -148,12 +148,14 @@ int wayland_init() {
     };
 
     void* obj_op[max_objects * max_opcodes] = {0};
+    obj_op[obj_op_index(wl_display_id, 0)] = &&wl_display_error;
+    obj_op[obj_op_index(wl_display_id, 1)] = &&wl_display_delete_id;
     obj_op[obj_op_index(wl_registry_id, 0)] = &&wl_registry_global;
     obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
 
     uint32_t new_id = wl_registry_id + 1;
     while (1) {
-        int ret = poll(&pfd, 1, -1);
+        int ret = poll(&pfd, 1, -1); // COMMENT OPTIMIZE: 16 ms vs. -1
         assert(ret >= 0);
         if (ret == 0) call_carmack("timeout");
 
@@ -501,6 +503,13 @@ int wayland_init() {
             wl_callback_done:
                 dump_bytes("wl_callback::done event", buffer + offset, size);
                 goto done;
+            wl_display_error:
+                dump_bytes("wl_display::error event", buffer + offset, size);
+                goto done;
+            wl_display_delete_id:
+                dump_bytes(
+                    "wl_display::delete_id event", buffer + offset, size);
+                goto done;
 #if WL_SHM
             wl_shm_format:
                 dump_bytes("wl_shm_format event", buffer + offset, size);
@@ -703,63 +712,63 @@ int wayland_init() {
                     "zwp_linux_buffer_params_v1_created", // REFACTOR to ::
                     buffer + offset,
                     size);
-                uint8_t destroy[8];
-                write_le32(destroy, zwp_linux_buffer_params_v1_id);
-                write_le16(destroy + 4, 0);
-                write_le16(destroy + 6, 8);
-                ssize_t destroy_written = write(fd, destroy, 8);
-                assert(destroy_written == 8);
-                dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
-                           destroy,
-                           8);
+                // uint8_t destroy[8];
+                // write_le32(destroy, zwp_linux_buffer_params_v1_id);
+                // write_le16(destroy + 4, 0);
+                // write_le16(destroy + 6, 8);
+                // ssize_t destroy_written = write(fd, destroy, 8);
+                // assert(destroy_written == 8);
+                // dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
+                //            destroy,
+                //            8);
 
-                wl_buffer_id = read_le32(buffer + offset + 8);
-                call_carmack("bound wl_buffer");
-                obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
+                // wl_buffer_id = read_le32(buffer + offset + 8);
+                // call_carmack("bound wl_buffer");
+                // obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
 
-                uint8_t first_attach[20];
-                write_le32(first_attach, wl_surface_id);
-                write_le16(first_attach + 4, 1);
-                write_le16(first_attach + 6, 20);
-                write_le32(first_attach + 8, wl_buffer_id);
-                write_le32(first_attach + 12, 0);
-                write_le32(first_attach + 16, 0);
-                dump_bytes("wl_surface_attach request", first_attach, 20);
-                ssize_t first_attach_written = write(fd, first_attach, 20);
-                assert(first_attach_written == 20);
+                // uint8_t first_attach[20];
+                // write_le32(first_attach, wl_surface_id);
+                // write_le16(first_attach + 4, 1);
+                // write_le16(first_attach + 6, 20);
+                // write_le32(first_attach + 8, wl_buffer_id);
+                // write_le32(first_attach + 12, 0);
+                // write_le32(first_attach + 16, 0);
+                // dump_bytes("wl_surface_attach request", first_attach, 20);
+                // ssize_t first_attach_written = write(fd, first_attach, 20);
+                // assert(first_attach_written == 20);
 
-                uint8_t first_damage[24];
-                write_le32(first_damage, wl_surface_id);
-                write_le16(first_damage + 4, 2);
-                write_le16(first_damage + 6, 24);
-                write_le32(first_damage + 8, 0);
-                write_le32(first_damage + 12, 0);
-                write_le32(first_damage + 16, width);
-                write_le32(first_damage + 20, height);
-                dump_bytes("wl_surface_damage request", first_damage, 24);
-                ssize_t first_damage_written = write(fd, first_damage, 24);
-                assert(first_damage_written == 24);
+                // uint8_t first_damage[24];
+                // write_le32(first_damage, wl_surface_id);
+                // write_le16(first_damage + 4, 2);
+                // write_le16(first_damage + 6, 24);
+                // write_le32(first_damage + 8, 0);
+                // write_le32(first_damage + 12, 0);
+                // write_le32(first_damage + 16, width);
+                // write_le32(first_damage + 20, height);
+                // dump_bytes("wl_surface_damage request", first_damage, 24);
+                // ssize_t first_damage_written = write(fd, first_damage, 24);
+                // assert(first_damage_written == 24);
 
-                assert(serial);
-                uint8_t first_dmabuf_ack_configure[12];
-                write_le32(first_dmabuf_ack_configure, xdg_surface_id);
-                write_le16(first_dmabuf_ack_configure + 4, 4);
-                write_le16(first_dmabuf_ack_configure + 6, 12);
-                write_le32(first_dmabuf_ack_configure + 8, serial);
-                dump_bytes("xdg_surface_ack_configure request",
-                           first_dmabuf_ack_configure,
-                           12);
-                ssize_t first_dmabuf_ack_configure_written =
-                    write(fd, first_dmabuf_ack_configure, 12);
-                assert(first_dmabuf_ack_configure_written == 12);
+                // assert(serial);
+                // uint8_t first_dmabuf_ack_configure[12];
+                // write_le32(first_dmabuf_ack_configure, xdg_surface_id);
+                // write_le16(first_dmabuf_ack_configure + 4, 4);
+                // write_le16(first_dmabuf_ack_configure + 6, 12);
+                // write_le32(first_dmabuf_ack_configure + 8, serial);
+                // dump_bytes("xdg_surface_ack_configure request",
+                //            first_dmabuf_ack_configure,
+                //            12);
+                // ssize_t first_dmabuf_ack_configure_written =
+                //     write(fd, first_dmabuf_ack_configure, 12);
+                // assert(first_dmabuf_ack_configure_written == 12);
 
-                uint8_t first_commit[8];
-                write_le32(first_commit, wl_surface_id);
-                write_le16(first_commit + 4, 6);
-                write_le16(first_commit + 6, 8);
-                dump_bytes("wl_surface_commit request", first_commit, 8);
-                ssize_t first_commit_written = write(fd, first_commit, 8);
-                assert(first_commit_written == 8);
+                // uint8_t first_commit[8];
+                // write_le32(first_commit, wl_surface_id);
+                // write_le16(first_commit + 4, 6);
+                // write_le16(first_commit + 6, 8);
+                // dump_bytes("wl_surface_commit request", first_commit, 8);
+                // ssize_t first_commit_written = write(fd, first_commit, 8);
+                // assert(first_commit_written == 8);
                 goto done;
             zwp_linux_buffer_params_v1_failed:
                 dump_bytes("zwp_linux_buffer_params_v1_failed event",
@@ -825,25 +834,74 @@ int wayland_init() {
                 dump_bytes(
                     "zwp_linux_buffer_params_v1::add request", full_msg, 28);
 
-                uint8_t create[24]; // REFACTOR: maybe 0 initialize
+                // COMMENT: create_immed vs. create
+                uint8_t create_immed[28]; // REFACTOR: maybe 0 initialize
                 write_le32(
-                    create,
+                    create_immed,
                     zwp_linux_buffer_params_v1_id); // REFACTOR: is it faster to
                                                     // copy the incoming message
                                                     // header and increment
                                                     // accordingly?
                 write_le16(
-                    create + 4,
-                    2); // REFACTOR CONCERN: check for duplicate variables names
-                write_le16(create + 6, 24);
-                write_le32(create + 8, width);
-                write_le32(create + 12, height);
-                write_le32(create + 16, DRM_FORMAT_ARGB8888);
-                write_le32(create + 20, 0);
-                dump_bytes(
-                    "zwp_linux_buffer_params_v1_create request", create, 24);
-                ssize_t create_written = write(fd, create, 24);
-                assert(create_written == 24);
+                    create_immed + 4,
+                    3); // REFACTOR CONCERN: check for duplicate variables names
+                write_le16(create_immed + 6, 28);
+                write_le32(create_immed + 8, new_id);
+                write_le32(create_immed + 12, width);
+                write_le32(create_immed + 16, height);
+                write_le32(create_immed + 20, DRM_FORMAT_ARGB8888);
+                write_le32(create_immed + 24, 0);
+                dump_bytes("zwp_linux_buffer_params_v1::create_immed request",
+                           create_immed,
+                           28);
+                call_carmack("bound: wl_buffer");
+                ssize_t create_immed_written = write(fd, create_immed, 28);
+                assert(create_immed_written == 28);
+                wl_buffer_id = new_id;
+                obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
+                new_id++;
+
+                //uint8_t destroy[8];
+                //write_le32(destroy, zwp_linux_buffer_params_v1_id);
+                //write_le16(destroy + 4, 0);
+                //write_le16(destroy + 6, 8);
+                //ssize_t destroy_written = write(fd, destroy, 8);
+                //assert(destroy_written == 8);
+                //dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
+                //           destroy,
+                //           8);
+
+                //uint8_t attach_dmabuf[20];
+                //write_le32(attach_dmabuf, wl_surface_id);
+                //write_le16(attach_dmabuf + 4, 1);
+                //write_le16(attach_dmabuf + 6, 20);
+                //write_le32(attach_dmabuf + 8, wl_buffer_id);
+                //write_le32(attach_dmabuf + 12, 0);
+                //write_le32(attach_dmabuf + 16, 0);
+                //dump_bytes("wl_surface_attach request", attach_dmabuf, 20);
+                //ssize_t attach_dmabuf_written = write(fd, attach_dmabuf, 20);
+                //assert(attach_dmabuf_written == 20);
+
+                //uint8_t damage_dmabuf[24];
+                //write_le32(damage_dmabuf, wl_surface_id);
+                //write_le16(damage_dmabuf + 4, 2);
+                //write_le16(damage_dmabuf + 6, 24);
+                //write_le32(damage_dmabuf + 8, 0);
+                //write_le32(damage_dmabuf + 12, 0);
+                //write_le32(damage_dmabuf + 16, width);
+                //write_le32(damage_dmabuf + 20, height);
+                //dump_bytes("wl_surface_damage request", damage_dmabuf, 24);
+                //ssize_t damage_dmabuf_written = write(fd, damage_dmabuf, 24);
+                //assert(damage_dmabuf == 24);
+
+                //uint8_t commit_dmabuf[8];
+                //write_le32(commit_dmabuf, wl_surface_id);
+                //write_le16(commit_dmabuf + 4, 6);
+                //write_le16(commit_dmabuf + 6, 8);
+                //dump_bytes("wl_surface_commit request", commit, 8);
+                //ssize_t commit_dmabuf_written = write(fd, commit, 8);
+                //assert(commit_dmabuf_written == 8);
+
                 goto done;
             zwp_linux_dmabuf_feedback_v1_format_table:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event",

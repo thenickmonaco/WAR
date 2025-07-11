@@ -5,21 +5,24 @@
       "-D_GNU_SOURCE",
       "-Wall",
       "-Wextra",
-      "-O3",
+      "-O0",
+      "-g",
       "-march=native",
       "-std=c99",
-      "-DNDEBUG",
+      "-DDEBUG",
       "-I",
       "src",
       "-I",
       "include",
+      "-DWL_SHM=0",
+      "-DDMABUF=1",
       "-c",
       "-o",
       "build/main.o",
       "src/main.c"
     ],
-    "directory": "/home/monaco/Projects/vimDAW",
-    "file": "/home/monaco/Projects/vimDAW/src/main.c",
-    "output": "/home/monaco/Projects/vimDAW/build/main.o"
+    "directory": "/home/monaco/Projects/WAR",
+    "file": "/home/monaco/Projects/WAR/src/main.c",
+    "output": "/home/monaco/Projects/WAR/build/main.o"
   }
 ]

@@ -34,6 +34,8 @@ endif
 CFLAGS += -DWL_SHM=$(WL_SHM)
 CFLAGS += -DDMABUF=$(DMABUF)
 
+LDFLAGS := -lvulkan
+
 SRC_DIR := src
 BUILD_DIR := build
 PRE_DIR := $(BUILD_DIR)/pre
@@ -70,7 +72,7 @@ $(UNITY_O): headers
 
 # Link final binary
 $(TARGET): $(UNITY_O)
-	$(Q)$(CC) $(CFLAGS) -o $@ $^
+	$(Q)$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Generate headers from all .c files using cproto
 headers:
@@ -107,6 +109,8 @@ prepend_std_headers:
 	echo "#include <stddef.h>" >> "$${tmpfile}"; \
 	echo "#include <stdbool.h>" >> "$${tmpfile}"; \
 	echo "#include <stdio.h>" >> "$${tmpfile}"; \
+	echo "#include <vulkan/vulkan.h>" >> "$${tmpfile}"; \
+	echo "#include <vulkan/vulkan_core.h>" >> "$${tmpfile}"; \
 	cat "$${header}" >> "$${tmpfile}"; \
 	mv "$${tmpfile}" "$${header}"
 

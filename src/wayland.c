@@ -154,7 +154,7 @@ int wayland_init() {
 
     uint32_t new_id = wl_registry_id + 1;
     while (1) {
-        int ret = poll(&pfd, 1, 16);
+        int ret = poll(&pfd, 1, -1);
         assert(ret >= 0);
         if (ret == 0) call_carmack("timeout");
 
@@ -1123,7 +1123,8 @@ int wayland_init() {
     return 0;
 }
 
-// COMMENT: return a lot of these variables. Output parameters with function pointers?
+// COMMENT: return a lot of these variables. Output parameters with function
+// pointers?
 int wayland_make_dmabuf_fd(uint32_t width, uint32_t height) {
     header("wayland_make_dmabuf_fd");
 

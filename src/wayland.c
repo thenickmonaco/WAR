@@ -1261,6 +1261,8 @@ int wayland_make_dmabuf_fd(uint32_t width, uint32_t height) {
     assert(res == VK_SUCCESS);
     assert(dmabuf_fd > 0);
 
+    free(available_extensions);
+
     end("wayland_make_dmabuf_fd");
     return dmabuf_fd;
 }

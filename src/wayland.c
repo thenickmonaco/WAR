@@ -1123,6 +1123,7 @@ int wayland_init() {
     return 0;
 }
 
+// COMMENT: return a lot of these variables. Output parameters with function pointers?
 int wayland_make_dmabuf_fd(uint32_t width, uint32_t height) {
     header("wayland_make_dmabuf_fd");
 

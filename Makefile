@@ -34,6 +34,14 @@ endif
 CFLAGS += -DWL_SHM=$(WL_SHM)
 CFLAGS += -DDMABUF=$(DMABUF)
 
+GLSLC := glslangValidator
+SHADER_SRC_DIR := src/shaders
+SHADER_BUILD_DIR := $(BUILD_DIR)/shaders
+VERT_SHADER_SRC := $(SHADER_SRC_DIR)/vertex.glsl
+FRAG_SHADER_SRC := $(SHADER_SRC_DIR)/fragment.glsl
+VERT_SHADER_SPV := $(SHADER_BUILD_DIR)/vertex.spv
+FRAG_SHADER_SPV := $(SHADER_BUILD_DIR)/fragment.spv
+
 LDFLAGS := -lvulkan
 
 SRC_DIR := src
@@ -51,7 +59,7 @@ DEP := $(UNITY_O:.o=.d)
 
 .PHONY: all headers clean guard empty_headers gcc_check
 
-all: empty_headers headers $(TARGET)
+all: empty_headers headers $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV) $(TARGET)
 
 # Create empty header placeholders if they don't exist
 empty_headers:
@@ -65,13 +73,18 @@ endif
 		fi; \
 	)
 
+# shaders
+$(SHADER_BUILD_DIR)/%.spv: $(SHADER_SRC_DIR)/%.glsl
+	$(Q)mkdir -p $(SHADER_BUILD_DIR)
+	$(Q)$(GLSLC) -V $< -o $@
+
 # Compile unity build main.c
 $(UNITY_O): headers
 	$(Q)mkdir -p $(dir $@)
 	$(Q)$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
 
 # Link final binary
-$(TARGET): $(UNITY_O)
+$(TARGET): $(UNITY_O) $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV)
 	$(Q)$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Generate headers from all .c files using cproto

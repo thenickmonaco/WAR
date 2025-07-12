@@ -14,4 +14,5 @@ void wayland_init(void);
 void wayland_registry_bind(int fd, uint8_t *buffer, size_t offset, uint16_t size, uint16_t new_id);
 int wayland_make_fd(void);
 int main(void);
+void record_and_submit_command_buffer(VulkanContext *ctx, uint32_t width, uint32_t height);
 #endif /* VIMDAW_MAIN_H */

@@ -43,6 +43,10 @@ typedef struct {
     VkFramebuffer frame_buffer;
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
+    VkViewport viewport;
+    VkRect2D scissor;
+    VkImageView image_view;
+
 } VulkanContext;
 
 #endif // WAR_DATA_H

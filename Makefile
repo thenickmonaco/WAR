@@ -34,14 +34,6 @@ endif
 CFLAGS += -DWL_SHM=$(WL_SHM)
 CFLAGS += -DDMABUF=$(DMABUF)
 
-GLSLC := glslangValidator
-SHADER_SRC_DIR := src/shaders
-SHADER_BUILD_DIR := $(BUILD_DIR)/shaders
-VERT_SHADER_SRC := $(SHADER_SRC_DIR)/vertex.glsl
-FRAG_SHADER_SRC := $(SHADER_SRC_DIR)/fragment.glsl
-VERT_SHADER_SPV := $(SHADER_BUILD_DIR)/vertex.spv
-FRAG_SHADER_SPV := $(SHADER_BUILD_DIR)/fragment.spv
-
 LDFLAGS := -lvulkan
 
 SRC_DIR := src
@@ -49,6 +41,14 @@ BUILD_DIR := build
 PRE_DIR := $(BUILD_DIR)/pre
 INCLUDE_DIR := include
 TARGET := WAR
+
+GLSLC := glslangValidator
+SHADER_SRC_DIR := src/shaders
+SHADER_BUILD_DIR := $(BUILD_DIR)/shaders
+VERT_SHADER_SRC := $(SHADER_SRC_DIR)/vertex.glsl
+FRAG_SHADER_SRC := $(SHADER_SRC_DIR)/fragment.glsl
+VERT_SHADER_SPV := $(SHADER_BUILD_DIR)/vertex.spv
+FRAG_SHADER_SPV := $(SHADER_BUILD_DIR)/fragment.spv
 
 SRC := $(shell find $(SRC_DIR) -type f -name '*.c')
 HDRS := $(patsubst $(SRC_DIR)/%.c,$(INCLUDE_DIR)/%.h,$(SRC))
@@ -73,10 +73,14 @@ endif
 		fi; \
 	)
 
-# shaders
-$(SHADER_BUILD_DIR)/%.spv: $(SHADER_SRC_DIR)/%.glsl
-	$(Q)mkdir -p $(SHADER_BUILD_DIR)
-	$(Q)$(GLSLC) -V $< -o $@
+$(SHADER_BUILD_DIR):
+	mkdir -p $(SHADER_BUILD_DIR)
+
+$(VERT_SHADER_SPV): $(VERT_SHADER_SRC) | $(SHADER_BUILD_DIR)
+	$(Q)$(GLSLC) -V -S vert $< -o $@
+
+$(FRAG_SHADER_SPV): $(FRAG_SHADER_SRC) | $(SHADER_BUILD_DIR)
+	$(Q)$(GLSLC) -V -S frag $< -o $@
 
 # Compile unity build main.c
 $(UNITY_O): headers
@@ -84,8 +88,9 @@ $(UNITY_O): headers
 	$(Q)$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
 
 # Link final binary
+# NOTE: .spv shader files are dependencies but NOT passed to linker
 $(TARGET): $(UNITY_O) $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV)
-	$(Q)$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(Q)$(CC) $(CFLAGS) -o $@ $(UNITY_O) $(LDFLAGS)
 
 # Generate headers from all .c files using cproto
 headers:

@@ -69,8 +69,8 @@ void wayland_init() {
         ARGB8888 = 0,
     };
 #if DMABUF
-    VulkanContext vulkan_context = vulkan_make_dmabuf_fd(width, height);
-    assert(vulkan_context.dmabuf_fd >= 0);
+    //VulkanContext vulkan_context = vulkan_make_dmabuf_fd(width, height);
+    //assert(vulkan_context.dmabuf_fd >= 0);
 #endif
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
@@ -733,7 +733,7 @@ void wayland_init() {
                 cmsg->cmsg_len = CMSG_LEN(sizeof(int));
                 cmsg->cmsg_level = SOL_SOCKET;
                 cmsg->cmsg_type = SCM_RIGHTS;
-                *((int*)CMSG_DATA(cmsg)) = vulkan_context.dmabuf_fd;
+                //*((int*)CMSG_DATA(cmsg)) = vulkan_context.dmabuf_fd;
                 ssize_t dmabuf_sent = sendmsg(fd, &msg, 0);
                 if (dmabuf_sent < 0) perror("sendmsg");
                 assert(dmabuf_sent == 28);

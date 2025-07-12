@@ -19,8 +19,10 @@
 //=============================================================================
 
 #include "wayland.h"
+#include "data.h"
 #include "debug_macros.h"
 #include "macros.h"
+#include "vulkan.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -53,9 +55,8 @@ enum {
     max_opcodes = 128,
 };
 
-int wayland_init() {
+void wayland_init() {
     // signal(SIGPIPE, SIG_IGN);
-
     header("wayland init");
 
     int fd = wayland_make_fd();
@@ -68,20 +69,20 @@ int wayland_init() {
         ARGB8888 = 0,
     };
 #if DMABUF
-    int dmabuf_fd = wayland_make_dmabuf_fd(width, height);
+    VulkanContext vulkan_context = vulkan_make_dmabuf_fd(width, height);
 #endif
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
 
     if (shm_fd < 0) {
         call_carmack("error: memfd_create");
-        return -1;
+        return;
     }
 
     if (syscall(SYS_ftruncate, shm_fd, stride * height) < 0) {
         call_carmack("error: ftruncate");
         close(shm_fd);
-        return -1;
+        return;
     }
 #endif
 
@@ -731,7 +732,7 @@ int wayland_init() {
                 cmsg->cmsg_len = CMSG_LEN(sizeof(int));
                 cmsg->cmsg_level = SOL_SOCKET;
                 cmsg->cmsg_type = SCM_RIGHTS;
-                *((int*)CMSG_DATA(cmsg)) = dmabuf_fd;
+                *((int*)CMSG_DATA(cmsg)) = vulkan_context.dmabuf_fd;
                 ssize_t dmabuf_sent = sendmsg(fd, &msg, 0);
                 if (dmabuf_sent < 0) perror("sendmsg");
                 assert(dmabuf_sent == 28);
@@ -1120,176 +1121,7 @@ int wayland_init() {
     }
 
     end("wayland init");
-    return 0;
-}
-
-// COMMENT: return a lot of these variables. Output parameters with function
-// pointers?
-int wayland_make_dmabuf_fd(uint32_t width, uint32_t height) {
-    header("wayland_make_dmabuf_fd");
-
-    VkInstanceCreateInfo instance_info = {
-        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = NULL,
-        .flags = 0,
-        .pApplicationInfo = NULL,
-    };
-
-    VkInstance instance;
-    vkCreateInstance(&instance_info, NULL, &instance);
-
-    enum {
-        max_gpu_count = 10,
-    };
-    uint32_t gpu_count = 0;
-    vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
-    VkPhysicalDevice physical_devices[max_gpu_count];
-    vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
-    assert(gpu_count != 0);
-    VkPhysicalDevice physical_device = physical_devices[0];
-
-    const char* device_extensions[] = {
-        VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
-    };
-
-    uint32_t extension_count = 0;
-    vkEnumerateDeviceExtensionProperties(
-        physical_device, NULL, &extension_count, NULL);
-
-    VkExtensionProperties* available_extensions =
-        malloc(sizeof(VkExtensionProperties) * extension_count);
-    vkEnumerateDeviceExtensionProperties(
-        physical_device, NULL, &extension_count, available_extensions);
-
-    for (uint32_t i = 0; i < extension_count; i++) {
-        call_carmack("  %s", available_extensions[i].extensionName);
-    }
-
-    uint8_t has_external_memory = 0;
-    uint8_t has_external_memory_fd = 0;
-
-    for (uint32_t i = 0; i < extension_count; i++) {
-        if (strcmp(available_extensions[i].extensionName,
-                   VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) == 0) {
-            has_external_memory = 1;
-        }
-        if (strcmp(available_extensions[i].extensionName,
-                   VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME) == 0) {
-            has_external_memory_fd = 1;
-        }
-    }
-
-    assert(has_external_memory && has_external_memory_fd);
-
-    uint32_t queue_family_index = 0;
-
-    float queue_priority = 1.0f;
-    VkDeviceQueueCreateInfo queue_info = {
-        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = queue_family_index,
-        .queueCount = 1,
-        .pQueuePriorities = &queue_priority,
-    };
-    VkDeviceCreateInfo device_info = {
-        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &queue_info,
-        .enabledExtensionCount = 2,
-        .ppEnabledExtensionNames = device_extensions,
-    };
-    VkDevice device;
-    vkCreateDevice(physical_device, &device_info, NULL, &device);
-
-    VkExternalMemoryImageCreateInfo ext_mem_image_info = {
-        .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-        .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-    };
-
-    VkImageCreateInfo image_create_info = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .pNext = &ext_mem_image_info,
-        .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .extent = {width, height, 1},
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    };
-
-    VkImage image;
-    VkResult res = vkCreateImage(device, &image_create_info, NULL, &image);
-    assert(res == VK_SUCCESS);
-
-    VkMemoryRequirements mem_reqs;
-    vkGetImageMemoryRequirements(device, image, &mem_reqs);
-
-    VkExportMemoryAllocateInfo export_alloc_info = {
-        .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-        .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-    };
-
-    VkMemoryAllocateInfo mem_alloc_info = {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext = &export_alloc_info,
-        .allocationSize = mem_reqs.size,
-        .memoryTypeIndex = find_memory_type(mem_reqs.memoryTypeBits,
-                                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                            physical_device),
-    };
-
-    VkDeviceMemory memory;
-    res = vkAllocateMemory(device, &mem_alloc_info, NULL, &memory);
-    assert(res == VK_SUCCESS);
-
-    vkBindImageMemory(device, image, memory, 0);
-
-    VkMemoryGetFdInfoKHR get_fd_info = {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
-        .memory = memory,
-        .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-    };
-
-    int dmabuf_fd;
-    PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR =
-        (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr(device, "vkGetMemoryFdKHR");
-
-    res = vkGetMemoryFdKHR(device, &get_fd_info, &dmabuf_fd);
-    assert(res == VK_SUCCESS);
-    assert(dmabuf_fd > 0);
-
-    free(available_extensions);
-
-    end("wayland_make_dmabuf_fd");
-    return dmabuf_fd;
-}
-
-uint32_t find_memory_type(uint32_t type_filter,
-                          VkMemoryPropertyFlags properties,
-                          VkPhysicalDevice physical_device) {
-    VkPhysicalDeviceMemoryProperties mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_properties);
-
-    call_carmack("Looking for memory type with properties: 0x%x", properties);
-    call_carmack("Available memory types:");
-
-    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
-        VkMemoryPropertyFlags flags =
-            mem_properties.memoryTypes[i].propertyFlags;
-        call_carmack("  Type %u: flags=0x%x", i, flags);
-
-        if ((type_filter & (1 << i)) && (flags & properties) == properties) {
-            call_carmack("-> Selected memory type %u", i);
-            return i;
-        }
-    }
-
-    call_carmack("Failed to find suitable memory type!");
-    exit(EXIT_FAILURE);
+    return;
 }
 
 void wayland_registry_bind(

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/debug_macros.h
+// include/debug_macros.h
 //=============================================================================
 
 #ifndef WAR_DEBUG_MACROS_H

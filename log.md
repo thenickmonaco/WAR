@@ -1,4 +1,4 @@
-# WAR [src/main.c:30:main, 00:26:40, 07-12-2025]
+# WAR [src/main.c:30:main, 00:32:28, 07-12-2025]
 ## wayland init [src/wayland.c:60:wayland_init]
 ## make fd [src/wayland.c:1151:wayland_make_fd]
 - xdg_prefix_size: 17
@@ -426,12 +426,12 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 1C 00 00 00 03 00 1C 00 1D 00 00 00 80 07 00 00 38 04 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 1C 00 00 00 00 00 08 00
-- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 FA 4E 10 00
-- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 FA 4E 10 00
+- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 00 51 10 00
+- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 00 51 10 00
 - xdg_toplevel_wm_capabilities event ( 20 bytes): 0C 00 00 00 03 00 14 00 08 00 00 00 01 00 00 00 02 00 00 00
 - xdg_toplevel_configure event ( 20 bytes): 0C 00 00 00 00 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 FB 4E 10 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 FB 4E 10 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 01 51 10 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 01 51 10 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -460,16 +460,16 @@
 - wl_surface_preferred_buffer_scale event ( 12 bytes): 06 00 00 00 02 00 0C 00 02 00 00 00
 - ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 05 00 00 FF
 - xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 FC 4E 10 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 FC 4E 10 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 02 51 10 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 02 51 10 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 21 00 00 00
 - wl_keyboard_keymap event ( 16 bytes): 1F 00 00 00 00 00 10 00 01 00 00 00 6F 00 01 00
 - wl_keyboard_repeat_info event ( 16 bytes): 1F 00 00 00 05 00 10 00 19 00 00 00 96 00 00 00
-- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 01 4F 10 00 06 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 02 4F 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 07 51 10 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 08 51 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_enter event ( 12 bytes): 06 00 00 00 00 00 0C 00 1B 00 00 00
 - wl_surface_preferred_buffer_transform event ( 12 bytes): 06 00 00 00 03 00 0C 00 00 00 00 00
 - zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
@@ -485,17 +485,17 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 22 00 00 00 03 00 1C 00 23 00 00 00 80 07 00 00 38 04 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 22 00 00 00 00 00 08 00
-- wl_callback::done event ( 12 bytes): 1E 00 00 00 00 00 0C 00 77 CF F4 17
+- wl_callback::done event ( 12 bytes): 1E 00 00 00 00 00 0C 00 00 1C FA 17
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 1E 00 00 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
-- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 03 4F 10 00 06 00 00 00
+- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 0D 51 10 00 06 00 00 00
 - xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 04 4F 10 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 04 4F 10 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 0E 51 10 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 0E 51 10 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 24 00 00 00
 - wl_buffer_release event (  8 bytes): 1D 00 00 00 00 00 08 00
-- wl_callback::done event ( 12 bytes): 21 00 00 00 00 00 0C 00 37 D2 F4 17
+- wl_callback::done event ( 12 bytes): 21 00 00 00 00 00 0C 00 F4 1E FA 17
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 21 00 00 00

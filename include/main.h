@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
+#include "data.h"
 #ifndef VIMDAW_MAIN_H
 #define VIMDAW_MAIN_H
 /* build/pre/main.i */

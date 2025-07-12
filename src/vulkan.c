@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// vulkan
+// src/vulkan.c
 //=============================================================================
 
 #include "vulkan.h"
@@ -49,8 +49,6 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-// COMMENT: return a lot of these variables. Output parameters with function
-// pointers?
 VulkanContext vulkan_make_dmabuf_fd(uint32_t width, uint32_t height) {
     header("vulkan_make_dmabuf_fd");
 
@@ -153,7 +151,6 @@ VulkanContext vulkan_make_dmabuf_fd(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
     };
-
     VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext = &ext_mem_image_info,
@@ -164,23 +161,21 @@ VulkanContext vulkan_make_dmabuf_fd(uint32_t width, uint32_t height) {
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-
     VkImage image;
     res = vkCreateImage(device, &image_create_info, NULL, &image);
     assert(res == VK_SUCCESS);
 
     VkMemoryRequirements mem_reqs;
     vkGetImageMemoryRequirements(device, image, &mem_reqs);
-
     VkExportMemoryAllocateInfo export_alloc_info = {
         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
     };
-
     VkMemoryAllocateInfo mem_alloc_info = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = &export_alloc_info,
@@ -194,7 +189,6 @@ VulkanContext vulkan_make_dmabuf_fd(uint32_t width, uint32_t height) {
     VkDeviceMemory memory;
     res = vkAllocateMemory(device, &mem_alloc_info, NULL, &memory);
     assert(res == VK_SUCCESS);
-
     vkBindImageMemory(device, image, memory, 0);
 
     VkMemoryGetFdInfoKHR get_fd_info = {
@@ -202,14 +196,171 @@ VulkanContext vulkan_make_dmabuf_fd(uint32_t width, uint32_t height) {
         .memory = memory,
         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
     };
-
     int dmabuf_fd;
     PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR =
         (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr(device, "vkGetMemoryFdKHR");
-
     res = vkGetMemoryFdKHR(device, &get_fd_info, &dmabuf_fd);
     assert(res == VK_SUCCESS);
     assert(dmabuf_fd > 0);
+
+    VkAttachmentDescription color_attachment = {
+        .flags = 0,
+        .format = VK_FORMAT_A8B8G8R8_UNORM_PACK32, // Same format as your image
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout =
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, // or
+                                             // VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                             // depending on usage
+    };
+    VkAttachmentReference color_attachment_ref = {
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &color_attachment_ref,
+    };
+    VkRenderPassCreateInfo render_pass_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &color_attachment,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+    };
+    VkRenderPass render_pass;
+    res = vkCreateRenderPass(device, &render_pass_info, NULL, &render_pass);
+    assert(res == VK_SUCCESS);
+
+    VkImageViewCreateInfo image_view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_A8B8G8R8_UNORM_PACK32,
+        .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+    };
+    VkImageView image_view;
+    res = vkCreateImageView(device, &image_view_info, NULL, &image_view);
+    assert(res == VK_SUCCESS);
+    VkFramebufferCreateInfo framebuffer_info = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = render_pass,
+        .attachmentCount = 1,
+        .pAttachments = &image_view,
+        .width = width,
+        .height = height,
+        .layers = 1,
+    };
+    VkFramebuffer framebuffer;
+    res = vkCreateFramebuffer(device, &framebuffer_info, NULL, &framebuffer);
+    assert(res == VK_SUCCESS);
+
+    // COMMENT TODO
+    //VkShaderModuleCreateInfo shader_info = {
+    //    .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    //    .codeSize = ..., // size of SPIR-V file
+    //    .pCode = ...,    // pointer to SPIR-V data
+    //};
+    //VkShaderModule vert_shader, frag_shader;
+    //vkCreateShaderModule(device, &shader_info, NULL, &vert_shader);
+    //// repeat for frag_shader
+
+    //VkPipelineLayoutCreateInfo layout_info = {
+    //    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    //};
+    //VkPipelineLayout pipeline_layout;
+    //vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline_layout);
+
+    //VkVertexInputBindingDescription binding = {
+    //    .binding = 0,
+    //    .stride = sizeof(float) * 4, // pos + uv
+    //    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+    //};
+    //VkVertexInputAttributeDescription attrs[] = {
+    //    {.location = 0,
+    //     .binding = 0,
+    //     .format = VK_FORMAT_R32G32_SFLOAT,
+    //     .offset = 0},
+    //    {.location = 1,
+    //     .binding = 0,
+    //     .format = VK_FORMAT_R32G32_SFLOAT,
+    //     .offset = sizeof(float) * 2},
+    //};
+    //VkPipelineVertexInputStateCreateInfo vertex_input = {
+    //    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    //    .vertexBindingDescriptionCount = 1,
+    //    .pVertexBindingDescriptions = &binding,
+    //    .vertexAttributeDescriptionCount = 2,
+    //    .pVertexAttributeDescriptions = attrs,
+    //};
+
+    //VkGraphicsPipelineCreateInfo pipeline_info = {
+    //    .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+    //    .stageCount = 2,
+    //    .pStages = (VkPipelineShaderStageCreateInfo[]){...},
+    //    .pVertexInputState = &vertex_input,
+    //    .pInputAssemblyState =
+    //        &(VkPipelineInputAssemblyStateCreateInfo){
+    //            .sType =
+    //                VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+    //            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    //        },
+    //    .pViewportState =
+    //        &(VkPipelineViewportStateCreateInfo){
+    //            .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+    //            .viewportCount = 1,
+    //            .scissorCount = 1,
+    //        },
+    //    .pRasterizationState =
+    //        &(VkPipelineRasterizationStateCreateInfo){
+    //            .sType =
+    //                VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+    //            .polygonMode = VK_POLYGON_MODE_FILL,
+    //            .cullMode = VK_CULL_MODE_NONE,
+    //            .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+    //            .lineWidth = 1.0f,
+    //        },
+    //    .pMultisampleState =
+    //        &(VkPipelineMultisampleStateCreateInfo){
+    //            .sType =
+    //                VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+    //            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    //        },
+    //    .pColorBlendState =
+    //        &(VkPipelineColorBlendStateCreateInfo){
+    //            .sType =
+    //                VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+    //            .attachmentCount = 1,
+    //            .pAttachments =
+    //                (VkPipelineColorBlendAttachmentState[]){
+    //                    {
+    //                        .blendEnable = VK_FALSE,
+    //                        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+    //                                          VK_COLOR_COMPONENT_G_BIT |
+    //                                          VK_COLOR_COMPONENT_B_BIT |
+    //                                          VK_COLOR_COMPONENT_A_BIT,
+    //                    },
+    //                },
+    //        },
+    //    .layout = pipeline_layout,
+    //    .renderPass = render_pass,
+    //    .subpass = 0,
+    //};
+    //VkPipeline pipeline;
+    //vkCreateGraphicsPipelines(
+    //    device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
 
     free(available_extensions);
 
@@ -223,7 +374,9 @@ VulkanContext vulkan_make_dmabuf_fd(uint32_t width, uint32_t height) {
                            .image = image,
                            .memory = memory,
                            .cmd_pool = cmd_pool,
-                           .cmd_buffer = cmd_buffer};
+                           .cmd_buffer = cmd_buffer,
+                           .pipeline = NULL, // COMMENT: unnullify
+                           .pipeline_layout = NULL};
 }
 
 uint32_t vulkan_find_memory_type(uint32_t type_filter,

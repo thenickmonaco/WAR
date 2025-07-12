@@ -1,4 +1,4 @@
-# WAR [src/main.c:30:main, 23:47:05, 07-11-2025]
+# WAR [src/main.c:30:main, 00:26:40, 07-12-2025]
 ## wayland init [src/wayland.c:60:wayland_init]
 ## make fd [src/wayland.c:1151:wayland_make_fd]
 - xdg_prefix_size: 17
@@ -9,7 +9,7 @@
 - path_len: 24
 - addr_len: 26
 ## END make fd [src/wayland.c:1237:wayland_make_fd]
-## vulkan_make_dmabuf_fd [src/vulkan.c:55:vulkan_make_dmabuf_fd]
+## vulkan_make_dmabuf_fd [src/vulkan.c:53:vulkan_make_dmabuf_fd]
 -   VK_KHR_8bit_storage
 -   VK_KHR_16bit_storage
 -   VK_KHR_bind_memory2
@@ -188,7 +188,7 @@
 - Available memory types:
 -   Type 0: flags=0x1
 - -> Selected memory type 0
-## END vulkan_make_dmabuf_fd [src/vulkan.c:216:vulkan_make_dmabuf_fd]
+## END vulkan_make_dmabuf_fd [src/vulkan.c:367:vulkan_make_dmabuf_fd]
 - written size: 12
 - written       ( 12 bytes): 01 00 00 00 01 00 0C 00 02 00 00 00
 - global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 01 00 00 00 07 00 00 00 77 6C 5F 73 68 6D 00 00 02 00 00 00
@@ -426,12 +426,12 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 1C 00 00 00 03 00 1C 00 1D 00 00 00 80 07 00 00 38 04 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 1C 00 00 00 00 00 08 00
-- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 A0 1D 10 00
-- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 A0 1D 10 00
+- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 FA 4E 10 00
+- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 FA 4E 10 00
 - xdg_toplevel_wm_capabilities event ( 20 bytes): 0C 00 00 00 03 00 14 00 08 00 00 00 01 00 00 00 02 00 00 00
 - xdg_toplevel_configure event ( 20 bytes): 0C 00 00 00 00 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 A1 1D 10 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 A1 1D 10 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 FB 4E 10 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 FB 4E 10 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -460,20 +460,18 @@
 - wl_surface_preferred_buffer_scale event ( 12 bytes): 06 00 00 00 02 00 0C 00 02 00 00 00
 - ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 05 00 00 FF
 - xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 A2 1D 10 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 A2 1D 10 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 FC 4E 10 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 FC 4E 10 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 21 00 00 00
 - wl_keyboard_keymap event ( 16 bytes): 1F 00 00 00 00 00 10 00 01 00 00 00 6F 00 01 00
 - wl_keyboard_repeat_info event ( 16 bytes): 1F 00 00 00 05 00 10 00 19 00 00 00 96 00 00 00
-- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 A7 1D 10 00 06 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 A8 1D 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 01 4F 10 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 02 4F 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_enter event ( 12 bytes): 06 00 00 00 00 00 0C 00 1B 00 00 00
 - wl_surface_preferred_buffer_transform event ( 12 bytes): 06 00 00 00 03 00 0C 00 00 00 00 00
-- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 AA 1D 10 00 06 00 00 00 97 59 00 00 42 FF 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
 - zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
 - zwp_linux_dmabuf_feedback_v1_format_table event ( 12 bytes): 07 00 00 00 01 00 0C 00 E0 0E 00 00
 - zwp_linux_dmabuf_feedback_v1_tranche_target_device event ( 20 bytes): 07 00 00 00 04 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
@@ -487,43 +485,17 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 22 00 00 00 03 00 1C 00 23 00 00 00 80 07 00 00 38 04 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 22 00 00 00 00 00 08 00
-- wl_callback::done event ( 12 bytes): 1E 00 00 00 00 00 0C 00 2B 91 D0 17
+- wl_callback::done event ( 12 bytes): 1E 00 00 00 00 00 0C 00 77 CF F4 17
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 1E 00 00 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 51 96 D0 17 0F 52 00 00 EF 00 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 56 96 D0 17 5D 4B 00 00 EF 00 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5B 96 D0 17 82 45 00 00 EF 00 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 60 96 D0 17 D0 3E 00 00 EF 00 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 64 96 D0 17 48 37 00 00 EF 00 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 68 96 D0 17 C0 2F 00 00 EF 00 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6C 96 D0 17 38 28 00 00 EF 00 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 72 96 D0 17 DA 1F 00 00 C5 01 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 76 96 D0 17 52 18 00 00 9B 02 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7B 96 D0 17 F4 0F 00 00 71 03 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7F 96 D0 17 96 07 00 00 1E 05 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 83 96 D0 17 0E 00 00 00 F4 05 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 AD 1D 10 00 06 00 00 00
-- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 B2 1D 10 00 06 00 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 03 4F 10 00 06 00 00 00
 - xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 AE 1D 10 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 AE 1D 10 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 04 4F 10 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 04 4F 10 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 24 00 00 00
 - wl_buffer_release event (  8 bytes): 1D 00 00 00 00 00 08 00
-- wl_callback::done event ( 12 bytes): 21 00 00 00 00 00 0C 00 8F 96 D0 17
+- wl_callback::done event ( 12 bytes): 21 00 00 00 00 00 0C 00 37 D2 F4 17
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 21 00 00 00

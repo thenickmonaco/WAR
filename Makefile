@@ -111,6 +111,7 @@ prepend_std_headers:
 	echo "#include <stdio.h>" >> "$${tmpfile}"; \
 	echo "#include <vulkan/vulkan.h>" >> "$${tmpfile}"; \
 	echo "#include <vulkan/vulkan_core.h>" >> "$${tmpfile}"; \
+	echo "#include \"data.h\"" >> "$${tmpfile}"; \
 	cat "$${header}" >> "$${tmpfile}"; \
 	mv "$${tmpfile}" "$${header}"
 

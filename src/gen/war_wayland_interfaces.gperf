@@ -1,3 +1,5 @@
+//-----------------------------------------------------------------------------
+//
 // WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
 // 
@@ -13,6 +15,8 @@
 // 
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+//
+//-----------------------------------------------------------------------------
 
 //=============================================================================
 // src/gen/war_wayland_interfaces.gperf

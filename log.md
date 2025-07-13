@@ -1,4 +1,4 @@
-# main [src/war_main.c:38:main, 19:17:06, 07-13-2025]
+# main [src/war_main.c:38:main, 19:35:38, 07-13-2025]
 ## war_vulkan_init [src/war_vulkan.c:57:war_vulkan_init]
 - Physical Device Name: Intel(R) Graphics (RPL-S)
 - Vendor ID: 0x8086
@@ -186,6 +186,6 @@
 ## END war_drm_init [src/war_drm.c:100:war_drm_init]
 ## war_drm_present_dmabuf [src/war_drm.c:110:war_drm_present_dmabuf]
 - PRIME support: 0x3
-- ✅ Framebuffer created: fb_id=279
+- ✅ Framebuffer created: fb_id=280
 No space left on device
-# END main [src/war_main.c:130:main, 19:17:06, 07-13-2025]
+# END main [src/war_main.c:130:main, 19:35:38, 07-13-2025]

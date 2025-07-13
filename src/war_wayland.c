@@ -15,14 +15,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/wayland.c
+// src/war_wayland.c
 //=============================================================================
 
-#include "wayland.h"
-#include "data.h"
-#include "debug_macros.h"
-#include "macros.h"
-#include "vulkan.h"
+#include "h/war_wayland.h"
+#include "h/war_data.h"
+#include "h/war_debug_macros.h"
+#include "h/war_macros.h"
+#include "h/war_vulkan.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -55,11 +55,11 @@ enum {
     max_opcodes = 128,
 };
 
-void wayland_init() {
+void war_wayland_init() {
     // signal(SIGPIPE, SIG_IGN);
-    header("wayland_init");
+    header("war_wayland_init");
 
-    int fd = wayland_make_fd();
+    int fd = war_wayland_make_fd();
     assert(fd >= 0);
 
     enum {
@@ -70,7 +70,7 @@ void wayland_init() {
     };
 
 #if DMABUF
-    VulkanContext vulkan_context = vulkan_init(width, height);
+    WAR_VulkanContext vulkan_context = war_vulkan_init(width, height);
     assert(vulkan_context.dmabuf_fd >= 0);
 #endif
 
@@ -204,19 +204,19 @@ void wayland_init() {
                                     16; // COMMENT OPTIMIZE: perfect hash
                 if (strcmp(iname, "wl_shm") == 0) {
 #if WL_SHM
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_shm_id = new_id;
                     obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
                     new_id++;
 #endif
                 } else if (strcmp(iname, "wl_compositor") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_compositor_id = new_id;
                     obj_op[obj_op_index(wl_compositor_id, 0)] =
                         &&wl_compositor_jump;
                     new_id++;
                 } else if (strcmp(iname, "wl_output") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_output_id = new_id;
                     obj_op[obj_op_index(wl_output_id, 0)] =
                         &&wl_output_geometry;
@@ -228,7 +228,7 @@ void wayland_init() {
                         &&wl_output_description;
                     new_id++;
                 } else if (strcmp(iname, "wl_seat") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wl_seat_id = new_id;
                     obj_op[obj_op_index(wl_seat_id, 0)] =
                         &&wl_seat_capabilities;
@@ -236,7 +236,7 @@ void wayland_init() {
                     new_id++;
                 } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
 #if DMABUF
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_linux_dmabuf_v1_id = new_id;
                     obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
                         &&zwp_linux_dmabuf_v1_format;
@@ -245,47 +245,47 @@ void wayland_init() {
                     new_id++;
 #endif
                 } else if (strcmp(iname, "xdg_wm_base") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     xdg_wm_base_id = new_id;
                     obj_op[obj_op_index(xdg_wm_base_id, 0)] =
                         &&xdg_wm_base_ping;
                     new_id++;
                 } else if (strcmp(iname, "wp_linux_drm_syncobj_manager_v1") ==
                            0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wp_linux_drm_syncobj_manager_v1_id = new_id;
                     obj_op[obj_op_index(wp_linux_drm_syncobj_manager_v1_id,
                                         0)] =
                         &&wp_linux_drm_syncobj_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_idle_inhibit_manager_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_idle_inhibit_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwp_idle_inhibit_manager_v1_id, 0)] =
                         &&zwp_idle_inhibit_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zxdg_decoration_manager_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zxdg_decoration_manager_v1_id = new_id;
                     obj_op[obj_op_index(zxdg_decoration_manager_v1_id, 0)] =
                         &&zxdg_decoration_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_relative_pointer_manager_v1") ==
                            0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_relative_pointer_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwp_relative_pointer_manager_v1_id,
                                         0)] =
                         &&zwp_relative_pointer_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_constraints_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_pointer_constraints_v1_id = new_id;
                     obj_op[obj_op_index(zwp_pointer_constraints_v1_id, 0)] =
                         &&zwp_pointer_constraints_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_output_manager_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwlr_output_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwlr_output_manager_v1_id, 0)] =
                         &&zwlr_output_manager_v1_head;
@@ -293,64 +293,64 @@ void wayland_init() {
                         &&zwlr_output_manager_v1_done;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_data_control_manager_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwlr_data_control_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwlr_data_control_manager_v1_id, 0)] =
                         &&zwlr_data_control_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_virtual_keyboard_manager_v1") ==
                            0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_virtual_keyboard_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwp_virtual_keyboard_manager_v1_id,
                                         0)] =
                         &&zwp_virtual_keyboard_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_viewporter") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wp_viewporter_id = new_id;
                     obj_op[obj_op_index(wp_viewporter_id, 0)] =
                         &&wp_viewporter_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_fractional_scale_manager_v1") ==
                            0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wp_fractional_scale_manager_v1_id = new_id;
                     obj_op[obj_op_index(wp_fractional_scale_manager_v1_id, 0)] =
                         &&wp_fractional_scale_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_gestures_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwp_pointer_gestures_v1_id = new_id;
                     obj_op[obj_op_index(zwp_pointer_gestures_v1_id, 0)] =
                         &&zwp_pointer_gestures_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "xdg_activation_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     xdg_activation_v1_id = new_id;
                     obj_op[obj_op_index(xdg_activation_v1_id, 0)] =
                         &&xdg_activation_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_presentation") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wp_presentation_id = new_id;
                     obj_op[obj_op_index(wp_presentation_id, 0)] =
                         &&wp_presentation_clock_id;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     zwlr_layer_shell_v1_id = new_id;
                     obj_op[obj_op_index(zwlr_layer_shell_v1_id, 0)] =
                         &&zwlr_layer_shell_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "ext_foreign_toplevel_list_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     ext_foreign_toplevel_list_v1_id = new_id;
                     obj_op[obj_op_index(ext_foreign_toplevel_list_v1_id, 0)] =
                         &&ext_foreign_toplevel_list_v1_toplevel;
                     new_id++;
                 } else if (strcmp(iname, "wp_content_type_manager_v1") == 0) {
-                    wayland_registry_bind(fd, buffer, offset, size, new_id);
+                    war_wayland_registry_bind(fd, buffer, offset, size, new_id);
                     wp_content_type_manager_v1_id = new_id;
                     obj_op[obj_op_index(wp_content_type_manager_v1_id, 0)] =
                         &&wp_content_type_manager_v1_jump;
@@ -1216,13 +1216,12 @@ void wayland_init() {
         }
     }
 
-    end("wayland_init");
-    return;
+    end("war_wayland_init");
 }
 
-void wayland_registry_bind(
+void war_wayland_registry_bind(
     int fd, uint8_t* buffer, size_t offset, uint16_t size, uint16_t new_id) {
-    header("wayland_registry_bind");
+    header("war_wayland_registry_bind");
 
     uint8_t bind[128];
     assert(size + 4 <= 128);
@@ -1240,11 +1239,11 @@ void wayland_registry_bind(
     ssize_t bind_written = write(fd, bind, size + 4);
     assert(bind_written == size + 4);
 
-    end("wayland_registry_bind");
+    end("war_wayland_registry_bind");
 }
 
-int wayland_make_fd() {
-    header("wayland_make_fd");
+int war_wayland_make_fd(void) {
+    header("war_wayland_make_fd");
 
     int fd = syscall(SYS_socket, AF_UNIX, SOCK_STREAM, 0);
     assert(fd >= 0);
@@ -1330,6 +1329,6 @@ int wayland_make_fd() {
     int ret = connect(fd, (struct sockaddr*)&addr, addr_len);
     assert(ret >= 0);
 
-    end("wayland_make_fd");
+    end("war_wayland_make_fd");
     return fd;
 }

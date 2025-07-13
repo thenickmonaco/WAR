@@ -21,57 +21,39 @@ else
 endif
 
 ifeq ($(DEBUG), 1)
-	# Debug build: asserts, debug symbols, and no DEBUG preprocessor
-    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -g -march=native -std=c99 -MMD -I src -I include
+	CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -g -march=native -std=c99 -MMD -I src -I include -I /usr/include/libdrm
 else ifeq ($(DEBUG), 2)
-	# Debug verbose build: asserts, debug symbols and DEBUG preprocessor
-    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O0 -g -march=native -std=c99 -MMD -DDEBUG -I src -I include
+	CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O0 -g -march=native -std=c99 -MMD -DDEBUG -I src -I include -I /usr/include/libdrm
 else
-	# Release build: no asserts, no debug symbols
-    CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -march=native -std=c99 -MMD -DNDEBUG -I src -I include
+	CFLAGS := -D_GNU_SOURCE -Wall -Wextra -O3 -march=native -std=c99 -MMD -DNDEBUG -I src -I include -I /usr/include/libdrm
 endif
 
 CFLAGS += -DWL_SHM=$(WL_SHM)
 CFLAGS += -DDMABUF=$(DMABUF)
 
-LDFLAGS := -lvulkan
+LDFLAGS := -lvulkan -ldrm
 
 SRC_DIR := src
 BUILD_DIR := build
-PRE_DIR := $(BUILD_DIR)/pre
-INCLUDE_DIR := include
 TARGET := WAR
 
 GLSLC := glslangValidator
 SHADER_SRC_DIR := src/shaders
 SHADER_BUILD_DIR := $(BUILD_DIR)/shaders
-VERT_SHADER_SRC := $(SHADER_SRC_DIR)/vertex.glsl
-FRAG_SHADER_SRC := $(SHADER_SRC_DIR)/fragment.glsl
-VERT_SHADER_SPV := $(SHADER_BUILD_DIR)/vertex.spv
-FRAG_SHADER_SPV := $(SHADER_BUILD_DIR)/fragment.spv
+VERT_SHADER_SRC := $(SHADER_SRC_DIR)/war_vertex.glsl
+FRAG_SHADER_SRC := $(SHADER_SRC_DIR)/war_fragment.glsl
+VERT_SHADER_SPV := $(SHADER_BUILD_DIR)/war_vertex.spv
+FRAG_SHADER_SPV := $(SHADER_BUILD_DIR)/war_fragment.spv
 
 SRC := $(shell find $(SRC_DIR) -type f -name '*.c')
-HDRS := $(patsubst $(SRC_DIR)/%.c,$(INCLUDE_DIR)/%.h,$(SRC))
 
-UNITY_C := $(SRC_DIR)/main.c
-UNITY_O := $(BUILD_DIR)/main.o
+UNITY_C := $(SRC_DIR)/war_main.c
+UNITY_O := $(BUILD_DIR)/war_main.o
 DEP := $(UNITY_O:.o=.d)
 
-.PHONY: all headers clean guard empty_headers gcc_check
+.PHONY: all clean gcc_check
 
-all: empty_headers headers $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV) $(TARGET)
-
-# Create empty header placeholders if they don't exist
-empty_headers:
-ifeq ($(VERBOSE),1)
-	$(Q)echo "Ensuring header placeholders exist..."
-endif
-	$(Q)$(foreach hdr,$(HDRS), \
-		if [ ! -f $(hdr) ]; then \
-			mkdir -p $$(dirname $(hdr)); \
-			echo "/* Placeholder for $${hdr} */" > $(hdr); \
-		fi; \
-	)
+all: $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV) $(TARGET)
 
 $(SHADER_BUILD_DIR):
 	mkdir -p $(SHADER_BUILD_DIR)
@@ -82,62 +64,16 @@ $(VERT_SHADER_SPV): $(VERT_SHADER_SRC) | $(SHADER_BUILD_DIR)
 $(FRAG_SHADER_SPV): $(FRAG_SHADER_SRC) | $(SHADER_BUILD_DIR)
 	$(Q)$(GLSLC) -V -S frag $< -o $@
 
-# Compile unity build main.c
-$(UNITY_O): headers
+$(UNITY_O): $(UNITY_C)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
 
-# Link final binary
-# NOTE: .spv shader files are dependencies but NOT passed to linker
 $(TARGET): $(UNITY_O) $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV)
 	$(Q)$(CC) $(CFLAGS) -o $@ $(UNITY_O) $(LDFLAGS)
 
-# Generate headers from all .c files using cproto
-headers:
-ifeq ($(VERBOSE),1)
-	$(Q)echo "Generating headers in $(INCLUDE_DIR)..."
-endif
-	$(Q)$(foreach f,$(SRC), \
-		mkdir -p $(dir $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h))); \
-		mkdir -p $(dir $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f))); \
-		$(CC) -E -w $(f) -I $(SRC_DIR) -I $(INCLUDE_DIR) -o $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)) 2>/dev/null; \
-		cproto -a $(patsubst $(SRC_DIR)/%,$(PRE_DIR)/%,$(f:.c=.i)) > $(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)) 2>/dev/null; \
-		$(MAKE) guard HEADER=$(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)) VERBOSE=$(VERBOSE); \
-		$(MAKE) prepend_std_headers HEADER=$(INCLUDE_DIR)/$(patsubst $(SRC_DIR)/%,%,$(f:.c=.h)); \
-	)
-
-# Add include guards with format VIMDAW_FILENAME_H
-guard:
-	$(Q)header=$(HEADER); \
-	filename=$$(basename "$${header}"); \
-	filename_no_ext=$${filename%.*}; \
-	guard_macro=$$(echo "VIMDAW_$${filename_no_ext}_H" | tr 'a-z' 'A-Z'); \
-	tmpfile="$${header}.tmp"; \
-	echo "#ifndef $${guard_macro}" > "$${tmpfile}"; \
-	echo "#define $${guard_macro}" >> "$${tmpfile}"; \
-	cat "$${header}" >> "$${tmpfile}"; \
-	echo "#endif /* $${guard_macro} */" >> "$${tmpfile}"; \
-	mv "$${tmpfile}" "$${header}"
-
-# Prepend standard includes to generated headers
-prepend_std_headers:
-	$(Q)header=$(HEADER); \
-	tmpfile="$${header}.tmp2"; \
-	echo "#include <stdint.h>" > "$${tmpfile}"; \
-	echo "#include <stddef.h>" >> "$${tmpfile}"; \
-	echo "#include <stdbool.h>" >> "$${tmpfile}"; \
-	echo "#include <stdio.h>" >> "$${tmpfile}"; \
-	echo "#include <vulkan/vulkan.h>" >> "$${tmpfile}"; \
-	echo "#include <vulkan/vulkan_core.h>" >> "$${tmpfile}"; \
-	echo "#include \"data.h\"" >> "$${tmpfile}"; \
-	cat "$${header}" >> "$${tmpfile}"; \
-	mv "$${tmpfile}" "$${header}"
-
-# Clean everything
 clean:
-	$(Q)rm -rf $(BUILD_DIR) $(TARGET) $(HDRS)
+	$(Q)rm -rf $(BUILD_DIR) $(TARGET)
 
-# Syntax check only
 gcc_check:
 	$(Q)$(CC) $(CFLAGS) -fsyntax-only $(SRC)
 

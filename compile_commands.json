@@ -5,24 +5,25 @@
       "-D_GNU_SOURCE",
       "-Wall",
       "-Wextra",
-      "-O0",
-      "-g",
+      "-O3",
       "-march=native",
       "-std=c99",
-      "-DDEBUG",
+      "-DNDEBUG",
       "-I",
       "src",
       "-I",
       "include",
+      "-I",
+      "/usr/include/libdrm",
       "-DWL_SHM=0",
       "-DDMABUF=1",
       "-c",
       "-o",
-      "build/main.o",
-      "src/main.c"
+      "build/war_main.o",
+      "src/war_main.c"
     ],
     "directory": "/home/monaco/Projects/WAR",
-    "file": "/home/monaco/Projects/WAR/src/main.c",
-    "output": "/home/monaco/Projects/WAR/build/main.o"
+    "file": "/home/monaco/Projects/WAR/src/war_main.c",
+    "output": "/home/monaco/Projects/WAR/build/war_main.o"
   }
 ]

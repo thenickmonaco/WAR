@@ -15,23 +15,27 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/main.c
+// src/war_main.c
 //=============================================================================
 
-#include "main.h"
-#include "data.h"
-#include "debug_macros.h"
-#include "macros.h"
-#include "vulkan.c"
-#include "wayland.c"
+#include "war_drm.c"
+#include "war_vulkan.c"
+#include "war_wayland.c"
+
+#include "h/war_data.h"
+#include "h/war_debug_macros.h"
+#include "h/war_macros.h"
+#include "h/war_main.h"
 
 #include <stdint.h>
 
 int main() {
     CALL_CARMACK("main");
 
-    wayland_init();
-    //VulkanContext vulkan_context = vulkan_init(1920, 1080);
+    // wayland_init();
+    WAR_VulkanContext vulkan_context = war_vulkan_init(1920, 1080);
+
+    WAR_DRMContext drm_context = war_drm_init();
 
     END("main");
     return 0;

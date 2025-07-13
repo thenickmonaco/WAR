@@ -1,26 +1,28 @@
 // WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-// 
+//
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/shaders/fragment.glsl
+// src/h/war_vulkan.h
 //=============================================================================
 
-#version 450
-layout(location = 0) in vec2 uv;
-layout(location = 0) out vec4 out_color;
-void main() {
-    out_color = vec4(uv, 0.5, 1.0);  // just some color
-}
+#ifndef WAR_VULKAN_H
+#define WAR_VULKAN_H
+
+#include "war_data.h"
+
+WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height);
+
+#endif // WAR_VULKAN_H

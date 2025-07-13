@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/gen/wayland_interfaces.gperf
+// src/gen/war_wayland_interfaces.gperf
 //=============================================================================
 
 %{

@@ -15,13 +15,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// src/vulkan.c
+// src/war_vulkan.c
 //=============================================================================
 
-#include "vulkan.h"
-#include "data.h"
-#include "debug_macros.h"
-#include "macros.h"
+#include "h/war_vulkan.h"
+#include "h/war_data.h"
+#include "h/war_debug_macros.h"
+#include "h/war_macros.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -49,8 +49,8 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-VulkanContext vulkan_init(uint32_t width, uint32_t height) {
-    header("vulkan_init");
+WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
+    header("war_vulkan_init");
 
     uint32_t instance_extension_count = 0;
     vkEnumerateInstanceExtensionProperties(
@@ -113,6 +113,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
+        VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
     };
 
     uint32_t extension_count = 0;
@@ -143,6 +144,8 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
             has_external_memory_fd = 1;
         }
     }
+
+    free(available_extensions);
 
     assert(has_external_memory && has_external_memory_fd);
 
@@ -180,7 +183,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_info,
-        .enabledExtensionCount = 3,
+        .enabledExtensionCount = 4,
         .ppEnabledExtensionNames = device_extensions,
     };
     VkDevice device;
@@ -349,7 +352,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
 
     uint32_t* vertex_code;
-    const char* vertex_path = "build/shaders/vertex.spv";
+    const char* vertex_path = "build/shaders/war_vertex.spv";
     FILE* vertex_spv = fopen(vertex_path, "rb");
     assert(vertex_spv);
     fseek(vertex_spv, 0, SEEK_END);
@@ -373,7 +376,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
     free(vertex_code);
 
     uint32_t* fragment_code;
-    const char* fragment_path = "build/shaders/fragment.spv";
+    const char* fragment_path = "build/shaders/war_fragment.spv";
     FILE* fragment_spv = fopen(fragment_path, "rb");
     assert(fragment_spv);
     fseek(fragment_spv, 0, SEEK_END);
@@ -515,10 +518,72 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
         device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
     assert(result == VK_SUCCESS);
 
-    free(available_extensions);
+    // initial image transition for render target
+    VkImageMemoryBarrier barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = image,
+        .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    };
+    vkBeginCommandBuffer(
+        cmd_buffer,
+        &(VkCommandBufferBeginInfo){
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        });
+    vkCmdPipelineBarrier(cmd_buffer,
+                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         0,
+                         0,
+                         NULL,
+                         0,
+                         NULL,
+                         1,
+                         &barrier);
+    vkEndCommandBuffer(cmd_buffer);
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd_buffer,
+    };
+    vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queue);
 
-    end("vulkan_init");
-    return (VulkanContext){
+    // double/triple buffering
+    VkSemaphoreCreateInfo semaphore_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+    };
+    VkSemaphore image_available_semaphore;
+    VkSemaphore render_finished_semaphore;
+    vkCreateSemaphore(
+        device, &semaphore_info, NULL, &image_available_semaphore);
+    vkCreateSemaphore(
+        device, &semaphore_info, NULL, &render_finished_semaphore);
+
+    // fps
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+    VkFence in_flight_fence;
+    vkCreateFence(device, &fence_info, NULL, &in_flight_fence);
+
+    end("war_vulkan_init");
+    return (WAR_VulkanContext){
         .dmabuf_fd = dmabuf_fd,
         .instance = instance,
         .physical_device = physical_device,
@@ -534,5 +599,8 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
         .pipeline = pipeline,
         .pipeline_layout = pipeline_layout,
         .image_view = image_view,
+        .image_available_semaphore = image_available_semaphore,
+        .render_finished_semaphore = render_finished_semaphore,
+        .in_flight_fence = in_flight_fence,
     };
 }

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //=============================================================================
-// include/debug_macros.h
+// src/h/war_debug_macros.h
 //=============================================================================
 
 #ifndef WAR_DEBUG_MACROS_H
@@ -23,7 +23,6 @@
 
 #include <stdio.h>
 
-// Define month detection macros fully:
 #define MONTH_IS_JAN (__DATE__[0] == 'J' && __DATE__[1] == 'a')
 #define MONTH_IS_FEB (__DATE__[0] == 'F')
 #define MONTH_IS_MAR                                                           \
@@ -125,4 +124,4 @@
 
 #endif // DEBUG
 
-#endif // WAR_MACROS_H
+#endif // WAR_DEBUG_MACROS_H

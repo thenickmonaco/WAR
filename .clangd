@@ -10,6 +10,7 @@ CompileFlags:
     -Wno-error=unused-variable,
     -I src,
     -I include,
+    -I /usr/include/libdrm,
     -DDMABUF=1,
     -DWL_SHM=1,
   ]

@@ -112,6 +112,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
     const char* device_extensions[] = {
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+        VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
     };
 
     uint32_t extension_count = 0;
@@ -125,7 +126,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
 
 #if DEBUG
     for (uint32_t i = 0; i < extension_count; i++) {
-        call_carmack("  %s", available_extensions[i].extensionName);
+        call_carmack("%s", available_extensions[i].extensionName);
     }
 #endif
 
@@ -179,7 +180,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_info,
-        .enabledExtensionCount = 2,
+        .enabledExtensionCount = 3,
         .ppEnabledExtensionNames = device_extensions,
     };
     VkDevice device;
@@ -216,7 +217,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext = &ext_mem_image_info,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
         .extent = {width, height, 1},
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -287,14 +288,14 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
 
     VkAttachmentDescription color_attachment = {
         .flags = 0,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
     };
     VkAttachmentReference color_attachment_ref = {
         .attachment = 0,
@@ -320,7 +321,7 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
         .subresourceRange =
             {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,

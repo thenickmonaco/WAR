@@ -30,8 +30,8 @@
 int main() {
     CALL_CARMACK("main");
 
-    // wayland_init();
-    VulkanContext vulkan_context = vulkan_init(1920, 1080);
+    wayland_init();
+    //VulkanContext vulkan_context = vulkan_init(1920, 1080);
 
     END("main");
     return 0;

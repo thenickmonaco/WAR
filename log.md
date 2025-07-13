@@ -1,257 +1,560 @@
-# main [src/main.c:31:main, 22:16:08, 07-12-2025]
+# main [src/main.c:31:main, 23:43:49, 07-12-2025]
+## wayland_init [src/wayland.c:60:wayland_init]
+## wayland_make_fd [src/wayland.c:1247:wayland_make_fd]
+- xdg_prefix_size: 17
+- wayland_prefix_size: 17
+- val: wayland-1
+- val: /run/user/1000
+- path: /run/user/1000/wayland-1
+- path_len: 24
+- addr_len: 26
+## END wayland_make_fd [src/wayland.c:1333:wayland_make_fd]
 ## vulkan_init [src/vulkan.c:53:vulkan_init]
--   VK_KHR_16bit_storage
--   VK_KHR_8bit_storage
--   VK_KHR_acceleration_structure
--   VK_KHR_bind_memory2
--   VK_KHR_buffer_device_address
--   VK_KHR_calibrated_timestamps
--   VK_KHR_compute_shader_derivatives
--   VK_KHR_cooperative_matrix
--   VK_KHR_copy_commands2
--   VK_KHR_create_renderpass2
--   VK_KHR_dedicated_allocation
--   VK_KHR_deferred_host_operations
--   VK_KHR_depth_stencil_resolve
--   VK_KHR_descriptor_update_template
--   VK_KHR_device_group
--   VK_KHR_draw_indirect_count
--   VK_KHR_driver_properties
--   VK_KHR_dynamic_rendering
--   VK_KHR_dynamic_rendering_local_read
--   VK_KHR_external_fence
--   VK_KHR_external_fence_fd
--   VK_KHR_external_memory
--   VK_KHR_external_memory_fd
--   VK_KHR_external_semaphore
--   VK_KHR_external_semaphore_fd
--   VK_KHR_format_feature_flags2
--   VK_KHR_fragment_shader_barycentric
--   VK_KHR_fragment_shading_rate
--   VK_KHR_get_memory_requirements2
--   VK_KHR_global_priority
--   VK_KHR_image_format_list
--   VK_KHR_imageless_framebuffer
--   VK_KHR_incremental_present
--   VK_KHR_index_type_uint8
--   VK_KHR_line_rasterization
--   VK_KHR_load_store_op_none
--   VK_KHR_maintenance1
--   VK_KHR_maintenance2
--   VK_KHR_maintenance3
--   VK_KHR_maintenance4
--   VK_KHR_maintenance5
--   VK_KHR_maintenance6
--   VK_KHR_maintenance7
--   VK_KHR_map_memory2
--   VK_KHR_multiview
--   VK_KHR_pipeline_binary
--   VK_KHR_pipeline_executable_properties
--   VK_KHR_pipeline_library
--   VK_KHR_present_id
--   VK_KHR_present_wait
--   VK_KHR_push_descriptor
--   VK_KHR_ray_query
--   VK_KHR_ray_tracing_maintenance1
--   VK_KHR_ray_tracing_pipeline
--   VK_KHR_ray_tracing_position_fetch
--   VK_KHR_relaxed_block_layout
--   VK_KHR_sampler_mirror_clamp_to_edge
--   VK_KHR_sampler_ycbcr_conversion
--   VK_KHR_separate_depth_stencil_layouts
--   VK_KHR_shader_atomic_int64
--   VK_KHR_shader_clock
--   VK_KHR_shader_draw_parameters
--   VK_KHR_shader_expect_assume
--   VK_KHR_shader_float16_int8
--   VK_KHR_shader_float_controls
--   VK_KHR_shader_float_controls2
--   VK_KHR_shader_integer_dot_product
--   VK_KHR_shader_maximal_reconvergence
--   VK_KHR_shader_non_semantic_info
--   VK_KHR_shader_quad_control
--   VK_KHR_shader_relaxed_extended_instruction
--   VK_KHR_shader_subgroup_extended_types
--   VK_KHR_shader_subgroup_rotate
--   VK_KHR_shader_subgroup_uniform_control_flow
--   VK_KHR_shader_terminate_invocation
--   VK_KHR_shared_presentable_image
--   VK_KHR_spirv_1_4
--   VK_KHR_storage_buffer_storage_class
--   VK_KHR_swapchain
--   VK_KHR_swapchain_mutable_format
--   VK_KHR_synchronization2
--   VK_KHR_timeline_semaphore
--   VK_KHR_uniform_buffer_standard_layout
--   VK_KHR_variable_pointers
--   VK_KHR_vertex_attribute_divisor
--   VK_KHR_video_decode_av1
--   VK_KHR_video_decode_h264
--   VK_KHR_video_decode_h265
--   VK_KHR_video_decode_queue
--   VK_KHR_video_encode_av1
--   VK_KHR_video_encode_h264
--   VK_KHR_video_encode_h265
--   VK_KHR_video_encode_quantization_map
--   VK_KHR_video_encode_queue
--   VK_KHR_video_maintenance1
--   VK_KHR_video_maintenance2
--   VK_KHR_video_queue
--   VK_KHR_vulkan_memory_model
--   VK_KHR_workgroup_memory_explicit_layout
--   VK_KHR_zero_initialize_workgroup_memory
--   VK_EXT_4444_formats
--   VK_EXT_attachment_feedback_loop_dynamic_state
--   VK_EXT_attachment_feedback_loop_layout
--   VK_EXT_blend_operation_advanced
--   VK_EXT_border_color_swizzle
--   VK_EXT_buffer_device_address
--   VK_EXT_calibrated_timestamps
--   VK_EXT_color_write_enable
--   VK_EXT_conditional_rendering
--   VK_EXT_conservative_rasterization
--   VK_EXT_custom_border_color
--   VK_EXT_depth_bias_control
--   VK_EXT_depth_clamp_control
--   VK_EXT_depth_clamp_zero_one
--   VK_EXT_depth_clip_control
--   VK_EXT_depth_clip_enable
--   VK_EXT_depth_range_unrestricted
--   VK_EXT_descriptor_buffer
--   VK_EXT_descriptor_indexing
--   VK_EXT_device_address_binding_report
--   VK_EXT_device_fault
--   VK_EXT_device_generated_commands
--   VK_EXT_discard_rectangles
--   VK_EXT_display_control
--   VK_EXT_dynamic_rendering_unused_attachments
--   VK_EXT_extended_dynamic_state
--   VK_EXT_extended_dynamic_state2
--   VK_EXT_extended_dynamic_state3
--   VK_EXT_external_memory_dma_buf
--   VK_EXT_external_memory_host
--   VK_EXT_fragment_shader_interlock
--   VK_EXT_global_priority
--   VK_EXT_global_priority_query
--   VK_EXT_graphics_pipeline_library
--   VK_EXT_host_image_copy
--   VK_EXT_host_query_reset
--   VK_EXT_image_2d_view_of_3d
--   VK_EXT_image_drm_format_modifier
--   VK_EXT_image_robustness
--   VK_EXT_image_sliced_view_of_3d
--   VK_EXT_image_view_min_lod
--   VK_EXT_index_type_uint8
--   VK_EXT_inline_uniform_block
--   VK_EXT_legacy_vertex_attributes
--   VK_EXT_line_rasterization
--   VK_EXT_load_store_op_none
--   VK_EXT_map_memory_placed
--   VK_EXT_memory_budget
--   VK_EXT_memory_priority
--   VK_EXT_mesh_shader
--   VK_EXT_multi_draw
--   VK_EXT_mutable_descriptor_type
--   VK_EXT_nested_command_buffer
--   VK_EXT_non_seamless_cube_map
--   VK_EXT_opacity_micromap
--   VK_EXT_pageable_device_local_memory
--   VK_EXT_pci_bus_info
--   VK_EXT_physical_device_drm
--   VK_EXT_pipeline_creation_cache_control
--   VK_EXT_pipeline_creation_feedback
--   VK_EXT_pipeline_library_group_handles
--   VK_EXT_pipeline_robustness
--   VK_EXT_post_depth_coverage
--   VK_EXT_present_mode_fifo_latest_ready
--   VK_EXT_primitive_topology_list_restart
--   VK_EXT_primitives_generated_query
--   VK_EXT_private_data
--   VK_EXT_provoking_vertex
--   VK_EXT_queue_family_foreign
--   VK_EXT_robustness2
--   VK_EXT_sample_locations
--   VK_EXT_sampler_filter_minmax
--   VK_EXT_scalar_block_layout
--   VK_EXT_separate_stencil_usage
--   VK_EXT_shader_atomic_float
--   VK_EXT_shader_demote_to_helper_invocation
--   VK_EXT_shader_image_atomic_int64
--   VK_EXT_shader_module_identifier
--   VK_EXT_shader_object
--   VK_EXT_shader_replicated_composites
--   VK_EXT_shader_subgroup_ballot
--   VK_EXT_shader_subgroup_vote
--   VK_EXT_shader_viewport_index_layer
--   VK_EXT_subgroup_size_control
--   VK_EXT_swapchain_maintenance1
--   VK_EXT_texel_buffer_alignment
--   VK_EXT_tooling_info
--   VK_EXT_transform_feedback
--   VK_EXT_vertex_attribute_divisor
--   VK_EXT_vertex_attribute_robustness
--   VK_EXT_vertex_input_dynamic_state
--   VK_EXT_ycbcr_2plane_444_formats
--   VK_EXT_ycbcr_image_arrays
--   VK_NV_clip_space_w_scaling
--   VK_NV_cluster_acceleration_structure
--   VK_NV_compute_shader_derivatives
--   VK_NV_cooperative_matrix
--   VK_NV_cooperative_matrix2
--   VK_NV_cooperative_vector
--   VK_NV_copy_memory_indirect
--   VK_NV_corner_sampled_image
--   VK_NV_coverage_reduction_mode
--   VK_NV_cuda_kernel_launch
--   VK_NV_dedicated_allocation
--   VK_NV_dedicated_allocation_image_aliasing
--   VK_NV_descriptor_pool_overallocation
--   VK_NV_device_diagnostic_checkpoints
--   VK_NV_device_diagnostics_config
--   VK_NV_device_generated_commands
--   VK_NV_device_generated_commands_compute
--   VK_NV_disk_cache_utils
--   VK_NV_extended_sparse_address_space
--   VK_NV_fill_rectangle
--   VK_NV_fragment_coverage_to_color
--   VK_NV_fragment_shader_barycentric
--   VK_NV_fragment_shading_rate_enums
--   VK_NV_framebuffer_mixed_samples
--   VK_NV_geometry_shader_passthrough
--   VK_NV_inherited_viewport_scissor
--   VK_NV_internal_nvpresent
--   VK_NV_linear_color_attachment
--   VK_NV_low_latency
--   VK_NV_low_latency2
--   VK_NV_memory_decompression
--   VK_NV_mesh_shader
--   VK_NV_optical_flow
--   VK_NV_partitioned_acceleration_structure
--   VK_NV_present_metering
--   VK_NV_raw_access_chains
--   VK_NV_ray_tracing
--   VK_NV_ray_tracing_invocation_reorder
--   VK_NV_ray_tracing_motion_blur
--   VK_NV_representative_fragment_test
--   VK_NV_sample_mask_override_coverage
--   VK_NV_scissor_exclusive
--   VK_NV_shader_atomic_float16_vector
--   VK_NV_shader_image_footprint
--   VK_NV_shader_sm_builtins
--   VK_NV_shader_subgroup_partitioned
--   VK_NV_shading_rate_image
--   VK_NV_viewport_array2
--   VK_NV_viewport_swizzle
--   VK_NVX_binary_import
--   VK_NVX_image_view_handle
--   VK_NVX_multiview_per_view_attributes
--   VK_AMD_buffer_marker
--   VK_GOOGLE_hlsl_functionality1
--   VK_GOOGLE_user_type
+- VK_KHR_16bit_storage
+- VK_KHR_8bit_storage
+- VK_KHR_acceleration_structure
+- VK_KHR_bind_memory2
+- VK_KHR_buffer_device_address
+- VK_KHR_calibrated_timestamps
+- VK_KHR_compute_shader_derivatives
+- VK_KHR_cooperative_matrix
+- VK_KHR_copy_commands2
+- VK_KHR_create_renderpass2
+- VK_KHR_dedicated_allocation
+- VK_KHR_deferred_host_operations
+- VK_KHR_depth_stencil_resolve
+- VK_KHR_descriptor_update_template
+- VK_KHR_device_group
+- VK_KHR_draw_indirect_count
+- VK_KHR_driver_properties
+- VK_KHR_dynamic_rendering
+- VK_KHR_dynamic_rendering_local_read
+- VK_KHR_external_fence
+- VK_KHR_external_fence_fd
+- VK_KHR_external_memory
+- VK_KHR_external_memory_fd
+- VK_KHR_external_semaphore
+- VK_KHR_external_semaphore_fd
+- VK_KHR_format_feature_flags2
+- VK_KHR_fragment_shader_barycentric
+- VK_KHR_fragment_shading_rate
+- VK_KHR_get_memory_requirements2
+- VK_KHR_global_priority
+- VK_KHR_image_format_list
+- VK_KHR_imageless_framebuffer
+- VK_KHR_incremental_present
+- VK_KHR_index_type_uint8
+- VK_KHR_line_rasterization
+- VK_KHR_load_store_op_none
+- VK_KHR_maintenance1
+- VK_KHR_maintenance2
+- VK_KHR_maintenance3
+- VK_KHR_maintenance4
+- VK_KHR_maintenance5
+- VK_KHR_maintenance6
+- VK_KHR_maintenance7
+- VK_KHR_map_memory2
+- VK_KHR_multiview
+- VK_KHR_pipeline_binary
+- VK_KHR_pipeline_executable_properties
+- VK_KHR_pipeline_library
+- VK_KHR_present_id
+- VK_KHR_present_wait
+- VK_KHR_push_descriptor
+- VK_KHR_ray_query
+- VK_KHR_ray_tracing_maintenance1
+- VK_KHR_ray_tracing_pipeline
+- VK_KHR_ray_tracing_position_fetch
+- VK_KHR_relaxed_block_layout
+- VK_KHR_sampler_mirror_clamp_to_edge
+- VK_KHR_sampler_ycbcr_conversion
+- VK_KHR_separate_depth_stencil_layouts
+- VK_KHR_shader_atomic_int64
+- VK_KHR_shader_clock
+- VK_KHR_shader_draw_parameters
+- VK_KHR_shader_expect_assume
+- VK_KHR_shader_float16_int8
+- VK_KHR_shader_float_controls
+- VK_KHR_shader_float_controls2
+- VK_KHR_shader_integer_dot_product
+- VK_KHR_shader_maximal_reconvergence
+- VK_KHR_shader_non_semantic_info
+- VK_KHR_shader_quad_control
+- VK_KHR_shader_relaxed_extended_instruction
+- VK_KHR_shader_subgroup_extended_types
+- VK_KHR_shader_subgroup_rotate
+- VK_KHR_shader_subgroup_uniform_control_flow
+- VK_KHR_shader_terminate_invocation
+- VK_KHR_shared_presentable_image
+- VK_KHR_spirv_1_4
+- VK_KHR_storage_buffer_storage_class
+- VK_KHR_swapchain
+- VK_KHR_swapchain_mutable_format
+- VK_KHR_synchronization2
+- VK_KHR_timeline_semaphore
+- VK_KHR_uniform_buffer_standard_layout
+- VK_KHR_variable_pointers
+- VK_KHR_vertex_attribute_divisor
+- VK_KHR_video_decode_av1
+- VK_KHR_video_decode_h264
+- VK_KHR_video_decode_h265
+- VK_KHR_video_decode_queue
+- VK_KHR_video_encode_av1
+- VK_KHR_video_encode_h264
+- VK_KHR_video_encode_h265
+- VK_KHR_video_encode_quantization_map
+- VK_KHR_video_encode_queue
+- VK_KHR_video_maintenance1
+- VK_KHR_video_maintenance2
+- VK_KHR_video_queue
+- VK_KHR_vulkan_memory_model
+- VK_KHR_workgroup_memory_explicit_layout
+- VK_KHR_zero_initialize_workgroup_memory
+- VK_EXT_4444_formats
+- VK_EXT_attachment_feedback_loop_dynamic_state
+- VK_EXT_attachment_feedback_loop_layout
+- VK_EXT_blend_operation_advanced
+- VK_EXT_border_color_swizzle
+- VK_EXT_buffer_device_address
+- VK_EXT_calibrated_timestamps
+- VK_EXT_color_write_enable
+- VK_EXT_conditional_rendering
+- VK_EXT_conservative_rasterization
+- VK_EXT_custom_border_color
+- VK_EXT_depth_bias_control
+- VK_EXT_depth_clamp_control
+- VK_EXT_depth_clamp_zero_one
+- VK_EXT_depth_clip_control
+- VK_EXT_depth_clip_enable
+- VK_EXT_depth_range_unrestricted
+- VK_EXT_descriptor_buffer
+- VK_EXT_descriptor_indexing
+- VK_EXT_device_address_binding_report
+- VK_EXT_device_fault
+- VK_EXT_device_generated_commands
+- VK_EXT_discard_rectangles
+- VK_EXT_display_control
+- VK_EXT_dynamic_rendering_unused_attachments
+- VK_EXT_extended_dynamic_state
+- VK_EXT_extended_dynamic_state2
+- VK_EXT_extended_dynamic_state3
+- VK_EXT_external_memory_dma_buf
+- VK_EXT_external_memory_host
+- VK_EXT_fragment_shader_interlock
+- VK_EXT_global_priority
+- VK_EXT_global_priority_query
+- VK_EXT_graphics_pipeline_library
+- VK_EXT_host_image_copy
+- VK_EXT_host_query_reset
+- VK_EXT_image_2d_view_of_3d
+- VK_EXT_image_drm_format_modifier
+- VK_EXT_image_robustness
+- VK_EXT_image_sliced_view_of_3d
+- VK_EXT_image_view_min_lod
+- VK_EXT_index_type_uint8
+- VK_EXT_inline_uniform_block
+- VK_EXT_legacy_vertex_attributes
+- VK_EXT_line_rasterization
+- VK_EXT_load_store_op_none
+- VK_EXT_map_memory_placed
+- VK_EXT_memory_budget
+- VK_EXT_memory_priority
+- VK_EXT_mesh_shader
+- VK_EXT_multi_draw
+- VK_EXT_mutable_descriptor_type
+- VK_EXT_nested_command_buffer
+- VK_EXT_non_seamless_cube_map
+- VK_EXT_opacity_micromap
+- VK_EXT_pageable_device_local_memory
+- VK_EXT_pci_bus_info
+- VK_EXT_physical_device_drm
+- VK_EXT_pipeline_creation_cache_control
+- VK_EXT_pipeline_creation_feedback
+- VK_EXT_pipeline_library_group_handles
+- VK_EXT_pipeline_robustness
+- VK_EXT_post_depth_coverage
+- VK_EXT_present_mode_fifo_latest_ready
+- VK_EXT_primitive_topology_list_restart
+- VK_EXT_primitives_generated_query
+- VK_EXT_private_data
+- VK_EXT_provoking_vertex
+- VK_EXT_queue_family_foreign
+- VK_EXT_robustness2
+- VK_EXT_sample_locations
+- VK_EXT_sampler_filter_minmax
+- VK_EXT_scalar_block_layout
+- VK_EXT_separate_stencil_usage
+- VK_EXT_shader_atomic_float
+- VK_EXT_shader_demote_to_helper_invocation
+- VK_EXT_shader_image_atomic_int64
+- VK_EXT_shader_module_identifier
+- VK_EXT_shader_object
+- VK_EXT_shader_replicated_composites
+- VK_EXT_shader_subgroup_ballot
+- VK_EXT_shader_subgroup_vote
+- VK_EXT_shader_viewport_index_layer
+- VK_EXT_subgroup_size_control
+- VK_EXT_swapchain_maintenance1
+- VK_EXT_texel_buffer_alignment
+- VK_EXT_tooling_info
+- VK_EXT_transform_feedback
+- VK_EXT_vertex_attribute_divisor
+- VK_EXT_vertex_attribute_robustness
+- VK_EXT_vertex_input_dynamic_state
+- VK_EXT_ycbcr_2plane_444_formats
+- VK_EXT_ycbcr_image_arrays
+- VK_NV_clip_space_w_scaling
+- VK_NV_cluster_acceleration_structure
+- VK_NV_compute_shader_derivatives
+- VK_NV_cooperative_matrix
+- VK_NV_cooperative_matrix2
+- VK_NV_cooperative_vector
+- VK_NV_copy_memory_indirect
+- VK_NV_corner_sampled_image
+- VK_NV_coverage_reduction_mode
+- VK_NV_cuda_kernel_launch
+- VK_NV_dedicated_allocation
+- VK_NV_dedicated_allocation_image_aliasing
+- VK_NV_descriptor_pool_overallocation
+- VK_NV_device_diagnostic_checkpoints
+- VK_NV_device_diagnostics_config
+- VK_NV_device_generated_commands
+- VK_NV_device_generated_commands_compute
+- VK_NV_disk_cache_utils
+- VK_NV_extended_sparse_address_space
+- VK_NV_fill_rectangle
+- VK_NV_fragment_coverage_to_color
+- VK_NV_fragment_shader_barycentric
+- VK_NV_fragment_shading_rate_enums
+- VK_NV_framebuffer_mixed_samples
+- VK_NV_geometry_shader_passthrough
+- VK_NV_inherited_viewport_scissor
+- VK_NV_internal_nvpresent
+- VK_NV_linear_color_attachment
+- VK_NV_low_latency
+- VK_NV_low_latency2
+- VK_NV_memory_decompression
+- VK_NV_mesh_shader
+- VK_NV_optical_flow
+- VK_NV_partitioned_acceleration_structure
+- VK_NV_present_metering
+- VK_NV_raw_access_chains
+- VK_NV_ray_tracing
+- VK_NV_ray_tracing_invocation_reorder
+- VK_NV_ray_tracing_motion_blur
+- VK_NV_representative_fragment_test
+- VK_NV_sample_mask_override_coverage
+- VK_NV_scissor_exclusive
+- VK_NV_shader_atomic_float16_vector
+- VK_NV_shader_image_footprint
+- VK_NV_shader_sm_builtins
+- VK_NV_shader_subgroup_partitioned
+- VK_NV_shading_rate_image
+- VK_NV_viewport_array2
+- VK_NV_viewport_swizzle
+- VK_NVX_binary_import
+- VK_NVX_image_view_handle
+- VK_NVX_multiview_per_view_attributes
+- VK_AMD_buffer_marker
+- VK_GOOGLE_hlsl_functionality1
+- VK_GOOGLE_user_type
 - Looking for memory type with properties: 0x1
 - Available memory types:
 - Type 0: flags=0x0
 - Type 1: flags=0x1
 - -> Selected memory type 1
-## END vulkan_init [src/vulkan.c:487:vulkan_init]
-# END main [src/main.c:36:main, 22:16:08, 07-12-2025]
+## END vulkan_init [src/vulkan.c:520:vulkan_init]
+- written size: 12
+- written       ( 12 bytes): 01 00 00 00 01 00 0C 00 02 00 00 00
+- global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 01 00 00 00 07 00 00 00 77 6C 5F 73 68 6D 00 00 02 00 00 00
+- iname: wl_shm
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00
+- iname: zwp_linux_dmabuf_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00 03 00 00 00
+- bound: zwp_linux_dmabuf_v1
+- to id: 3
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: wp_linux_drm_syncobj_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 04 00 00 00
+- bound: wp_linux_drm_syncobj_manager_v1
+- to id: 4
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 36 bytes): 02 00 00 00 00 00 24 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00
+- iname: wl_compositor
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00 05 00 00 00
+- bound: wl_compositor
+- to id: 5
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- create_surface request ( 12 bytes): 05 00 00 00 00 00 0C 00 06 00 00 00
+- bound: wl_surface
+- zwp_linux_dmabuf_v1::get_surface_feedback request ( 16 bytes): 03 00 00 00 03 00 10 00 07 00 00 00 06 00 00 00
+- bound: xdg_surface
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 05 00 00 00 11 00 00 00 77 6C 5F 73 75 62 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 00 01 00 00 00
+- iname: wl_subcompositor
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 06 00 00 00 17 00 00 00 77 6C 5F 64 61 74 61 5F 64 65 76 69 63 65 5F 6D 61 6E 61 67 65 72 00 00 03 00 00 00
+- iname: wl_data_device_manager
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 07 00 00 00 1E 00 00 00 7A 77 6C 72 5F 67 61 6D 6D 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: zwlr_gamma_control_manager_v1
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 08 00 00 00 17 00 00 00 7A 78 64 67 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 03 00 00 00
+- iname: zxdg_output_manager_v1
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 09 00 00 00 15 00 00 00 65 78 74 5F 69 64 6C 65 5F 6E 6F 74 69 66 69 65 72 5F 76 31 00 00 00 00 02 00 00 00
+- iname: ext_idle_notifier_v1
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: zwp_idle_inhibit_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 08 00 00 00
+- bound: zwp_idle_inhibit_manager_v1
+- to id: 8
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00
+- iname: zwlr_layer_shell_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00 09 00 00 00
+- bound: zwlr_layer_shell_v1
+- to id: 9
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 32 bytes): 02 00 00 00 00 00 20 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00
+- iname: xdg_wm_base
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00 0A 00 00 00
+- bound: xdg_wm_base
+- to id: 10
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- get_xdg_surface request ( 16 bytes): 0A 00 00 00 02 00 10 00 0B 00 00 00 06 00 00 00
+- bound: xdg_surface
+- get_xdg_toplevel request ( 12 bytes): 0B 00 00 00 01 00 0C 00 0C 00 00 00
+- bound: xdg_toplevel
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 0D 00 00 00 16 00 00 00 7A 77 70 5F 74 61 62 6C 65 74 5F 6D 61 6E 61 67 65 72 5F 76 32 00 00 00 01 00 00 00
+- iname: zwp_tablet_manager_v2
+- global event  ( 60 bytes): 02 00 00 00 00 00 3C 00 0E 00 00 00 27 00 00 00 6F 72 67 5F 6B 64 65 5F 6B 77 69 6E 5F 73 65 72 76 65 72 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 00 00 01 00 00 00
+- iname: org_kde_kwin_server_decoration_manager
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
+- iname: zxdg_decoration_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 0D 00 00 00
+- bound: zxdg_decoration_manager_v1
+- to id: 13
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: zwp_relative_pointer_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 0E 00 00 00
+- bound: zwp_relative_pointer_manager_v1
+- to id: 14
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00
+- iname: zwp_pointer_constraints_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00 0F 00 00 00
+- bound: zwp_pointer_constraints_v1
+- to id: 15
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 36 bytes): 02 00 00 00 00 00 24 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00
+- iname: wp_presentation
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00 10 00 00 00
+- bound: wp_presentation
+- to id: 16
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 13 00 00 00 15 00 00 00 77 70 5F 61 6C 70 68 61 5F 6D 6F 64 69 66 69 65 72 5F 76 31 00 00 00 00 01 00 00 00
+- iname: wp_alpha_modifier_v1
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00
+- iname: zwlr_output_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00 11 00 00 00
+- bound: zwlr_output_manager_v1
+- to id: 17
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 15 00 00 00 1D 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 70 6F 77 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 01 00 00 00
+- iname: zwlr_output_power_manager_v1
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 16 00 00 00 1C 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 6D 65 74 68 6F 64 5F 6D 61 6E 61 67 65 72 5F 76 32 00 01 00 00 00
+- iname: zwp_input_method_manager_v2
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 17 00 00 00 1A 00 00 00 7A 77 70 5F 74 65 78 74 5F 69 6E 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 33 00 00 00 01 00 00 00
+- iname: zwp_text_input_manager_v3
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00
+- iname: ext_foreign_toplevel_list_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00 12 00 00 00
+- bound: ext_foreign_toplevel_list_v1
+- to id: 18
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 56 bytes): 02 00 00 00 00 00 38 00 19 00 00 00 21 00 00 00 7A 77 6C 72 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 03 00 00 00
+- iname: zwlr_foreign_toplevel_manager_v1
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 1A 00 00 00 1C 00 00 00 65 78 74 5F 73 65 73 73 69 6F 6E 5F 6C 6F 63 6B 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: ext_session_lock_manager_v1
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 1B 00 00 00 17 00 00 00 77 70 5F 64 72 6D 5F 6C 65 61 73 65 5F 64 65 76 69 63 65 5F 76 31 00 00 01 00 00 00
+- iname: wp_drm_lease_device_v1
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 1C 00 00 00 17 00 00 00 77 70 5F 64 72 6D 5F 6C 65 61 73 65 5F 64 65 76 69 63 65 5F 76 31 00 00 01 00 00 00
+- iname: wp_drm_lease_device_v1
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 1D 00 00 00 1E 00 00 00 7A 77 6C 72 5F 65 78 70 6F 72 74 5F 64 6D 61 62 75 66 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: zwlr_export_dmabuf_manager_v1
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 1E 00 00 00 1B 00 00 00 7A 77 6C 72 5F 73 63 72 65 65 6E 63 6F 70 79 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 03 00 00 00
+- iname: zwlr_screencopy_manager_v1
+- global event  ( 56 bytes): 02 00 00 00 00 00 38 00 1F 00 00 00 22 00 00 00 65 78 74 5F 69 6D 61 67 65 5F 63 6F 70 79 5F 63 61 70 74 75 72 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: ext_image_copy_capture_manager_v1
+- global event  ( 64 bytes): 02 00 00 00 00 00 40 00 20 00 00 00 2B 00 00 00 65 78 74 5F 6F 75 74 70 75 74 5F 69 6D 61 67 65 5F 63 61 70 74 75 72 65 5F 73 6F 75 72 63 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
+- iname: ext_output_image_capture_source_manager_v1
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00
+- iname: zwlr_data_control_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00 13 00 00 00
+- bound: zwlr_data_control_manager_v1
+- to id: 19
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 22 00 00 00 1C 00 00 00 65 78 74 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: ext_data_control_manager_v1
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 23 00 00 00 1F 00 00 00 77 70 5F 73 65 63 75 72 69 74 79 5F 63 6F 6E 74 65 78 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
+- iname: wp_security_context_manager_v1
+- global event  ( 36 bytes): 02 00 00 00 00 00 24 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00
+- iname: wp_viewporter
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00 14 00 00 00
+- bound: wp_viewporter
+- to id: 20
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 56 bytes): 02 00 00 00 00 00 38 00 25 00 00 00 22 00 00 00 77 70 5F 73 69 6E 67 6C 65 5F 70 69 78 65 6C 5F 62 75 66 66 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: wp_single_pixel_buffer_manager_v1
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
+- iname: wp_content_type_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 15 00 00 00
+- bound: wp_content_type_manager_v1
+- to id: 21
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
+- iname: wp_fractional_scale_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 16 00 00 00
+- bound: wp_fractional_scale_manager_v1
+- to id: 22
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 28 00 00 00 1E 00 00 00 77 70 5F 74 65 61 72 69 6E 67 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: wp_tearing_control_manager_v1
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 29 00 00 00 11 00 00 00 7A 78 64 67 5F 65 78 70 6F 72 74 65 72 5F 76 31 00 00 00 00 01 00 00 00
+- iname: zxdg_exporter_v1
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 2A 00 00 00 11 00 00 00 7A 78 64 67 5F 69 6D 70 6F 72 74 65 72 5F 76 31 00 00 00 00 01 00 00 00
+- iname: zxdg_importer_v1
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 2B 00 00 00 11 00 00 00 7A 78 64 67 5F 65 78 70 6F 72 74 65 72 5F 76 32 00 00 00 00 01 00 00 00
+- iname: zxdg_exporter_v2
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 2C 00 00 00 11 00 00 00 7A 78 64 67 5F 69 6D 70 6F 72 74 65 72 5F 76 32 00 00 00 00 01 00 00 00
+- iname: zxdg_importer_v2
+- global event  ( 40 bytes): 02 00 00 00 00 00 28 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00
+- iname: xdg_activation_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00 17 00 00 00
+- bound: xdg_activation_v1
+- to id: 23
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 48 bytes): 02 00 00 00 00 00 30 00 2E 00 00 00 1B 00 00 00 77 70 5F 63 75 72 73 6F 72 5F 73 68 61 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
+- iname: wp_cursor_shape_manager_v1
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: zwp_virtual_keyboard_manager_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 18 00 00 00
+- bound: zwp_virtual_keyboard_manager_v1
+- to id: 24
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 30 00 00 00 20 00 00 00 7A 77 6C 72 5F 76 69 72 74 75 61 6C 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 02 00 00 00
+- iname: zwlr_virtual_pointer_manager_v1
+- global event  ( 64 bytes): 02 00 00 00 00 00 40 00 31 00 00 00 2A 00 00 00 7A 77 70 5F 6B 65 79 62 6F 61 72 64 5F 73 68 6F 72 74 63 75 74 73 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: zwp_keyboard_shortcuts_inhibit_manager_v1
+- global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00
+- iname: zwp_pointer_gestures_v1
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00 19 00 00 00
+- bound: zwp_pointer_gestures_v1
+- to id: 25
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 52 bytes): 02 00 00 00 00 00 34 00 33 00 00 00 1E 00 00 00 65 78 74 5F 74 72 61 6E 73 69 65 6E 74 5F 73 65 61 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
+- iname: ext_transient_seat_manager_v1
+- global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00
+- iname: wl_seat
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 32 bytes): 02 00 00 00 00 00 20 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00 1A 00 00 00
+- bound: wl_seat
+- to id: 26
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- global event  ( 60 bytes): 02 00 00 00 00 00 3C 00 36 00 00 00 28 00 00 00 7A 77 70 5F 70 72 69 6D 61 72 79 5F 73 65 6C 65 63 74 69 6F 6E 5F 64 65 76 69 63 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
+- iname: zwp_primary_selection_device_manager_v1
+- global event  ( 32 bytes): 02 00 00 00 00 00 20 00 37 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00
+- iname: wl_output
+## wayland_registry_bind [src/wayland.c:1225:wayland_registry_bind]
+- bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 37 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00 1B 00 00 00
+- bound: wl_output
+- to id: 27
+## END wayland_registry_bind [src/wayland.c:1243:wayland_registry_bind]
+- zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
+- zwp_linux_dmabuf_feedback_v1_format_table event ( 12 bytes): 07 00 00 00 01 00 0C 00 E0 0E 00 00
+- zwp_linux_dmabuf_feedback_v1_tranche_target_device event ( 20 bytes): 07 00 00 00 04 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
+- zwp_linux_dmabuf_feedback_v1_tranche_flags event ( 12 bytes): 07 00 00 00 06 00 0C 00 00 00 00 00
+- zwp_linux_dmabuf_feedback_v1_tranche_formats event (488 bytes): 07 00 00 00 05 00 E8 01 DC 01 00 00 00 00 01 00 02 00 03 00 04 00 05 00 06 00 07 00 08 00 09 00 0A 00 0B 00 0C 00 0D 00 0E 00 0F 00 10 00 11 00 12 00 13 00 14 00 15 00 16 00 17 00 18 00 19 00 1A 00 1B 00 1C 00 1D 00 1E 00 1F 00 20 00 21 00 22 00 23 00 24 00 25 00 26 00 27 00 28 00 29 00 2A 00 2B 00 2C 00 2D 00 2E 00 2F 00 30 00 31 00 32 00 33 00 34 00 35 00 36 00 37 00 38 00 39 00 3A 00 3B 00 3C 00 3D 00 3E 00 3F 00 40 00 41 00 42 00 43 00 44 00 45 00 46 00 47 00 48 00 49 00 4A 00 4B 00 4C 00 4D 00 4E 00 4F 00 50 00 51 00 52 00 53 00 54 00 55 00 56 00 57 00 58 00 59 00 5A 00 5B 00 5C 00 5D 00 5E 00 5F 00 60 00 61 00 62 00 63 00 64 00 65 00 66 00 67 00 68 00 69 00 6A 00 6B 00 6C 00 6D 00 6E 00 6F 00 70 00 71 00 72 00 73 00 74 00 75 00 76 00 77 00 78 00 79 00 7A 00 7B 00 7C 00 7D 00 7E 00 7F 00 80 00 81 00 82 00 83 00 84 00 85 00 86 00 87 00 88 00 89 00 8A 00 8B 00 8C 00 8D 00 8E 00 8F 00 90 00 91 00 92 00 93 00 94 00 95 00 96 00 97 00 98 00 99 00 9A 00 9B 00 9C 00 9D 00 9E 00 9F 00 A0 00 A1 00 A2 00 A3 00 A4 00 A5 00 A6 00 A7 00 A8 00 A9 00 AA 00 AB 00 AC 00 AD 00 AE 00 AF 00 B0 00 B1 00 B2 00 B3 00 B4 00 B5 00 B6 00 B7 00 B8 00 B9 00 BA 00 BB 00 BC 00 BD 00 BE 00 BF 00 C0 00 C1 00 C2 00 C3 00 C4 00 C5 00 C6 00 C7 00 C8 00 C9 00 CA 00 CB 00 CC 00 CD 00 CE 00 CF 00 D0 00 D1 00 D2 00 D3 00 D4 00 D5 00 D6 00 D7 00 D8 00 D9 00 DA 00 DB 00 DC 00 DD 00 DE 00 DF 00 E0 00 E1 00 E2 00 E3 00 E4 00 E5 00 E6 00 E7 00 E8 00 E9 00 EA 00 EB 00 EC 00 ED 00
+- zwp_linux_dmabuf_feedback_v1_tranche_done event (  8 bytes): 07 00 00 00 03 00 08 00
+- zwp_linux_dmabuf_feedback_v1_done event (  8 bytes): 07 00 00 00 00 00 08 00
+- zwp_linux_dmabuf_v1_create_params request ( 12 bytes): 03 00 00 00 01 00 0C 00 1C 00 00 00
+- bound: zwp_linux_buffer_params_v1
+- zwp_linux_buffer_params_v1::add request ( 28 bytes): 1C 00 00 00 01 00 1C 00 00 00 00 00 00 00 00 00 00 1E 00 00 00 00 00 00 00 00 00 00
+- zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 1C 00 00 00 03 00 1C 00 1D 00 00 00 80 07 00 00 38 04 00 00 41 52 32 34 00 00 00 00
+- bound: wl_buffer
+- zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 1C 00 00 00 00 00 08 00
+- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 E4 F3 00 00
+- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 E4 F3 00 00
+- xdg_toplevel_wm_capabilities event ( 20 bytes): 0C 00 00 00 03 00 14 00 08 00 00 00 01 00 00 00 02 00 00 00
+- xdg_toplevel_configure event ( 20 bytes): 0C 00 00 00 00 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 E5 F3 00 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 E5 F3 00 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 1E 00 00 00
+- wp_presentation_clock_id event ( 12 bytes): 10 00 00 00 00 00 0C 00 01 00 00 00
+- zwlr_output_manager_v1_head event ( 12 bytes): 11 00 00 00 00 00 0C 00 00 00 00 FF
+- zwlr_output_manager_v1_done event ( 12 bytes): 11 00 00 00 01 00 0C 00 01 00 00 00
+- ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 03 00 00 FF
+- ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 04 00 00 FF
+- ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 05 00 00 FF
+- wl_seat_name event ( 20 bytes): 1A 00 00 00 01 00 14 00 06 00 00 00 73 65 61 74 30 00 00 00
+- seat: seat0
+- wl_seat_capabilities event ( 12 bytes): 1A 00 00 00 00 00 0C 00 03 00 00 00
+- keyboard detected
+- get_keyboard request ( 12 bytes): 1A 00 00 00 01 00 0C 00 1F 00 00 00
+- bound: wl_keyboard
+- pointer detected
+- get_pointer request ( 12 bytes): 1A 00 00 00 00 00 0C 00 20 00 00 00
+- bound: wl_pointer
+- wl_output_geometry event ( 80 bytes): 1B 00 00 00 00 00 50 00 00 00 00 00 00 00 00 00 5E 01 00 00 DC 00 00 00 00 00 00 00 17 00 00 00 54 68 65 72 6D 6F 74 72 65 78 20 43 6F 72 70 6F 72 61 74 69 6F 6E 00 00 0E 00 00 00 54 4C 31 36 30 41 44 4D 50 30 33 2D 30 00 00 00 00 00 00 00
+- wl_output_mode event ( 24 bytes): 1B 00 00 00 01 00 18 00 01 00 00 00 00 0A 00 00 40 06 00 00 80 A9 03 00
+- wl_output_scale event ( 12 bytes): 1B 00 00 00 03 00 0C 00 02 00 00 00
+- wl_output_name event ( 20 bytes): 1B 00 00 00 04 00 14 00 06 00 00 00 65 44 50 2D 32 00 00 00
+- wl_output_description event ( 60 bytes): 1B 00 00 00 05 00 3C 00 2D 00 00 00 54 68 65 72 6D 6F 74 72 65 78 20 43 6F 72 70 6F 72 61 74 69 6F 6E 20 54 4C 31 36 30 41 44 4D 50 30 33 2D 30 20 28 65 44 50 2D 32 29 00 00 00 00
+- wl_output_done event (  8 bytes): 1B 00 00 00 02 00 08 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 1C 00 00 00
+- wl_surface_preferred_buffer_scale event ( 12 bytes): 06 00 00 00 02 00 0C 00 02 00 00 00
+- wl_surface::set_buffer_scale request ( 12 bytes): 06 00 00 00 08 00 0C 00 02 00 00 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface::commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 06 00 00 FF
+- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 E6 F3 00 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 E6 F3 00 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 21 00 00 00
+- wl_keyboard_keymap event ( 16 bytes): 1F 00 00 00 00 00 10 00 01 00 00 00 6F 00 01 00
+- wl_keyboard_repeat_info event ( 16 bytes): 1F 00 00 00 05 00 10 00 19 00 00 00 96 00 00 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 EB F3 00 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 EC F3 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_callback::done event ( 12 bytes): 1E 00 00 00 00 00 0C 00 66 2A 77 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 1E 00 00 00
+- wl_surface_enter event ( 12 bytes): 06 00 00 00 00 00 0C 00 1B 00 00 00
+- wl_surface_preferred_buffer_transform event ( 12 bytes): 06 00 00 00 03 00 0C 00 00 00 00 00
+- wl_surface::set_buffer_transform request ( 12 bytes): 06 00 00 00 07 00 0C 00 00 00 00 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface::commit request (  8 bytes): 06 00 00 00 06 00 08 00

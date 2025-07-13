@@ -57,7 +57,7 @@ enum {
 
 void wayland_init() {
     // signal(SIGPIPE, SIG_IGN);
-    header("wayland init");
+    header("wayland_init");
 
     int fd = wayland_make_fd();
     assert(fd >= 0);
@@ -68,10 +68,12 @@ void wayland_init() {
         stride = width * 4,
         ARGB8888 = 0,
     };
+
 #if DMABUF
-    //VulkanContext vulkan_context = vulkan_make_dmabuf_fd(width, height);
-    //assert(vulkan_context.dmabuf_fd >= 0);
+    VulkanContext vulkan_context = vulkan_init(width, height);
+    assert(vulkan_context.dmabuf_fd >= 0);
 #endif
+
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
 
@@ -733,7 +735,7 @@ void wayland_init() {
                 cmsg->cmsg_len = CMSG_LEN(sizeof(int));
                 cmsg->cmsg_level = SOL_SOCKET;
                 cmsg->cmsg_type = SCM_RIGHTS;
-                //*((int*)CMSG_DATA(cmsg)) = vulkan_context.dmabuf_fd;
+                *((int*)CMSG_DATA(cmsg)) = vulkan_context.dmabuf_fd;
                 ssize_t dmabuf_sent = sendmsg(fd, &msg, 0);
                 if (dmabuf_sent < 0) perror("sendmsg");
                 assert(dmabuf_sent == 28);
@@ -834,49 +836,49 @@ void wayland_init() {
                            size);
                 assert(size == 12);
 
-                // uint8_t set_buffer_scale[12];
-                // write_le32(set_buffer_scale, wl_surface_id);
-                // write_le16(set_buffer_scale + 4, 8);
-                // write_le16(set_buffer_scale + 6, 12);
-                // write_le32(set_buffer_scale + 8,
-                //            read_le32(buffer + offset + 8));
-                // dump_bytes("wl_surface::set_buffer_scale request",
-                //            set_buffer_scale,
-                //            12);
-                // ssize_t set_buffer_scale_written =
-                //     write(fd, set_buffer_scale, 12);
-                // assert(set_buffer_scale_written == 12);
+                uint8_t set_buffer_scale[12];
+                write_le32(set_buffer_scale, wl_surface_id);
+                write_le16(set_buffer_scale + 4, 8);
+                write_le16(set_buffer_scale + 6, 12);
+                write_le32(set_buffer_scale + 8,
+                           read_le32(buffer + offset + 8));
+                dump_bytes("wl_surface::set_buffer_scale request",
+                           set_buffer_scale,
+                           12);
+                ssize_t set_buffer_scale_written =
+                    write(fd, set_buffer_scale, 12);
+                assert(set_buffer_scale_written == 12);
 
-                // uint8_t scale_attach[20];
-                // write_le32(scale_attach, wl_surface_id);
-                // write_le16(scale_attach + 4, 1);
-                // write_le16(scale_attach + 6, 20);
-                // write_le32(scale_attach + 8, wl_buffer_id);
-                // write_le32(scale_attach + 12, 0);
-                // write_le32(scale_attach + 16, 0);
-                // dump_bytes("wl_surface_attach request", scale_attach, 20);
-                // ssize_t scale_attach_written = write(fd, scale_attach, 20);
-                // assert(scale_attach_written == 20);
+                uint8_t scale_attach[20];
+                write_le32(scale_attach, wl_surface_id);
+                write_le16(scale_attach + 4, 1);
+                write_le16(scale_attach + 6, 20);
+                write_le32(scale_attach + 8, wl_buffer_id);
+                write_le32(scale_attach + 12, 0);
+                write_le32(scale_attach + 16, 0);
+                dump_bytes("wl_surface_attach request", scale_attach, 20);
+                ssize_t scale_attach_written = write(fd, scale_attach, 20);
+                assert(scale_attach_written == 20);
 
-                // uint8_t scale_damage[24];
-                // write_le32(scale_damage, wl_surface_id);
-                // write_le16(scale_damage + 4, 2);
-                // write_le16(scale_damage + 6, 24);
-                // write_le32(scale_damage + 8, 0);
-                // write_le32(scale_damage + 12, 0);
-                // write_le32(scale_damage + 16, width);
-                // write_le32(scale_damage + 20, height);
-                // dump_bytes("wl_surface_damage request", scale_damage, 24);
-                // ssize_t scale_damage_written = write(fd, scale_damage, 24);
-                // assert(scale_damage_written == 24);
+                uint8_t scale_damage[24];
+                write_le32(scale_damage, wl_surface_id);
+                write_le16(scale_damage + 4, 2);
+                write_le16(scale_damage + 6, 24);
+                write_le32(scale_damage + 8, 0);
+                write_le32(scale_damage + 12, 0);
+                write_le32(scale_damage + 16, width);
+                write_le32(scale_damage + 20, height);
+                dump_bytes("wl_surface_damage request", scale_damage, 24);
+                ssize_t scale_damage_written = write(fd, scale_damage, 24);
+                assert(scale_damage_written == 24);
 
-                // uint8_t commit_scale[8];
-                // write_le32(commit_scale, wl_surface_id);
-                // write_le16(commit_scale + 4, 6);
-                // write_le16(commit_scale + 6, 8);
-                // dump_bytes("wl_surface::commit request", commit_scale, 8);
-                // ssize_t commit_scale_written = write(fd, commit_scale, 8);
-                // assert(commit_scale_written == 8);
+                uint8_t commit_scale[8];
+                write_le32(commit_scale, wl_surface_id);
+                write_le16(commit_scale + 4, 6);
+                write_le16(commit_scale + 6, 8);
+                dump_bytes("wl_surface::commit request", commit_scale, 8);
+                ssize_t commit_scale_written = write(fd, commit_scale, 8);
+                assert(commit_scale_written == 8);
                 goto done;
             wl_surface_preferred_buffer_transform:
                 dump_bytes("wl_surface_preferred_buffer_transform event",
@@ -884,52 +886,52 @@ void wayland_init() {
                            size);
                 assert(size == 12);
 
-                // uint8_t set_buffer_transform[12];
-                // write_le32(set_buffer_transform, wl_surface_id);
-                // write_le16(set_buffer_transform + 4, 7);
-                // write_le16(set_buffer_transform + 6, 12);
-                // write_le32(set_buffer_transform + 8,
-                //            read_le32(buffer + offset + 8));
-                // dump_bytes("wl_surface::set_buffer_transform request",
-                //            set_buffer_transform,
-                //            12);
-                // ssize_t set_buffer_transform_written =
-                //     write(fd, set_buffer_transform, 12);
-                // assert(set_buffer_transform_written == 12);
+                uint8_t set_buffer_transform[12];
+                write_le32(set_buffer_transform, wl_surface_id);
+                write_le16(set_buffer_transform + 4, 7);
+                write_le16(set_buffer_transform + 6, 12);
+                write_le32(set_buffer_transform + 8,
+                           read_le32(buffer + offset + 8));
+                dump_bytes("wl_surface::set_buffer_transform request",
+                           set_buffer_transform,
+                           12);
+                ssize_t set_buffer_transform_written =
+                    write(fd, set_buffer_transform, 12);
+                assert(set_buffer_transform_written == 12);
 
-                // uint8_t transform_attach[20];
-                // write_le32(transform_attach, wl_surface_id);
-                // write_le16(transform_attach + 4, 1);
-                // write_le16(transform_attach + 6, 20);
-                // write_le32(transform_attach + 8, wl_buffer_id);
-                // write_le32(transform_attach + 12, 0);
-                // write_le32(transform_attach + 16, 0);
-                // dump_bytes("wl_surface_attach request", transform_attach,
-                // 20); ssize_t transform_attach_written =
-                //     write(fd, transform_attach, 20);
-                // assert(transform_attach_written == 20);
+                uint8_t transform_attach[20];
+                write_le32(transform_attach, wl_surface_id);
+                write_le16(transform_attach + 4, 1);
+                write_le16(transform_attach + 6, 20);
+                write_le32(transform_attach + 8, wl_buffer_id);
+                write_le32(transform_attach + 12, 0);
+                write_le32(transform_attach + 16, 0);
+                dump_bytes("wl_surface_attach request", transform_attach, 20);
+                ssize_t transform_attach_written =
+                    write(fd, transform_attach, 20);
+                assert(transform_attach_written == 20);
 
-                // uint8_t transform_damage[24];
-                // write_le32(transform_damage, wl_surface_id);
-                // write_le16(transform_damage + 4, 2);
-                // write_le16(transform_damage + 6, 24);
-                // write_le32(transform_damage + 8, 0);
-                // write_le32(transform_damage + 12, 0);
-                // write_le32(transform_damage + 16, width);
-                // write_le32(transform_damage + 20, height);
-                // dump_bytes("wl_surface_damage request", transform_damage,
-                // 24); ssize_t transform_damage_written =
-                //     write(fd, transform_damage, 24);
-                // assert(transform_damage_written == 24);
+                uint8_t transform_damage[24];
+                write_le32(transform_damage, wl_surface_id);
+                write_le16(transform_damage + 4, 2);
+                write_le16(transform_damage + 6, 24);
+                write_le32(transform_damage + 8, 0);
+                write_le32(transform_damage + 12, 0);
+                write_le32(transform_damage + 16, width);
+                write_le32(transform_damage + 20, height);
+                dump_bytes("wl_surface_damage request", transform_damage, 24);
+                ssize_t transform_damage_written =
+                    write(fd, transform_damage, 24);
+                assert(transform_damage_written == 24);
 
-                // uint8_t commit_transform[8];
-                // write_le32(commit_transform, wl_surface_id);
-                // write_le16(commit_transform + 4, 6);
-                // write_le16(commit_transform + 6, 8);
-                // dump_bytes("wl_surface::commit request", commit_transform,
-                // 8); ssize_t commit_transform_written =
-                //     write(fd, commit_transform, 8);
-                // assert(commit_transform_written == 8);
+                uint8_t commit_transform[8];
+                write_le32(commit_transform, wl_surface_id);
+                write_le16(commit_transform + 4, 6);
+                write_le16(commit_transform + 6, 8);
+                dump_bytes("wl_surface::commit request", commit_transform, 8);
+                ssize_t commit_transform_written =
+                    write(fd, commit_transform, 8);
+                assert(commit_transform_written == 8);
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
@@ -1214,13 +1216,13 @@ void wayland_init() {
         }
     }
 
-    end("wayland init");
+    end("wayland_init");
     return;
 }
 
 void wayland_registry_bind(
     int fd, uint8_t* buffer, size_t offset, uint16_t size, uint16_t new_id) {
-    header("reg_bind request");
+    header("wayland_registry_bind");
 
     uint8_t bind[128];
     assert(size + 4 <= 128);
@@ -1238,11 +1240,11 @@ void wayland_registry_bind(
     ssize_t bind_written = write(fd, bind, size + 4);
     assert(bind_written == size + 4);
 
-    end("reg_bind request");
+    end("wayland_registry_bind");
 }
 
 int wayland_make_fd() {
-    header("make fd");
+    header("wayland_make_fd");
 
     int fd = syscall(SYS_socket, AF_UNIX, SOCK_STREAM, 0);
     assert(fd >= 0);
@@ -1328,6 +1330,6 @@ int wayland_make_fd() {
     int ret = connect(fd, (struct sockaddr*)&addr, addr_len);
     assert(ret >= 0);
 
-    end("make fd");
+    end("wayland_make_fd");
     return fd;
 }

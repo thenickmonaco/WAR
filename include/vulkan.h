@@ -8,4 +8,5 @@
 #ifndef VIMDAW_VULKAN_H
 #define VIMDAW_VULKAN_H
 /* build/pre/vulkan.i */
+VulkanContext vulkan_init(uint32_t width, uint32_t height);
 #endif /* VIMDAW_VULKAN_H */

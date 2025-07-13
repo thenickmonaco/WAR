@@ -2,17 +2,17 @@
 //
 // WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-// 
+//
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //
@@ -101,7 +101,13 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
     VkPhysicalDevice physical_devices[max_gpu_count];
     vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
     assert(gpu_count != 0);
-    VkPhysicalDevice physical_device = physical_devices[0];
+    VkPhysicalDevice physical_device = physical_devices[1];
+
+    VkPhysicalDeviceProperties device_props;
+    vkGetPhysicalDeviceProperties(physical_device, &device_props);
+    call_carmack("Physical Device Name: %s", device_props.deviceName);
+    call_carmack("Vendor ID: 0x%x", device_props.vendorID);
+    call_carmack("Device ID: 0x%x", device_props.deviceID);
 
     uint32_t device_extension_count = 0;
     vkEnumerateDeviceExtensionProperties(
@@ -229,7 +235,7 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
         .mipLevels = 1,
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .tiling = VK_IMAGE_TILING_LINEAR,
         .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -292,6 +298,9 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkGetMemoryFdKHR(device, &get_fd_info, &dmabuf_fd);
     assert(result == VK_SUCCESS);
     assert(dmabuf_fd > 0);
+
+    int flags = fcntl(dmabuf_fd, F_GETFD);
+    assert(flags != -1);
 
     VkAttachmentDescription color_attachment = {
         .flags = 0,

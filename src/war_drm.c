@@ -2,17 +2,17 @@
 //
 // WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-// 
+//
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Affero General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //
@@ -41,43 +41,42 @@
 
 WAR_DRMContext war_drm_init() {
     header("war_drm_init");
-    WAR_DRMContext ctx = {0};
+    WAR_DRMContext drm_context = {0};
 
     DIR* dir = opendir("/dev/dri");
     assert(dir);
     struct dirent* entry;
     int best_fd = -1;
-
     while ((entry = readdir(dir)) != NULL) {
         if (strncmp(entry->d_name, "card", 4) == 0) {
             char path[256];
             snprintf(path, sizeof(path), "/dev/dri/%s", entry->d_name);
 
             int fd = open(path, O_RDWR | O_CLOEXEC);
-            if (fd < 0) {
-                continue; // Could not open, skip
+            if (fd < 0) continue;
+
+            uint64_t cap = 0;
+            if (drmGetCap(fd, DRM_CAP_PRIME, &cap) == 0) {
+                if (cap & DRM_PRIME_CAP_IMPORT) {
+                    best_fd = fd;
+                    printf("✅ Using DRM device: %s (supports PRIME)\n", path);
+                    break;
+                }
             }
 
-            // Query device info here (e.g. drmGetVersion or other ioctls)
-            // Decide if this device is "better" than current best
-
-            // For example, just pick the first device:
-            best_fd = fd;
-            break; // Or implement logic to choose best device
+            close(fd);
         }
     }
     closedir(dir);
+    assert(best_fd >= 0 && "No DRM device with PRIME support found");
+    drm_context.drm_fd = best_fd;
 
-    // Open DRM device (assume /dev/dri/card0)
-    ctx.drm_fd = best_fd;
-    assert(ctx.drm_fd >= 0);
-
-    drmModeRes* res = drmModeGetResources(ctx.drm_fd);
+    drmModeRes* res = drmModeGetResources(drm_context.drm_fd);
     assert(res);
 
     drmModeConnector* connector = NULL;
     for (int i = 0; i < res->count_connectors; i++) {
-        connector = drmModeGetConnector(ctx.drm_fd, res->connectors[i]);
+        connector = drmModeGetConnector(drm_context.drm_fd, res->connectors[i]);
         if (connector->connection == DRM_MODE_CONNECTED &&
             connector->count_modes > 0)
             break;
@@ -86,23 +85,23 @@ WAR_DRMContext war_drm_init() {
     }
     assert(connector);
 
-    ctx.connector_id = connector->connector_id;
-    ctx.mode = connector->modes[0]; // use first available mode
+    drm_context.connector_id = connector->connector_id;
+    drm_context.mode = connector->modes[0];
 
     drmModeEncoder* encoder =
-        drmModeGetEncoder(ctx.drm_fd, connector->encoder_id);
+        drmModeGetEncoder(drm_context.drm_fd, connector->encoder_id);
     assert(encoder);
-    ctx.crtc_id = encoder->crtc_id;
+    drm_context.crtc_id = encoder->crtc_id;
 
     drmModeFreeEncoder(encoder);
     drmModeFreeConnector(connector);
     drmModeFreeResources(res);
 
     end("war_drm_init");
-    return ctx;
+    return drm_context;
 }
 
-void war_drm_present_dmabuf(WAR_DRMContext* ctx,
+void war_drm_present_dmabuf(WAR_DRMContext* drm_context,
                             int dmabuf_fd,
                             uint32_t width,
                             uint32_t height,
@@ -113,8 +112,17 @@ void war_drm_present_dmabuf(WAR_DRMContext* ctx,
         .fd = dmabuf_fd,
         .flags = 0,
     };
-    int ret = ioctl(ctx->drm_fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &args);
-    assert(ret == 0);
+
+    uint64_t has_prime = 0;
+    drmGetCap(drm_context->drm_fd, DRM_CAP_PRIME, &has_prime);
+    call_carmack("PRIME support: 0x%lx", has_prime);
+
+    int ret = ioctl(drm_context->drm_fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &args);
+    if (ret != 0) {
+        perror("");
+        return;
+    }
+
     uint32_t handle = args.handle;
 
     struct drm_mode_fb_cmd2 fb = {
@@ -126,20 +134,32 @@ void war_drm_present_dmabuf(WAR_DRMContext* ctx,
         .offsets[0] = 0,
     };
 
-    ret = ioctl(ctx->drm_fd, DRM_IOCTL_MODE_ADDFB2, &fb);
-    assert(ret == 0);
+    ret = ioctl(drm_context->drm_fd, DRM_IOCTL_MODE_ADDFB2, &fb);
+    if (ret != 0) {
+        perror("");
+        return;
+    } else if (ret == 0) {
+        call_carmack("✅ Framebuffer created: fb_id=%u", fb.fb_id);
+    }
 
-    ret = drmModeSetCrtc(ctx->drm_fd,
-                         ctx->crtc_id,
+    ret = drmModeSetCrtc(drm_context->drm_fd,
+                         drm_context->crtc_id,
                          fb.fb_id,
                          0,
                          0,
-                         &ctx->connector_id,
+                         &drm_context->connector_id,
                          1,
-                         &ctx->mode);
-    assert(ret == 0);
+                         &drm_context->mode);
+    if (ret != 0) {
+        perror("");
+        return;
+    }
 
-    // Optional: sleep to keep screen visible
     sleep(3);
+
+    ret = ioctl(drm_context->drm_fd, DRM_IOCTL_MODE_RMFB, &fb.fb_id);
+    if (ret != 0) { perror("DRM_IOCTL_MODE_RMFB"); }
+    fb.fb_id = 0;
+
     end("war_drm_present_dmabuf");
 }

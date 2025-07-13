@@ -1,8 +1,10 @@
-# main [src/war_main.c:33:main, 04:32:32, 07-13-2025]
-## war_vulkan_init [src/war_vulkan.c:53:war_vulkan_init]
-- VK_KHR_16bit_storage
+# main [src/war_main.c:38:main, 19:17:06, 07-13-2025]
+## war_vulkan_init [src/war_vulkan.c:57:war_vulkan_init]
+- Physical Device Name: Intel(R) Graphics (RPL-S)
+- Vendor ID: 0x8086
+- Device ID: 0xa788
 - VK_KHR_8bit_storage
-- VK_KHR_acceleration_structure
+- VK_KHR_16bit_storage
 - VK_KHR_bind_memory2
 - VK_KHR_buffer_device_address
 - VK_KHR_calibrated_timestamps
@@ -26,7 +28,6 @@
 - VK_KHR_external_semaphore
 - VK_KHR_external_semaphore_fd
 - VK_KHR_format_feature_flags2
-- VK_KHR_fragment_shader_barycentric
 - VK_KHR_fragment_shading_rate
 - VK_KHR_get_memory_requirements2
 - VK_KHR_global_priority
@@ -43,18 +44,14 @@
 - VK_KHR_maintenance5
 - VK_KHR_maintenance6
 - VK_KHR_maintenance7
+- VK_KHR_maintenance8
 - VK_KHR_map_memory2
 - VK_KHR_multiview
-- VK_KHR_pipeline_binary
 - VK_KHR_pipeline_executable_properties
 - VK_KHR_pipeline_library
 - VK_KHR_present_id
 - VK_KHR_present_wait
 - VK_KHR_push_descriptor
-- VK_KHR_ray_query
-- VK_KHR_ray_tracing_maintenance1
-- VK_KHR_ray_tracing_pipeline
-- VK_KHR_ray_tracing_position_fetch
 - VK_KHR_relaxed_block_layout
 - VK_KHR_sampler_mirror_clamp_to_edge
 - VK_KHR_sampler_ycbcr_conversion
@@ -75,7 +72,6 @@
 - VK_KHR_shader_subgroup_rotate
 - VK_KHR_shader_subgroup_uniform_control_flow
 - VK_KHR_shader_terminate_invocation
-- VK_KHR_shared_presentable_image
 - VK_KHR_spirv_1_4
 - VK_KHR_storage_buffer_storage_class
 - VK_KHR_swapchain
@@ -85,25 +81,12 @@
 - VK_KHR_uniform_buffer_standard_layout
 - VK_KHR_variable_pointers
 - VK_KHR_vertex_attribute_divisor
-- VK_KHR_video_decode_av1
-- VK_KHR_video_decode_h264
-- VK_KHR_video_decode_h265
-- VK_KHR_video_decode_queue
-- VK_KHR_video_encode_av1
-- VK_KHR_video_encode_h264
-- VK_KHR_video_encode_h265
-- VK_KHR_video_encode_quantization_map
-- VK_KHR_video_encode_queue
-- VK_KHR_video_maintenance1
-- VK_KHR_video_maintenance2
-- VK_KHR_video_queue
 - VK_KHR_vulkan_memory_model
 - VK_KHR_workgroup_memory_explicit_layout
 - VK_KHR_zero_initialize_workgroup_memory
 - VK_EXT_4444_formats
 - VK_EXT_attachment_feedback_loop_dynamic_state
 - VK_EXT_attachment_feedback_loop_layout
-- VK_EXT_blend_operation_advanced
 - VK_EXT_border_color_swizzle
 - VK_EXT_buffer_device_address
 - VK_EXT_calibrated_timestamps
@@ -116,13 +99,9 @@
 - VK_EXT_depth_clamp_zero_one
 - VK_EXT_depth_clip_control
 - VK_EXT_depth_clip_enable
-- VK_EXT_depth_range_unrestricted
 - VK_EXT_descriptor_buffer
 - VK_EXT_descriptor_indexing
-- VK_EXT_device_address_binding_report
-- VK_EXT_device_fault
-- VK_EXT_device_generated_commands
-- VK_EXT_discard_rectangles
+- VK_EXT_device_memory_report
 - VK_EXT_display_control
 - VK_EXT_dynamic_rendering_unused_attachments
 - VK_EXT_extended_dynamic_state
@@ -134,6 +113,7 @@
 - VK_EXT_global_priority
 - VK_EXT_global_priority_query
 - VK_EXT_graphics_pipeline_library
+- VK_EXT_hdr_metadata
 - VK_EXT_host_image_copy
 - VK_EXT_host_query_reset
 - VK_EXT_image_2d_view_of_3d
@@ -143,27 +123,23 @@
 - VK_EXT_image_view_min_lod
 - VK_EXT_index_type_uint8
 - VK_EXT_inline_uniform_block
+- VK_EXT_legacy_dithering
 - VK_EXT_legacy_vertex_attributes
 - VK_EXT_line_rasterization
 - VK_EXT_load_store_op_none
 - VK_EXT_map_memory_placed
 - VK_EXT_memory_budget
-- VK_EXT_memory_priority
-- VK_EXT_mesh_shader
 - VK_EXT_multi_draw
 - VK_EXT_mutable_descriptor_type
 - VK_EXT_nested_command_buffer
 - VK_EXT_non_seamless_cube_map
-- VK_EXT_opacity_micromap
-- VK_EXT_pageable_device_local_memory
 - VK_EXT_pci_bus_info
 - VK_EXT_physical_device_drm
 - VK_EXT_pipeline_creation_cache_control
 - VK_EXT_pipeline_creation_feedback
-- VK_EXT_pipeline_library_group_handles
+- VK_EXT_pipeline_protected_access
 - VK_EXT_pipeline_robustness
 - VK_EXT_post_depth_coverage
-- VK_EXT_present_mode_fifo_latest_ready
 - VK_EXT_primitive_topology_list_restart
 - VK_EXT_primitives_generated_query
 - VK_EXT_private_data
@@ -175,11 +151,12 @@
 - VK_EXT_scalar_block_layout
 - VK_EXT_separate_stencil_usage
 - VK_EXT_shader_atomic_float
+- VK_EXT_shader_atomic_float2
 - VK_EXT_shader_demote_to_helper_invocation
 - VK_EXT_shader_image_atomic_int64
 - VK_EXT_shader_module_identifier
-- VK_EXT_shader_object
 - VK_EXT_shader_replicated_composites
+- VK_EXT_shader_stencil_export
 - VK_EXT_shader_subgroup_ballot
 - VK_EXT_shader_subgroup_vote
 - VK_EXT_shader_viewport_index_layer
@@ -189,71 +166,26 @@
 - VK_EXT_tooling_info
 - VK_EXT_transform_feedback
 - VK_EXT_vertex_attribute_divisor
-- VK_EXT_vertex_attribute_robustness
 - VK_EXT_vertex_input_dynamic_state
 - VK_EXT_ycbcr_2plane_444_formats
 - VK_EXT_ycbcr_image_arrays
-- VK_NV_clip_space_w_scaling
-- VK_NV_cluster_acceleration_structure
-- VK_NV_compute_shader_derivatives
-- VK_NV_cooperative_matrix
-- VK_NV_cooperative_matrix2
-- VK_NV_cooperative_vector
-- VK_NV_copy_memory_indirect
-- VK_NV_corner_sampled_image
-- VK_NV_coverage_reduction_mode
-- VK_NV_cuda_kernel_launch
-- VK_NV_dedicated_allocation
-- VK_NV_dedicated_allocation_image_aliasing
-- VK_NV_descriptor_pool_overallocation
-- VK_NV_device_diagnostic_checkpoints
-- VK_NV_device_diagnostics_config
-- VK_NV_device_generated_commands
-- VK_NV_device_generated_commands_compute
-- VK_NV_disk_cache_utils
-- VK_NV_extended_sparse_address_space
-- VK_NV_fill_rectangle
-- VK_NV_fragment_coverage_to_color
-- VK_NV_fragment_shader_barycentric
-- VK_NV_fragment_shading_rate_enums
-- VK_NV_framebuffer_mixed_samples
-- VK_NV_geometry_shader_passthrough
-- VK_NV_inherited_viewport_scissor
-- VK_NV_internal_nvpresent
-- VK_NV_linear_color_attachment
-- VK_NV_low_latency
-- VK_NV_low_latency2
-- VK_NV_memory_decompression
-- VK_NV_mesh_shader
-- VK_NV_optical_flow
-- VK_NV_partitioned_acceleration_structure
-- VK_NV_present_metering
-- VK_NV_raw_access_chains
-- VK_NV_ray_tracing
-- VK_NV_ray_tracing_invocation_reorder
-- VK_NV_ray_tracing_motion_blur
-- VK_NV_representative_fragment_test
-- VK_NV_sample_mask_override_coverage
-- VK_NV_scissor_exclusive
-- VK_NV_shader_atomic_float16_vector
-- VK_NV_shader_image_footprint
-- VK_NV_shader_sm_builtins
-- VK_NV_shader_subgroup_partitioned
-- VK_NV_shading_rate_image
-- VK_NV_viewport_array2
-- VK_NV_viewport_swizzle
-- VK_NVX_binary_import
-- VK_NVX_image_view_handle
-- VK_NVX_multiview_per_view_attributes
 - VK_AMD_buffer_marker
+- VK_GOOGLE_decorate_string
 - VK_GOOGLE_hlsl_functionality1
 - VK_GOOGLE_user_type
+- VK_INTEL_shader_integer_functions2
+- VK_MESA_image_alignment_control
+- VK_NV_compute_shader_derivatives
+- VK_VALVE_mutable_descriptor_type
 - Looking for memory type with properties: 0x1
 - Available memory types:
-- Type 0: flags=0x0
-- Type 1: flags=0x1
-- -> Selected memory type 1
-## END war_vulkan_init [src/war_vulkan.c:585:war_vulkan_init]
-## war_drm_init [src/war_drm.c:39:war_drm_init]
-## END war_drm_init [src/war_drm.c:97:war_drm_init]
-# END main [src/war_main.c:40:main, 04:32:32, 07-13-2025]
+- Type 0: flags=0x1
+- -> Selected memory type 0
+## END war_vulkan_init [src/war_vulkan.c:598:war_vulkan_init]
+## war_drm_init [src/war_drm.c:43:war_drm_init]
+## END war_drm_init [src/war_drm.c:100:war_drm_init]
+## war_drm_present_dmabuf [src/war_drm.c:110:war_drm_present_dmabuf]
+- PRIME support: 0x3
+- ✅ Framebuffer created: fb_id=279
+No space left on device
+# END main [src/war_main.c:130:main, 19:17:06, 07-13-2025]

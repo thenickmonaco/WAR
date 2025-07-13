@@ -1,4 +1,4 @@
-# main [src/main.c:31:main, 20:33:05, 07-12-2025]
+# main [src/main.c:31:main, 22:16:08, 07-12-2025]
 ## vulkan_init [src/vulkan.c:53:vulkan_init]
 -   VK_KHR_16bit_storage
 -   VK_KHR_8bit_storage
@@ -253,5 +253,5 @@
 - Type 0: flags=0x0
 - Type 1: flags=0x1
 - -> Selected memory type 1
-## END vulkan_init [src/vulkan.c:482:vulkan_init]
-# END main [src/main.c:36:main, 20:33:05, 07-12-2025]
+## END vulkan_init [src/vulkan.c:487:vulkan_init]
+# END main [src/main.c:36:main, 22:16:08, 07-12-2025]

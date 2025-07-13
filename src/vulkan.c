@@ -52,11 +52,38 @@
 VulkanContext vulkan_init(uint32_t width, uint32_t height) {
     header("vulkan_init");
 
+    uint32_t instance_extension_count = 0;
+    vkEnumerateInstanceExtensionProperties(
+        NULL, &instance_extension_count, NULL);
+    VkExtensionProperties* instance_extensions_properties =
+        malloc(sizeof(VkExtensionProperties) * instance_extension_count);
+    vkEnumerateInstanceExtensionProperties(
+        NULL, &instance_extension_count, instance_extensions_properties);
+
+    const char* validation_layers[] = {
+        "VK_LAYER_KHRONOS_validation",
+    };
+    const char* instance_extensions[] = {
+        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
+    };
     VkInstanceCreateInfo instance_info = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .pApplicationInfo = NULL,
+        .pApplicationInfo =
+            &(VkApplicationInfo){
+                .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+                .pApplicationName = "WAR",
+                .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+                .pEngineName = "war-engine",
+                .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+                .apiVersion = VK_API_VERSION_1_2,
+            },
+        .enabledLayerCount = 1,
+        .ppEnabledLayerNames = validation_layers,
+        .enabledExtensionCount =
+            sizeof(instance_extensions) / sizeof(instance_extensions[0]),
+        .ppEnabledExtensionNames = instance_extensions,
     };
     VkInstance instance;
     VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
@@ -71,6 +98,16 @@ VulkanContext vulkan_init(uint32_t width, uint32_t height) {
     vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
     assert(gpu_count != 0);
     VkPhysicalDevice physical_device = physical_devices[0];
+
+    uint32_t device_extension_count = 0;
+    vkEnumerateDeviceExtensionProperties(
+        physical_device, NULL, &device_extension_count, NULL);
+    VkExtensionProperties* device_extensions_properties =
+        malloc(sizeof(VkExtensionProperties) * device_extension_count);
+    vkEnumerateDeviceExtensionProperties(physical_device,
+                                         NULL,
+                                         &device_extension_count,
+                                         device_extensions_properties);
 
     const char* device_extensions[] = {
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,

@@ -1,5 +1,4 @@
-# main [src/war_main.c:32:main, 04:19:33, 07-13-2025]
-- HI
+# main [src/war_main.c:33:main, 04:32:32, 07-13-2025]
 ## war_vulkan_init [src/war_vulkan.c:53:war_vulkan_init]
 - VK_KHR_16bit_storage
 - VK_KHR_8bit_storage
@@ -255,4 +254,6 @@
 - Type 1: flags=0x1
 - -> Selected memory type 1
 ## END war_vulkan_init [src/war_vulkan.c:585:war_vulkan_init]
-# END main [src/war_main.c:38:main, 04:19:33, 07-13-2025]
+## war_drm_init [src/war_drm.c:39:war_drm_init]
+## END war_drm_init [src/war_drm.c:97:war_drm_init]
+# END main [src/war_main.c:40:main, 04:32:32, 07-13-2025]

@@ -18,10 +18,12 @@
 // src/war_drm.c
 //=============================================================================
 
-#include "h/war_data.h"
 #include "h/war_drm.h"
+#include "h/war_data.h"
+#include "h/war_debug_macros.h"
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -34,10 +36,36 @@
 #include <xf86drmMode.h>
 
 WAR_DRMContext war_drm_init() {
+    header("war_drm_init");
     WAR_DRMContext ctx = {0};
 
+    DIR* dir = opendir("/dev/dri");
+    assert(dir);
+    struct dirent* entry;
+    int best_fd = -1;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "card", 4) == 0) {
+            char path[256];
+            snprintf(path, sizeof(path), "/dev/dri/%s", entry->d_name);
+
+            int fd = open(path, O_RDWR | O_CLOEXEC);
+            if (fd < 0) {
+                continue; // Could not open, skip
+            }
+
+            // Query device info here (e.g. drmGetVersion or other ioctls)
+            // Decide if this device is "better" than current best
+
+            // For example, just pick the first device:
+            best_fd = fd;
+            break; // Or implement logic to choose best device
+        }
+    }
+    closedir(dir);
+
     // Open DRM device (assume /dev/dri/card0)
-    ctx.drm_fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+    ctx.drm_fd = best_fd;
     assert(ctx.drm_fd >= 0);
 
     drmModeRes* res = drmModeGetResources(ctx.drm_fd);
@@ -66,6 +94,7 @@ WAR_DRMContext war_drm_init() {
     drmModeFreeConnector(connector);
     drmModeFreeResources(res);
 
+    end("war_drm_init");
     return ctx;
 }
 
@@ -75,6 +104,7 @@ void war_drm_present_dmabuf(WAR_DRMContext* ctx,
                             uint32_t height,
                             uint32_t format,
                             uint32_t stride) {
+    header("war_drm_present_dmabuf");
     struct drm_prime_handle args = {
         .fd = dmabuf_fd,
         .flags = 0,
@@ -107,4 +137,5 @@ void war_drm_present_dmabuf(WAR_DRMContext* ctx,
 
     // Optional: sleep to keep screen visible
     sleep(3);
+    end("war_drm_present_dmabuf");
 }

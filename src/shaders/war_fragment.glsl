@@ -23,16 +23,11 @@
 //-----------------------------------------------------------------------------
 
 #version 450
-layout(location = 0) in vec2 uv;
-layout(location = 1) in vec4 color;
 
-layout(binding = 0) uniform sampler2D tex_sampler;
+layout(location = 0) in vec4 color;
 
 layout(location = 0) out vec4 out_color;
 
 void main() {
-    vec4 tex_color = texture(tex_sampler, uv);
-    // Combine texture color with vertex color (modulate)
-    out_color = tex_color * color;
+    out_color = color;
 }
-

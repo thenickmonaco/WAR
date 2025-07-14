@@ -62,8 +62,8 @@ void war_wayland_init() {
     assert(fd >= 0);
 
     enum {
-        width = 1920,
-        height = 1080,
+        width = 3450,
+        height = 2160,
         stride = width * 4,
         ARGB8888 = 0,
     };
@@ -498,6 +498,180 @@ void war_wayland_init() {
                 dump_bytes(
                     "wl_callback::done event", msg_buffer + offset, size);
                 // COMMENT ADD: render logic
+
+                // 1. Wait for previous frame to finish (optional but
+                // recommended)
+                vkWaitForFences(vulkan_context.device,
+                                1,
+                                &vulkan_context.in_flight_fence,
+                                VK_TRUE,
+                                UINT64_MAX);
+                vkResetFences(
+                    vulkan_context.device, 1, &vulkan_context.in_flight_fence);
+
+                // 2. Begin command buffer recording
+                VkCommandBufferBeginInfo begin_info = {
+                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                };
+                vkBeginCommandBuffer(vulkan_context.cmd_buffer, &begin_info);
+
+                // 3. Begin render pass, clear color to gray (0.5, 0.5,
+                // 0.5, 1.0)
+                VkClearValue clear_color = {
+                    .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
+
+                VkRenderPassBeginInfo render_pass_info = {
+                    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                    .renderPass = vulkan_context.render_pass,
+                    .framebuffer = vulkan_context.frame_buffer,
+                    .renderArea =
+                        {
+                            .offset = {0, 0},
+                            .extent = {width, height},
+                        },
+                    .clearValueCount = 1,
+                    .pClearValues = &clear_color,
+                };
+
+                vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
+                                     &render_pass_info,
+                                     VK_SUBPASS_CONTENTS_INLINE);
+
+                // 4. Bind pipeline
+                vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  vulkan_context.pipeline);
+
+                // 5. Update vertex buffer with red quad data
+                // Example: a simple quad in NDC coords (-0.5, -0.5) to (0.5,
+                // 0.5) Vertex format: vec2 position + uint32_t color
+                // (R8G8B8A8_UNORM) Let's prepare the data and upload it:
+
+                typedef struct {
+                    float pos[2];
+                    uint32_t color;
+                } Vertex;
+
+                Vertex quad_verts[4] = {
+                    {{-0.5f, -0.5f}, 0xFF0000FF}, // red in RGBA (red opaque)
+                    {{0.5f, -0.5f}, 0xFF0000FF},
+                    {{0.5f, 0.5f}, 0xFF0000FF},
+                    {{-0.5f, 0.5f}, 0xFF0000FF},
+                };
+
+                uint16_t quad_indices[6] = {0, 1, 2, 2, 3, 0};
+
+                // Map vertex buffer memory and copy vertices
+                void* vertex_data;
+                vkMapMemory(vulkan_context.device,
+                            vulkan_context.quads_vertex_buffer_memory,
+                            0,
+                            sizeof(quad_verts),
+                            0,
+                            &vertex_data);
+                memcpy(vertex_data, quad_verts, sizeof(quad_verts));
+                vkUnmapMemory(vulkan_context.device,
+                              vulkan_context.quads_vertex_buffer_memory);
+
+                // Map index buffer memory and copy indices
+                void* index_data;
+                vkMapMemory(vulkan_context.device,
+                            vulkan_context.quads_index_buffer_memory,
+                            0,
+                            sizeof(quad_indices),
+                            0,
+                            &index_data);
+                memcpy(index_data, quad_indices, sizeof(quad_indices));
+                vkUnmapMemory(vulkan_context.device,
+                              vulkan_context.quads_index_buffer_memory);
+
+                // 6. Bind vertex and index buffers
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                       0,
+                                       1,
+                                       &vulkan_context.quads_vertex_buffer,
+                                       offsets);
+                vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                     vulkan_context.quads_index_buffer,
+                                     0,
+                                     VK_INDEX_TYPE_UINT16);
+
+                // 7. Bind descriptor sets if needed (for texture). Since you
+                // want a red quad with no texture, you can bind a dummy
+                // descriptor set or create a pipeline without texture sampling.
+                // Or you can skip this if your shader supports vertex color
+                // without texture.
+
+                // 7. Set dynamic viewport and scissor (required!)
+                VkViewport viewport = {
+                    .x = 0.0f,
+                    .y = 0.0f,
+                    .width = (float)width,
+                    .height = (float)height,
+                    .minDepth = 0.0f,
+                    .maxDepth = 1.0f,
+                };
+                vkCmdSetViewport(vulkan_context.cmd_buffer, 0, 1, &viewport);
+
+                VkRect2D scissor = {
+                    .offset = {0, 0},
+                    .extent = {width, height},
+                };
+                vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
+
+                // 8. Draw indexed quad
+                vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
+
+                // 9. End render pass and command buffer
+                vkCmdEndRenderPass(vulkan_context.cmd_buffer);
+                vkEndCommandBuffer(vulkan_context.cmd_buffer);
+
+                // 10. Submit command buffer
+                VkSubmitInfo submit_info = {
+                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                    .commandBufferCount = 1,
+                    .pCommandBuffers = &vulkan_context.cmd_buffer,
+                    // You might need to set wait semaphores here if syncing
+                    // with presentation
+                };
+                vkQueueSubmit(vulkan_context.queue,
+                              1,
+                              &submit_info,
+                              vulkan_context.in_flight_fence);
+
+                uint8_t render_attach[20];
+                write_le32(render_attach, wl_surface_id);
+                write_le16(render_attach + 4, 1);
+                write_le16(render_attach + 6, 20);
+                write_le32(render_attach + 8, wl_buffer_id);
+                write_le32(render_attach + 12, 0);
+                write_le32(render_attach + 16, 0);
+                dump_bytes("wl_surface_attach request", render_attach, 20);
+                ssize_t render_attach_written = write(fd, render_attach, 20);
+                assert(render_attach_written == 20);
+
+                uint8_t render_damage[24];
+                write_le32(render_damage, wl_surface_id);
+                write_le16(render_damage + 4, 2);
+                write_le16(render_damage + 6, 24);
+                write_le32(render_damage + 8, 0);
+                write_le32(render_damage + 12, 0);
+                write_le32(render_damage + 16, width);
+                write_le32(render_damage + 20, height);
+                dump_bytes("wl_surface_damage request", render_damage, 24);
+                ssize_t render_damage_written = write(fd, render_damage, 24);
+                assert(render_damage_written == 24);
+
+                uint8_t render_commit[8];
+                write_le32(render_commit, wl_surface_id);
+                write_le16(render_commit + 4, 6);
+                write_le16(render_commit + 6, 8);
+                dump_bytes("wl_surface_commit request", render_commit, 8);
+                ssize_t render_commit_written = write(fd, render_commit, 8);
+                assert(render_commit_written == 8);
+
                 goto done;
             wl_display_error:
                 dump_bytes(

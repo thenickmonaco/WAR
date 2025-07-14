@@ -63,6 +63,12 @@ typedef struct WAR_VulkanContext {
     VkDeviceMemory quads_vertex_buffer_memory;
     VkBuffer quads_index_buffer;
     VkDeviceMemory quads_index_buffer_memory;
+    VkImage texture_image;
+    VkDeviceMemory texture_memory;
+    VkImageView texture_image_view;
+    VkSampler texture_sampler;
+    VkDescriptorSet texture_descriptor_set;
+    VkDescriptorPool texture_descriptor_pool;
 } WAR_VulkanContext;
 
 typedef struct WAR_DRMContext {

@@ -413,6 +413,21 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     free(fragment_code);
 
+    VkDescriptorSetLayoutBinding sampler_binding = {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .pImmutableSamplers = NULL,
+    };
+    VkDescriptorSetLayoutCreateInfo descriptor_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &sampler_binding,
+    };
+    VkDescriptorSetLayout descriptor_set_layout;
+    vkCreateDescriptorSetLayout(
+        device, &descriptor_layout_info, NULL, &descriptor_set_layout);
     VkPipelineShaderStageCreateInfo shader_stages[2] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -430,8 +445,8 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext = NULL,
         .flags = 0,
-        .setLayoutCount = 0,
-        .pSetLayouts = NULL,
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptor_set_layout,
         .pushConstantRangeCount = 0,
         .pPushConstantRanges = NULL,
     };
@@ -442,7 +457,7 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
 
     VkVertexInputBindingDescription binding = {
         .binding = 0,
-        .stride = sizeof(float) * 4,
+        .stride = sizeof(float) * 8,
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
     VkVertexInputAttributeDescription attrs[] = {
@@ -454,12 +469,18 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
          .binding = 0,
          .format = VK_FORMAT_R32G32_SFLOAT,
          .offset = sizeof(float) * 2},
+        {
+            .location = 2,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+            .offset = sizeof(float) * 4,
+        },
     };
     VkPipelineVertexInputStateCreateInfo vertex_input = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 1,
         .pVertexBindingDescriptions = &binding,
-        .vertexAttributeDescriptionCount = 2,
+        .vertexAttributeDescriptionCount = 3,
         .pVertexAttributeDescriptions = attrs,
     };
 

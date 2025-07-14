@@ -54,12 +54,6 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-enum {
-    max_objects = 128,
-    max_opcodes = 128,
-    max_quads = 800,
-};
-
 void war_wayland_init() {
     // signal(SIGPIPE, SIG_IGN);
     header("war_wayland_init");
@@ -162,13 +156,14 @@ void war_wayland_init() {
     obj_op[obj_op_index(wl_registry_id, 0)] = &&wl_registry_global;
     obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
 
-    uint8_t quads_buffer[sizeof(float) * max_quads * 4 * 2 +
-                         sizeof(uint16_t) * max_quads * 6 +
-                         sizeof(uint32_t) * max_quads * 4];
+    uint8_t quads_buffer[sizeof(float) * max_quads * 4 +
+                         sizeof(float) * max_quads * 4 +
+                         sizeof(uint32_t) * max_quads * 4 +
+                         sizeof(uint16_t) * max_quads * 6];
     float* quads_x = (float*)quads_buffer;
     float* quads_y = (float*)(quads_x + max_quads * 4);
-    uint16_t* quads_indices = (uint16_t*)(quads_y + max_quads * 4);
-    uint32_t* quads_colors = (uint32_t*)(quads_indices + max_quads * 6);
+    uint32_t* quads_colors = (uint32_t*)(quads_y + max_quads * 4);
+    uint16_t* quads_indices = (uint16_t*)(quads_colors + max_quads * 4);
 
     while (1) {
         int ret = poll(&pfd, 1, -1);
@@ -1279,7 +1274,9 @@ void war_wayland_init() {
         }
     }
 
-    free(quads_buffer);
+    close(vulkan_context.dmabuf_fd);
+    vulkan_context.dmabuf_fd = -1;
+
     end("war_wayland_init");
 }
 

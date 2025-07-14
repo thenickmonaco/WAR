@@ -1,6 +1,6 @@
-# main [src/war_main.c:38:main, 22:59:30, 07-13-2025]
-## war_wayland_init [src/war_wayland.c:65:war_wayland_init]
-## war_wayland_make_fd [src/war_wayland.c:1313:war_wayland_make_fd]
+# main [src/war_main.c:38:main, 00:33:24, 07-14-2025]
+## war_wayland_init [src/war_wayland.c:59:war_wayland_init]
+## war_wayland_make_fd [src/war_wayland.c:1310:war_wayland_make_fd]
 - xdg_prefix_size: 17
 - wayland_prefix_size: 17
 - val: wayland-1
@@ -8,7 +8,7 @@
 - path: /run/user/1000/wayland-1
 - path_len: 24
 - addr_len: 26
-## END war_wayland_make_fd [src/war_wayland.c:1399:war_wayland_make_fd]
+## END war_wayland_make_fd [src/war_wayland.c:1396:war_wayland_make_fd]
 ## war_vulkan_init [src/war_vulkan.c:57:war_vulkan_init]
 - Physical Device Name: Intel(R) Graphics (RPL-S)
 - Vendor ID: 0x8086
@@ -191,32 +191,32 @@
 - Available memory types:
 - Type 0: flags=0x1
 - -> Selected memory type 0
-## END war_vulkan_init [src/war_vulkan.c:619:war_vulkan_init]
+## END war_vulkan_init [src/war_vulkan.c:717:war_vulkan_init]
 - written size: 12
 - written       ( 12 bytes): 01 00 00 00 01 00 0C 00 02 00 00 00
 - global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 01 00 00 00 07 00 00 00 77 6C 5F 73 68 6D 00 00 02 00 00 00
 - iname: wl_shm
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00
 - iname: zwp_linux_dmabuf_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00 03 00 00 00
 - bound: zwp_linux_dmabuf_v1
 - to id: 3
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: wp_linux_drm_syncobj_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 04 00 00 00
 - bound: wp_linux_drm_syncobj_manager_v1
 - to id: 4
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00
 - iname: wl_compositor
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00 05 00 00 00
 - bound: wl_compositor
 - to id: 5
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - create_surface request ( 12 bytes): 05 00 00 00 00 00 0C 00 06 00 00 00
 - bound: wl_surface
 - zwp_linux_dmabuf_v1::get_surface_feedback request ( 16 bytes): 03 00 00 00 03 00 10 00 07 00 00 00 06 00 00 00
@@ -233,25 +233,25 @@
 - iname: ext_idle_notifier_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_idle_inhibit_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 08 00 00 00
 - bound: zwp_idle_inhibit_manager_v1
 - to id: 8
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00
 - iname: zwlr_layer_shell_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00 09 00 00 00
 - bound: zwlr_layer_shell_v1
 - to id: 9
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 32 bytes): 02 00 00 00 00 00 20 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00
 - iname: xdg_wm_base
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00 0A 00 00 00
 - bound: xdg_wm_base
 - to id: 10
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - get_xdg_surface request ( 16 bytes): 0A 00 00 00 02 00 10 00 0B 00 00 00 06 00 00 00
 - bound: xdg_surface
 - get_xdg_toplevel request ( 12 bytes): 0B 00 00 00 01 00 0C 00 0C 00 00 00
@@ -263,41 +263,41 @@
 - iname: org_kde_kwin_server_decoration_manager
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: zxdg_decoration_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 0D 00 00 00
 - bound: zxdg_decoration_manager_v1
 - to id: 13
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_relative_pointer_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 0E 00 00 00
 - bound: zwp_relative_pointer_manager_v1
 - to id: 14
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00
 - iname: zwp_pointer_constraints_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00 0F 00 00 00
 - bound: zwp_pointer_constraints_v1
 - to id: 15
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00
 - iname: wp_presentation
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00 10 00 00 00
 - bound: wp_presentation
 - to id: 16
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 13 00 00 00 15 00 00 00 77 70 5F 61 6C 70 68 61 5F 6D 6F 64 69 66 69 65 72 5F 76 31 00 00 00 00 01 00 00 00
 - iname: wp_alpha_modifier_v1
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00
 - iname: zwlr_output_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00 11 00 00 00
 - bound: zwlr_output_manager_v1
 - to id: 17
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 15 00 00 00 1D 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 70 6F 77 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 01 00 00 00
 - iname: zwlr_output_power_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 16 00 00 00 1C 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 6D 65 74 68 6F 64 5F 6D 61 6E 61 67 65 72 5F 76 32 00 01 00 00 00
@@ -306,11 +306,11 @@
 - iname: zwp_text_input_manager_v3
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00
 - iname: ext_foreign_toplevel_list_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00 12 00 00 00
 - bound: ext_foreign_toplevel_list_v1
 - to id: 18
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 56 bytes): 02 00 00 00 00 00 38 00 19 00 00 00 21 00 00 00 7A 77 6C 72 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 03 00 00 00
 - iname: zwlr_foreign_toplevel_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 1A 00 00 00 1C 00 00 00 65 78 74 5F 73 65 73 73 69 6F 6E 5F 6C 6F 63 6B 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
@@ -329,38 +329,38 @@
 - iname: ext_output_image_capture_source_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00
 - iname: zwlr_data_control_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00 13 00 00 00
 - bound: zwlr_data_control_manager_v1
 - to id: 19
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 22 00 00 00 1C 00 00 00 65 78 74 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: ext_data_control_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 23 00 00 00 1F 00 00 00 77 70 5F 73 65 63 75 72 69 74 79 5F 63 6F 6E 74 65 78 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_security_context_manager_v1
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00
 - iname: wp_viewporter
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00 14 00 00 00
 - bound: wp_viewporter
 - to id: 20
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 56 bytes): 02 00 00 00 00 00 38 00 25 00 00 00 22 00 00 00 77 70 5F 73 69 6E 67 6C 65 5F 70 69 78 65 6C 5F 62 75 66 66 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: wp_single_pixel_buffer_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_content_type_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 15 00 00 00
 - bound: wp_content_type_manager_v1
 - to id: 21
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_fractional_scale_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 16 00 00 00
 - bound: wp_fractional_scale_manager_v1
 - to id: 22
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 28 00 00 00 1E 00 00 00 77 70 5F 74 65 61 72 69 6E 67 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: wp_tearing_control_manager_v1
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 29 00 00 00 11 00 00 00 7A 78 64 67 5F 65 78 70 6F 72 74 65 72 5F 76 31 00 00 00 00 01 00 00 00
@@ -373,49 +373,49 @@
 - iname: zxdg_importer_v2
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00
 - iname: xdg_activation_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00 17 00 00 00
 - bound: xdg_activation_v1
 - to id: 23
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 2E 00 00 00 1B 00 00 00 77 70 5F 63 75 72 73 6F 72 5F 73 68 61 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_cursor_shape_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_virtual_keyboard_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 18 00 00 00
 - bound: zwp_virtual_keyboard_manager_v1
 - to id: 24
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 30 00 00 00 20 00 00 00 7A 77 6C 72 5F 76 69 72 74 75 61 6C 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 02 00 00 00
 - iname: zwlr_virtual_pointer_manager_v1
 - global event  ( 64 bytes): 02 00 00 00 00 00 40 00 31 00 00 00 2A 00 00 00 7A 77 70 5F 6B 65 79 62 6F 61 72 64 5F 73 68 6F 72 74 63 75 74 73 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: zwp_keyboard_shortcuts_inhibit_manager_v1
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00
 - iname: zwp_pointer_gestures_v1
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00 19 00 00 00
 - bound: zwp_pointer_gestures_v1
 - to id: 25
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 33 00 00 00 1E 00 00 00 65 78 74 5F 74 72 61 6E 73 69 65 6E 74 5F 73 65 61 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: ext_transient_seat_manager_v1
 - global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00
 - iname: wl_seat
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 32 bytes): 02 00 00 00 00 00 20 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00 1A 00 00 00
 - bound: wl_seat
 - to id: 26
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - global event  ( 60 bytes): 02 00 00 00 00 00 3C 00 36 00 00 00 28 00 00 00 7A 77 70 5F 70 72 69 6D 61 72 79 5F 73 65 6C 65 63 74 69 6F 6E 5F 64 65 76 69 63 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_primary_selection_device_manager_v1
 - global event  ( 32 bytes): 02 00 00 00 00 00 20 00 3B 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00
 - iname: wl_output
-## war_wayland_registry_bind [src/war_wayland.c:1291:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1288:war_wayland_registry_bind]
 - bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 3B 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00 1B 00 00 00
 - bound: wl_output
 - to id: 27
-## END war_wayland_registry_bind [src/war_wayland.c:1309:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1306:war_wayland_registry_bind]
 - zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
 - zwp_linux_dmabuf_feedback_v1_format_table event ( 12 bytes): 07 00 00 00 01 00 0C 00 E0 0E 00 00
 - zwp_linux_dmabuf_feedback_v1_tranche_target_device event ( 20 bytes): 07 00 00 00 04 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
@@ -429,12 +429,12 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 1C 00 00 00 03 00 1C 00 1D 00 00 00 80 07 00 00 38 04 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 1C 00 00 00 00 00 08 00
-- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 B0 EB 00 00
-- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 B0 EB 00 00
+- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 23 59 01 00
+- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 23 59 01 00
 - xdg_toplevel_wm_capabilities event ( 20 bytes): 0C 00 00 00 03 00 14 00 08 00 00 00 01 00 00 00 02 00 00 00
 - xdg_toplevel_configure event ( 20 bytes): 0C 00 00 00 00 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 B1 EB 00 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 B1 EB 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 24 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 24 59 01 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -467,17 +467,17 @@
 - wl_surface::commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 05 00 00 FF
 - xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 B2 EB 00 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 B2 EB 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 25 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 25 59 01 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 21 00 00 00
 - wl_keyboard_keymap event ( 16 bytes): 1F 00 00 00 00 00 10 00 01 00 00 00 6F 00 01 00
 - wl_keyboard_repeat_info event ( 16 bytes): 1F 00 00 00 05 00 10 00 19 00 00 00 96 00 00 00
-- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 B7 EB 00 00 06 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 B8 EB 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- wl_callback::done event ( 12 bytes): 1E 00 00 00 00 00 0C 00 AD F5 97 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 2A 59 01 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 2B 59 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_callback::done event ( 12 bytes): 1E 00 00 00 00 00 0C 00 AA EB ED 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 1E 00 00 00
 - wl_surface_enter event ( 12 bytes): 06 00 00 00 00 00 0C 00 1B 00 00 00
 - wl_surface_preferred_buffer_transform event ( 12 bytes): 06 00 00 00 03 00 0C 00 00 00 00 00
@@ -498,194 +498,472 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 22 00 00 00 03 00 1C 00 23 00 00 00 80 07 00 00 38 04 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 22 00 00 00 00 00 08 00
-- wl_callback::done event ( 12 bytes): 21 00 00 00 00 00 0C 00 B0 F5 97 00
+- wl_callback::done event ( 12 bytes): 21 00 00 00 00 00 0C 00 B0 EB ED 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 21 00 00 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
-- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 BB EB 00 00 06 00 00 00
+- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 2E 59 01 00 06 00 00 00
 - xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 BC EB 00 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 BC EB 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 2F 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 2F 59 01 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 24 00 00 00
 - wl_buffer_release event (  8 bytes): 1D 00 00 00 00 00 08 00
-- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 C5 EB 00 00 06 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 C6 EB 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 C8 EB 00 00 06 00 00 00 C0 09 00 00 6E D5 01 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 39 59 01 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 3A 59 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 3B 59 01 00 06 00 00 00 2D 21 01 00 36 12 02 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
 - xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 C4 EB 00 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 C4 EB 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 38 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 38 59 01 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 25 00 00 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 3B FA 97 00 E3 65 00 00 64 B9 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 FB EE ED 00 0F 70 01 00 09 FE 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_callback::done event ( 12 bytes): 24 00 00 00 00 00 0C 00 3D FA 97 00
+- wl_callback::done event ( 12 bytes): 24 00 00 00 00 00 0C 00 FE EE ED 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 24 00 00 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 40 FA 97 00 DB C2 00 00 1D 9F 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 00 EF ED 00 EA B9 01 00 9F EF 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 44 FA 97 00 EB 22 01 00 8B 84 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 04 EF ED 00 50 FE 01 00 7B E7 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4A FA 97 00 91 7A 01 00 A6 6A 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 09 EF ED 00 57 40 02 00 BE E5 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4E FA 97 00 C7 CB 01 00 80 54 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0D EF ED 00 D5 79 02 00 BE E5 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 52 FA 97 00 35 20 02 00 D9 3D 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 12 EF ED 00 34 9F 02 00 FD E6 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 56 FA 97 00 EA 6A 02 00 2C 2B 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 16 EF ED 00 27 BA 02 00 22 EB 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5B FA 97 00 03 A6 02 00 2D 1D 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 1B EF ED 00 F7 CC 02 00 D6 EF 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5F FA 97 00 6D DA 02 00 12 10 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 1F EF ED 00 84 D9 02 00 05 F4 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 64 FA 97 00 80 06 03 00 63 05 01 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 25 EF ED 00 3B E5 02 00 E1 F9 01 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 69 FA 97 00 12 2C 03 00 B1 FB 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 29 EF ED 00 45 EF 02 00 69 01 02 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6D FA 97 00 C2 49 03 00 91 F4 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2D EF ED 00 CD F6 02 00 C7 09 02 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 71 FA 97 00 FF 5D 03 00 87 F0 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 31 EF ED 00 55 FE 02 00 D1 13 02 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 76 FA 97 00 FF 5D 03 00 10 ED 00 00
+- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 3C 59 01 00 06 00 00 00
 - wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7A FA 97 00 FF 5D 03 00 64 EB 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7F FA 97 00 FF 5D 03 00 B7 E9 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 9E FA 97 00 5B 5C 03 00 5C EB 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 A3 FA 97 00 F7 54 03 00 1B F1 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 A8 FA 97 00 40 49 03 00 CD F7 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 AC FA 97 00 D0 3B 03 00 85 FE 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 B0 FA 97 00 01 2A 03 00 A5 05 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 B5 FA 97 00 FF 13 03 00 D0 0E 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 B9 FA 97 00 BE FA 02 00 EA 18 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 BE FA 97 00 AD DC 02 00 CD 25 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 C2 FA 97 00 F1 BA 02 00 40 37 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 C7 FA 97 00 45 92 02 00 3B 4A 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 CB FA 97 00 FC 65 02 00 16 61 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 D0 FA 97 00 26 3E 02 00 14 73 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 D4 FA 97 00 2B 18 02 00 11 86 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 D9 FA 97 00 EA F4 01 00 A8 94 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 DD FA 97 00 56 D5 01 00 10 A1 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 E2 FA 97 00 7D B6 01 00 E0 A9 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 E7 FA 97 00 6C 9B 01 00 34 B2 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 EB FA 97 00 D6 81 01 00 88 B7 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 EF FA 97 00 12 6C 01 00 80 BA 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F4 FA 97 00 69 5C 01 00 80 BA 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F8 FA 97 00 06 4F 01 00 80 BA 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 FD FA 97 00 26 44 01 00 D4 B8 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 01 FB 97 00 C7 3B 01 00 7B B5 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 06 FB 97 00 EC 35 01 00 22 B2 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0A FB 97 00 E7 30 01 00 F3 AD 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0F FB 97 00 8E 2D 01 00 9A AA 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 13 FB 97 00 0B 2B 01 00 42 A7 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 18 FB 97 00 5F 29 01 00 BA 9F 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 1C FB 97 00 35 2A 01 00 85 96 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 21 FB 97 00 64 2E 01 00 F8 89 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 26 FB 97 00 DD 36 01 00 B8 7A 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2A FB 97 00 13 43 01 00 DF 68 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2E FB 97 00 81 53 01 00 50 53 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 33 FB 97 00 69 66 01 00 66 41 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 37 FB 97 00 98 7C 01 00 44 31 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 3C FB 97 00 10 90 01 00 95 25 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 40 FB 97 00 A6 A5 01 00 13 1E 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 44 FB 97 00 3A BA 01 00 32 18 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 49 FB 97 00 CB CD 01 00 67 15 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4E FB 97 00 3E DD 01 00 67 15 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 52 FB 97 00 78 EB 01 00 3D 16 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 57 FB 97 00 2F F7 01 00 BF 18 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5B FB 97 00 39 01 02 00 EE 1C 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 60 FB 97 00 C1 08 02 00 1D 21 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 65 FB 97 00 C6 0D 02 00 23 26 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 69 FB 97 00 1F 11 02 00 28 2B 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6D FB 97 00 A2 13 02 00 57 2F 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 72 FB 97 00 78 14 02 00 09 36 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 76 FB 97 00 A2 13 02 00 13 40 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7B FB 97 00 49 10 02 00 F4 4A 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7F FB 97 00 6D 0A 02 00 81 57 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 85 FB 97 00 38 01 02 00 69 67 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 89 FB 97 00 E6 F3 01 00 4C 7D 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 8D FB 97 00 4F E1 01 00 2A 93 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 91 FB 97 00 3B CA 01 00 8D AC 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 96 FB 97 00 46 AF 01 00 04 C3 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 9A FB 97 00 D7 93 01 00 BB D8 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 9F FB 97 00 FF 6D 01 00 7C F4 01 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 A3 FB 97 00 05 40 01 00 A8 12 02 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 C9 EB 00 00 06 00 00 00
-- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
-- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 CA EB 00 00 06 00 00 00
+- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 3E 59 01 00 06 00 00 00
 - xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 CB EB 00 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 CB EB 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 3F 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 3F 59 01 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
-- wl_callback::done event ( 12 bytes): 25 00 00 00 00 00 0C 00 BD FB 97 00
+- wl_callback::done event ( 12 bytes): 25 00 00 00 00 00 0C 00 BA EF ED 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 25 00 00 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 49 59 01 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 4A 59 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 4B 59 01 00 06 00 00 00 61 4F 00 00 43 D4 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 48 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 48 59 01 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 27 00 00 00
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 DB EF ED 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 DD EF ED 00 E8 82 00 00 FE 84 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 E2 EF ED 00 6B B9 00 00 E8 3E 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 E6 EF ED 00 16 FD 00 00 3F F9 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 EB EF ED 00 29 42 01 00 04 C0 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 EF EF ED 00 33 8F 01 00 F1 8D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F3 EF ED 00 13 E6 01 00 EF 5C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F7 EF ED 00 E5 3F 02 00 70 36 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 FC EF ED 00 8E 89 02 00 49 1D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 01 F0 ED 00 40 CD 02 00 C6 0C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 06 F0 ED 00 81 08 03 00 DC 01 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0A F0 ED 00 8E 3B 03 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0F F0 ED 00 FF 5D 03 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 17 F0 ED 00 FF 5D 03 00 38 02 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 1B F0 ED 00 FF 5D 03 00 57 06 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 21 F0 ED 00 FF 5D 03 00 D1 0A 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 25 F0 ED 00 FF 5D 03 00 61 13 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2A F0 ED 00 FF 5D 03 00 28 1A 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2E F0 ED 00 FF 5D 03 00 B0 21 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 32 F0 ED 00 FF 5D 03 00 62 28 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 36 F0 ED 00 FF 5D 03 00 E9 2F 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 3C F0 ED 00 FF 5D 03 00 EF 34 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 40 F0 ED 00 FF 5D 03 00 1E 39 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 45 F0 ED 00 FF 5D 03 00 CF 3F 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 49 F0 ED 00 FF 5D 03 00 04 49 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4E F0 ED 00 D0 59 03 00 3D 57 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 52 F0 ED 00 C6 50 03 00 09 6C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 56 F0 ED 00 E2 40 03 00 AE 8A 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5A F0 ED 00 FB 28 03 00 AC B7 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 60 F0 ED 00 08 0B 03 00 29 E8 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 64 F0 ED 00 C2 E4 02 00 FA 1F 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 69 F0 ED 00 13 B5 02 00 2D 58 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6D F0 ED 00 4E 85 02 00 C5 8E 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 72 F0 ED 00 C4 4C 02 00 4F C7 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 76 F0 ED 00 8E 12 02 00 B4 FF 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 4C 59 01 00 06 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 4D 59 01 00 06 00 00 00 04 31 00 00 F1 EA 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 D5 F0 ED 00 FB 48 00 00 11 8D 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 DA F0 ED 00 17 70 00 00 9C 22 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 DE F0 ED 00 85 A5 00 00 A9 B2 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 E2 F0 ED 00 25 E2 00 00 CF 4C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 E7 F0 ED 00 18 14 01 00 7D 0B 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 EB F0 ED 00 8A 3D 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F0 F0 ED 00 22 65 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F4 F0 ED 00 F6 95 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 FA F0 ED 00 54 C2 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 FE F0 ED 00 FD F0 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 02 F1 ED 00 FF 25 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 06 F1 ED 00 95 5D 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0B F1 ED 00 22 87 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0F F1 ED 00 B2 A9 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 14 F1 ED 00 8D C5 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 19 F1 ED 00 FC DD 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 1D F1 ED 00 99 F2 02 00 F6 01 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 21 F1 ED 00 A5 03 03 00 A7 04 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 26 F1 ED 00 47 10 03 00 05 08 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2A F1 ED 00 51 1A 03 00 35 0C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2F F1 ED 00 86 23 03 00 3A 11 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 33 F1 ED 00 37 2A 03 00 3F 16 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 39 F1 ED 00 66 2E 03 00 98 19 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 3D F1 ED 00 6C 33 03 00 73 1F 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 41 F1 ED 00 EE 35 03 00 79 24 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 45 F1 ED 00 71 38 03 00 54 2A 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4A F1 ED 00 71 38 03 00 88 33 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4E F1 ED 00 71 38 03 00 3F 3F 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 53 F1 ED 00 71 38 03 00 79 4D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 58 F1 ED 00 E9 35 03 00 7F 5D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5D F1 ED 00 6D 32 03 00 87 71 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 61 F1 ED 00 8A 2B 03 00 18 8C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 65 F1 ED 00 B9 22 03 00 A5 A7 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 69 F1 ED 00 A0 18 03 00 EF C5 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6E F1 ED 00 0B 0D 03 00 4F E1 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 73 F1 ED 00 BB 01 03 00 05 FB 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 78 F1 ED 00 C3 F5 02 00 F7 10 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7C F1 ED 00 25 E9 02 00 52 26 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 80 F1 ED 00 4A D6 02 00 B8 3E 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 84 F1 ED 00 E6 BF 02 00 D3 59 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 89 F1 ED 00 2A A5 02 00 E1 76 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 8D F1 ED 00 E6 82 02 00 D4 97 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 93 F1 ED 00 C2 5A 02 00 6F BA 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 97 F1 ED 00 E8 28 02 00 F0 E2 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 9C F1 ED 00 4C F2 01 00 E2 07 02 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 4E 59 01 00 06 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 4F 59 01 00 06 00 00 00 F0 69 00 00 FF F2 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F1 F1 ED 00 87 75 00 00 22 AA 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 F6 F1 ED 00 6C 89 00 00 2F 5E 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 FA F1 ED 00 53 A8 00 00 04 10 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 FF F1 ED 00 8C CA 00 00 C5 C9 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 03 F2 ED 00 78 ED 00 00 E8 8D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 07 F2 ED 00 7C 1A 01 00 E2 57 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 0B F2 ED 00 C4 49 01 00 AC 2D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 11 F2 ED 00 B1 73 01 00 14 08 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 15 F2 ED 00 65 A9 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 1A F2 ED 00 85 E0 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 1E F2 ED 00 49 14 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 23 F2 ED 00 13 49 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 27 F2 ED 00 BE 7B 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2C F2 ED 00 3E AB 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 30 F2 ED 00 C0 D4 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 35 F2 ED 00 61 F4 02 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 39 F2 ED 00 F0 0E 03 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 3E F2 ED 00 C7 23 03 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 42 F2 ED 00 02 33 03 00 89 02 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 46 F2 ED 00 98 3F 03 00 BB 06 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4A F2 ED 00 78 4A 03 00 97 0C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 50 F2 ED 00 83 54 03 00 F5 14 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 54 F2 ED 00 E1 5C 03 00 FF 1E 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 59 F2 ED 00 FF 5D 03 00 39 2D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5D F2 ED 00 FF 5D 03 00 C9 3D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 62 F2 ED 00 FF 5D 03 00 86 52 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 66 F2 ED 00 FF 5D 03 00 02 6C 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6A F2 ED 00 AB 5C 03 00 2C 9D 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6F F2 ED 00 99 51 03 00 38 F0 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 74 F2 ED 00 78 3E 03 00 09 4C 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 78 F2 ED 00 7D 20 03 00 43 C6 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 50 59 01 00 06 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 52 59 01 00 06 00 00 00
+- xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 53 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 53 59 01 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 28 00 00 00
+- wl_callback::done event ( 12 bytes): 27 00 00 00 00 00 0C 00 F3 F2 ED 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 27 00 00 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 5C 59 01 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 5D 59 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 5F 59 01 00 06 00 00 00 FD 1A 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 5B 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 5B 59 01 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 29 00 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 23 F3 ED 00 06 3A 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_callback::done event ( 12 bytes): 28 00 00 00 00 00 0C 00 25 F3 ED 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 28 00 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 28 F3 ED 00 F8 5F 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 2C F3 ED 00 37 87 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 31 F3 ED 00 C5 A3 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 35 F3 ED 00 2D BB 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 3A F3 ED 00 0E D7 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 3E F3 ED 00 3F F3 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 44 F3 ED 00 66 0E 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 48 F3 ED 00 45 2C 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 4C F3 ED 00 A7 4D 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 50 F3 ED 00 67 71 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 55 F3 ED 00 EC 8D 01 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 59 F3 ED 00 EC A7 01 00 FF 03 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5E F3 ED 00 D4 BC 01 00 C0 08 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 63 F3 ED 00 9B CE 01 00 DC 0F 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 68 F3 ED 00 53 DD 01 00 C9 16 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6C F3 ED 00 E3 EB 01 00 36 20 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 70 F3 ED 00 2F F7 01 00 C5 29 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 74 F3 ED 00 59 01 02 00 A0 35 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 79 F3 ED 00 B0 0A 02 00 E8 44 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7D F3 ED 00 F9 13 02 00 44 5A 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 83 F3 ED 00 EA 1A 02 00 0A 75 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 87 F3 ED 00 6E 20 02 00 3B 97 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 8B F3 ED 00 6E 20 02 00 D1 C7 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 8F F3 ED 00 6E 20 02 00 9F 08 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 94 F3 ED 00 F4 1B 02 00 51 41 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 98 F3 ED 00 88 11 02 00 62 7B 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 9D F3 ED 00 89 02 02 00 5D B4 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 A2 F3 ED 00 A5 F3 01 00 F4 EC 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 60 59 01 00 06 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 62 59 01 00 06 00 00 00
+- xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 63 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 63 59 01 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 2A 00 00 00
+- wl_callback::done event ( 12 bytes): 29 00 00 00 00 00 0C 00 23 F4 ED 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 29 00 00 00
+- wl_keyboard_enter event ( 20 bytes): 1F 00 00 00 01 00 14 00 6C 59 01 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 1F 00 00 00 04 00 1C 00 6D 59 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_pointer_enter event ( 24 bytes): 20 00 00 00 00 00 18 00 6F 59 01 00 06 00 00 00 AC 13 00 00 DF C3 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 6B 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 6B 59 01 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 2B 00 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 5F F4 ED 00 AD 43 00 00 47 AD 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_callback::done event ( 12 bytes): 2A 00 00 00 00 00 0C 00 62 F4 ED 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 2A 00 00 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 64 F4 ED 00 35 75 00 00 4C 9C 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 68 F4 ED 00 F9 A4 00 00 04 90 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 6C F4 ED 00 59 D7 00 00 20 87 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 70 F4 ED 00 D9 0A 01 00 B6 82 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 75 F4 ED 00 F8 2D 01 00 B6 82 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 79 F4 ED 00 62 4A 01 00 B6 82 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 7F F4 ED 00 0C 62 01 00 AF 84 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 83 F4 ED 00 10 76 01 00 69 87 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 88 F4 ED 00 C7 86 01 00 EE 8A 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 8C F4 ED 00 15 95 01 00 D2 90 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 90 F4 ED 00 C7 A3 01 00 BD 97 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 94 F4 ED 00 96 B2 01 00 93 9F 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 9A F4 ED 00 3E BF 01 00 B4 A9 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 9E F4 ED 00 3A CA 01 00 88 B5 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 A3 F4 ED 00 8C D3 01 00 16 C3 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 A7 F4 ED 00 68 DA 01 00 61 D3 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 AB F4 ED 00 10 DF 01 00 E0 E7 01 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 20 00 00 00 02 00 14 00 AF F4 ED 00 1C E1 01 00 78 02 02 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_pointer_leave event ( 16 bytes): 20 00 00 00 01 00 10 00 70 59 01 00 06 00 00 00
+- wl_pointer_frame event (  8 bytes): 20 00 00 00 05 00 08 00
+- wl_keyboard_leave event ( 16 bytes): 1F 00 00 00 02 00 10 00 72 59 01 00 06 00 00 00
+- xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 73 59 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 73 59 01 00
+- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 23 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 80 07 00 00 38 04 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 2C 00 00 00
+- wl_callback::done event ( 12 bytes): 2B 00 00 00 00 00 0C 00 64 F5 ED 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 2B 00 00 00

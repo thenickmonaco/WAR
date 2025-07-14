@@ -34,6 +34,12 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+enum {
+    max_objects = 128,
+    max_opcodes = 128,
+    max_quads = 800,
+};
+
 typedef struct WAR_VulkanContext {
     int dmabuf_fd;
     VkInstance instance;
@@ -53,6 +59,10 @@ typedef struct WAR_VulkanContext {
     VkFence in_flight_fence;
     VkSemaphore image_available_semaphore;
     VkSemaphore render_finished_semaphore;
+    VkBuffer quads_vertex_buffer;
+    VkDeviceMemory quads_vertex_buffer_memory;
+    VkBuffer quads_index_buffer;
+    VkDeviceMemory quads_index_buffer_memory;
 } WAR_VulkanContext;
 
 typedef struct WAR_DRMContext {

@@ -137,6 +137,8 @@ void war_drm_present_dmabuf(WAR_DRMContext* drm_context,
     ret = ioctl(drm_context->drm_fd, DRM_IOCTL_MODE_ADDFB2, &fb);
     if (ret != 0) {
         perror("");
+        struct drm_gem_close gem_close = {.handle = handle};
+        ioctl(drm_context->drm_fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
         return;
     } else if (ret == 0) {
         call_carmack("✅ Framebuffer created: fb_id=%u", fb.fb_id);
@@ -152,6 +154,9 @@ void war_drm_present_dmabuf(WAR_DRMContext* drm_context,
                          &drm_context->mode);
     if (ret != 0) {
         perror("");
+        ioctl(drm_context->drm_fd, DRM_IOCTL_MODE_RMFB, &fb.fb_id);
+        struct drm_gem_close gem_close = {.handle = handle};
+        ioctl(drm_context->drm_fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
         return;
     }
 
@@ -160,6 +165,11 @@ void war_drm_present_dmabuf(WAR_DRMContext* drm_context,
     ret = ioctl(drm_context->drm_fd, DRM_IOCTL_MODE_RMFB, &fb.fb_id);
     if (ret != 0) { perror("DRM_IOCTL_MODE_RMFB"); }
     fb.fb_id = 0;
+
+    struct drm_gem_close gem_close = {
+        .handle = handle,
+    };
+    ioctl(drm_context->drm_fd, DRM_IOCTL_GEM_CLOSE, &gem_close);
 
     end("war_drm_present_dmabuf");
 }

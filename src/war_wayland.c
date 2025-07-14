@@ -57,7 +57,7 @@
 enum {
     max_objects = 128,
     max_opcodes = 128,
-    max_quads = 512,
+    max_quads = 800,
 };
 
 void war_wayland_init() {
@@ -163,10 +163,12 @@ void war_wayland_init() {
     obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
 
     uint8_t quads_buffer[sizeof(float) * max_quads * 4 * 2 +
-                         sizeof(uint16_t) * max_quads * 6];
+                         sizeof(uint16_t) * max_quads * 6 +
+                         sizeof(uint32_t) * max_quads * 4];
     float* quads_x = (float*)quads_buffer;
     float* quads_y = (float*)(quads_x + max_quads * 4);
     uint16_t* quads_indices = (uint16_t*)(quads_y + max_quads * 4);
+    uint32_t* quads_colors = (uint32_t*)(quads_indices + max_quads * 6);
 
     while (1) {
         int ret = poll(&pfd, 1, -1);

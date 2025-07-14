@@ -34,6 +34,11 @@
 
 // COMMENT OPTIMIZE: Duff's Device + SIMD (intrinsics)
 
+static inline uint32_t pad_to_scale(float value, uint32_t scale) {
+    uint32_t rounded = (uint32_t)(value + 0.5f);
+    return (rounded + scale - 1) / scale * scale;
+}
+
 static inline uint32_t read_le32(const uint8_t* p) {
     return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);

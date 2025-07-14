@@ -73,7 +73,7 @@ void war_wayland_init() {
 
 #if DMABUF
     WAR_VulkanContext vulkan_context =
-        war_vulkan_init(logical_width, logical_height);
+        war_vulkan_init(physical_width, physical_height);
     assert(vulkan_context.dmabuf_fd >= 0);
 #endif
 
@@ -85,7 +85,7 @@ void war_wayland_init() {
         return;
     }
 
-    if (syscall(SYS_ftruncate, shm_fd, stride * logical_height) < 0) {
+    if (syscall(SYS_ftruncate, shm_fd, stride * physical_height) < 0) {
         call_carmack("error: ftruncate");
         close(shm_fd);
         return;
@@ -532,7 +532,7 @@ void war_wayland_init() {
                     .renderArea =
                         {
                             .offset = {0, 0},
-                            .extent = {logical_width, logical_height},
+                            .extent = {physical_width, physical_height},
                         },
                     .clearValueCount = 1,
                     .pClearValues = &clear_color,
@@ -612,8 +612,8 @@ void war_wayland_init() {
                 VkViewport viewport = {
                     .x = 0.0f,
                     .y = 0.0f,
-                    .logical_width = (float)logical_width,
-                    .logical_height = (float)logical_height,
+                    .width = (float)physical_width,
+                    .height = (float)physical_height,
                     .minDepth = 0.0f,
                     .maxDepth = 1.0f,
                 };
@@ -621,7 +621,7 @@ void war_wayland_init() {
 
                 VkRect2D scissor = {
                     .offset = {0, 0},
-                    .extent = {logical_width, logical_height},
+                    .extent = {physical_width, physical_height},
                 };
                 vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
 
@@ -662,8 +662,8 @@ void war_wayland_init() {
                 write_le16(render_damage + 6, 24);
                 write_le32(render_damage + 8, 0);
                 write_le32(render_damage + 12, 0);
-                write_le32(render_damage + 16, logical_width);
-                write_le32(render_damage + 20, logical_height);
+                write_le32(render_damage + 16, physical_width);
+                write_le32(render_damage + 20, physical_height);
                 dump_bytes("wl_surface_damage request", render_damage, 24);
                 ssize_t render_damage_written = write(fd, render_damage, 24);
                 assert(render_damage_written == 24);
@@ -695,7 +695,7 @@ void war_wayland_init() {
                     write_le16(create_pool + 6,
                                16); // message size = 12 + 4 bytes for pool size
                     write_le32(create_pool + 8, new_id); // new pool id
-                    uint32_t pool_size = stride * logical_height;
+                    uint32_t pool_size = stride * physical_height;
                     struct iovec iov[2] = {
                         {.iov_base = create_pool, .iov_len = 12},
                         {.iov_base = &pool_size, .iov_len = 4}};
@@ -727,8 +727,8 @@ void war_wayland_init() {
                     write_le16(create_buffer + 6, 32);
                     write_le32(create_buffer + 8, new_id);
                     write_le32(create_buffer + 12, 0); // offset
-                    write_le32(create_buffer + 16, logical_width);
-                    write_le32(create_buffer + 20, logical_height);
+                    write_le32(create_buffer + 16, physical_width);
+                    write_le32(create_buffer + 20, physical_height);
                     write_le32(create_buffer + 24, stride);
                     write_le32(create_buffer + 28, ARGB8888);
                     dump_bytes(
@@ -792,8 +792,8 @@ void war_wayland_init() {
                 write_le16(damage + 6, 24);
                 write_le32(damage + 8, 0);
                 write_le32(damage + 12, 0);
-                write_le32(damage + 16, logical_width);
-                write_le32(damage + 20, logical_height);
+                write_le32(damage + 16, physical_width);
+                write_le32(damage + 20, physical_height);
                 dump_bytes("wl_surface_damage request", damage, 24);
                 ssize_t damage_written = write(fd, damage, 24);
                 assert(damage_written == 24);
@@ -848,8 +848,8 @@ void war_wayland_init() {
                 write_le16(shm_damage + 6, 24);
                 write_le32(shm_damage + 8, 0);
                 write_le32(shm_damage + 12, 0);
-                write_le32(shm_damage + 16, logical_width);
-                write_le32(shm_damage + 20, logical_height);
+                write_le32(shm_damage + 16, physical_width);
+                write_le32(shm_damage + 20, physical_height);
                 dump_bytes("wl_surface_damage request", shm_damage, 24);
                 ssize_t shm_damage_written = write(fd, shm_damage, 24);
                 assert(shm_damage_written == 24);
@@ -978,8 +978,8 @@ void war_wayland_init() {
                                // variables names
                 write_le16(create_immed + 6, 28);
                 write_le32(create_immed + 8, new_id);
-                write_le32(create_immed + 12, logical_width);
-                write_le32(create_immed + 16, logical_height);
+                write_le32(create_immed + 12, physical_width);
+                write_le32(create_immed + 16, physical_height);
                 write_le32(create_immed + 20, DRM_FORMAT_ARGB8888);
                 write_le32(create_immed + 24, 0);
                 dump_bytes("zwp_linux_buffer_params_v1::create_immed request",
@@ -1085,8 +1085,8 @@ void war_wayland_init() {
                 write_le16(scale_damage + 6, 24);
                 write_le32(scale_damage + 8, 0);
                 write_le32(scale_damage + 12, 0);
-                write_le32(scale_damage + 16, logical_width);
-                write_le32(scale_damage + 20, logical_height);
+                write_le32(scale_damage + 16, physical_width);
+                write_le32(scale_damage + 20, physical_height);
                 dump_bytes("wl_surface_damage request", scale_damage, 24);
                 ssize_t scale_damage_written = write(fd, scale_damage, 24);
                 assert(scale_damage_written == 24);
@@ -1136,8 +1136,8 @@ void war_wayland_init() {
                 write_le16(transform_damage + 6, 24);
                 write_le32(transform_damage + 8, 0);
                 write_le32(transform_damage + 12, 0);
-                write_le32(transform_damage + 16, logical_width);
-                write_le32(transform_damage + 20, logical_height);
+                write_le32(transform_damage + 16, physical_width);
+                write_le32(transform_damage + 20, physical_height);
                 dump_bytes("wl_surface_damage request", transform_damage, 24);
                 ssize_t transform_damage_written =
                     write(fd, transform_damage, 24);

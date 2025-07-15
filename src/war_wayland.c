@@ -35,6 +35,7 @@
 #include <inttypes.h>
 #include <libdrm/drm_fourcc.h> // DRM_FORMAT_ARGB8888
 #include <libdrm/drm_mode.h>   // DRM_FORMAT_MOD_LINEAR
+#include <linux/input-event-codes.h>
 #include <linux/socket.h>
 #include <math.h>
 #include <poll.h>
@@ -73,12 +74,16 @@ void war_wayland_init() {
     const uint32_t logical_height =
         (uint32_t)floor(physical_height / scale_factor);
 
-    const uint32_t max_cols = 50;
-    const uint32_t max_rows = 50;
+    const uint32_t max_cols = 143;
+    const uint32_t max_rows = 39;
     const float col_width_px = (float)physical_width / max_cols;
     const float row_height_px = (float)physical_height / max_rows;
-    uint32_t col = 1;
-    uint32_t row = 1;
+    float cursor_x;
+    float cursor_y;
+    uint32_t col = 0;
+    uint32_t row = 0;
+
+    uint8_t frame_dirty = 1;
 
     enum {
         ARGB8888 = 0,
@@ -515,182 +520,192 @@ void war_wayland_init() {
             wl_callback_done:
                 dump_bytes(
                     "wl_callback::done event", msg_buffer + offset, size);
+                if (frame_dirty) {
+                    //-------------------------------------------------------------
+                    // RENDER LOGIC
+                    //-------------------------------------------------------------
+                    // 1. Wait for previous frame to finish (optional but
+                    // recommended)
+                    vkWaitForFences(vulkan_context.device,
+                                    1,
+                                    &vulkan_context.in_flight_fence,
+                                    VK_TRUE,
+                                    UINT64_MAX);
+                    vkResetFences(vulkan_context.device,
+                                  1,
+                                  &vulkan_context.in_flight_fence);
 
-                //-------------------------------------------------------------
-                // RENDER LOGIC
-                //-------------------------------------------------------------
-                // 1. Wait for previous frame to finish (optional but
-                // recommended)
-                vkWaitForFences(vulkan_context.device,
-                                1,
-                                &vulkan_context.in_flight_fence,
-                                VK_TRUE,
-                                UINT64_MAX);
-                vkResetFences(
-                    vulkan_context.device, 1, &vulkan_context.in_flight_fence);
+                    // 2. Begin command buffer recording
+                    VkCommandBufferBeginInfo begin_info = {
+                        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                    };
+                    vkBeginCommandBuffer(vulkan_context.cmd_buffer,
+                                         &begin_info);
 
-                // 2. Begin command buffer recording
-                VkCommandBufferBeginInfo begin_info = {
-                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-                };
-                vkBeginCommandBuffer(vulkan_context.cmd_buffer, &begin_info);
+                    // 3. Begin render pass, clear color to gray (0.5, 0.5,
+                    // 0.5, 1.0)
+                    VkClearValue clear_color = {
+                        .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
 
-                // 3. Begin render pass, clear color to gray (0.5, 0.5,
-                // 0.5, 1.0)
-                VkClearValue clear_color = {
-                    .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
+                    VkRenderPassBeginInfo render_pass_info = {
+                        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                        .renderPass = vulkan_context.render_pass,
+                        .framebuffer = vulkan_context.frame_buffer,
+                        .renderArea =
+                            {
+                                .offset = {0, 0},
+                                .extent = {physical_width, physical_height},
+                            },
+                        .clearValueCount = 1,
+                        .pClearValues = &clear_color,
+                    };
 
-                VkRenderPassBeginInfo render_pass_info = {
-                    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-                    .renderPass = vulkan_context.render_pass,
-                    .framebuffer = vulkan_context.frame_buffer,
-                    .renderArea =
-                        {
-                            .offset = {0, 0},
-                            .extent = {physical_width, physical_height},
-                        },
-                    .clearValueCount = 1,
-                    .pClearValues = &clear_color,
-                };
+                    vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
+                                         &render_pass_info,
+                                         VK_SUBPASS_CONTENTS_INLINE);
 
-                vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
-                                     &render_pass_info,
-                                     VK_SUBPASS_CONTENTS_INLINE);
+                    // 4. Bind pipeline
+                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                      vulkan_context.pipeline);
 
-                // 4. Bind pipeline
-                vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  vulkan_context.pipeline);
+                    // 5. Update vertex buffer with red quad data
+                    // Example: a simple quad in NDC coords (-0.5, -0.5) to
+                    // (0.5, 0.5) Vertex format: vec2 position + uint32_t color
+                    // (R8G8B8A8_UNORM) Let's prepare the data and upload it:
 
-                // 5. Update vertex buffer with red quad data
-                // Example: a simple quad in NDC coords (-0.5, -0.5) to (0.5,
-                // 0.5) Vertex format: vec2 position + uint32_t color
-                // (R8G8B8A8_UNORM) Let's prepare the data and upload it:
+                    typedef struct {
+                        float pos[2];
+                        uint32_t color;
+                    } Vertex;
 
-                typedef struct {
-                    float pos[2];
-                    uint32_t color;
-                } Vertex;
+                    Vertex quad_verts[8] = {
+                        {{-0.5f, -0.5f},
+                         0xFF0000FF}, // red in RGBA (red opaque)
+                        {{0.5f, -0.5f}, 0xFF0000FF},
+                        {{0.5f, 0.5f}, 0xFF0000FF},
+                        {{-0.5f, 0.5f}, 0xFF0000FF},
+                        // cursor
+                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
+                          1.0f - ((row + 1) * row_height_px) / physical_height *
+                                     2.0f},
+                         0xFFFFFFFF},
+                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
+                              1.0f,
+                          1.0f - ((row + 1) * row_height_px) / physical_height *
+                                     2.0f},
+                         0xFFFFFFFF},
+                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
+                              1.0f,
+                          1.0f -
+                              (row * row_height_px) / physical_height * 2.0f},
+                         0xFFFFFFFF},
+                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
+                          1.0f -
+                              (row * row_height_px) / physical_height * 2.0f},
+                         0xFFFFFFFF},
+                    };
 
-                Vertex quad_verts[4] = {
-                    {{-0.5f, -0.5f}, 0xFF0000FF}, // red in RGBA (red opaque)
-                    {{0.5f, -0.5f}, 0xFF0000FF},
-                    {{0.5f, 0.5f}, 0xFF0000FF},
-                    {{-0.5f, 0.5f}, 0xFF0000FF},
-                };
+                    uint16_t quad_indices[12] = {
+                        0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
 
-                uint16_t quad_indices[6] = {0, 1, 2, 2, 3, 0};
+                    // Map vertex buffer memory and copy vertices
+                    void* vertex_data;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_vertex_buffer_memory,
+                                0,
+                                sizeof(quad_verts),
+                                0,
+                                &vertex_data);
+                    memcpy(vertex_data, quad_verts, sizeof(quad_verts));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_vertex_buffer_memory);
 
-                // Map vertex buffer memory and copy vertices
-                void* vertex_data;
-                vkMapMemory(vulkan_context.device,
-                            vulkan_context.quads_vertex_buffer_memory,
-                            0,
-                            sizeof(quad_verts),
-                            0,
-                            &vertex_data);
-                memcpy(vertex_data, quad_verts, sizeof(quad_verts));
-                vkUnmapMemory(vulkan_context.device,
-                              vulkan_context.quads_vertex_buffer_memory);
+                    // Map index buffer memory and copy indices
+                    void* index_data;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_index_buffer_memory,
+                                0,
+                                sizeof(quad_indices),
+                                0,
+                                &index_data);
+                    memcpy(index_data, quad_indices, sizeof(quad_indices));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_index_buffer_memory);
 
-                // Map index buffer memory and copy indices
-                void* index_data;
-                vkMapMemory(vulkan_context.device,
-                            vulkan_context.quads_index_buffer_memory,
-                            0,
-                            sizeof(quad_indices),
-                            0,
-                            &index_data);
-                memcpy(index_data, quad_indices, sizeof(quad_indices));
-                vkUnmapMemory(vulkan_context.device,
-                              vulkan_context.quads_index_buffer_memory);
+                    // 6. Bind vertex and index buffers
+                    VkDeviceSize offsets[] = {0};
+                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                           0,
+                                           1,
+                                           &vulkan_context.quads_vertex_buffer,
+                                           offsets);
+                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                         vulkan_context.quads_index_buffer,
+                                         0,
+                                         VK_INDEX_TYPE_UINT16);
 
-                // 6. Bind vertex and index buffers
-                VkDeviceSize offsets[] = {0};
-                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                                       0,
-                                       1,
-                                       &vulkan_context.quads_vertex_buffer,
-                                       offsets);
-                vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                                     vulkan_context.quads_index_buffer,
-                                     0,
-                                     VK_INDEX_TYPE_UINT16);
+                    // 7. Bind descriptor sets if needed (for texture). Since
+                    // you want a red quad with no texture, you can bind a dummy
+                    // descriptor set or create a pipeline without texture
+                    // sampling. Or you can skip this if your shader supports
+                    // vertex color without texture.
 
-                // 7. Bind descriptor sets if needed (for texture). Since you
-                // want a red quad with no texture, you can bind a dummy
-                // descriptor set or create a pipeline without texture sampling.
-                // Or you can skip this if your shader supports vertex color
-                // without texture.
+                    // 7. Set dynamic viewport and scissor (required!)
+                    VkViewport viewport = {
+                        .x = 0.0f,
+                        .y = 0.0f,
+                        .width = (float)physical_width,
+                        .height = (float)physical_height,
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    };
+                    vkCmdSetViewport(
+                        vulkan_context.cmd_buffer, 0, 1, &viewport);
 
-                // 7. Set dynamic viewport and scissor (required!)
-                VkViewport viewport = {
-                    .x = 0.0f,
-                    .y = 0.0f,
-                    .width = (float)physical_width,
-                    .height = (float)physical_height,
-                    .minDepth = 0.0f,
-                    .maxDepth = 1.0f,
-                };
-                vkCmdSetViewport(vulkan_context.cmd_buffer, 0, 1, &viewport);
+                    VkRect2D scissor = {
+                        .offset = {0, 0},
+                        .extent = {physical_width, physical_height},
+                    };
+                    vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
 
-                VkRect2D scissor = {
-                    .offset = {0, 0},
-                    .extent = {physical_width, physical_height},
-                };
-                vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
+                    // 8. Draw indexed quad
+                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
 
-                // 8. Draw indexed quad
-                vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
+                    // 9. End render pass and command buffer
+                    vkCmdEndRenderPass(vulkan_context.cmd_buffer);
+                    vkEndCommandBuffer(vulkan_context.cmd_buffer);
 
-                // 9. End render pass and command buffer
-                vkCmdEndRenderPass(vulkan_context.cmd_buffer);
-                vkEndCommandBuffer(vulkan_context.cmd_buffer);
+                    // 10. Submit command buffer
+                    VkSubmitInfo submit_info = {
+                        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                        .commandBufferCount = 1,
+                        .pCommandBuffers = &vulkan_context.cmd_buffer,
+                        // You might need to set wait semaphores here if syncing
+                        // with presentation
+                    };
+                    vkQueueSubmit(vulkan_context.queue,
+                                  1,
+                                  &submit_info,
+                                  vulkan_context.in_flight_fence);
 
-                // 10. Submit command buffer
-                VkSubmitInfo submit_info = {
-                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                    .commandBufferCount = 1,
-                    .pCommandBuffers = &vulkan_context.cmd_buffer,
-                    // You might need to set wait semaphores here if syncing
-                    // with presentation
-                };
-                vkQueueSubmit(vulkan_context.queue,
-                              1,
-                              &submit_info,
-                              vulkan_context.in_flight_fence);
+                    war_wayland_wl_surface_attach(
+                        fd, wl_surface_id, wl_buffer_id, 0, 0);
+                    war_wayland_wl_surface_damage(fd,
+                                                  wl_surface_id,
+                                                  0,
+                                                  0,
+                                                  physical_width,
+                                                  physical_height);
+                    war_wayland_wl_surface_commit(fd, wl_surface_id);
+                    frame_dirty = 0;
+                    call_carmack("somethign rendered");
+                }
 
-                uint8_t render_attach[20];
-                write_le32(render_attach, wl_surface_id);
-                write_le16(render_attach + 4, 1);
-                write_le16(render_attach + 6, 20);
-                write_le32(render_attach + 8, wl_buffer_id);
-                write_le32(render_attach + 12, 0);
-                write_le32(render_attach + 16, 0);
-                dump_bytes("wl_surface_attach request", render_attach, 20);
-                ssize_t render_attach_written = write(fd, render_attach, 20);
-                assert(render_attach_written == 20);
-
-                uint8_t render_damage[24];
-                write_le32(render_damage, wl_surface_id);
-                write_le16(render_damage + 4, 2);
-                write_le16(render_damage + 6, 24);
-                write_le32(render_damage + 8, 0);
-                write_le32(render_damage + 12, 0);
-                write_le32(render_damage + 16, physical_width);
-                write_le32(render_damage + 20, physical_height);
-                dump_bytes("wl_surface_damage request", render_damage, 24);
-                ssize_t render_damage_written = write(fd, render_damage, 24);
-                assert(render_damage_written == 24);
-
-                uint8_t render_commit[8];
-                write_le32(render_commit, wl_surface_id);
-                write_le16(render_commit + 4, 6);
-                write_le16(render_commit + 6, 8);
-                dump_bytes("wl_surface_commit request", render_commit, 8);
-                ssize_t render_commit_written = write(fd, render_commit, 8);
-                assert(render_commit_written == 8);
+                war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
+                wl_callback_id = new_id++;
+                obj_op[obj_op_index(wl_callback_id, 0)] = &&wl_callback_done;
                 goto done;
             wl_display_error:
                 dump_bytes(
@@ -833,45 +848,13 @@ void war_wayland_init() {
                     assert(set_destination_written == 16);
                 }
 
-                uint8_t attach[20];
-                write_le32(attach, wl_surface_id);
-                write_le16(attach + 4, 1);
-                write_le16(attach + 6, 20);
-                write_le32(attach + 8, wl_buffer_id);
-                write_le32(attach + 12, 0);
-                write_le32(attach + 16, 0);
-                dump_bytes("wl_surface_attach request", attach, 20);
-                ssize_t attach_written = write(fd, attach, 20);
-                assert(attach_written == 20);
+                war_wayland_wl_surface_attach(
+                    fd, wl_surface_id, wl_buffer_id, 0, 0);
+                war_wayland_wl_surface_damage(
+                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
+                war_wayland_wl_surface_commit(fd, wl_surface_id);
 
-                uint8_t damage[24];
-                write_le32(damage, wl_surface_id);
-                write_le16(damage + 4, 2);
-                write_le16(damage + 6, 24);
-                write_le32(damage + 8, 0);
-                write_le32(damage + 12, 0);
-                write_le32(damage + 16, physical_width);
-                write_le32(damage + 20, physical_height);
-                dump_bytes("wl_surface_damage request", damage, 24);
-                ssize_t damage_written = write(fd, damage, 24);
-                assert(damage_written == 24);
-
-                uint8_t commit[8];
-                write_le32(commit, wl_surface_id);
-                write_le16(commit + 4, 6);
-                write_le16(commit + 6, 8);
-                dump_bytes("wl_surface_commit request", commit, 8);
-                ssize_t commit_written = write(fd, commit, 8);
-                assert(commit_written == 8);
-
-                uint8_t frame[12];
-                write_le32(frame, wl_surface_id);
-                write_le16(frame + 4, 3);
-                write_le16(frame + 6, 12);
-                write_le32(frame + 8, new_id);
-                dump_bytes("wl_surface::frame request", frame, 12);
-                ssize_t frame_written = write(fd, frame, 12);
-                assert(frame_written == 12);
+                war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
                 wl_callback_id = new_id;
                 obj_op[obj_op_index(wl_callback_id, 0)] = &&wl_callback_done;
                 new_id++;
@@ -1129,36 +1112,11 @@ void war_wayland_init() {
                     write(fd, set_buffer_scale, 12);
                 assert(set_buffer_scale_written == 12);
 
-                uint8_t scale_attach[20];
-                write_le32(scale_attach, wl_surface_id);
-                write_le16(scale_attach + 4, 1);
-                write_le16(scale_attach + 6, 20);
-                write_le32(scale_attach + 8, wl_buffer_id);
-                write_le32(scale_attach + 12, 0);
-                write_le32(scale_attach + 16, 0);
-                dump_bytes("wl_surface_attach request", scale_attach, 20);
-                ssize_t scale_attach_written = write(fd, scale_attach, 20);
-                assert(scale_attach_written == 20);
-
-                uint8_t scale_damage[24];
-                write_le32(scale_damage, wl_surface_id);
-                write_le16(scale_damage + 4, 2);
-                write_le16(scale_damage + 6, 24);
-                write_le32(scale_damage + 8, 0);
-                write_le32(scale_damage + 12, 0);
-                write_le32(scale_damage + 16, physical_width);
-                write_le32(scale_damage + 20, physical_height);
-                dump_bytes("wl_surface_damage request", scale_damage, 24);
-                ssize_t scale_damage_written = write(fd, scale_damage, 24);
-                assert(scale_damage_written == 24);
-
-                uint8_t commit_scale[8];
-                write_le32(commit_scale, wl_surface_id);
-                write_le16(commit_scale + 4, 6);
-                write_le16(commit_scale + 6, 8);
-                dump_bytes("wl_surface::commit request", commit_scale, 8);
-                ssize_t commit_scale_written = write(fd, commit_scale, 8);
-                assert(commit_scale_written == 8);
+                war_wayland_wl_surface_attach(
+                    fd, wl_surface_id, wl_buffer_id, 0, 0);
+                war_wayland_wl_surface_damage(
+                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
+                war_wayland_wl_surface_commit(fd, wl_surface_id);
                 goto done;
             wl_surface_preferred_buffer_transform:
                 dump_bytes("wl_surface_preferred_buffer_transform event",
@@ -1179,39 +1137,11 @@ void war_wayland_init() {
                     write(fd, set_buffer_transform, 12);
                 assert(set_buffer_transform_written == 12);
 
-                uint8_t transform_attach[20];
-                write_le32(transform_attach, wl_surface_id);
-                write_le16(transform_attach + 4, 1);
-                write_le16(transform_attach + 6, 20);
-                write_le32(transform_attach + 8, wl_buffer_id);
-                write_le32(transform_attach + 12, 0);
-                write_le32(transform_attach + 16, 0);
-                dump_bytes("wl_surface_attach request", transform_attach, 20);
-                ssize_t transform_attach_written =
-                    write(fd, transform_attach, 20);
-                assert(transform_attach_written == 20);
-
-                uint8_t transform_damage[24];
-                write_le32(transform_damage, wl_surface_id);
-                write_le16(transform_damage + 4, 2);
-                write_le16(transform_damage + 6, 24);
-                write_le32(transform_damage + 8, 0);
-                write_le32(transform_damage + 12, 0);
-                write_le32(transform_damage + 16, physical_width);
-                write_le32(transform_damage + 20, physical_height);
-                dump_bytes("wl_surface_damage request", transform_damage, 24);
-                ssize_t transform_damage_written =
-                    write(fd, transform_damage, 24);
-                assert(transform_damage_written == 24);
-
-                uint8_t commit_transform[8];
-                write_le32(commit_transform, wl_surface_id);
-                write_le16(commit_transform + 4, 6);
-                write_le16(commit_transform + 6, 8);
-                dump_bytes("wl_surface::commit request", commit_transform, 8);
-                ssize_t commit_transform_written =
-                    write(fd, commit_transform, 8);
-                assert(commit_transform_written == 8);
+                war_wayland_wl_surface_attach(
+                    fd, wl_surface_id, wl_buffer_id, 0, 0);
+                war_wayland_wl_surface_damage(
+                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
+                war_wayland_wl_surface_commit(fd, wl_surface_id);
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
@@ -1421,10 +1351,34 @@ void war_wayland_init() {
             wl_pointer_motion:
                 dump_bytes(
                     "wl_pointer_motion event", msg_buffer + offset, size);
+                cursor_x = (float)(int32_t)read_le32(msg_buffer + offset + 12) /
+                           256.0f;
+                cursor_y = (float)(int32_t)read_le32(msg_buffer + offset + 16) /
+                           256.0f;
                 goto done;
             wl_pointer_button:
                 dump_bytes(
                     "wl_pointer_button event", msg_buffer + offset, size);
+                if (read_le32(msg_buffer + offset + 8 + 8) == BTN_LEFT) {
+                    if (read_le32(msg_buffer + offset + 8 + 12) == 1) {
+                        col = (uint32_t)(cursor_x / col_width_px);
+                        row = (uint32_t)(cursor_y / row_height_px);
+                        call_carmack("col after pointer lmb: %u", col);
+                        call_carmack("row after pointer lmb: %u", row);
+
+                        war_wayland_wl_surface_attach(
+                            fd, wl_surface_id, wl_buffer_id, 0, 0);
+                        war_wayland_wl_surface_damage(fd,
+                                                      wl_surface_id,
+                                                      0,
+                                                      0,
+                                                      physical_width,
+                                                      physical_height);
+                        war_wayland_wl_surface_commit(fd, wl_surface_id);
+
+                        frame_dirty = 1;
+                    }
+                }
                 goto done;
             wl_pointer_axis:
                 dump_bytes("wl_pointer_axis event", msg_buffer + offset, size);
@@ -1517,6 +1471,67 @@ void war_wayland_init() {
     vulkan_context.dmabuf_fd = -1;
 
     end("war_wayland_init");
+}
+
+void war_wayland_wl_surface_attach(int fd,
+                                   uint32_t wl_surface_id,
+                                   uint32_t wl_buffer_id,
+                                   uint32_t x,
+                                   uint32_t y) {
+    uint8_t attach[20];
+    write_le32(attach, wl_surface_id);
+    write_le16(attach + 4, 1);
+    write_le16(attach + 6, 20);
+    write_le32(attach + 8, wl_buffer_id);
+    write_le32(attach + 12, x);
+    write_le32(attach + 16, y);
+    dump_bytes("wl_surface::attach request", attach, 20);
+    ssize_t attach_written = write(fd, attach, 20);
+    assert(attach_written == 20);
+}
+
+void war_wayland_wl_surface_damage(int fd,
+                                   uint32_t wl_surface_id,
+                                   uint32_t x,
+                                   uint32_t y,
+                                   uint32_t width,
+                                   uint32_t height) {
+    uint8_t damage[24];
+    write_le32(damage, wl_surface_id);
+    write_le16(damage + 4, 2);
+    write_le16(damage + 6, 24);
+    write_le32(damage + 8, x);
+    write_le32(damage + 12, y);
+    write_le32(damage + 16, width);
+    write_le32(damage + 20, height);
+    dump_bytes("wl_surface_damage request", damage, 24);
+    ssize_t damage_written = write(fd, damage, 24);
+    assert(damage_written == 24);
+}
+
+void war_wayland_wl_surface_commit(int fd, uint32_t wl_surface_id) {
+    uint8_t commit[8];
+    write_le32(commit, wl_surface_id);
+    write_le16(commit + 4, 6);
+    write_le16(commit + 6, 8);
+    dump_bytes("wl_surface_commit request", commit, 8);
+    ssize_t commit_written = write(fd, commit, 8);
+    assert(commit_written == 8);
+}
+
+void war_wayland_wl_surface_frame(int fd,
+                                  uint32_t wl_surface_id,
+                                  uint32_t new_id) {
+
+    uint8_t frame[12];
+    write_le32(frame, wl_surface_id);
+    write_le16(frame + 4, 3);
+    write_le16(frame + 6, 12);
+    write_le32(frame + 8, new_id);
+    call_carmack("bound wl_callback");
+    dump_bytes("wl_surface::frame request", frame, 12);
+    ssize_t frame_written = write(fd, frame, 12);
+    assert(frame_written == 12);
 }
 
 void war_wayland_registry_bind(int fd,

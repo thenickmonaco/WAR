@@ -36,6 +36,7 @@
 #include <libdrm/drm_fourcc.h> // DRM_FORMAT_ARGB8888
 #include <libdrm/drm_mode.h>   // DRM_FORMAT_MOD_LINEAR
 #include <linux/socket.h>
+#include <math.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -61,12 +62,19 @@ void war_wayland_init() {
     int fd = war_wayland_make_fd();
     assert(fd >= 0);
 
+    // const uint32_t internal_width = 1920;
+    // const uint32_t internal_height = 1080;
+
     const uint32_t physical_width = 2560;
     const uint32_t physical_height = 1600;
     const uint32_t stride = physical_width * 4;
 
-    const uint32_t logical_width = 3450;  // 3450
-    const uint32_t logical_height = 2156; // 2156
+    const float scale_factor = 1.483333;
+    const uint32_t logical_width =
+        (uint32_t)floor(physical_width / scale_factor);
+    const uint32_t logical_height =
+        (uint32_t)floor(physical_height / scale_factor);
+
     enum {
         ARGB8888 = 0,
     };

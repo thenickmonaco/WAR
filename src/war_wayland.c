@@ -187,6 +187,7 @@ void war_wayland_init() {
     float* quads_y = (float*)(quads_x + max_quads * 4);
     uint32_t* quads_colors = (uint32_t*)(quads_y + max_quads * 4);
     uint16_t* quads_indices = (uint16_t*)(quads_colors + max_quads * 4);
+    size_t quads_size = 0;
 
     while (1) {
         int ret = poll(&pfd, 1, -1);

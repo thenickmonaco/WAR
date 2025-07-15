@@ -520,6 +520,7 @@ void war_wayland_init() {
             wl_callback_done:
                 dump_bytes(
                     "wl_callback::done event", msg_buffer + offset, size);
+#if DMABUF
                 if (frame_dirty) {
                     //-------------------------------------------------------------
                     // RENDER LOGIC
@@ -706,6 +707,7 @@ void war_wayland_init() {
                 war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
                 wl_callback_id = new_id++;
                 obj_op[obj_op_index(wl_callback_id, 0)] = &&wl_callback_done;
+#endif
                 goto done;
             wl_display_error:
                 dump_bytes(
@@ -913,8 +915,10 @@ void war_wayland_init() {
             xdg_toplevel_close:
                 dump_bytes(
                     "xdg_toplevel_close event", msg_buffer + offset, size);
+#if DMABUF
                 close(vulkan_context.dmabuf_fd);
                 vulkan_context.dmabuf_fd = -1;
+#endif
                 return;
                 goto done;
             xdg_toplevel_configure_bounds:
@@ -1467,8 +1471,10 @@ void war_wayland_init() {
         }
     }
 
+#if DMABUF
     close(vulkan_context.dmabuf_fd);
     vulkan_context.dmabuf_fd = -1;
+#endif
 
     end("war_wayland_init");
 }

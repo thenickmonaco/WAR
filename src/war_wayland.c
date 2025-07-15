@@ -64,16 +64,21 @@ void war_wayland_init() {
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
-
     const uint32_t physical_width = 2560;
     const uint32_t physical_height = 1600;
     const uint32_t stride = physical_width * 4;
-
     const float scale_factor = 1.483333;
     const uint32_t logical_width =
         (uint32_t)floor(physical_width / scale_factor);
     const uint32_t logical_height =
         (uint32_t)floor(physical_height / scale_factor);
+
+    const uint32_t max_cols = 50;
+    const uint32_t max_rows = 50;
+    const float col_width_px = (float)physical_width / max_cols;
+    const float row_height_px = (float)physical_height / max_rows;
+    uint32_t col = 1;
+    uint32_t row = 1;
 
     enum {
         ARGB8888 = 0,
@@ -510,8 +515,10 @@ void war_wayland_init() {
             wl_callback_done:
                 dump_bytes(
                     "wl_callback::done event", msg_buffer + offset, size);
-                // COMMENT ADD: render logic
 
+                //-------------------------------------------------------------
+                // RENDER LOGIC
+                //-------------------------------------------------------------
                 // 1. Wait for previous frame to finish (optional but
                 // recommended)
                 vkWaitForFences(vulkan_context.device,
@@ -684,7 +691,6 @@ void war_wayland_init() {
                 dump_bytes("wl_surface_commit request", render_commit, 8);
                 ssize_t render_commit_written = write(fd, render_commit, 8);
                 assert(render_commit_written == 8);
-
                 goto done;
             wl_display_error:
                 dump_bytes(
@@ -924,6 +930,9 @@ void war_wayland_init() {
             xdg_toplevel_close:
                 dump_bytes(
                     "xdg_toplevel_close event", msg_buffer + offset, size);
+                close(vulkan_context.dmabuf_fd);
+                vulkan_context.dmabuf_fd = -1;
+                return;
                 goto done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",

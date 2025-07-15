@@ -1,6 +1,6 @@
-# main [src/war_main.c:38:main, 21:43:26, 07-14-2025]
+# main [src/war_main.c:38:main, 23:25:11, 07-14-2025]
 ## war_wayland_init [src/war_wayland.c:60:war_wayland_init]
-## war_wayland_make_fd [src/war_wayland.c:1540:war_wayland_make_fd]
+## war_wayland_make_fd [src/war_wayland.c:1549:war_wayland_make_fd]
 - xdg_prefix_size: 17
 - wayland_prefix_size: 17
 - val: wayland-1
@@ -8,7 +8,7 @@
 - path: /run/user/1000/wayland-1
 - path_len: 24
 - addr_len: 26
-## END war_wayland_make_fd [src/war_wayland.c:1626:war_wayland_make_fd]
+## END war_wayland_make_fd [src/war_wayland.c:1635:war_wayland_make_fd]
 ## war_vulkan_init [src/war_vulkan.c:57:war_vulkan_init]
 - Physical Device Name: Intel(R) Graphics (RPL-S)
 - Vendor ID: 0x8086
@@ -198,25 +198,25 @@
 - iname: wl_shm
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00
 - iname: zwp_linux_dmabuf_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00 03 00 00 00
 - bound: zwp_linux_dmabuf_v1
 - to id: 3
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: wp_linux_drm_syncobj_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 04 00 00 00
 - bound: wp_linux_drm_syncobj_manager_v1
 - to id: 4
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00
 - iname: wl_compositor
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00 05 00 00 00
 - bound: wl_compositor
 - to id: 5
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - create_surface request ( 12 bytes): 05 00 00 00 00 00 0C 00 06 00 00 00
 - bound: wl_surface
 - zwp_linux_dmabuf_v1::get_surface_feedback request ( 16 bytes): 03 00 00 00 03 00 10 00 07 00 00 00 06 00 00 00
@@ -233,25 +233,25 @@
 - iname: ext_idle_notifier_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_idle_inhibit_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 08 00 00 00
 - bound: zwp_idle_inhibit_manager_v1
 - to id: 8
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00
 - iname: zwlr_layer_shell_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00 09 00 00 00
 - bound: zwlr_layer_shell_v1
 - to id: 9
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 32 bytes): 02 00 00 00 00 00 20 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00
 - iname: xdg_wm_base
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00 0A 00 00 00
 - bound: xdg_wm_base
 - to id: 10
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - get_xdg_surface request ( 16 bytes): 0A 00 00 00 02 00 10 00 0B 00 00 00 06 00 00 00
 - bound: xdg_surface
 - get_xdg_toplevel request ( 12 bytes): 0B 00 00 00 01 00 0C 00 0C 00 00 00
@@ -263,41 +263,41 @@
 - iname: org_kde_kwin_server_decoration_manager
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: zxdg_decoration_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 0D 00 00 00
 - bound: zxdg_decoration_manager_v1
 - to id: 13
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_relative_pointer_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 0E 00 00 00
 - bound: zwp_relative_pointer_manager_v1
 - to id: 14
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00
 - iname: zwp_pointer_constraints_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00 0F 00 00 00
 - bound: zwp_pointer_constraints_v1
 - to id: 15
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00
 - iname: wp_presentation
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00 10 00 00 00
 - bound: wp_presentation
 - to id: 16
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 13 00 00 00 15 00 00 00 77 70 5F 61 6C 70 68 61 5F 6D 6F 64 69 66 69 65 72 5F 76 31 00 00 00 00 01 00 00 00
 - iname: wp_alpha_modifier_v1
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00
 - iname: zwlr_output_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00 11 00 00 00
 - bound: zwlr_output_manager_v1
 - to id: 17
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 15 00 00 00 1D 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 70 6F 77 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 01 00 00 00
 - iname: zwlr_output_power_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 16 00 00 00 1C 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 6D 65 74 68 6F 64 5F 6D 61 6E 61 67 65 72 5F 76 32 00 01 00 00 00
@@ -306,11 +306,11 @@
 - iname: zwp_text_input_manager_v3
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00
 - iname: ext_foreign_toplevel_list_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00 12 00 00 00
 - bound: ext_foreign_toplevel_list_v1
 - to id: 18
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 56 bytes): 02 00 00 00 00 00 38 00 19 00 00 00 21 00 00 00 7A 77 6C 72 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 03 00 00 00
 - iname: zwlr_foreign_toplevel_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 1A 00 00 00 1C 00 00 00 65 78 74 5F 73 65 73 73 69 6F 6E 5F 6C 6F 63 6B 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
@@ -329,38 +329,38 @@
 - iname: ext_output_image_capture_source_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00
 - iname: zwlr_data_control_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00 13 00 00 00
 - bound: zwlr_data_control_manager_v1
 - to id: 19
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 22 00 00 00 1C 00 00 00 65 78 74 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: ext_data_control_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 23 00 00 00 1F 00 00 00 77 70 5F 73 65 63 75 72 69 74 79 5F 63 6F 6E 74 65 78 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_security_context_manager_v1
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00
 - iname: wp_viewporter
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00 14 00 00 00
 - bound: wp_viewporter
 - to id: 20
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 56 bytes): 02 00 00 00 00 00 38 00 25 00 00 00 22 00 00 00 77 70 5F 73 69 6E 67 6C 65 5F 70 69 78 65 6C 5F 62 75 66 66 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: wp_single_pixel_buffer_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_content_type_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 15 00 00 00
 - bound: wp_content_type_manager_v1
 - to id: 21
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_fractional_scale_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 16 00 00 00
 - bound: wp_fractional_scale_manager_v1
 - to id: 22
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 28 00 00 00 1E 00 00 00 77 70 5F 74 65 61 72 69 6E 67 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: wp_tearing_control_manager_v1
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 29 00 00 00 11 00 00 00 7A 78 64 67 5F 65 78 70 6F 72 74 65 72 5F 76 31 00 00 00 00 01 00 00 00
@@ -373,49 +373,49 @@
 - iname: zxdg_importer_v2
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00
 - iname: xdg_activation_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00 17 00 00 00
 - bound: xdg_activation_v1
 - to id: 23
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 2E 00 00 00 1B 00 00 00 77 70 5F 63 75 72 73 6F 72 5F 73 68 61 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_cursor_shape_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_virtual_keyboard_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 18 00 00 00
 - bound: zwp_virtual_keyboard_manager_v1
 - to id: 24
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 30 00 00 00 20 00 00 00 7A 77 6C 72 5F 76 69 72 74 75 61 6C 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 02 00 00 00
 - iname: zwlr_virtual_pointer_manager_v1
 - global event  ( 64 bytes): 02 00 00 00 00 00 40 00 31 00 00 00 2A 00 00 00 7A 77 70 5F 6B 65 79 62 6F 61 72 64 5F 73 68 6F 72 74 63 75 74 73 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: zwp_keyboard_shortcuts_inhibit_manager_v1
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00
 - iname: zwp_pointer_gestures_v1
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00 19 00 00 00
 - bound: zwp_pointer_gestures_v1
 - to id: 25
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 33 00 00 00 1E 00 00 00 65 78 74 5F 74 72 61 6E 73 69 65 6E 74 5F 73 65 61 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: ext_transient_seat_manager_v1
 - global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00
 - iname: wl_seat
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 32 bytes): 02 00 00 00 00 00 20 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00 1A 00 00 00
 - bound: wl_seat
 - to id: 26
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - global event  ( 60 bytes): 02 00 00 00 00 00 3C 00 36 00 00 00 28 00 00 00 7A 77 70 5F 70 72 69 6D 61 72 79 5F 73 65 6C 65 63 74 69 6F 6E 5F 64 65 76 69 63 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_primary_selection_device_manager_v1
 - global event  ( 32 bytes): 02 00 00 00 00 00 20 00 3D 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00
 - iname: wl_output
-## war_wayland_registry_bind [src/war_wayland.c:1518:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1527:war_wayland_registry_bind]
 - bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 3D 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00 1B 00 00 00
 - bound: wl_output
 - to id: 27
-## END war_wayland_registry_bind [src/war_wayland.c:1536:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
 - zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
 - zwp_linux_dmabuf_feedback_v1_format_table event ( 12 bytes): 07 00 00 00 01 00 0C 00 E0 0E 00 00
 - zwp_linux_dmabuf_feedback_v1_tranche_target_device event ( 20 bytes): 07 00 00 00 04 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
@@ -429,12 +429,12 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 1C 00 00 00 03 00 1C 00 1D 00 00 00 00 0A 00 00 40 06 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 1C 00 00 00 00 00 08 00
-- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 79 6C 03 00
-- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 79 6C 03 00
+- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 E2 B2 03 00
+- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 E2 B2 03 00
 - xdg_toplevel_wm_capabilities event ( 20 bytes): 0C 00 00 00 03 00 14 00 08 00 00 00 01 00 00 00 02 00 00 00
 - xdg_toplevel_configure event ( 20 bytes): 0C 00 00 00 00 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 7A 6C 03 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 7A 6C 03 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 E3 B2 03 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 E3 B2 03 00
 - wp_viewporter::get_viewport request ( 16 bytes): 14 00 00 00 01 00 10 00 1E 00 00 00 06 00 00 00
 - bound: wp_viewport
 - wp_viewport::set_destination request ( 16 bytes): 1E 00 00 00 02 00 10 00 BD 06 00 00 36 04 00 00
@@ -470,17 +470,17 @@
 - wl_surface::commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 05 00 00 FF
 - xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 BD 06 00 00 08 02 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 7B 6C 03 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 7B 6C 03 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 E4 B2 03 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 E4 B2 03 00
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
 - wl_keyboard_keymap event ( 16 bytes): 20 00 00 00 00 00 10 00 01 00 00 00 6F 00 01 00
 - wl_keyboard_repeat_info event ( 16 bytes): 20 00 00 00 05 00 10 00 19 00 00 00 96 00 00 00
-- wl_keyboard_enter event ( 20 bytes): 20 00 00 00 01 00 14 00 80 6C 03 00 06 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 81 6C 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- wl_callback::done event ( 12 bytes): 1F 00 00 00 00 00 0C 00 53 AD 78 05
+- wl_keyboard_enter event ( 20 bytes): 20 00 00 00 01 00 14 00 E9 B2 03 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 EA B2 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_callback::done event ( 12 bytes): 1F 00 00 00 00 00 0C 00 A5 CE D5 05
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -491,7 +491,7 @@
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface::commit request (  8 bytes): 06 00 00 00 06 00 08 00
-- wl_pointer_enter event ( 24 bytes): 21 00 00 00 00 00 18 00 83 6C 03 00 06 00 00 00 B1 E9 01 00 FE 67 00 00
+- wl_pointer_enter event ( 24 bytes): 21 00 00 00 00 00 18 00 EC B2 03 00 06 00 00 00 92 89 02 00 A5 4C 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
 - zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
 - zwp_linux_dmabuf_feedback_v1_format_table event ( 12 bytes): 07 00 00 00 01 00 0C 00 E0 0E 00 00
@@ -507,33 +507,69 @@
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 23 00 00 00 00 00 08 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 23 00 00 00
-- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 66 AD 78 05
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 BB CE D5 05
 - wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
 - wl_buffer_release event (  8 bytes): 1D 00 00 00 00 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 96 B2 78 05 2E E7 01 00 9A 5A 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A9 CF D5 05 DB 8B 02 00 1F 4B 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 9A B2 78 05 AB E4 01 00 59 4C 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 AD CF D5 05 24 8E 02 00 D6 48 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 9F B2 78 05 27 E2 01 00 18 3E 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B3 CF D5 05 A7 90 02 00 53 46 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A3 B2 78 05 4F E1 01 00 F7 2E 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B7 CF D5 05 00 94 02 00 FA 42 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A8 B2 78 05 A1 DF 01 00 AC 20 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 BB CF D5 05 83 96 02 00 A1 3F 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 AD B2 78 05 CB DE 01 00 1F 14 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 BF CF D5 05 DB 99 02 00 1F 3D 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B2 B2 78 05 F5 DD 01 00 BB 06 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C4 CF D5 05 5E 9C 02 00 C6 39 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_keyboard_leave event ( 16 bytes): 20 00 00 00 02 00 10 00 84 6C 03 00 06 00 00 00
-- wl_pointer_leave event ( 16 bytes): 21 00 00 00 01 00 10 00 89 6C 03 00 06 00 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C8 CF D5 05 E1 9E 02 00 6D 36 01 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 BD 06 00 00 08 02 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 85 6C 03 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 85 6C 03 00
-- wl_surface_attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
-- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
-- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
-- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 25 00 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 CD CF D5 05 8D A0 02 00 EB 33 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 D2 CF D5 05 10 A3 02 00 68 31 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 D7 CF D5 05 BC A4 02 00 E5 2E 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 DB CF D5 05 68 A6 02 00 39 2D 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 DF CF D5 05 15 A8 02 00 B6 2A 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E3 CF D5 05 C1 A9 02 00 0A 29 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E8 CF D5 05 97 AA 02 00 34 28 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 EC CF D5 05 6E AB 02 00 5D 27 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 F2 CF D5 05 1A AD 02 00 B1 25 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 F6 CF D5 05 F0 AD 02 00 05 24 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 FA CF D5 05 9D AF 02 00 58 22 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 FE CF D5 05 9D AF 02 00 82 21 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 03 D0 D5 05 49 B1 02 00 D6 1F 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 07 D0 D5 05 1F B2 02 00 FF 1E 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 0C D0 D5 05 CC B3 02 00 53 1D 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 10 D0 D5 05 78 B5 02 00 A7 1B 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 16 D0 D5 05 25 B7 02 00 FA 19 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 1A D0 D5 05 A7 B9 02 00 4E 18 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 1E D0 D5 05 2A BC 02 00 A1 16 01 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 EF B2 03 00 7F D0 D5 05 2A 00 00 00 01 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 F0 B2 03 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F1 B2 03 00 8D D0 D5 05 7D 00 00 00 01 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 F2 B2 03 00 41 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- xdg_toplevel_close event (  8 bytes): 0C 00 00 00 01 00 08 00
+# END main [src/war_main.c:52:main, 23:25:11, 07-14-2025]

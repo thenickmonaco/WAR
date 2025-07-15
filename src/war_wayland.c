@@ -114,7 +114,9 @@ void war_wayland_init() {
     uint32_t wl_buffer_id = 0;
     uint32_t wl_callback_id = 0;
     uint32_t wl_compositor_id = 0;
+    uint32_t wp_viewporter_id = 0;
     uint32_t wl_surface_id = 0;
+    uint32_t wp_viewport_id = 0;
     uint32_t xdg_wm_base_id = 0;
     uint32_t xdg_surface_id = 0;
     uint32_t xdg_toplevel_id = 0;
@@ -131,7 +133,6 @@ void war_wayland_init() {
     uint32_t zwlr_output_manager_v1_id = 0;
     uint32_t zwlr_data_control_manager_v1_id = 0;
     uint32_t zwp_virtual_keyboard_manager_v1_id = 0;
-    uint32_t wp_viewporter_id = 0;
     uint32_t wp_fractional_scale_manager_v1_id = 0;
     uint32_t zwp_pointer_gestures_v1_id = 0;
     uint32_t xdg_activation_v1_id = 0;
@@ -782,6 +783,49 @@ void war_wayland_init() {
                     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
                 assert(ack_configure_written == 12);
+
+                if (!wp_viewport_id) {
+                    uint8_t get_viewport[16];
+                    write_le32(get_viewport, wp_viewporter_id);
+                    write_le16(get_viewport + 4, 1);
+                    write_le16(get_viewport + 6, 16);
+                    write_le32(get_viewport + 8, new_id);
+                    write_le32(get_viewport + 12, wl_surface_id);
+                    dump_bytes("wp_viewporter::get_viewport request",
+                               get_viewport,
+                               16);
+                    call_carmack("bound: wp_viewport");
+                    ssize_t get_viewport_written = write(fd, get_viewport, 16);
+                    assert(get_viewport_written == 16);
+                    wp_viewport_id = new_id;
+                    new_id++;
+
+                    //uint8_t set_source[24];
+                    //write_le32(set_source, wp_viewport_id);
+                    //write_le16(set_source + 4, 1);
+                    //write_le16(set_source + 6, 24);
+                    //write_le32(set_source + 8, 0);
+                    //write_le32(set_source + 12, 0);
+                    //write_le32(set_source + 16, physical_width);
+                    //write_le32(set_source + 20, physical_height);
+                    //dump_bytes(
+                    //    "wp_viewport::set_source request", set_source, 24);
+                    //ssize_t set_source_written = write(fd, set_source, 24);
+                    //assert(set_source_written == 24);
+
+                    uint8_t set_destination[16];
+                    write_le32(set_destination, wp_viewport_id);
+                    write_le16(set_destination + 4, 2);
+                    write_le16(set_destination + 6, 16);
+                    write_le32(set_destination + 8, logical_width);
+                    write_le32(set_destination + 12, logical_height);
+                    dump_bytes("wp_viewport::set_destination request",
+                               set_destination,
+                               16);
+                    ssize_t set_destination_written =
+                        write(fd, set_destination, 16);
+                    assert(set_destination_written == 16);
+                }
 
                 uint8_t attach[20];
                 write_le32(attach, wl_surface_id);

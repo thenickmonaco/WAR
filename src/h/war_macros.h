@@ -34,6 +34,10 @@
 
 // COMMENT OPTIMIZE: Duff's Device + SIMD (intrinsics)
 
+static inline int32_t to_fixed(float f) {
+    return (int32_t)(f * 256.0f);
+}
+
 static inline uint32_t pad_to_scale(float value, uint32_t scale) {
     uint32_t rounded = (uint32_t)(value + 0.5f);
     return (rounded + scale - 1) / scale * scale;

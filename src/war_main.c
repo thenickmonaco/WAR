@@ -37,6 +37,16 @@
 int main() {
     CALL_CARMACK("main");
 
+    // while (1) {
+    // wayland_handle_message();
+    // if (render) {
+    // render();
+    // }
+    // if (input) {
+    // input();
+    // }
+    // }
+
     war_wayland_init();
 
     END("main");

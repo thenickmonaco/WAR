@@ -800,18 +800,18 @@ void war_wayland_init() {
                     wp_viewport_id = new_id;
                     new_id++;
 
-                    //uint8_t set_source[24];
-                    //write_le32(set_source, wp_viewport_id);
-                    //write_le16(set_source + 4, 1);
-                    //write_le16(set_source + 6, 24);
-                    //write_le32(set_source + 8, 0);
-                    //write_le32(set_source + 12, 0);
-                    //write_le32(set_source + 16, physical_width);
-                    //write_le32(set_source + 20, physical_height);
-                    //dump_bytes(
-                    //    "wp_viewport::set_source request", set_source, 24);
-                    //ssize_t set_source_written = write(fd, set_source, 24);
-                    //assert(set_source_written == 24);
+                    // uint8_t set_source[24];
+                    // write_le32(set_source, wp_viewport_id);
+                    // write_le16(set_source + 4, 1);
+                    // write_le16(set_source + 6, 24);
+                    // write_le32(set_source + 8, 0);
+                    // write_le32(set_source + 12, 0);
+                    // write_le32(set_source + 16, physical_width);
+                    // write_le32(set_source + 20, physical_height);
+                    // dump_bytes(
+                    //     "wp_viewport::set_source request", set_source, 24);
+                    // ssize_t set_source_written = write(fd, set_source, 24);
+                    // assert(set_source_written == 24);
 
                     uint8_t set_destination[16];
                     write_le32(set_destination, wp_viewport_id);

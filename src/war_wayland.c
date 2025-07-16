@@ -74,8 +74,8 @@ void war_wayland_init() {
     const uint32_t logical_height =
         (uint32_t)floor(physical_height / scale_factor);
 
-    const uint32_t max_cols = 143;
-    const uint32_t max_rows = 39;
+    const uint32_t max_cols = 71;
+    const uint32_t max_rows = 20;
     const float col_width_px = (float)physical_width / max_cols;
     const float row_height_px = (float)physical_height / max_rows;
     float cursor_x;
@@ -517,13 +517,7 @@ void war_wayland_init() {
                     //---------------------------------------------------------
                     // initial commit
                     //---------------------------------------------------------
-                    uint8_t commit[8];
-                    write_le32(commit, wl_surface_id);
-                    write_le16(commit + 4, 6);
-                    write_le16(commit + 6, 8);
-                    dump_bytes("wl_surface_commit request", commit, 8);
-                    ssize_t commit_written = write(fd, commit, 8);
-                    assert(commit_written == 8);
+                    war_wayland_wl_surface_commit(fd, wl_surface_id);
                 }
                 goto done;
             wl_registry_global_remove:
@@ -702,11 +696,15 @@ void war_wayland_init() {
                                        vulkan_context.in_flight_fence);
                 assert(result == VK_SUCCESS);
 
-                war_wayland_wl_surface_attach(
-                    fd, wl_surface_id, wl_buffer_id, 0, 0);
-                war_wayland_wl_surface_damage(
-                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
-                war_wayland_wl_surface_commit(fd, wl_surface_id);
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
                 call_carmack("something rendered");
 #endif
                 goto done;
@@ -829,6 +827,7 @@ void war_wayland_init() {
                     wp_viewport_id = new_id;
                     new_id++;
 
+                    // COMMENT: unecessary
                     // uint8_t set_source[24];
                     // write_le32(set_source, wp_viewport_id);
                     // write_le16(set_source + 4, 1);
@@ -1120,6 +1119,16 @@ void war_wayland_init() {
                 ssize_t set_buffer_scale_written =
                     write(fd, set_buffer_scale, 12);
                 assert(set_buffer_scale_written == 12);
+
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
                 goto done;
             wl_surface_preferred_buffer_transform:
                 dump_bytes("wl_surface_preferred_buffer_transform event",
@@ -1139,6 +1148,16 @@ void war_wayland_init() {
                 ssize_t set_buffer_transform_written =
                     write(fd, set_buffer_transform, 12);
                 assert(set_buffer_transform_written == 12);
+
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
@@ -1333,10 +1352,10 @@ void war_wayland_init() {
                 switch (read_le32(msg_buffer + offset + 8 + 12)) {
                 case 1:
                     if (read_le32(msg_buffer + offset + 8 + 8) == KEY_K) {
-                        row--;
+                        row++;
                     }
                     if (read_le32(msg_buffer + offset + 8 + 8) == KEY_J) {
-                        row++;
+                        row--;
                     }
                     if (read_le32(msg_buffer + offset + 8 + 8) == KEY_H) {
                         col--;
@@ -1346,8 +1365,18 @@ void war_wayland_init() {
                     }
                     break;
                 case 0:
+                    // COMMENT ADD: handle holds
                     break;
                 }
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
                 goto done;
             wl_keyboard_modifiers:
                 dump_bytes(
@@ -1378,6 +1407,16 @@ void war_wayland_init() {
                     if (read_le32(msg_buffer + offset + 8 + 12) == 1) {
                         col = (uint32_t)(cursor_x / col_width_px);
                         row = (uint32_t)(cursor_y / row_height_px);
+
+                        war_wayland_holy_trinity(fd,
+                                                 wl_surface_id,
+                                                 wl_buffer_id,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 physical_width,
+                                                 physical_height);
                     }
                 }
                 goto done;
@@ -1474,6 +1513,22 @@ void war_wayland_init() {
 #endif
 
     end("war_wayland_init");
+}
+
+void war_wayland_holy_trinity(int fd,
+                              uint32_t wl_surface_id,
+                              uint32_t wl_buffer_id,
+                              uint32_t attach_x,
+                              uint32_t attach_y,
+                              uint32_t damage_x,
+                              uint32_t damage_y,
+                              uint32_t width,
+                              uint32_t height) {
+    war_wayland_wl_surface_attach(
+        fd, wl_surface_id, wl_buffer_id, attach_x, attach_y);
+    war_wayland_wl_surface_damage(
+        fd, wl_surface_id, damage_x, damage_y, width, height);
+    war_wayland_wl_surface_commit(fd, wl_surface_id);
 }
 
 void war_wayland_wl_surface_attach(int fd,

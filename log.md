@@ -1,6 +1,6 @@
-# main [src/war_main.c:38:main, 23:28:33, 07-15-2025]
+# main [src/war_main.c:38:main, 23:44:34, 07-15-2025]
 ## war_wayland_init [src/war_wayland.c:61:war_wayland_init]
-## war_wayland_make_fd [src/war_wayland.c:1567:war_wayland_make_fd]
+## war_wayland_make_fd [src/war_wayland.c:1622:war_wayland_make_fd]
 - xdg_prefix_size: 17
 - wayland_prefix_size: 17
 - val: wayland-1
@@ -8,7 +8,7 @@
 - path: /run/user/1000/wayland-1
 - path_len: 24
 - addr_len: 26
-## END war_wayland_make_fd [src/war_wayland.c:1653:war_wayland_make_fd]
+## END war_wayland_make_fd [src/war_wayland.c:1708:war_wayland_make_fd]
 ## war_vulkan_init [src/war_vulkan.c:57:war_vulkan_init]
 - Physical Device Name: Intel(R) Graphics (RPL-S)
 - Vendor ID: 0x8086
@@ -198,25 +198,25 @@
 - iname: wl_shm
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00
 - iname: zwp_linux_dmabuf_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 02 00 00 00 14 00 00 00 7A 77 70 5F 6C 69 6E 75 78 5F 64 6D 61 62 75 66 5F 76 31 00 04 00 00 00 03 00 00 00
 - bound: zwp_linux_dmabuf_v1
 - to id: 3
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: wp_linux_drm_syncobj_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 03 00 00 00 20 00 00 00 77 70 5F 6C 69 6E 75 78 5F 64 72 6D 5F 73 79 6E 63 6F 62 6A 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 04 00 00 00
 - bound: wp_linux_drm_syncobj_manager_v1
 - to id: 4
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00
 - iname: wl_compositor
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 04 00 00 00 0E 00 00 00 77 6C 5F 63 6F 6D 70 6F 73 69 74 6F 72 00 00 00 06 00 00 00 05 00 00 00
 - bound: wl_compositor
 - to id: 5
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - create_surface request ( 12 bytes): 05 00 00 00 00 00 0C 00 06 00 00 00
 - bound: wl_surface
 - zwp_linux_dmabuf_v1::get_surface_feedback request ( 16 bytes): 03 00 00 00 03 00 10 00 07 00 00 00 06 00 00 00
@@ -233,25 +233,25 @@
 - iname: ext_idle_notifier_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_idle_inhibit_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0A 00 00 00 1C 00 00 00 7A 77 70 5F 69 64 6C 65 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 08 00 00 00
 - bound: zwp_idle_inhibit_manager_v1
 - to id: 8
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00
 - iname: zwlr_layer_shell_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 0B 00 00 00 14 00 00 00 7A 77 6C 72 5F 6C 61 79 65 72 5F 73 68 65 6C 6C 5F 76 31 00 04 00 00 00 09 00 00 00
 - bound: zwlr_layer_shell_v1
 - to id: 9
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 32 bytes): 02 00 00 00 00 00 20 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00
 - iname: xdg_wm_base
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 0C 00 00 00 0C 00 00 00 78 64 67 5F 77 6D 5F 62 61 73 65 00 05 00 00 00 0A 00 00 00
 - bound: xdg_wm_base
 - to id: 10
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - get_xdg_surface request ( 16 bytes): 0A 00 00 00 02 00 10 00 0B 00 00 00 06 00 00 00
 - bound: xdg_surface
 - get_xdg_toplevel request ( 12 bytes): 0B 00 00 00 01 00 0C 00 0C 00 00 00
@@ -263,41 +263,41 @@
 - iname: org_kde_kwin_server_decoration_manager
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: zxdg_decoration_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 0F 00 00 00 1B 00 00 00 7A 78 64 67 5F 64 65 63 6F 72 61 74 69 6F 6E 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 0D 00 00 00
 - bound: zxdg_decoration_manager_v1
 - to id: 13
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_relative_pointer_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 10 00 00 00 20 00 00 00 7A 77 70 5F 72 65 6C 61 74 69 76 65 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 0E 00 00 00
 - bound: zwp_relative_pointer_manager_v1
 - to id: 14
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00
 - iname: zwp_pointer_constraints_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 11 00 00 00 1B 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 63 6F 6E 73 74 72 61 69 6E 74 73 5F 76 31 00 00 01 00 00 00 0F 00 00 00
 - bound: zwp_pointer_constraints_v1
 - to id: 15
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00
 - iname: wp_presentation
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 12 00 00 00 10 00 00 00 77 70 5F 70 72 65 73 65 6E 74 61 74 69 6F 6E 00 02 00 00 00 10 00 00 00
 - bound: wp_presentation
 - to id: 16
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 13 00 00 00 15 00 00 00 77 70 5F 61 6C 70 68 61 5F 6D 6F 64 69 66 69 65 72 5F 76 31 00 00 00 00 01 00 00 00
 - iname: wp_alpha_modifier_v1
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00
 - iname: zwlr_output_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 14 00 00 00 17 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 04 00 00 00 11 00 00 00
 - bound: zwlr_output_manager_v1
 - to id: 17
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 15 00 00 00 1D 00 00 00 7A 77 6C 72 5F 6F 75 74 70 75 74 5F 70 6F 77 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 01 00 00 00
 - iname: zwlr_output_power_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 16 00 00 00 1C 00 00 00 7A 77 70 5F 69 6E 70 75 74 5F 6D 65 74 68 6F 64 5F 6D 61 6E 61 67 65 72 5F 76 32 00 01 00 00 00
@@ -306,11 +306,11 @@
 - iname: zwp_text_input_manager_v3
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00
 - iname: ext_foreign_toplevel_list_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 18 00 00 00 1D 00 00 00 65 78 74 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6C 69 73 74 5F 76 31 00 00 00 00 01 00 00 00 12 00 00 00
 - bound: ext_foreign_toplevel_list_v1
 - to id: 18
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 56 bytes): 02 00 00 00 00 00 38 00 19 00 00 00 21 00 00 00 7A 77 6C 72 5F 66 6F 72 65 69 67 6E 5F 74 6F 70 6C 65 76 65 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 03 00 00 00
 - iname: zwlr_foreign_toplevel_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 1A 00 00 00 1C 00 00 00 65 78 74 5F 73 65 73 73 69 6F 6E 5F 6C 6F 63 6B 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
@@ -329,38 +329,38 @@
 - iname: ext_output_image_capture_source_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00
 - iname: zwlr_data_control_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 21 00 00 00 1D 00 00 00 7A 77 6C 72 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 00 02 00 00 00 13 00 00 00
 - bound: zwlr_data_control_manager_v1
 - to id: 19
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 22 00 00 00 1C 00 00 00 65 78 74 5F 64 61 74 61 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: ext_data_control_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 23 00 00 00 1F 00 00 00 77 70 5F 73 65 63 75 72 69 74 79 5F 63 6F 6E 74 65 78 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_security_context_manager_v1
 - global event  ( 36 bytes): 02 00 00 00 00 00 24 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00
 - iname: wp_viewporter
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 40 bytes): 02 00 00 00 00 00 28 00 24 00 00 00 0E 00 00 00 77 70 5F 76 69 65 77 70 6F 72 74 65 72 00 00 00 01 00 00 00 14 00 00 00
 - bound: wp_viewporter
 - to id: 20
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 56 bytes): 02 00 00 00 00 00 38 00 25 00 00 00 22 00 00 00 77 70 5F 73 69 6E 67 6C 65 5F 70 69 78 65 6C 5F 62 75 66 66 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: wp_single_pixel_buffer_manager_v1
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_content_type_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 52 bytes): 02 00 00 00 00 00 34 00 26 00 00 00 1B 00 00 00 77 70 5F 63 6F 6E 74 65 6E 74 5F 74 79 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 15 00 00 00
 - bound: wp_content_type_manager_v1
 - to id: 21
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_fractional_scale_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 27 00 00 00 1F 00 00 00 77 70 5F 66 72 61 63 74 69 6F 6E 61 6C 5F 73 63 61 6C 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00 16 00 00 00
 - bound: wp_fractional_scale_manager_v1
 - to id: 22
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 28 00 00 00 1E 00 00 00 77 70 5F 74 65 61 72 69 6E 67 5F 63 6F 6E 74 72 6F 6C 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: wp_tearing_control_manager_v1
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 29 00 00 00 11 00 00 00 7A 78 64 67 5F 65 78 70 6F 72 74 65 72 5F 76 31 00 00 00 00 01 00 00 00
@@ -373,49 +373,49 @@
 - iname: zxdg_importer_v2
 - global event  ( 40 bytes): 02 00 00 00 00 00 28 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00
 - iname: xdg_activation_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 44 bytes): 02 00 00 00 00 00 2C 00 2D 00 00 00 12 00 00 00 78 64 67 5F 61 63 74 69 76 61 74 69 6F 6E 5F 76 31 00 00 00 01 00 00 00 17 00 00 00
 - bound: xdg_activation_v1
 - to id: 23
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 48 bytes): 02 00 00 00 00 00 30 00 2E 00 00 00 1B 00 00 00 77 70 5F 63 75 72 73 6F 72 5F 73 68 61 70 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 01 00 00 00
 - iname: wp_cursor_shape_manager_v1
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_virtual_keyboard_manager_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 56 bytes): 02 00 00 00 00 00 38 00 2F 00 00 00 20 00 00 00 7A 77 70 5F 76 69 72 74 75 61 6C 5F 6B 65 79 62 6F 61 72 64 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00 18 00 00 00
 - bound: zwp_virtual_keyboard_manager_v1
 - to id: 24
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 30 00 00 00 20 00 00 00 7A 77 6C 72 5F 76 69 72 74 75 61 6C 5F 70 6F 69 6E 74 65 72 5F 6D 61 6E 61 67 65 72 5F 76 31 00 02 00 00 00
 - iname: zwlr_virtual_pointer_manager_v1
 - global event  ( 64 bytes): 02 00 00 00 00 00 40 00 31 00 00 00 2A 00 00 00 7A 77 70 5F 6B 65 79 62 6F 61 72 64 5F 73 68 6F 72 74 63 75 74 73 5F 69 6E 68 69 62 69 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: zwp_keyboard_shortcuts_inhibit_manager_v1
 - global event  ( 44 bytes): 02 00 00 00 00 00 2C 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00
 - iname: zwp_pointer_gestures_v1
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 48 bytes): 02 00 00 00 00 00 30 00 32 00 00 00 18 00 00 00 7A 77 70 5F 70 6F 69 6E 74 65 72 5F 67 65 73 74 75 72 65 73 5F 76 31 00 03 00 00 00 19 00 00 00
 - bound: zwp_pointer_gestures_v1
 - to id: 25
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 52 bytes): 02 00 00 00 00 00 34 00 33 00 00 00 1E 00 00 00 65 78 74 5F 74 72 61 6E 73 69 65 6E 74 5F 73 65 61 74 5F 6D 61 6E 61 67 65 72 5F 76 31 00 00 00 01 00 00 00
 - iname: ext_transient_seat_manager_v1
 - global event  ( 28 bytes): 02 00 00 00 00 00 1C 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00
 - iname: wl_seat
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 32 bytes): 02 00 00 00 00 00 20 00 34 00 00 00 08 00 00 00 77 6C 5F 73 65 61 74 00 09 00 00 00 1A 00 00 00
 - bound: wl_seat
 - to id: 26
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - global event  ( 60 bytes): 02 00 00 00 00 00 3C 00 36 00 00 00 28 00 00 00 7A 77 70 5F 70 72 69 6D 61 72 79 5F 73 65 6C 65 63 74 69 6F 6E 5F 64 65 76 69 63 65 5F 6D 61 6E 61 67 65 72 5F 76 31 00 01 00 00 00
 - iname: zwp_primary_selection_device_manager_v1
 - global event  ( 32 bytes): 02 00 00 00 00 00 20 00 37 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00
 - iname: wl_output
-## war_wayland_registry_bind [src/war_wayland.c:1545:war_wayland_registry_bind]
+## war_wayland_registry_bind [src/war_wayland.c:1600:war_wayland_registry_bind]
 - bind request  ( 36 bytes): 02 00 00 00 00 00 24 00 37 00 00 00 0A 00 00 00 77 6C 5F 6F 75 74 70 75 74 00 00 00 04 00 00 00 1B 00 00 00
 - bound: wl_output
 - to id: 27
-## END war_wayland_registry_bind [src/war_wayland.c:1563:war_wayland_registry_bind]
+## END war_wayland_registry_bind [src/war_wayland.c:1618:war_wayland_registry_bind]
 - zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
 - zwp_linux_dmabuf_feedback_v1_format_table event ( 12 bytes): 07 00 00 00 01 00 0C 00 E0 0E 00 00
 - zwp_linux_dmabuf_feedback_v1_tranche_target_device event ( 20 bytes): 07 00 00 00 04 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
@@ -429,12 +429,12 @@
 - zwp_linux_buffer_params_v1::create_immed request ( 28 bytes): 1C 00 00 00 03 00 1C 00 1D 00 00 00 00 0A 00 00 40 06 00 00 41 52 32 34 00 00 00 00
 - bound: wl_buffer
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 1C 00 00 00 00 00 08 00
-- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 83 99 01 00
-- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 83 99 01 00
+- xdg_wm_base_ping event ( 12 bytes): 0A 00 00 00 00 00 0C 00 99 BC 01 00
+- xdg_wm_base_pong request ( 12 bytes): 0A 00 00 00 03 00 0C 00 99 BC 01 00
 - xdg_toplevel_wm_capabilities event ( 20 bytes): 0C 00 00 00 03 00 14 00 08 00 00 00 01 00 00 00 02 00 00 00
 - xdg_toplevel_configure event ( 20 bytes): 0C 00 00 00 00 00 14 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 84 99 01 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 84 99 01 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 9A BC 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 9A BC 01 00
 - wp_viewporter::get_viewport request ( 16 bytes): 14 00 00 00 01 00 10 00 1E 00 00 00 06 00 00 00
 - bound: wp_viewport
 - wp_viewport::set_destination request ( 16 bytes): 1E 00 00 00 02 00 10 00 BD 06 00 00 36 04 00 00
@@ -465,11 +465,14 @@
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 1C 00 00 00
 - wl_surface_preferred_buffer_scale event ( 12 bytes): 06 00 00 00 02 00 0C 00 02 00 00 00
 - wl_surface::set_buffer_scale request ( 12 bytes): 06 00 00 00 08 00 0C 00 02 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 05 00 00 FF
 - callback_id detected: 31
 - wl_callback_done jump in progress
 - wl_callback_id: 31
-- wl_callback::done event ( 12 bytes): 1F 00 00 00 00 00 0C 00 84 8D 52 01
+- wl_callback::done event ( 12 bytes): 1F 00 00 00 00 00 0C 00 19 30 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -478,19 +481,24 @@
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 1F 00 00 00
 - xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 85 99 01 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 85 99 01 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 9B BC 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 9B BC 01 00
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - wl_keyboard_keymap event ( 16 bytes): 20 00 00 00 00 00 10 00 01 00 00 00 6F 00 01 00
 - wl_keyboard_repeat_info event ( 16 bytes): 20 00 00 00 05 00 10 00 19 00 00 00 96 00 00 00
-- wl_keyboard_enter event ( 20 bytes): 20 00 00 00 01 00 14 00 8A 99 01 00 06 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 8B 99 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_keyboard_enter event ( 20 bytes): 20 00 00 00 01 00 14 00 A0 BC 01 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 A1 BC 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_enter event ( 12 bytes): 06 00 00 00 00 00 0C 00 1B 00 00 00
 - wl_surface_preferred_buffer_transform event ( 12 bytes): 06 00 00 00 03 00 0C 00 00 00 00 00
 - wl_surface::set_buffer_transform request ( 12 bytes): 06 00 00 00 07 00 0C 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 1D 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_pointer_enter event ( 24 bytes): 21 00 00 00 00 00 18 00 A3 BC 01 00 06 00 00 00 87 32 01 00 E2 3B 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
 - zwp_linux_dmabuf_feedback_v1_main_device event ( 20 bytes): 07 00 00 00 02 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
 - zwp_linux_dmabuf_feedback_v1_format_table event ( 12 bytes): 07 00 00 00 01 00 0C 00 E0 0E 00 00
 - zwp_linux_dmabuf_feedback_v1_tranche_target_device event ( 20 bytes): 07 00 00 00 04 00 14 00 08 00 00 00 81 E2 00 00 00 00 00 00
@@ -506,7 +514,7 @@
 - zwp_linux_buffer_params_v1_id::destroy request (  8 bytes): 23 00 00 00 00 00 08 00
 - wl_callback_done jump in progress
 - wl_callback_id: 34
-- wl_callback::done event ( 12 bytes): 1F 00 00 00 00 00 0C 00 8C 8D 52 01
+- wl_callback::done event ( 12 bytes): 1F 00 00 00 00 00 0C 00 21 30 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -515,7 +523,7 @@
 - callback_id detected: 34
 - wl_callback_done jump in progress
 - wl_callback_id: 34
-- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 8C 8D 52 01
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 21 30 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -525,58 +533,1365 @@
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 23 00 00 00
 - wl_buffer_release event (  8 bytes): 1D 00 00 00 00 00 08 00
-- wl_pointer_enter event ( 24 bytes): 21 00 00 00 00 00 18 00 8F 99 01 00 06 00 00 00 FE 14 00 00 0B DE 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 29 31 61 01 85 2E 01 00 AD 38 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 2E 31 61 01 B6 29 01 00 AB 34 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 7E 8E 52 01 DB 48 00 00 14 D1 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 32 31 61 01 5D 26 01 00 52 31 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 82 8E 52 01 9C 7E 00 00 98 C8 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 37 31 61 01 2E 22 01 00 F9 2D 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 86 8E 52 01 FA BF 00 00 B6 C1 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 3C 31 61 01 FF 1D 01 00 A0 2A 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 8B 8E 52 01 BC FF 00 00 B6 C1 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 40 31 61 01 A6 1A 01 00 48 27 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 90 8E 52 01 71 31 01 00 18 C3 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 44 31 61 01 24 18 01 00 C5 24 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 94 8E 52 01 86 60 01 00 D1 C9 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 49 31 61 01 CB 14 01 00 6C 21 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 99 8E 52 01 1D 87 01 00 88 D2 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 4D 31 61 01 48 12 01 00 C0 1F 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 9D 8E 52 01 22 AA 01 00 34 DE 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 52 31 61 01 EF 0E 01 00 3D 1D 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A2 8E 52 01 8E C5 01 00 14 E8 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 56 31 61 01 43 0D 01 00 91 1B 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A7 8E 52 01 AF DA 01 00 AE F1 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 5C 31 61 01 C0 0A 01 00 0E 19 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 AB 8E 52 01 AB EA 01 00 25 FA 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 60 31 61 01 14 09 01 00 62 17 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 AF 8E 52 01 C1 F9 01 00 04 03 02 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 64 31 61 01 68 07 01 00 B5 15 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B4 8E 52 01 0D 03 02 00 A0 0A 02 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 68 31 61 01 91 06 01 00 DF 14 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B8 8E 52 01 95 0A 02 00 FE 12 02 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 6D 31 61 01 E5 04 01 00 33 13 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 BD 8E 52 01 71 10 02 00 86 1A 02 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 71 31 61 01 0F 04 01 00 86 11 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C1 8E 52 01 A0 14 02 00 0E 22 02 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 76 31 61 01 39 03 01 00 DA 0F 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C5 8E 52 01 22 17 02 00 96 29 02 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 7A 31 61 01 62 02 01 00 2D 0E 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 90 99 01 00 B0 8F 52 01 10 01 00 00 01 00 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 7F 31 61 01 8C 01 01 00 81 0C 03 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 91 99 01 00 03 90 52 01 7D 00 00 00 01 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 92 99 01 00 40 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_toplevel_configure event ( 44 bytes): 0C 00 00 00 00 00 2C 00 BD 06 00 00 36 04 00 00 18 00 00 00 02 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 93 99 01 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 93 99 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 88 31 61 01 E0 FF 00 00 28 09 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 8C 31 61 01 E0 FF 00 00 7C 07 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 91 31 61 01 33 FE 00 00 4D 03 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 95 31 61 01 33 FE 00 00 76 02 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 9B 31 61 01 33 FE 00 00 1E FF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 9F 31 61 01 33 FE 00 00 71 FD 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A3 31 61 01 33 FE 00 00 EF FA 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A7 31 61 01 33 FE 00 00 42 F9 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 AC 31 61 01 33 FE 00 00 C0 F6 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B0 31 61 01 33 FE 00 00 E9 F5 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B5 31 61 01 33 FE 00 00 13 F5 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 BA 31 61 01 33 FE 00 00 3D F4 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 BE 31 61 01 33 FE 00 00 91 F2 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C2 31 61 01 33 FE 00 00 E4 F0 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C7 31 61 01 5D FD 00 00 62 EE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 A8 BC 01 00 18 32 61 01 10 01 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 6A 32 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 A9 BC 01 00 69 32 61 01 10 01 00 00 00 00 00 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AA BC 01 00 95 35 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 97 35 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AB BC 01 00 0C 36 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 0E 36 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AC BC 01 00 24 36 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 26 36 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AD BC 01 00 68 37 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 69 37 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AE BC 01 00 80 37 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 89 37 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AF BC 01 00 38 3F 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 3A 3F 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B0 BC 01 00 F0 41 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 F1 41 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B1 BC 01 00 46 48 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 48 48 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B2 BC 01 00 26 4A 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 27 4A 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B3 BC 01 00 11 51 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 13 51 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B4 BC 01 00 C9 52 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 CA 52 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B5 BC 01 00 3F 58 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 40 58 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B6 BC 01 00 06 5A 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 08 5A 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B7 BC 01 00 87 5F 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 88 5F 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B8 BC 01 00 30 61 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 31 61 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B9 BC 01 00 0F 66 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 10 66 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 BA BC 01 00 B0 67 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 B1 67 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 BB BC 01 00 A3 6C 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 A5 6C 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 BC BC 01 00 68 6E 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 69 6E 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 BD BC 01 00 52 73 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 53 73 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 BE BC 01 00 07 75 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 09 75 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 BF BC 01 00 27 77 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 28 77 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C0 BC 01 00 AF 77 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 B0 77 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C1 BC 01 00 0C 78 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 0D 78 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C2 BC 01 00 BC 78 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 BD 78 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C3 BC 01 00 12 79 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 13 79 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C4 BC 01 00 91 79 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 92 79 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C5 BC 01 00 B8 79 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 B9 79 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C6 BC 01 00 12 7A 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 13 7A 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C7 BC 01 00 B7 7A 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 B8 7A 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C8 BC 01 00 8D 7B 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 8E 7B 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 C9 BC 01 00 BC 7B 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 BD 7B 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 CA BC 01 00 6B 7C 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 6C 7C 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 CB BC 01 00 92 7C 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 93 7C 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 D9 7E 61 01 9E FC 00 00 62 EE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E2 7E 61 01 2D FC 00 00 62 EE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 EA 7E 61 01 90 FB 00 00 62 EE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 EE 7E 61 01 F5 F9 00 00 62 EE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 F4 7E 61 01 72 F7 00 00 38 EF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 F8 7E 61 01 9C F6 00 00 38 EF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 FD 7E 61 01 F0 F4 00 00 38 EF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 01 7F 61 01 6D F2 00 00 38 EF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 05 7F 61 01 C1 F0 00 00 38 EF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 09 7F 61 01 EB EF 00 00 38 EF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 0F 7F 61 01 92 EC 00 00 62 EE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 12 7F 61 01 0F EA 00 00 8B ED 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 18 7F 61 01 B6 E6 00 00 DF EB 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 1C 7F 61 01 5D E3 00 00 32 EA 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 20 7F 61 01 58 DE 00 00 B0 E7 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 24 7F 61 01 53 D9 00 00 81 E3 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 29 7F 61 01 77 D3 00 00 7C DE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 CE BC 01 00 16 80 61 01 1D 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 CF BC 01 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 18 80 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D0 BC 01 00 2B 86 61 01 1D 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 D1 BC 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 2C 86 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D2 BC 01 00 85 87 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 86 87 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D3 BC 01 00 B3 87 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 B4 87 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D4 BC 01 00 12 88 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 13 88 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D5 BC 01 00 4B 88 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 4C 88 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D6 BC 01 00 9A 88 61 01 25 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 9B 88 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D7 BC 01 00 C1 88 61 01 25 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 C2 88 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D8 BC 01 00 F2 88 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 F3 88 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 D9 BC 01 00 22 89 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 23 89 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 DA BC 01 00 7A 89 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 7B 89 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 DB BC 01 00 D0 89 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 D1 89 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 DC BC 01 00 EA 89 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 F0 89 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 DD BC 01 00 35 8A 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 36 8A 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 DE BC 01 00 92 8A 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 93 8A 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 DF BC 01 00 B5 8A 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 B6 8A 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E0 BC 01 00 01 8B 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 02 8B 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E1 BC 01 00 22 8B 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 23 8B 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E2 BC 01 00 74 8B 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 75 8B 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E3 BC 01 00 81 8B 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 84 8B 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E4 BC 01 00 CB 8B 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 CC 8B 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E5 BC 01 00 2A 8C 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 2B 8C 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E6 BC 01 00 84 8C 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 85 8C 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E7 BC 01 00 A3 8C 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 A4 8C 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E8 BC 01 00 50 8D 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 51 8D 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 E9 BC 01 00 6D 8D 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 70 8D 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 EA BC 01 00 B7 8D 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 B8 8D 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 EB BC 01 00 D1 8D 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 D7 8D 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 EC BC 01 00 16 8E 61 01 26 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 17 8E 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 ED BC 01 00 4D 8E 61 01 26 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 4E 8E 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 EE BC 01 00 59 8F 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 5A 8F 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 EF BC 01 00 A1 8F 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 A2 8F 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F0 BC 01 00 09 90 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 0A 90 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F1 BC 01 00 33 90 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 34 90 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F2 BC 01 00 7A 90 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 7B 90 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F3 BC 01 00 AA 90 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 AB 90 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F4 BC 01 00 6A 91 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 6B 91 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F5 BC 01 00 CE 91 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 CF 91 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F6 BC 01 00 25 92 61 01 0B 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 26 92 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F7 BC 01 00 87 92 61 01 0B 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 88 92 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F8 BC 01 00 BD 92 61 01 24 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 BE 92 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 F9 BC 01 00 0C 93 61 01 24 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 0D 93 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 FA BC 01 00 3C 93 61 01 0B 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 3D 93 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 FB BC 01 00 76 93 61 01 0B 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 34
+- wl_callback_done jump in progress
+- wl_callback_id: 34
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 77 93 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 22 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 22 00 00 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 79 95 61 01 8C CE 00 00 67 E3 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 7D 95 61 01 A0 C9 00 00 53 E8 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 81 95 61 01 71 C5 00 00 58 ED 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 85 95 61 01 42 C1 00 00 34 F3 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 8A 95 61 01 13 BD 00 00 63 F7 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 8E 95 61 01 0E B8 00 00 68 FC 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 94 95 61 01 09 B3 00 00 C1 FF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 98 95 61 01 DA AE 00 00 43 02 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 9D 95 61 01 FE A8 00 00 C6 04 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A1 95 61 01 23 A3 00 00 C6 04 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A5 95 61 01 9B 9B 00 00 9C 05 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A9 95 61 01 13 94 00 00 9C 05 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 AE 95 61 01 DF 8A 00 00 C6 04 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B3 95 61 01 81 82 00 00 F0 03 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B8 95 61 01 76 78 00 00 43 02 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 BC 95 61 01 6C 6E 00 00 97 00 03 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C0 95 61 01 8B 63 00 00 EA FE 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C4 95 61 01 AA 58 00 00 3E FD 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 C9 95 61 01 A0 4E 00 00 92 FB 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 CD 95 61 01 BF 43 00 00 E5 F9 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 D3 95 61 01 DE 38 00 00 63 F7 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 D7 95 61 01 FE 2D 00 00 E0 F4 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 DC 95 61 01 1D 23 00 00 5D F2 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E0 95 61 01 13 19 00 00 DB EF 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E4 95 61 01 08 0F 00 00 58 ED 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E8 95 61 01 FE 04 00 00 AC EB 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_keyboard_leave event ( 16 bytes): 20 00 00 00 02 00 10 00 FE BC 01 00 06 00 00 00
+- wl_pointer_leave event ( 16 bytes): 21 00 00 00 01 00 10 00 03 BD 01 00 06 00 00 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 FF BC 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 FF BC 01 00
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 25 00 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 25 90 52 01 22 76 05 00 96 29 02 00
 - wl_callback_done jump in progress
 - wl_callback_id: 37
-- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 2B 90 52 01
+- wl_callback::done event ( 12 bytes): 22 00 00 00 00 00 0C 00 F1 95 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -585,7 +1900,7 @@
 - callback_id detected: 37
 - wl_callback_done jump in progress
 - wl_callback_id: 37
-- wl_callback::done event ( 12 bytes): 25 00 00 00 00 00 0C 00 2B 90 52 01
+- wl_callback::done event ( 12 bytes): 25 00 00 00 00 00 0C 00 F1 95 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -593,41 +1908,20 @@
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 25 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 25 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 94 99 01 00 53 90 52 01 7D 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 95 99 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 96 99 01 00 D3 8F 52 01 10 01 00 00 00 00 00 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 97 99 01 00 50 91 52 01 10 01 00 00 01 00 00 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 98 99 01 00 73 91 52 01 10 01 00 00 00 00 00 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 99 99 01 00 58 92 52 01 25 00 00 00 01 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 9A 99 01 00 8B 92 52 01 26 00 00 00 01 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 9B 99 01 00 A1 92 52 01 24 00 00 00 01 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 9C 99 01 00 BC 92 52 01 25 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 9D 99 01 00 CA 92 52 01 26 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 9E 99 01 00 DA 92 52 01 24 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 9F 99 01 00 13 93 52 01 25 00 00 00 01 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A0 99 01 00 4E 93 52 01 24 00 00 00 01 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A1 99 01 00 5B 93 52 01 25 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A2 99 01 00 AA 93 52 01 24 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A3 99 01 00 CB 93 52 01 26 00 00 00 01 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A4 99 01 00 03 94 52 01 25 00 00 00 01 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A5 99 01 00 23 94 52 01 25 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A6 99 01 00 3C 94 52 01 26 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 A7 99 01 00 8B 94 52 01 7D 00 00 00 01 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 A8 99 01 00 40 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 A9 99 01 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 A9 99 01 00
+- wl_keyboard_enter event ( 28 bytes): 20 00 00 00 01 00 1C 00 0F BD 01 00 06 00 00 00 08 00 00 00 2A 00 00 00 7D 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 10 BD 01 00 41 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 BD 06 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 0E BD 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 0E BD 01 00
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A7 94 52 01 22 17 02 00 96 29 02 00
+- wl_pointer_enter event ( 24 bytes): 21 00 00 00 00 00 18 00 12 BD 01 00 06 00 00 00 E3 54 02 00 F5 8D 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
 - wl_callback_done jump in progress
 - wl_callback_id: 38
-- wl_callback::done event ( 12 bytes): 25 00 00 00 00 00 0C 00 B6 94 52 01
+- wl_callback::done event ( 12 bytes): 25 00 00 00 00 00 0C 00 97 97 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -636,7 +1930,7 @@
 - callback_id detected: 38
 - wl_callback_done jump in progress
 - wl_callback_id: 38
-- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 B6 94 52 01
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 97 97 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -644,21 +1938,175 @@
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AA 99 01 00 DE 94 52 01 7D 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 AB 99 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AC 99 01 00 19 96 52 01 7D 00 00 00 01 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 AD 99 01 00 40 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_toplevel_configure event ( 44 bytes): 0C 00 00 00 00 00 2C 00 BD 06 00 00 36 04 00 00 18 00 00 00 02 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 AE 99 01 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 AE 99 01 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 13 BD 01 00 A9 97 61 01 2A 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 14 BD 01 00 40 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 B5 97 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 15 BD 01 00 B9 97 61 01 7D 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 16 BD 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 C1 97 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 17 BD 01 00 7E 98 61 01 1D 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 18 BD 01 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 80 98 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 19 BD 01 00 AE 98 61 01 1E 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 B0 98 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 1A BD 01 00 C7 98 61 01 1D 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 1B BD 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 C9 98 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 1C BD 01 00 06 99 61 01 1E 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 08 99 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 1D BD 01 00 6D 99 61 01 02 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 6E 99 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 1E BD 01 00 BF 99 61 01 02 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 C0 99 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 1F BD 01 00 D9 9D 61 01 7D 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 20 BD 01 00 40 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 DB 9D 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 21 BD 01 00 57 9E 61 01 7D 00 00 00 00 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 22 BD 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 38
+- wl_callback_done jump in progress
+- wl_callback_id: 38
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 58 9E 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 26 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 26 00 00 00
+- ext_foreign_toplevel_list_v1_toplevel event ( 12 bytes): 12 00 00 00 00 00 0C 00 06 00 00 FF
+- wl_keyboard_leave event ( 16 bytes): 20 00 00 00 02 00 10 00 26 BD 01 00 06 00 00 00
+- xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5F 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 27 BD 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 27 BD 01 00
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 27 00 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 39 96 52 01 22 76 05 00 96 29 02 00
 - wl_callback_done jump in progress
 - wl_callback_id: 39
-- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 3D 96 52 01
+- wl_callback::done event ( 12 bytes): 26 00 00 00 00 00 0C 00 E8 9E 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -667,7 +2115,7 @@
 - callback_id detected: 39
 - wl_callback_done jump in progress
 - wl_callback_id: 39
-- wl_callback::done event ( 12 bytes): 27 00 00 00 00 00 0C 00 3D 96 52 01
+- wl_callback::done event ( 12 bytes): 27 00 00 00 00 00 0C 00 E8 9E 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -675,21 +2123,62 @@
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 27 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 27 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 AF 99 01 00 70 96 52 01 7D 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 B0 99 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B1 99 01 00 D0 97 52 01 7D 00 00 00 01 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 B2 99 01 00 40 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5E 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 B3 99 01 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 B3 99 01 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 78 A4 61 01 31 5B 02 00 88 8F 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 7C A4 61 01 7F 61 02 00 52 90 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 81 A4 61 01 5A 67 02 00 28 91 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 85 A4 61 01 5F 6C 02 00 FE 91 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 89 A4 61 01 65 71 02 00 FE 91 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 8D A4 61 01 94 75 02 00 D4 92 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 92 A4 61 01 C3 79 02 00 AB 93 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 97 A4 61 01 45 7C 02 00 AB 93 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 9C A4 61 01 C8 7E 02 00 AB 93 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A0 A4 61 01 4B 81 02 00 81 94 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A4 A4 61 01 F7 82 02 00 81 94 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 A8 A4 61 01 CD 83 02 00 81 94 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 B2 A4 61 01 8F 84 02 00 81 94 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 BB A4 61 01 25 85 02 00 81 94 02 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- wl_keyboard_enter event ( 20 bytes): 20 00 00 00 01 00 14 00 3F BD 01 00 06 00 00 00 00 00 00 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 40 BD 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 41 BD 01 00 11 A5 61 01 10 01 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
+- xdg_toplevel_configure event ( 40 bytes): 0C 00 00 00 00 00 28 00 5F 03 00 00 10 04 00 00 14 00 00 00 04 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
+- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 3E BD 01 00
+- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 3E BD 01 00
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 28 00 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E3 97 52 01 22 17 02 00 96 29 02 00
+- callback_id detected: 40
 - wl_callback_done jump in progress
 - wl_callback_id: 40
-- wl_callback::done event ( 12 bytes): 27 00 00 00 00 00 0C 00 F5 97 52 01
+- wl_callback::done event ( 12 bytes): 28 00 00 00 00 00 0C 00 68 A5 61 01
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- something rendered
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 28 00 00 00
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 28 00 00 00
+- wl_callback_done jump in progress
+- wl_callback_id: 40
+- wl_callback::done event ( 12 bytes): 27 00 00 00 00 00 0C 00 68 A5 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -698,7 +2187,7 @@
 - callback_id detected: 40
 - wl_callback_done jump in progress
 - wl_callback_id: 40
-- wl_callback::done event ( 12 bytes): 28 00 00 00 00 00 0C 00 F5 97 52 01
+- wl_callback::done event ( 12 bytes): 28 00 00 00 00 00 0C 00 7D A5 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
@@ -706,130 +2195,39 @@
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 28 00 00 00
 - bound wl_callback
 - wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 28 00 00 00
-- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 B4 99 01 00 39 98 52 01 7D 00 00 00 00 00 00 00
-- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 B5 99 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 D8 99 52 01 2E 0F 02 00 61 2A 02 00
+- wl_pointer_button event ( 24 bytes): 21 00 00 00 03 00 18 00 42 BD 01 00 57 A5 61 01 10 01 00 00 00 00 00 00
 - wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 DD 99 52 01 D1 08 02 00 61 2A 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E1 99 52 01 49 01 02 00 61 2A 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E5 99 52 01 14 F8 01 00 8B 29 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 E9 99 52 01 63 F1 01 00 8B 29 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 F6 99 52 01 0A EE 01 00 B5 28 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 FA 99 52 01 82 E6 01 00 DF 27 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 FF 99 52 01 4E DD 01 00 08 27 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 03 9A 52 01 19 D4 01 00 32 26 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 07 9A 52 01 E5 CA 01 00 5C 25 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 0B 9A 52 01 B1 C1 01 00 86 24 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 11 9A 52 01 A6 B7 01 00 B0 23 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 15 9A 52 01 1F B0 01 00 B0 23 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 1A 9A 52 01 3E A5 01 00 03 22 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 1E 9A 52 01 E0 9C 01 00 2D 21 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 23 9A 52 01 82 94 01 00 57 20 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 27 9A 52 01 A6 8E 01 00 57 20 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 2B 9A 52 01 1E 87 01 00 AA 1E 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 30 9A 52 01 6D 80 01 00 D4 1D 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 35 9A 52 01 BB 79 01 00 FE 1C 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 39 9A 52 01 B6 74 01 00 52 1B 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 3E 9A 52 01 B1 6F 01 00 A5 19 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 42 9A 52 01 AB 6A 01 00 F9 17 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 46 9A 52 01 7C 66 01 00 4C 16 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 4B 9A 52 01 FA 63 01 00 A0 14 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 50 9A 52 01 A1 60 01 00 F4 12 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 FF 9A 52 01 76 61 01 00 EB 1C 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 04 9B 52 01 A1 60 01 00 B8 27 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 08 9B 52 01 F5 5E 01 00 6F 33 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 0D 9B 52 01 9C 5B 01 00 FC 3F 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 12 9B 52 01 96 56 01 00 89 4C 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 17 9B 52 01 BB 50 01 00 40 58 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 1B 9B 52 01 09 4A 01 00 20 63 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 1F 9B 52 01 D5 40 01 00 2B 6D 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 23 9B 52 01 A1 37 01 00 35 77 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 28 9B 52 01 EA 2B 01 00 6A 80 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 2C 9B 52 01 2D 20 01 00 A3 89 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 32 9B 52 01 EC 11 01 00 05 92 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 36 9B 52 01 92 03 01 00 9E 99 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 3A 9B 52 01 68 F0 00 00 EB A0 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 3E 9B 52 01 ED D9 00 00 C8 A6 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 43 9B 52 01 2F C2 00 00 7B AC 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 47 9B 52 01 5E A8 00 00 72 B1 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 4D 9B 52 01 4E 8D 00 00 74 B5 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 51 9B 52 01 63 6E 00 00 C9 BA 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 56 9B 52 01 71 4E 00 00 17 BE 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 5A 9B 52 01 99 30 00 00 39 C0 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_pointer_motion event ( 20 bytes): 21 00 00 00 02 00 14 00 5E 9B 52 01 57 10 00 00 86 C2 02 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- wl_keyboard_leave event ( 16 bytes): 20 00 00 00 02 00 10 00 B8 99 01 00 06 00 00 00
-- wl_pointer_leave event ( 16 bytes): 21 00 00 00 01 00 10 00 BD 99 01 00 06 00 00 00
-- wl_pointer_frame event (  8 bytes): 21 00 00 00 05 00 08 00
-- xdg_toplevel_configure event ( 36 bytes): 0C 00 00 00 00 00 24 00 5E 03 00 00 10 04 00 00 10 00 00 00 05 00 00 00 06 00 00 00 07 00 00 00 08 00 00 00
-- xdg_surface_configure event ( 12 bytes): 0B 00 00 00 00 00 0C 00 B9 99 01 00
-- xdg_surface_ack_configure request ( 12 bytes): 0B 00 00 00 04 00 0C 00 B9 99 01 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 43 BD 01 00 B9 A8 61 01 2A 00 00 00 01 00 00 00
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
-- bound wl_callback
-- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 29 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 44 BD 01 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 40
 - wl_callback_done jump in progress
-- wl_callback_id: 41
-- wl_callback::done event ( 12 bytes): 28 00 00 00 00 00 0C 00 6B 9B 52 01
+- wl_callback_id: 40
+- wl_callback::done event ( 12 bytes): 28 00 00 00 00 00 0C 00 BB A8 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - something rendered
 - wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 28 00 00 00
-- callback_id detected: 41
+- bound wl_callback
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 28 00 00 00
+- wl_keyboard_key event ( 24 bytes): 20 00 00 00 03 00 18 00 45 BD 01 00 D1 A8 61 01 7D 00 00 00 01 00 00 00
+- wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
+- wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
+- wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
+- wl_keyboard_modifiers event ( 28 bytes): 20 00 00 00 04 00 1C 00 46 BD 01 00 41 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+- callback_id detected: 40
 - wl_callback_done jump in progress
-- wl_callback_id: 41
-- wl_callback::done event ( 12 bytes): 29 00 00 00 00 00 0C 00 6B 9B 52 01
+- wl_callback_id: 40
+- wl_callback::done event ( 12 bytes): 28 00 00 00 00 00 0C 00 DA A8 61 01
 - wl_surface::attach request ( 20 bytes): 06 00 00 00 01 00 14 00 24 00 00 00 00 00 00 00 00 00 00 00
 - wl_surface_damage request ( 24 bytes): 06 00 00 00 02 00 18 00 00 00 00 00 00 00 00 00 00 0A 00 00 40 06 00 00
 - wl_surface_commit request (  8 bytes): 06 00 00 00 06 00 08 00
 - something rendered
-- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 29 00 00 00
+- wl_display::delete_id event ( 12 bytes): 01 00 00 00 01 00 0C 00 28 00 00 00
 - bound wl_callback
-- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 29 00 00 00
+- wl_surface::frame request ( 12 bytes): 06 00 00 00 03 00 0C 00 28 00 00 00
+- xdg_toplevel_close event (  8 bytes): 0C 00 00 00 01 00 08 00
+# END main [src/war_main.c:52:main, 23:44:34, 07-15-2025]

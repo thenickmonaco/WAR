@@ -53,4 +53,14 @@ void war_wayland_wl_surface_frame(int fd,
                                   uint32_t wl_surface_id,
                                   uint32_t new_id);
 
+void war_wayland_holy_trinity(int fd,
+                              uint32_t wl_surface_id,
+                              uint32_t wl_buffer_id,
+                              uint32_t attach_x,
+                              uint32_t attach_y,
+                              uint32_t damage_x,
+                              uint32_t damage_y,
+                              uint32_t width,
+                              uint32_t height);
+
 #endif // WAR_WAYLAND_H

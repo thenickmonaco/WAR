@@ -1484,8 +1484,8 @@ void war_wayland_init() {
                 case 1:
                     if (read_le32(msg_buffer + offset + 8 + 8) == BTN_LEFT) {
                         col = (uint32_t)(cursor_x / col_width_px);
-                        row = (uint32_t)((cursor_y) /
-                                         row_height_px); // flipped Y
+                        row =
+                            (uint32_t)((cursor_y) / row_height_px); // flipped Y
 
                         war_wayland_holy_trinity(fd,
                                                  wl_surface_id,

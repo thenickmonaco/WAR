@@ -32,7 +32,7 @@ Session.vim
 
 # logs
 *.log
-# /log.md
+/log.md
 /log/
 
 # mistake

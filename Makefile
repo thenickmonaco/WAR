@@ -31,7 +31,7 @@ endif
 CFLAGS += -DWL_SHM=$(WL_SHM)
 CFLAGS += -DDMABUF=$(DMABUF)
 
-LDFLAGS := -lvulkan -ldrm -lm -lluajit-5.1
+LDFLAGS := -lvulkan -ldrm -lm -lluajit-5.1 -lxkbcommon
 
 SRC_DIR := src
 BUILD_DIR := build

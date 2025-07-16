@@ -1396,9 +1396,9 @@ void war_wayland_init() {
                 dump_bytes(
                     "wl_pointer_motion event", msg_buffer + offset, size);
                 cursor_x = (float)(int32_t)read_le32(msg_buffer + offset + 12) /
-                           256.0f;
+                           256.0f * scale_factor;
                 cursor_y = (float)(int32_t)read_le32(msg_buffer + offset + 16) /
-                           256.0f;
+                           256.0f * scale_factor;
                 goto done;
             wl_pointer_button:
                 dump_bytes(
@@ -1407,7 +1407,8 @@ void war_wayland_init() {
                 case 1:
                     if (read_le32(msg_buffer + offset + 8 + 8) == BTN_LEFT) {
                         col = (uint32_t)(cursor_x / col_width_px);
-                        row = (uint32_t)(cursor_y / row_height_px);
+                        row = (uint32_t)((physical_height - cursor_y) /
+                                         row_height_px); // flipped Y
 
                         war_wayland_holy_trinity(fd,
                                                  wl_surface_id,

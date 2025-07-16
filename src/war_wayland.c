@@ -683,12 +683,12 @@ void war_wayland_init() {
                     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                     .commandBufferCount = 1,
                     .pCommandBuffers = &vulkan_context.cmd_buffer,
-                    .waitSemaphoreCount = 0,
-                    .pWaitSemaphores = NULL, // Optional unless syncing with
-                                             // buffer acquisition
-                    .signalSemaphoreCount = 1,
-                    .pSignalSemaphores =
-                        &vulkan_context.render_finished_semaphore,
+                    //.waitSemaphoreCount = 0,
+                    //.pWaitSemaphores = NULL, // Optional unless syncing with
+                    //                         // buffer acquisition
+                    //.signalSemaphoreCount = 1,
+                    //.pSignalSemaphores =
+                    //    &vulkan_context.render_finished_semaphore,
                 };
                 result = vkQueueSubmit(vulkan_context.queue,
                                        1,
@@ -1403,8 +1403,9 @@ void war_wayland_init() {
             wl_pointer_button:
                 dump_bytes(
                     "wl_pointer_button event", msg_buffer + offset, size);
-                if (read_le32(msg_buffer + offset + 8 + 8) == BTN_LEFT) {
-                    if (read_le32(msg_buffer + offset + 8 + 12) == 1) {
+                switch (read_le32(msg_buffer + offset + 8 + 12)) {
+                case 1:
+                    if (read_le32(msg_buffer + offset + 8 + 8) == BTN_LEFT) {
                         col = (uint32_t)(cursor_x / col_width_px);
                         row = (uint32_t)(cursor_y / row_height_px);
 

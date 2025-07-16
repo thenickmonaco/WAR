@@ -83,8 +83,6 @@ void war_wayland_init() {
     uint32_t col = 0;
     uint32_t row = 0;
 
-    uint8_t frame_dirty = 1;
-
     enum {
         ARGB8888 = 0,
     };
@@ -187,12 +185,15 @@ void war_wayland_init() {
     float* quads_y = (float*)(quads_x + max_quads * 4);
     uint32_t* quads_colors = (uint32_t*)(quads_y + max_quads * 4);
     uint16_t* quads_indices = (uint16_t*)(quads_colors + max_quads * 4);
-    size_t quads_size = 0;
+    uint16_t quads_count = 0;
 
+    //-------------------------------------------------------------------------
+    // main loop
+    //-------------------------------------------------------------------------
     while (1) {
         int ret = poll(&pfd, 1, -1);
         assert(ret >= 0);
-        if (ret == 0) call_carmack("timeout");
+        if (ret == 0) { call_carmack("timeout"); }
 
         if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
             call_carmack("wayland socket error or hangup: %s", strerror(errno));
@@ -225,7 +226,14 @@ void war_wayland_init() {
                 }
 
                 size_t idx = obj_op_index(object_id, opcode);
+                if (object_id == wl_callback_id) {
+                    call_carmack("callback_id detected: %u", object_id);
+                }
                 if (obj_op[idx]) {
+                    if (obj_op[idx] == &&wl_callback_done) {
+                        call_carmack("wl_callback_done jump in progress");
+                        call_carmack("wl_callback_id: %u", wl_callback_id);
+                    }
                     goto* obj_op[idx];
                 } else {
                     goto wayland_default;
@@ -506,6 +514,9 @@ void war_wayland_init() {
                         &&xdg_toplevel_wm_capabilities;
                     new_id++;
 
+                    //---------------------------------------------------------
+                    // initial commit
+                    //---------------------------------------------------------
                     uint8_t commit[8];
                     write_le32(commit, wl_surface_id);
                     write_le16(commit + 4, 6);
@@ -522,192 +533,181 @@ void war_wayland_init() {
                 dump_bytes(
                     "wl_callback::done event", msg_buffer + offset, size);
 #if DMABUF
-                if (frame_dirty) {
-                    //-------------------------------------------------------------
-                    // RENDER LOGIC
-                    //-------------------------------------------------------------
-                    // 1. Wait for previous frame to finish (optional but
-                    // recommended)
-                    vkWaitForFences(vulkan_context.device,
-                                    1,
-                                    &vulkan_context.in_flight_fence,
-                                    VK_TRUE,
-                                    UINT64_MAX);
-                    vkResetFences(vulkan_context.device,
-                                  1,
-                                  &vulkan_context.in_flight_fence);
+                //-------------------------------------------------------------
+                // RENDER LOGIC
+                //-------------------------------------------------------------
+                // 1. Wait for previous frame to finish (optional but
+                // recommended)
+                vkWaitForFences(vulkan_context.device,
+                                1,
+                                &vulkan_context.in_flight_fence,
+                                VK_TRUE,
+                                UINT64_MAX);
+                vkResetFences(
+                    vulkan_context.device, 1, &vulkan_context.in_flight_fence);
 
-                    // 2. Begin command buffer recording
-                    VkCommandBufferBeginInfo begin_info = {
-                        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-                    };
-                    vkBeginCommandBuffer(vulkan_context.cmd_buffer,
-                                         &begin_info);
+                // 2. Begin command buffer recording
+                VkCommandBufferBeginInfo begin_info = {
+                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                };
+                VkResult result = vkBeginCommandBuffer(
+                    vulkan_context.cmd_buffer, &begin_info);
+                assert(result == VK_SUCCESS);
 
-                    // 3. Begin render pass, clear color to gray (0.5, 0.5,
-                    // 0.5, 1.0)
-                    VkClearValue clear_color = {
-                        .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
+                // 3. Begin render pass, clear color to gray (0.5, 0.5,
+                // 0.5, 1.0)
+                VkClearValue clear_color = {
+                    .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
 
-                    VkRenderPassBeginInfo render_pass_info = {
-                        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-                        .renderPass = vulkan_context.render_pass,
-                        .framebuffer = vulkan_context.frame_buffer,
-                        .renderArea =
-                            {
-                                .offset = {0, 0},
-                                .extent = {physical_width, physical_height},
-                            },
-                        .clearValueCount = 1,
-                        .pClearValues = &clear_color,
-                    };
+                VkRenderPassBeginInfo render_pass_info = {
+                    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                    .renderPass = vulkan_context.render_pass,
+                    .framebuffer = vulkan_context.frame_buffer,
+                    .renderArea =
+                        {
+                            .offset = {0, 0},
+                            .extent = {physical_width, physical_height},
+                        },
+                    .clearValueCount = 1,
+                    .pClearValues = &clear_color,
+                };
 
-                    vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
-                                         &render_pass_info,
-                                         VK_SUBPASS_CONTENTS_INLINE);
+                vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
+                                     &render_pass_info,
+                                     VK_SUBPASS_CONTENTS_INLINE);
 
-                    // 4. Bind pipeline
-                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      vulkan_context.pipeline);
+                // 4. Bind pipeline
+                vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  vulkan_context.pipeline);
 
-                    // 5. Update vertex buffer with red quad data
-                    // Example: a simple quad in NDC coords (-0.5, -0.5) to
-                    // (0.5, 0.5) Vertex format: vec2 position + uint32_t color
-                    // (R8G8B8A8_UNORM) Let's prepare the data and upload it:
+                // 5. Update vertex buffer with red quad data
+                // Example: a simple quad in NDC coords (-0.5, -0.5) to
+                // (0.5, 0.5) Vertex format: vec2 position + uint32_t color
+                // (R8G8B8A8_UNORM) Let's prepare the data and upload it:
 
-                    typedef struct {
-                        float pos[2];
-                        uint32_t color;
-                    } Vertex;
+                typedef struct {
+                    float pos[2];
+                    uint32_t color;
+                } Vertex;
 
-                    Vertex quad_verts[8] = {
-                        {{-0.5f, -0.5f},
-                         0xFF0000FF}, // red in RGBA (red opaque)
-                        {{0.5f, -0.5f}, 0xFF0000FF},
-                        {{0.5f, 0.5f}, 0xFF0000FF},
-                        {{-0.5f, 0.5f}, 0xFF0000FF},
-                        // cursor
-                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
-                          1.0f - ((row + 1) * row_height_px) / physical_height *
-                                     2.0f},
-                         0xFFFFFFFF},
-                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
-                              1.0f,
-                          1.0f - ((row + 1) * row_height_px) / physical_height *
-                                     2.0f},
-                         0xFFFFFFFF},
-                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
-                              1.0f,
-                          1.0f -
-                              (row * row_height_px) / physical_height * 2.0f},
-                         0xFFFFFFFF},
-                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
-                          1.0f -
-                              (row * row_height_px) / physical_height * 2.0f},
-                         0xFFFFFFFF},
-                    };
+                Vertex quad_verts[8] = {
+                    {{-0.5f, -0.5f}, 0xFF0000FF}, // red in RGBA (red opaque)
+                    {{0.5f, -0.5f}, 0xFF0000FF},
+                    {{0.5f, 0.5f}, 0xFF0000FF},
+                    {{-0.5f, 0.5f}, 0xFF0000FF},
+                    // cursor
+                    {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
+                      1.0f -
+                          ((row + 1) * row_height_px) / physical_height * 2.0f},
+                     0xFFFFFFFF},
+                    {{((col + 1) * col_width_px) / physical_width * 2.0f - 1.0f,
+                      1.0f -
+                          ((row + 1) * row_height_px) / physical_height * 2.0f},
+                     0xFFFFFFFF},
+                    {{((col + 1) * col_width_px) / physical_width * 2.0f - 1.0f,
+                      1.0f - (row * row_height_px) / physical_height * 2.0f},
+                     0xFFFFFFFF},
+                    {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
+                      1.0f - (row * row_height_px) / physical_height * 2.0f},
+                     0xFFFFFFFF},
+                };
 
-                    uint16_t quad_indices[12] = {
-                        0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
+                uint16_t quad_indices[12] = {
+                    0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
 
-                    // Map vertex buffer memory and copy vertices
-                    void* vertex_data;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.quads_vertex_buffer_memory,
-                                0,
-                                sizeof(quad_verts),
-                                0,
-                                &vertex_data);
-                    memcpy(vertex_data, quad_verts, sizeof(quad_verts));
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.quads_vertex_buffer_memory);
+                // Map vertex buffer memory and copy vertices
+                void* vertex_data;
+                vkMapMemory(vulkan_context.device,
+                            vulkan_context.quads_vertex_buffer_memory,
+                            0,
+                            sizeof(quad_verts),
+                            0,
+                            &vertex_data);
+                memcpy(vertex_data, quad_verts, sizeof(quad_verts));
+                vkUnmapMemory(vulkan_context.device,
+                              vulkan_context.quads_vertex_buffer_memory);
 
-                    // Map index buffer memory and copy indices
-                    void* index_data;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.quads_index_buffer_memory,
-                                0,
-                                sizeof(quad_indices),
-                                0,
-                                &index_data);
-                    memcpy(index_data, quad_indices, sizeof(quad_indices));
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.quads_index_buffer_memory);
+                // Map index buffer memory and copy indices
+                void* index_data;
+                vkMapMemory(vulkan_context.device,
+                            vulkan_context.quads_index_buffer_memory,
+                            0,
+                            sizeof(quad_indices),
+                            0,
+                            &index_data);
+                memcpy(index_data, quad_indices, sizeof(quad_indices));
+                vkUnmapMemory(vulkan_context.device,
+                              vulkan_context.quads_index_buffer_memory);
 
-                    // 6. Bind vertex and index buffers
-                    VkDeviceSize offsets[] = {0};
-                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                                           0,
-                                           1,
-                                           &vulkan_context.quads_vertex_buffer,
-                                           offsets);
-                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                                         vulkan_context.quads_index_buffer,
-                                         0,
-                                         VK_INDEX_TYPE_UINT16);
+                // 6. Bind vertex and index buffers
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                       0,
+                                       1,
+                                       &vulkan_context.quads_vertex_buffer,
+                                       offsets);
+                vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                     vulkan_context.quads_index_buffer,
+                                     0,
+                                     VK_INDEX_TYPE_UINT16);
 
-                    // 7. Bind descriptor sets if needed (for texture). Since
-                    // you want a red quad with no texture, you can bind a dummy
-                    // descriptor set or create a pipeline without texture
-                    // sampling. Or you can skip this if your shader supports
-                    // vertex color without texture.
+                // 7. Bind descriptor sets if needed (for texture). Since
+                // you want a red quad with no texture, you can bind a dummy
+                // descriptor set or create a pipeline without texture
+                // sampling. Or you can skip this if your shader supports
+                // vertex color without texture.
 
-                    // 7. Set dynamic viewport and scissor (required!)
-                    VkViewport viewport = {
-                        .x = 0.0f,
-                        .y = 0.0f,
-                        .width = (float)physical_width,
-                        .height = (float)physical_height,
-                        .minDepth = 0.0f,
-                        .maxDepth = 1.0f,
-                    };
-                    vkCmdSetViewport(
-                        vulkan_context.cmd_buffer, 0, 1, &viewport);
+                // 7. Set dynamic viewport and scissor (required!)
+                VkViewport viewport = {
+                    .x = 0.0f,
+                    .y = 0.0f,
+                    .width = (float)physical_width,
+                    .height = (float)physical_height,
+                    .minDepth = 0.0f,
+                    .maxDepth = 1.0f,
+                };
+                vkCmdSetViewport(vulkan_context.cmd_buffer, 0, 1, &viewport);
 
-                    VkRect2D scissor = {
-                        .offset = {0, 0},
-                        .extent = {physical_width, physical_height},
-                    };
-                    vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
+                VkRect2D scissor = {
+                    .offset = {0, 0},
+                    .extent = {physical_width, physical_height},
+                };
+                vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
 
-                    // 8. Draw indexed quad
-                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
+                // 8. Draw indexed quad
+                vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
 
-                    // 9. End render pass and command buffer
-                    vkCmdEndRenderPass(vulkan_context.cmd_buffer);
-                    vkEndCommandBuffer(vulkan_context.cmd_buffer);
+                // 9. End render pass and command buffer
+                vkCmdEndRenderPass(vulkan_context.cmd_buffer);
+                result = vkEndCommandBuffer(vulkan_context.cmd_buffer);
+                assert(result == VK_SUCCESS);
 
-                    // 10. Submit command buffer
-                    VkSubmitInfo submit_info = {
-                        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                        .commandBufferCount = 1,
-                        .pCommandBuffers = &vulkan_context.cmd_buffer,
-                        // You might need to set wait semaphores here if syncing
-                        // with presentation
-                    };
-                    vkQueueSubmit(vulkan_context.queue,
-                                  1,
-                                  &submit_info,
-                                  vulkan_context.in_flight_fence);
+                // 10. Submit command buffer
+                VkSubmitInfo submit_info = {
+                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                    .commandBufferCount = 1,
+                    .pCommandBuffers = &vulkan_context.cmd_buffer,
+                    .waitSemaphoreCount = 0,
+                    .pWaitSemaphores = NULL, // Optional unless syncing with
+                                             // buffer acquisition
+                    .signalSemaphoreCount = 1,
+                    .pSignalSemaphores =
+                        &vulkan_context.render_finished_semaphore,
+                };
+                result = vkQueueSubmit(vulkan_context.queue,
+                                       1,
+                                       &submit_info,
+                                       vulkan_context.in_flight_fence);
+                assert(result == VK_SUCCESS);
 
-                    war_wayland_wl_surface_attach(
-                        fd, wl_surface_id, wl_buffer_id, 0, 0);
-                    war_wayland_wl_surface_damage(fd,
-                                                  wl_surface_id,
-                                                  0,
-                                                  0,
-                                                  physical_width,
-                                                  physical_height);
-                    war_wayland_wl_surface_commit(fd, wl_surface_id);
-                    frame_dirty = 0;
-                    call_carmack("somethign rendered");
-                }
-
-                war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
-                wl_callback_id = new_id++;
-                obj_op[obj_op_index(wl_callback_id, 0)] = &&wl_callback_done;
+                war_wayland_wl_surface_attach(
+                    fd, wl_surface_id, wl_buffer_id, 0, 0);
+                war_wayland_wl_surface_damage(
+                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
+                war_wayland_wl_surface_commit(fd, wl_surface_id);
+                call_carmack("something rendered");
 #endif
                 goto done;
             wl_display_error:
@@ -717,6 +717,11 @@ void war_wayland_init() {
             wl_display_delete_id:
                 dump_bytes(
                     "wl_display::delete_id event", msg_buffer + offset, size);
+
+                if (read_le32(msg_buffer + offset + 8) == wl_callback_id) {
+                    war_wayland_wl_surface_frame(
+                        fd, wl_surface_id, wl_callback_id);
+                }
                 goto done;
 #if WL_SHM
             wl_shm_format:
@@ -850,17 +855,16 @@ void war_wayland_init() {
                         write(fd, set_destination, 16);
                     assert(set_destination_written == 16);
                 }
-
+                //-------------------------------------------------------------
+                // initial attach, initial frame, commit
+                //-------------------------------------------------------------
                 war_wayland_wl_surface_attach(
                     fd, wl_surface_id, wl_buffer_id, 0, 0);
-                war_wayland_wl_surface_damage(
-                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
-                war_wayland_wl_surface_commit(fd, wl_surface_id);
-
                 war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
                 wl_callback_id = new_id;
                 obj_op[obj_op_index(wl_callback_id, 0)] = &&wl_callback_done;
                 new_id++;
+                war_wayland_wl_surface_commit(fd, wl_surface_id);
 #endif
 #if WL_SHM
                 uint8_t shm_ack_configure[12];
@@ -1116,12 +1120,6 @@ void war_wayland_init() {
                 ssize_t set_buffer_scale_written =
                     write(fd, set_buffer_scale, 12);
                 assert(set_buffer_scale_written == 12);
-
-                war_wayland_wl_surface_attach(
-                    fd, wl_surface_id, wl_buffer_id, 0, 0);
-                war_wayland_wl_surface_damage(
-                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
-                war_wayland_wl_surface_commit(fd, wl_surface_id);
                 goto done;
             wl_surface_preferred_buffer_transform:
                 dump_bytes("wl_surface_preferred_buffer_transform event",
@@ -1141,12 +1139,6 @@ void war_wayland_init() {
                 ssize_t set_buffer_transform_written =
                     write(fd, set_buffer_transform, 12);
                 assert(set_buffer_transform_written == 12);
-
-                war_wayland_wl_surface_attach(
-                    fd, wl_surface_id, wl_buffer_id, 0, 0);
-                war_wayland_wl_surface_damage(
-                    fd, wl_surface_id, 0, 0, physical_width, physical_height);
-                war_wayland_wl_surface_commit(fd, wl_surface_id);
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
@@ -1338,6 +1330,24 @@ void war_wayland_init() {
                 goto done;
             wl_keyboard_key:
                 dump_bytes("wl_keyboard_key event", msg_buffer + offset, size);
+                switch (read_le32(msg_buffer + offset + 8 + 12)) {
+                case 1:
+                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_K) {
+                        row--;
+                    }
+                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_J) {
+                        row++;
+                    }
+                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_H) {
+                        col--;
+                    }
+                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_L) {
+                        col++;
+                    }
+                    break;
+                case 0:
+                    break;
+                }
                 goto done;
             wl_keyboard_modifiers:
                 dump_bytes(
@@ -1368,20 +1378,6 @@ void war_wayland_init() {
                     if (read_le32(msg_buffer + offset + 8 + 12) == 1) {
                         col = (uint32_t)(cursor_x / col_width_px);
                         row = (uint32_t)(cursor_y / row_height_px);
-                        call_carmack("col after pointer lmb: %u", col);
-                        call_carmack("row after pointer lmb: %u", row);
-
-                        war_wayland_wl_surface_attach(
-                            fd, wl_surface_id, wl_buffer_id, 0, 0);
-                        war_wayland_wl_surface_damage(fd,
-                                                      wl_surface_id,
-                                                      0,
-                                                      0,
-                                                      physical_width,
-                                                      physical_height);
-                        war_wayland_wl_surface_commit(fd, wl_surface_id);
-
-                        frame_dirty = 1;
                     }
                 }
                 goto done;

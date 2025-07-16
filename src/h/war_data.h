@@ -60,8 +60,8 @@ enum WAR_WaylandInterfaceHashValue {
 };
 
 enum {
-    max_objects = 128,
-    max_opcodes = 128,
+    max_objects = 1000,
+    max_opcodes = 20,
     max_quads = 800,
 };
 

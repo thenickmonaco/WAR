@@ -106,6 +106,8 @@ void war_wayland_init() {
         close(shm_fd);
         return;
     }
+
+    void* pixel_buffer;
 #endif
 
     uint32_t wl_display_id = 1;
@@ -226,14 +228,7 @@ void war_wayland_init() {
                 }
 
                 size_t idx = obj_op_index(object_id, opcode);
-                if (object_id == wl_callback_id) {
-                    call_carmack("callback_id detected: %u", object_id);
-                }
                 if (obj_op[idx]) {
-                    if (obj_op[idx] == &&wl_callback_done) {
-                        call_carmack("wl_callback_done jump in progress");
-                        call_carmack("wl_callback_id: %u", wl_callback_id);
-                    }
                     goto* obj_op[idx];
                 } else {
                     goto wayland_default;
@@ -695,7 +690,40 @@ void war_wayland_init() {
                                        &submit_info,
                                        vulkan_context.in_flight_fence);
                 assert(result == VK_SUCCESS);
+#endif
+#if WL_SHM
+                uint32_t* pixels = (uint32_t*)pixel_buffer;
+                for (uint32_t y = 0; y < physical_height; y++) {
+                    for (uint32_t x = 0; x < physical_width; x++) {
+                        pixels[y * physical_width + x] = 0xFF808080;
+                    }
+                }
 
+                uint32_t quad_w = physical_width / 2;
+                uint32_t quad_h = physical_height / 2;
+                uint32_t quad_x = (physical_width - quad_w) / 2;
+                uint32_t quad_y = (physical_height - quad_h) / 2;
+
+                for (uint32_t y = quad_y; y < quad_y + quad_h; ++y) {
+                    for (uint32_t x = quad_x; x < quad_x + quad_w; ++x) {
+                        pixels[y * physical_width + x] =
+                            0xFFFF0000; // red in ARGB
+                    }
+                }
+
+                uint32_t cursor_w = col_width_px;
+                uint32_t cursor_h = row_height_px;
+                uint32_t cursor_x = col * col_width_px;
+                uint32_t cursor_y = row * row_height_px;
+
+                for (uint32_t y = cursor_y; y < cursor_y + cursor_h; ++y) {
+                    if (y >= physical_height) break;
+                    for (uint32_t x = cursor_x; x < cursor_x + cursor_w; ++x) {
+                        if (x >= physical_width) break;
+                        pixels[y * physical_width + x] = 0xFFFFFFFF; // white
+                    }
+                }
+#endif
                 war_wayland_holy_trinity(fd,
                                          wl_surface_id,
                                          wl_buffer_id,
@@ -705,8 +733,6 @@ void war_wayland_init() {
                                          0,
                                          physical_width,
                                          physical_height);
-                call_carmack("something rendered");
-#endif
                 goto done;
             wl_display_error:
                 dump_bytes(
@@ -776,6 +802,14 @@ void war_wayland_init() {
                     wl_buffer_id = new_id;
                     obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
                     new_id++;
+
+                    pixel_buffer = mmap(NULL,
+                                        pool_size,
+                                        PROT_READ | PROT_WRITE,
+                                        MAP_SHARED,
+                                        shm_fd,
+                                        0);
+                    assert(pixel_buffer != MAP_FAILED);
                 }
                 goto done;
 #endif
@@ -799,7 +833,7 @@ void war_wayland_init() {
                 dump_bytes(
                     "xdg_surface_configure event", msg_buffer + offset, size);
                 assert(size == 12);
-#if DMABUF
+
                 uint8_t ack_configure[12];
                 write_le32(ack_configure, xdg_surface_id);
                 write_le16(ack_configure + 4, 4);
@@ -867,53 +901,7 @@ void war_wayland_init() {
                     new_id++;
                 }
                 war_wayland_wl_surface_commit(fd, wl_surface_id);
-#endif
-#if WL_SHM
-                uint8_t shm_ack_configure[12];
-                write_le32(shm_ack_configure, xdg_surface_id);
-                write_le16(shm_ack_configure + 4, 4);
-                write_le16(shm_ack_configure + 6, 12);
-                write_le32(shm_ack_configure + 8,
-                           read_le32(msg_buffer + offset + 8));
-                dump_bytes(
-                    "xdg_surface_ack_configure request", shm_ack_configure, 12);
-                ssize_t shm_ack_configure_written =
-                    write(fd, shm_ack_configure, 12);
-                assert(shm_ack_configure_written == 12);
 
-                uint8_t shm_attach[20];
-                write_le32(shm_attach, wl_surface_id);
-                write_le16(shm_attach + 4, 1);
-                write_le16(shm_attach + 6, 20);
-                write_le32(shm_attach + 8, wl_buffer_id);
-                write_le32(shm_attach + 12, 0);
-                write_le32(shm_attach + 16, 0);
-                dump_bytes("wl_surface_attach request", shm_attach, 20);
-                ssize_t shm_attach_written = write(fd, shm_attach, 20);
-                assert(shm_attach_written == 20);
-
-                uint8_t shm_damage[24];
-                write_le32(shm_damage, wl_surface_id);
-                write_le16(shm_damage + 4, 2);
-                write_le16(shm_damage + 6, 24);
-                write_le32(shm_damage + 8, 0);
-                write_le32(shm_damage + 12, 0);
-                write_le32(shm_damage + 16, physical_width);
-                write_le32(shm_damage + 20, physical_height);
-                dump_bytes("wl_surface_damage request", shm_damage, 24);
-                ssize_t shm_damage_written = write(fd, shm_damage, 24);
-                assert(shm_damage_written == 24);
-
-                uint8_t shm_commit[8];
-                write_le32(shm_commit, wl_surface_id);
-                write_le16(shm_commit + 4, 6);
-                write_le16(shm_commit + 6, 8);
-                dump_bytes("wl_surface_commit request", shm_commit, 8);
-                ssize_t shm_commit_written = write(fd, shm_commit, 8);
-                assert(shm_commit_written == 8);
-
-                // COMMENT: to be continued...
-#endif
                 goto done;
             xdg_toplevel_configure:
                 dump_bytes(
@@ -922,11 +910,50 @@ void war_wayland_init() {
             xdg_toplevel_close:
                 dump_bytes(
                     "xdg_toplevel_close event", msg_buffer + offset, size);
+
+                uint8_t xdg_toplevel_destroy[8];
+                write_le32(xdg_toplevel_destroy, xdg_toplevel_id);
+                write_le16(xdg_toplevel_destroy + 4, 0);
+                write_le16(xdg_toplevel_destroy + 6, 8);
+                ssize_t xdg_toplevel_destroy_written =
+                    write(fd, xdg_toplevel_destroy, 8);
+                dump_bytes(
+                    "xdg_toplevel::destroy request", xdg_toplevel_destroy, 8);
+                assert(xdg_toplevel_destroy_written == 8);
+
+                uint8_t xdg_surface_destroy[8];
+                write_le32(xdg_surface_destroy, xdg_surface_id);
+                write_le16(xdg_surface_destroy + 4, 0);
+                write_le16(xdg_surface_destroy + 6, 8);
+                ssize_t xdg_surface_destroy_written =
+                    write(fd, xdg_surface_destroy, 8);
+                dump_bytes(
+                    "xdg_surface::destroy request", xdg_surface_destroy, 8);
+                assert(xdg_surface_destroy_written == 8);
+
+                uint8_t wl_buffer_destroy[8];
+                write_le32(wl_buffer_destroy, wl_buffer_id);
+                write_le16(wl_buffer_destroy + 4, 0);
+                write_le16(wl_buffer_destroy + 6, 8);
+                ssize_t wl_buffer_destroy_written =
+                    write(fd, wl_buffer_destroy, 8);
+                dump_bytes("wl_buffer::destroy request", wl_buffer_destroy, 8);
+                assert(wl_buffer_destroy_written == 8);
+
+                uint8_t wl_surface_destroy[8];
+                write_le32(wl_surface_destroy, wl_surface_id);
+                write_le16(wl_surface_destroy + 4, 0);
+                write_le16(wl_surface_destroy + 6, 8);
+                ssize_t wl_surface_destroy_written =
+                    write(fd, wl_surface_destroy, 8);
+                dump_bytes(
+                    "wl_surface::destroy request", wl_surface_destroy, 8);
+                assert(wl_surface_destroy_written == 8);
+
 #if DMABUF
                 close(vulkan_context.dmabuf_fd);
                 vulkan_context.dmabuf_fd = -1;
 #endif
-                return;
                 goto done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
@@ -1361,11 +1388,11 @@ void war_wayland_init() {
                         break;
                     case 1:
                         // pressed
-                        row++;
+                        row--;
                         break;
                     case 2:
                         // repeated
-                        row++;
+                        row--;
                         break;
                     }
                     break;
@@ -1374,10 +1401,10 @@ void war_wayland_init() {
                     case 0:
                         break;
                     case 1:
-                        row--;
+                        row++;
                         break;
                     case 2:
-                        row--;
+                        row++;
                         break;
                     }
                     break;
@@ -1457,7 +1484,7 @@ void war_wayland_init() {
                 case 1:
                     if (read_le32(msg_buffer + offset + 8 + 8) == BTN_LEFT) {
                         col = (uint32_t)(cursor_x / col_width_px);
-                        row = (uint32_t)((physical_height - cursor_y) /
+                        row = (uint32_t)((cursor_y) /
                                          row_height_px); // flipped Y
 
                         war_wayland_holy_trinity(fd,

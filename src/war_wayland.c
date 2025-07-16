@@ -859,10 +859,13 @@ void war_wayland_init() {
                 //-------------------------------------------------------------
                 war_wayland_wl_surface_attach(
                     fd, wl_surface_id, wl_buffer_id, 0, 0);
-                war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
-                wl_callback_id = new_id;
-                obj_op[obj_op_index(wl_callback_id, 0)] = &&wl_callback_done;
-                new_id++;
+                if (!wl_callback_id) {
+                    war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
+                    wl_callback_id = new_id;
+                    obj_op[obj_op_index(wl_callback_id, 0)] =
+                        &&wl_callback_done;
+                    new_id++;
+                }
                 war_wayland_wl_surface_commit(fd, wl_surface_id);
 #endif
 #if WL_SHM
@@ -1349,23 +1352,70 @@ void war_wayland_init() {
                 goto done;
             wl_keyboard_key:
                 dump_bytes("wl_keyboard_key event", msg_buffer + offset, size);
-                switch (read_le32(msg_buffer + offset + 8 + 12)) {
-                case 1:
-                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_K) {
+                uint32_t wl_key_state = read_le32(msg_buffer + offset + 8 + 12);
+                switch (read_le32(msg_buffer + offset + 8 + 8)) {
+                case KEY_K:
+                    switch (wl_key_state) {
+                    case 0:
+                        // released (not pressed)
+                        break;
+                    case 1:
+                        // pressed
                         row++;
-                    }
-                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_J) {
-                        row--;
-                    }
-                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_H) {
-                        col--;
-                    }
-                    if (read_le32(msg_buffer + offset + 8 + 8) == KEY_L) {
-                        col++;
+                        break;
+                    case 2:
+                        // repeated
+                        row++;
+                        break;
                     }
                     break;
-                case 0:
-                    // COMMENT ADD: handle holds
+                case KEY_J:
+                    switch (wl_key_state) {
+                    case 0:
+                        break;
+                    case 1:
+                        row--;
+                        break;
+                    case 2:
+                        row--;
+                        break;
+                    }
+                    break;
+                case KEY_H:
+                    switch (wl_key_state) {
+                    case 0:
+                        break;
+                    case 1:
+                        col--;
+                        break;
+                    case 2:
+                        col--;
+                        break;
+                    }
+                    break;
+                case KEY_L:
+                    switch (wl_key_state) {
+                    case 0:
+                        break;
+                    case 1:
+                        col++;
+                        break;
+                    case 2:
+                        col++;
+                        break;
+                    }
+                    break;
+                case KEY_0:
+                    switch (wl_key_state) {
+                    case 0:
+                        break;
+                    case 1:
+                        col = 0;
+                        break;
+                    case 2:
+                        col = 0;
+                        break;
+                    }
                     break;
                 }
                 war_wayland_holy_trinity(fd,

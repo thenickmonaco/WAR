@@ -73,6 +73,7 @@ int main() {
 }
 
 void* war_window_render(void* args) {
+    header("war_window_render");
     war_thread_args* a = (war_thread_args*)args;
 
     war_wayland_init();
@@ -81,15 +82,18 @@ void* war_window_render(void* args) {
     // while (!end_window_render) {
     // }
 
+    end("war_audio");
     return 0;
 }
 
 void* war_audio(void* args) {
+    header("war_audio");
     war_thread_args* a = (war_thread_args*)args;
 
     // uint8_t end_audio = 0;
     // while (!end_audio) {
     // }
 
+    end("war_audio");
     return 0;
 }

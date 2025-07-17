@@ -58,7 +58,6 @@
 #include <xkbcommon/xkbcommon.h>
 
 void war_wayland_init() {
-    // signal(SIGPIPE, SIG_IGN);
     header("war_wayland_init");
 
     int fd = war_wayland_make_fd();

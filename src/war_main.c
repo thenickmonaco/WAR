@@ -34,8 +34,6 @@
 #include <stdint.h>
 #include <unistd.h>
 
-asdjflkasjdflkasjdflaskdfjsadklfjasfdlfdkjsal
-
 int main() {
     CALL_CARMACK("main");
 

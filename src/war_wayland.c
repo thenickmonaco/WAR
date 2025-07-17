@@ -210,29 +210,30 @@ void war_wayland_init() {
         }
 
         if (pfd.revents & POLLIN) {
-            struct msghdr poll_msg = {0};
+            struct msghdr poll_msg_hdr = {0};
             struct iovec poll_iov;
             poll_iov.iov_base = msg_buffer + msg_buffer_size;
             poll_iov.iov_len = sizeof(msg_buffer) - msg_buffer_size;
-            poll_msg.msg_iov = &poll_iov;
-            poll_msg.msg_iovlen = 1;
+            poll_msg_hdr.msg_iov = &poll_iov;
+            poll_msg_hdr.msg_iovlen = 1;
             char poll_ctrl_buf[CMSG_SPACE(sizeof(int) * 4)];
-            poll_msg.msg_control = poll_ctrl_buf;
-            poll_msg.msg_controllen = sizeof(poll_ctrl_buf);
-            ssize_t size_read = recvmsg(fd, &poll_msg, 0);
+            poll_msg_hdr.msg_control = poll_ctrl_buf;
+            poll_msg_hdr.msg_controllen = sizeof(poll_ctrl_buf);
+            ssize_t size_read = recvmsg(fd, &poll_msg_hdr, 0);
             assert(size_read > 0);
             msg_buffer_size += size_read;
 
-            size_t offset = 0;
-            while (msg_buffer_size - offset >= 8) {
-                uint16_t size = read_le16(msg_buffer + offset + 6);
+            size_t msg_buffer_offset = 0;
+            while (msg_buffer_size - msg_buffer_offset >= 8) {
+                uint16_t size = read_le16(msg_buffer + msg_buffer_offset + 6);
 
-                if ((size < 8) || (size > (msg_buffer_size - offset))) {
+                if ((size < 8) ||
+                    (size > (msg_buffer_size - msg_buffer_offset))) {
                     break;
                 };
 
-                uint32_t object_id = read_le32(msg_buffer + offset);
-                uint16_t opcode = read_le16(msg_buffer + offset + 4);
+                uint32_t object_id = read_le32(msg_buffer + msg_buffer_offset);
+                uint16_t opcode = read_le16(msg_buffer + msg_buffer_offset + 4);
 
                 if (object_id >= max_objects || opcode >= max_opcodes) {
                     // COMMENT CONCERN: INVALID OBJECT/OP 27 TIMES!
@@ -249,30 +250,32 @@ void war_wayland_init() {
                 }
 
             wl_registry_global:
-                dump_bytes("global event", msg_buffer + offset, size);
+                dump_bytes(
+                    "global event", msg_buffer + msg_buffer_offset, size);
                 call_carmack("iname: %s",
-                             (const char*)msg_buffer + offset + 16);
+                             (const char*)msg_buffer + msg_buffer_offset + 16);
 
-                const char* iname = (const char*)msg_buffer + offset +
+                const char* iname = (const char*)msg_buffer +
+                                    msg_buffer_offset +
                                     16; // COMMENT OPTIMIZE: perfect hash
                 if (strcmp(iname, "wl_shm") == 0) {
 #if WL_SHM
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_shm_id = new_id;
                     obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
                     new_id++;
 #endif
                 } else if (strcmp(iname, "wl_compositor") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_compositor_id = new_id;
                     obj_op[obj_op_index(wl_compositor_id, 0)] =
                         &&wl_compositor_jump;
                     new_id++;
                 } else if (strcmp(iname, "wl_output") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_output_id = new_id;
                     obj_op[obj_op_index(wl_output_id, 0)] =
                         &&wl_output_geometry;
@@ -285,7 +288,7 @@ void war_wayland_init() {
                     new_id++;
                 } else if (strcmp(iname, "wl_seat") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_seat_id = new_id;
                     obj_op[obj_op_index(wl_seat_id, 0)] =
                         &&wl_seat_capabilities;
@@ -294,7 +297,7 @@ void war_wayland_init() {
                 } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
 #if DMABUF
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_linux_dmabuf_v1_id = new_id;
                     obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
                         &&zwp_linux_dmabuf_v1_format;
@@ -304,7 +307,7 @@ void war_wayland_init() {
 #endif
                 } else if (strcmp(iname, "xdg_wm_base") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     xdg_wm_base_id = new_id;
                     obj_op[obj_op_index(xdg_wm_base_id, 0)] =
                         &&xdg_wm_base_ping;
@@ -312,7 +315,7 @@ void war_wayland_init() {
                 } else if (strcmp(iname, "wp_linux_drm_syncobj_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_linux_drm_syncobj_manager_v1_id = new_id;
                     obj_op[obj_op_index(wp_linux_drm_syncobj_manager_v1_id,
                                         0)] =
@@ -320,14 +323,14 @@ void war_wayland_init() {
                     new_id++;
                 } else if (strcmp(iname, "zwp_idle_inhibit_manager_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_idle_inhibit_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwp_idle_inhibit_manager_v1_id, 0)] =
                         &&zwp_idle_inhibit_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zxdg_decoration_manager_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zxdg_decoration_manager_v1_id = new_id;
                     obj_op[obj_op_index(zxdg_decoration_manager_v1_id, 0)] =
                         &&zxdg_decoration_manager_v1_jump;
@@ -335,7 +338,7 @@ void war_wayland_init() {
                 } else if (strcmp(iname, "zwp_relative_pointer_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_relative_pointer_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwp_relative_pointer_manager_v1_id,
                                         0)] =
@@ -343,14 +346,14 @@ void war_wayland_init() {
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_constraints_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_pointer_constraints_v1_id = new_id;
                     obj_op[obj_op_index(zwp_pointer_constraints_v1_id, 0)] =
                         &&zwp_pointer_constraints_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_output_manager_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_output_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwlr_output_manager_v1_id, 0)] =
                         &&zwlr_output_manager_v1_head;
@@ -359,7 +362,7 @@ void war_wayland_init() {
                     new_id++;
                 } else if (strcmp(iname, "zwlr_data_control_manager_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_data_control_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwlr_data_control_manager_v1_id, 0)] =
                         &&zwlr_data_control_manager_v1_jump;
@@ -367,7 +370,7 @@ void war_wayland_init() {
                 } else if (strcmp(iname, "zwp_virtual_keyboard_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_virtual_keyboard_manager_v1_id = new_id;
                     obj_op[obj_op_index(zwp_virtual_keyboard_manager_v1_id,
                                         0)] =
@@ -375,7 +378,7 @@ void war_wayland_init() {
                     new_id++;
                 } else if (strcmp(iname, "wp_viewporter") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_viewporter_id = new_id;
                     obj_op[obj_op_index(wp_viewporter_id, 0)] =
                         &&wp_viewporter_jump;
@@ -383,49 +386,49 @@ void war_wayland_init() {
                 } else if (strcmp(iname, "wp_fractional_scale_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_fractional_scale_manager_v1_id = new_id;
                     obj_op[obj_op_index(wp_fractional_scale_manager_v1_id, 0)] =
                         &&wp_fractional_scale_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_gestures_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_pointer_gestures_v1_id = new_id;
                     obj_op[obj_op_index(zwp_pointer_gestures_v1_id, 0)] =
                         &&zwp_pointer_gestures_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "xdg_activation_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     xdg_activation_v1_id = new_id;
                     obj_op[obj_op_index(xdg_activation_v1_id, 0)] =
                         &&xdg_activation_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_presentation") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_presentation_id = new_id;
                     obj_op[obj_op_index(wp_presentation_id, 0)] =
                         &&wp_presentation_clock_id;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_layer_shell_v1_id = new_id;
                     obj_op[obj_op_index(zwlr_layer_shell_v1_id, 0)] =
                         &&zwlr_layer_shell_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "ext_foreign_toplevel_list_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     ext_foreign_toplevel_list_v1_id = new_id;
                     obj_op[obj_op_index(ext_foreign_toplevel_list_v1_id, 0)] =
                         &&ext_foreign_toplevel_list_v1_toplevel;
                     new_id++;
                 } else if (strcmp(iname, "wp_content_type_manager_v1") == 0) {
                     war_wayland_registry_bind(
-                        fd, msg_buffer, offset, size, new_id);
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_content_type_manager_v1_id = new_id;
                     obj_op[obj_op_index(wp_content_type_manager_v1_id, 0)] =
                         &&wp_content_type_manager_v1_jump;
@@ -530,11 +533,13 @@ void war_wayland_init() {
                 }
                 goto done;
             wl_registry_global_remove:
-                dump_bytes("global_rm event", msg_buffer + offset, size);
+                dump_bytes(
+                    "global_rm event", msg_buffer + msg_buffer_offset, size);
                 goto done;
             wl_callback_done:
-                dump_bytes(
-                    "wl_callback::done event", msg_buffer + offset, size);
+                dump_bytes("wl_callback::done event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
 #if DMABUF
                 //-------------------------------------------------------------
                 // RENDER LOGIC
@@ -750,22 +755,27 @@ void war_wayland_init() {
                                          physical_height);
                 goto done;
             wl_display_error:
-                dump_bytes(
-                    "wl_display::error event", msg_buffer + offset, size);
+                dump_bytes("wl_display::error event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_display_delete_id:
-                dump_bytes(
-                    "wl_display::delete_id event", msg_buffer + offset, size);
+                dump_bytes("wl_display::delete_id event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
 
-                if (read_le32(msg_buffer + offset + 8) == wl_callback_id) {
+                if (read_le32(msg_buffer + msg_buffer_offset + 8) ==
+                    wl_callback_id) {
                     war_wayland_wl_surface_frame(
                         fd, wl_surface_id, wl_callback_id);
                 }
                 goto done;
 #if WL_SHM
             wl_shm_format:
-                dump_bytes("wl_shm_format event", msg_buffer + offset, size);
-                if (read_le32(msg_buffer + offset + 8) == ARGB8888) {
+                dump_bytes("wl_shm_format event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
+                if (read_le32(msg_buffer + msg_buffer_offset + 8) == ARGB8888) {
                     uint8_t create_pool[12];
                     write_le32(create_pool, wl_shm_id); // object id
                     write_le16(create_pool + 4, 0);     // opcode 0
@@ -803,7 +813,7 @@ void war_wayland_init() {
                     write_le16(create_buffer + 4, 0);
                     write_le16(create_buffer + 6, 32);
                     write_le32(create_buffer + 8, new_id);
-                    write_le32(create_buffer + 12, 0); // offset
+                    write_le32(create_buffer + 12, 0); // msg_buffer_offset
                     write_le32(create_buffer + 16, physical_width);
                     write_le32(create_buffer + 20, physical_height);
                     write_le32(create_buffer + 24, stride);
@@ -829,24 +839,29 @@ void war_wayland_init() {
                 goto done;
 #endif
             wl_buffer_release:
-                dump_bytes(
-                    "wl_buffer_release event", msg_buffer + offset, size);
+                dump_bytes("wl_buffer_release event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             xdg_wm_base_ping:
-                dump_bytes("xdg_wm_base_ping event", msg_buffer + offset, size);
+                dump_bytes("xdg_wm_base_ping event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 assert(size == 12);
                 uint8_t pong[12];
                 write_le32(pong, xdg_wm_base_id);
                 write_le16(pong + 4, 3);
                 write_le16(pong + 6, 12);
-                write_le32(pong + 8, read_le32(msg_buffer + offset + 8));
+                write_le32(pong + 8,
+                           read_le32(msg_buffer + msg_buffer_offset + 8));
                 dump_bytes("xdg_wm_base_pong request", pong, 12);
                 ssize_t pong_written = write(fd, pong, 12);
                 assert(pong_written == 12);
                 goto done;
             xdg_surface_configure:
-                dump_bytes(
-                    "xdg_surface_configure event", msg_buffer + offset, size);
+                dump_bytes("xdg_surface_configure event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 assert(size == 12);
 
                 uint8_t ack_configure[12];
@@ -854,7 +869,7 @@ void war_wayland_init() {
                 write_le16(ack_configure + 4, 4);
                 write_le16(ack_configure + 6, 12);
                 write_le32(ack_configure + 8,
-                           read_le32(msg_buffer + offset + 8));
+                           read_le32(msg_buffer + msg_buffer_offset + 8));
                 dump_bytes(
                     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
@@ -919,12 +934,14 @@ void war_wayland_init() {
 
                 goto done;
             xdg_toplevel_configure:
-                dump_bytes(
-                    "xdg_toplevel_configure event", msg_buffer + offset, size);
+                dump_bytes("xdg_toplevel_configure event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             xdg_toplevel_close:
-                dump_bytes(
-                    "xdg_toplevel_close event", msg_buffer + offset, size);
+                dump_bytes("xdg_toplevel_close event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
 
                 uint8_t xdg_toplevel_destroy[8];
                 write_le32(xdg_toplevel_destroy, xdg_toplevel_id);
@@ -972,40 +989,40 @@ void war_wayland_init() {
                 goto done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             xdg_toplevel_wm_capabilities:
                 dump_bytes("xdg_toplevel_wm_capabilities event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
 #if DMABUF
             zwp_linux_dmabuf_v1_format:
                 dump_bytes("zwp_linux_dmabuf_v1_format event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_linux_dmabuf_v1_modifier:
                 dump_bytes("zwp_linux_dmabuf_v1_modifier event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_linux_buffer_params_v1_created:
                 dump_bytes(
                     "zwp_linux_buffer_params_v1_created", // COMMENT REFACTOR:
                                                           // to ::
-                    msg_buffer + offset,
+                    msg_buffer + msg_buffer_offset,
                     size);
                 goto done;
             zwp_linux_buffer_params_v1_failed:
                 dump_bytes("zwp_linux_buffer_params_v1_failed event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_linux_dmabuf_feedback_v1_done:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 uint8_t create_params[12]; // REFACTOR: zero initialize
                 write_le32(create_params, zwp_linux_dmabuf_v1_id);
@@ -1101,54 +1118,59 @@ void war_wayland_init() {
                 goto done;
             zwp_linux_dmabuf_feedback_v1_format_table:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size); // REFACTOR: event
                 goto done;
             zwp_linux_dmabuf_feedback_v1_main_device:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_main_device event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_linux_dmabuf_feedback_v1_tranche_done:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_done event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_linux_dmabuf_feedback_v1_tranche_target_device:
                 dump_bytes(
                     "zwp_linux_dmabuf_feedback_v1_tranche_target_device event",
-                    msg_buffer + offset,
+                    msg_buffer + msg_buffer_offset,
                     size);
                 goto done;
             zwp_linux_dmabuf_feedback_v1_tranche_formats:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_formats event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_linux_dmabuf_feedback_v1_tranche_flags:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_flags event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
 #endif
             wp_linux_drm_syncobj_manager_v1_jump:
                 dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wl_compositor_jump:
-                dump_bytes(
-                    "wl_compositor_jump event", msg_buffer + offset, size);
+                dump_bytes("wl_compositor_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_surface_enter:
-                dump_bytes("wl_surface_enter event", msg_buffer + offset, size);
+                dump_bytes("wl_surface_enter event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_surface_leave:
-                dump_bytes("wl_surface_leave event", msg_buffer + offset, size);
+                dump_bytes("wl_surface_leave event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_surface_preferred_buffer_scale:
                 dump_bytes("wl_surface_preferred_buffer_scale event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 assert(size == 12);
 
@@ -1157,7 +1179,7 @@ void war_wayland_init() {
                 write_le16(set_buffer_scale + 4, 8);
                 write_le16(set_buffer_scale + 6, 12);
                 write_le32(set_buffer_scale + 8,
-                           read_le32(msg_buffer + offset + 8));
+                           read_le32(msg_buffer + msg_buffer_offset + 8));
                 dump_bytes("wl_surface::set_buffer_scale request",
                            set_buffer_scale,
                            12);
@@ -1177,7 +1199,7 @@ void war_wayland_init() {
                 goto done;
             wl_surface_preferred_buffer_transform:
                 dump_bytes("wl_surface_preferred_buffer_transform event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 assert(size == 12);
 
@@ -1186,7 +1208,7 @@ void war_wayland_init() {
                 write_le16(set_buffer_transform + 4, 7);
                 write_le16(set_buffer_transform + 6, 12);
                 write_le32(set_buffer_transform + 8,
-                           read_le32(msg_buffer + offset + 8));
+                           read_le32(msg_buffer + msg_buffer_offset + 8));
                 dump_bytes("wl_surface::set_buffer_transform request",
                            set_buffer_transform,
                            12);
@@ -1206,91 +1228,95 @@ void war_wayland_init() {
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwlr_layer_shell_v1_jump:
                 dump_bytes("zwlr_layer_shell_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zxdg_decoration_manager_v1_jump:
                 dump_bytes("zxdg_decoration_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_relative_pointer_manager_v1_jump:
                 dump_bytes("zwp_relative_pointer_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_pointer_constraints_v1_jump:
                 dump_bytes("zwp_pointer_constraints_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wp_presentation_clock_id:
                 dump_bytes("wp_presentation_clock_id event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwlr_output_manager_v1_head:
                 dump_bytes("zwlr_output_manager_v1_head event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwlr_output_manager_v1_done:
                 dump_bytes("zwlr_output_manager_v1_done event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             ext_foreign_toplevel_list_v1_toplevel:
                 dump_bytes("ext_foreign_toplevel_list_v1_toplevel event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwlr_data_control_manager_v1_jump:
                 dump_bytes("zwlr_data_control_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wp_viewporter_jump:
-                dump_bytes(
-                    "wp_viewporter_jump event", msg_buffer + offset, size);
+                dump_bytes("wp_viewporter_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wp_content_type_manager_v1_jump:
                 dump_bytes("wp_content_type_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wp_fractional_scale_manager_v1_jump:
                 dump_bytes("wp_fractional_scale_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             xdg_activation_v1_jump:
-                dump_bytes(
-                    "xdg_activation_v1_jump event", msg_buffer + offset, size);
+                dump_bytes("xdg_activation_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             zwp_virtual_keyboard_manager_v1_jump:
                 dump_bytes("zwp_virtual_keyboard_manager_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             zwp_pointer_gestures_v1_jump:
                 dump_bytes("zwp_pointer_gestures_v1_jump event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wl_seat_capabilities:
-                dump_bytes(
-                    "wl_seat_capabilities event", msg_buffer + offset, size);
+                dump_bytes("wl_seat_capabilities event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 enum {
                     wl_seat_pointer = 0x01,
                     wl_seat_keyboard = 0x02,
                     wl_seat_touch = 0x04,
                 };
-                uint32_t capabilities = read_le32(msg_buffer + offset + 8);
+                uint32_t capabilities =
+                    read_le32(msg_buffer + msg_buffer_offset + 8);
                 if (capabilities & wl_seat_keyboard) {
                     call_carmack("keyboard detected");
                     assert(size == 12);
@@ -1301,7 +1327,8 @@ void war_wayland_init() {
                     write_le32(get_keyboard + 8, new_id);
                     dump_bytes("get_keyboard request", get_keyboard, 12);
                     call_carmack("bound: wl_keyboard",
-                                 (const char*)msg_buffer + offset + 12);
+                                 (const char*)msg_buffer + msg_buffer_offset +
+                                     12);
                     ssize_t get_keyboard_written = write(fd, get_keyboard, 12);
                     assert(get_keyboard_written == 12);
                     wl_keyboard_id = new_id;
@@ -1376,46 +1403,34 @@ void war_wayland_init() {
                 }
                 goto done;
             wl_seat_name:
-                dump_bytes("wl_seat_name event", msg_buffer + offset, size);
-                call_carmack(
-                    "seat: %s", (const char*)msg_buffer + offset + 12, size);
+                dump_bytes(
+                    "wl_seat_name event", msg_buffer + msg_buffer_offset, size);
+                call_carmack("seat: %s",
+                             (const char*)msg_buffer + msg_buffer_offset + 12,
+                             size);
                 goto done;
             wl_keyboard_keymap:
-                // optional debug
                 dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
+                assert(size == 16);
 
                 int keymap_fd = -1;
-                for (struct cmsghdr* poll_cmsg = CMSG_FIRSTHDR(&poll_msg);
+                for (struct cmsghdr* poll_cmsg = CMSG_FIRSTHDR(&poll_msg_hdr);
                      poll_cmsg != NULL;
-                     poll_cmsg = CMSG_NXTHDR(&poll_msg, poll_cmsg)) {
+                     poll_cmsg = CMSG_NXTHDR(&poll_msg_hdr, poll_cmsg)) {
                     if (poll_cmsg->cmsg_level == SOL_SOCKET &&
                         poll_cmsg->cmsg_type == SCM_RIGHTS) {
                         keymap_fd = *(int*)CMSG_DATA(poll_cmsg);
-
-                        assert(keymap_fd >= 0);
-
                         break;
                     }
                 }
+                assert(keymap_fd >= 0);
 
-                struct msghdr wl_msg = {0};
-                struct iovec wl_iov;
-                char wl_ctrl[CMSG_SPACE(sizeof(int))];
-                size_t wl_n;
-
-                wl_iov.iov_base = msg_buffer;
-                wl_iov.iov_len = sizeof(msg_buffer);
-
-                wl_msg.msg_iov = &wl_iov;
-                wl_msg.msg_iovlen = 1;
-                wl_msg.msg_control = wl_ctrl;
-                wl_msg.msg_controllen = sizeof(wl_ctrl);
-
-                wl_n = recvmsg(fd, &wl_msg, 0);
-                assert(wl_n >= 0);
-
-                assert(read_le32(msg_buffer + 8));
-                uint32_t keymap_size = read_le32(msg_buffer + 8 + 4 + 4);
+                uint32_t keymap_format =
+                    read_le32(msg_buffer + msg_buffer_offset + 8);
+                assert(keymap_format == XKB_KEYMAP_FORMAT_TEXT_V1);
+                uint32_t keymap_size =
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4);
+                assert(keymap_size > 0);
 
                 xkb_context = xkb_context_new(0);
                 assert(xkb_context);
@@ -1435,19 +1450,26 @@ void war_wayland_init() {
                 close(keymap_fd);
                 goto done;
             wl_keyboard_enter:
-                dump_bytes(
-                    "wl_keyboard_enter event", msg_buffer + offset, size);
+
+                dump_bytes("wl_keyboard_enter event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_keyboard_leave:
-                dump_bytes(
-                    "wl_keyboard_leave event", msg_buffer + offset, size);
+                dump_bytes("wl_keyboard_leave event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_keyboard_key:
-                dump_bytes("wl_keyboard_key event", msg_buffer + offset, size);
+                dump_bytes("wl_keyboard_key event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
 
-                uint32_t wl_key_state = read_le32(msg_buffer + offset + 8 + 12);
+                uint32_t wl_key_state =
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 12);
                 uint32_t keycode =
-                    read_le32(msg_buffer + offset + 8 + 8) + 8; // raw keycode
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 8) +
+                    8; // raw keycode
                 xkb_keysym_t keysym =
                     xkb_state_key_get_one_sym(xkb_state, keycode);
                 bool shift_active = xkb_state_mod_name_is_active(
@@ -1534,33 +1556,44 @@ void war_wayland_init() {
                                          physical_height);
                 goto done;
             wl_keyboard_modifiers:
-                dump_bytes(
-                    "wl_keyboard_modifiers event", msg_buffer + offset, size);
+                dump_bytes("wl_keyboard_modifiers event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_keyboard_repeat_info:
-                dump_bytes(
-                    "wl_keyboard_repeat_info event", msg_buffer + offset, size);
+                dump_bytes("wl_keyboard_repeat_info event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_pointer_enter:
-                dump_bytes("wl_pointer_enter event", msg_buffer + offset, size);
+                dump_bytes("wl_pointer_enter event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_pointer_leave:
-                dump_bytes("wl_pointer_leave event", msg_buffer + offset, size);
+                dump_bytes("wl_pointer_leave event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_pointer_motion:
-                dump_bytes(
-                    "wl_pointer_motion event", msg_buffer + offset, size);
-                cursor_x = (float)(int32_t)read_le32(msg_buffer + offset + 12) /
+                dump_bytes("wl_pointer_motion event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
+                cursor_x = (float)(int32_t)read_le32(msg_buffer +
+                                                     msg_buffer_offset + 12) /
                            256.0f * scale_factor;
-                cursor_y = (float)(int32_t)read_le32(msg_buffer + offset + 16) /
+                cursor_y = (float)(int32_t)read_le32(msg_buffer +
+                                                     msg_buffer_offset + 16) /
                            256.0f * scale_factor;
                 goto done;
             wl_pointer_button:
-                dump_bytes(
-                    "wl_pointer_button event", msg_buffer + offset, size);
-                switch (read_le32(msg_buffer + offset + 8 + 12)) {
+                dump_bytes("wl_pointer_button event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
+                switch (read_le32(msg_buffer + msg_buffer_offset + 8 + 12)) {
                 case 1:
-                    if (read_le32(msg_buffer + offset + 8 + 8) == BTN_LEFT) {
+                    if (read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
+                        BTN_LEFT) {
                         col = (uint32_t)(cursor_x / col_width_px);
                         row =
                             (uint32_t)((cursor_y) / row_height_px); // flipped Y
@@ -1578,88 +1611,118 @@ void war_wayland_init() {
                 }
                 goto done;
             wl_pointer_axis:
-                dump_bytes("wl_pointer_axis event", msg_buffer + offset, size);
+                dump_bytes("wl_pointer_axis event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_pointer_frame:
-                dump_bytes("wl_pointer_frame event", msg_buffer + offset, size);
+                dump_bytes("wl_pointer_frame event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_pointer_axis_source:
-                dump_bytes(
-                    "wl_pointer_axis_source event", msg_buffer + offset, size);
+                dump_bytes("wl_pointer_axis_source event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_pointer_axis_stop:
-                dump_bytes(
-                    "wl_pointer_axis_stop event", msg_buffer + offset, size);
+                dump_bytes("wl_pointer_axis_stop event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_pointer_axis_discrete:
                 dump_bytes("wl_pointer_axis_discrete event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wl_pointer_axis_value120:
                 dump_bytes("wl_pointer_axis_value120 event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wl_pointer_axis_relative_direction:
                 dump_bytes("wl_pointer_axis_relative_direction event",
-                           msg_buffer + offset,
+                           msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
             wl_touch_down:
-                dump_bytes("wl_touch_down event", msg_buffer + offset, size);
+                dump_bytes("wl_touch_down event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_touch_up:
-                dump_bytes("wl_touch_up event", msg_buffer + offset, size);
+                dump_bytes(
+                    "wl_touch_up event", msg_buffer + msg_buffer_offset, size);
                 goto done;
             wl_touch_motion:
-                dump_bytes("wl_touch_motion event", msg_buffer + offset, size);
+                dump_bytes("wl_touch_motion event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_touch_frame:
-                dump_bytes("wl_touch_frame event", msg_buffer + offset, size);
+                dump_bytes("wl_touch_frame event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_touch_cancel:
-                dump_bytes("wl_touch_cancel event", msg_buffer + offset, size);
+                dump_bytes("wl_touch_cancel event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_touch_shape:
-                dump_bytes("wl_touch_shape event", msg_buffer + offset, size);
+                dump_bytes("wl_touch_shape event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_touch_orientation:
-                dump_bytes(
-                    "wl_touch_orientation event", msg_buffer + offset, size);
+                dump_bytes("wl_touch_orientation event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_output_geometry:
-                dump_bytes(
-                    "wl_output_geometry event", msg_buffer + offset, size);
+                dump_bytes("wl_output_geometry event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_output_mode:
-                dump_bytes("wl_output_mode event", msg_buffer + offset, size);
+                dump_bytes("wl_output_mode event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_output_done:
-                dump_bytes("wl_output_done event", msg_buffer + offset, size);
+                dump_bytes("wl_output_done event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_output_scale:
-                dump_bytes("wl_output_scale event", msg_buffer + offset, size);
+                dump_bytes("wl_output_scale event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_output_name:
-                dump_bytes("wl_output_name event", msg_buffer + offset, size);
+                dump_bytes("wl_output_name event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wl_output_description:
-                dump_bytes(
-                    "wl_output_description event", msg_buffer + offset, size);
+                dump_bytes("wl_output_description event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto done;
             wayland_default:
-                dump_bytes("default event", msg_buffer + offset, size);
+                dump_bytes(
+                    "default event", msg_buffer + msg_buffer_offset, size);
                 goto done;
             done:
-                offset += size;
+                msg_buffer_offset += size;
                 continue;
             }
 
-            if (offset > 0) {
-                memmove(
-                    msg_buffer, msg_buffer + offset, msg_buffer_size - offset);
-                msg_buffer_size -= offset;
+            if (msg_buffer_offset > 0) {
+                memmove(msg_buffer,
+                        msg_buffer + msg_buffer_offset,
+                        msg_buffer_size - msg_buffer_offset);
+                msg_buffer_size -= msg_buffer_offset;
             }
         }
     }
@@ -1755,14 +1818,14 @@ void war_wayland_wl_surface_frame(int fd,
 
 void war_wayland_registry_bind(int fd,
                                uint8_t* msg_buffer,
-                               size_t offset,
+                               size_t msg_buffer_offset,
                                uint16_t size,
                                uint16_t new_id) {
     header("war_wayland_registry_bind");
 
     uint8_t bind[128];
     assert(size + 4 <= 128);
-    memcpy(bind, msg_buffer + offset, size);
+    memcpy(bind, msg_buffer + msg_buffer_offset, size);
     write_le32(bind, 2);
     write_le16(bind + 4, 0);
     uint16_t total_size = read_le16(bind + 6) + 4;
@@ -1770,7 +1833,7 @@ void war_wayland_registry_bind(int fd,
     write_le32(bind + size, new_id);
 
     dump_bytes("bind request", bind, size + 4);
-    call_carmack("bound: %s", (const char*)msg_buffer + offset + 16);
+    call_carmack("bound: %s", (const char*)msg_buffer + msg_buffer_offset + 16);
     call_carmack("to id: %u", new_id);
 
     ssize_t bind_written = write(fd, bind, size + 4);

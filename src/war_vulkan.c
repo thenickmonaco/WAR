@@ -841,6 +841,7 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
     vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, NULL);
 
     end("war_vulkan_init");
+    // no tuple?!
     return (WAR_VulkanContext){
         .dmabuf_fd = dmabuf_fd,
         .instance = instance,

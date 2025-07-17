@@ -85,9 +85,6 @@ void war_wayland_init() {
     float cursor_y;
     uint32_t col = 0;
     uint32_t row = 0;
-    uint32_t mods_depressed = 0;
-    uint32_t mods_latched = 0;
-    uint32_t mods_locked = 0;
 
     struct xkb_context* xkb_context;
     struct xkb_keymap* xkb_keymap;
@@ -213,9 +210,16 @@ void war_wayland_init() {
         }
 
         if (pfd.revents & POLLIN) {
-            ssize_t size_read = read(fd,
-                                     msg_buffer + msg_buffer_size,
-                                     sizeof(msg_buffer) - msg_buffer_size);
+            struct msghdr poll_msg = {0};
+            struct iovec poll_iov;
+            poll_iov.iov_base = msg_buffer + msg_buffer_size;
+            poll_iov.iov_len = sizeof(msg_buffer) - msg_buffer_size;
+            poll_msg.msg_iov = &poll_iov;
+            poll_msg.msg_iovlen = 1;
+            char poll_ctrl_buf[CMSG_SPACE(sizeof(int) * 4)];
+            poll_msg.msg_control = poll_ctrl_buf;
+            poll_msg.msg_controllen = sizeof(poll_ctrl_buf);
+            ssize_t size_read = recvmsg(fd, &poll_msg, 0);
             assert(size_read > 0);
             msg_buffer_size += size_read;
 
@@ -1380,6 +1384,20 @@ void war_wayland_init() {
                 // optional debug
                 dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
 
+                int keymap_fd = -1;
+                for (struct cmsghdr* poll_cmsg = CMSG_FIRSTHDR(&poll_msg);
+                     poll_cmsg != NULL;
+                     poll_cmsg = CMSG_NXTHDR(&poll_msg, poll_cmsg)) {
+                    if (poll_cmsg->cmsg_level == SOL_SOCKET &&
+                        poll_cmsg->cmsg_type == SCM_RIGHTS) {
+                        keymap_fd = *(int*)CMSG_DATA(poll_cmsg);
+
+                        assert(keymap_fd >= 0);
+
+                        break;
+                    }
+                }
+
                 struct msghdr wl_msg = {0};
                 struct iovec wl_iov;
                 char wl_ctrl[CMSG_SPACE(sizeof(int))];
@@ -1396,21 +1414,8 @@ void war_wayland_init() {
                 wl_n = recvmsg(fd, &wl_msg, 0);
                 assert(wl_n >= 0);
 
-                // parse values from message
-                assert(read_le32(msg_buffer + 8)); // format (should be 1)
+                assert(read_le32(msg_buffer + 8));
                 uint32_t keymap_size = read_le32(msg_buffer + 8 + 4 + 4);
-
-                int keymap_fd = -1;
-                for (struct cmsghdr* keymap_cmsg = CMSG_FIRSTHDR(&wl_msg);
-                     keymap_cmsg != NULL;
-                     keymap_cmsg = CMSG_NXTHDR(&wl_msg, keymap_cmsg)) {
-                    if (keymap_cmsg->cmsg_level == SOL_SOCKET &&
-                        keymap_cmsg->cmsg_type == SCM_RIGHTS) {
-                        keymap_fd = *((int*)CMSG_DATA(keymap_cmsg));
-                        break;
-                    }
-                }
-                assert(keymap_fd >= 0);
 
                 xkb_context = xkb_context_new(0);
                 assert(xkb_context);
@@ -1442,29 +1447,23 @@ void war_wayland_init() {
 
                 uint32_t wl_key_state = read_le32(msg_buffer + offset + 8 + 12);
                 uint32_t keycode =
-                    read_le32(msg_buffer + offset + 8 + 8); // raw keycode
-
-                // Adjust keycode for xkb (Wayland uses evdev codes, so subtract
-                // 8)
-                keycode -= 8;
-
-                // Get keysym from xkb state
+                    read_le32(msg_buffer + offset + 8 + 8) + 8; // raw keycode
                 xkb_keysym_t keysym =
                     xkb_state_key_get_one_sym(xkb_state, keycode);
-
                 bool shift_active = xkb_state_mod_name_is_active(
                     xkb_state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_DEPRESSED);
 
-                // 0 = released (not pressed), 1 = pressed, 2 = repeated
                 switch (keysym) {
                 case XKB_KEY_K:
                     switch (wl_key_state) {
                     case 0:
+                        row++;
                         break;
                     case 1:
                         row++;
                         break;
                     case 2:
+                        row++;
                         break;
                     }
                     break;
@@ -1524,86 +1523,6 @@ void war_wayland_init() {
                     }
                     break;
                 }
-
-                // uint32_t wl_key_state = read_le32(msg_buffer + offset + 8 +
-                // 12); switch (read_le32(msg_buffer + offset + 8 + 8)) { case
-                // KEY_K:
-                //     switch (wl_key_state) {
-                //     case 0:
-                //         // released (not pressed)
-                //         break;
-                //     case 1:
-                //         // pressed
-                //         row++;
-                //         break;
-                //     case 2:
-                //         // repeated
-                //         row++;
-                //         break;
-                //     }
-                //     break;
-                // case KEY_J:
-                //     switch (wl_key_state) {
-                //     case 0:
-                //         break;
-                //     case 1:
-                //         row--;
-                //         break;
-                //     case 2:
-                //         row--;
-                //         break;
-                //     }
-                //     break;
-                // case KEY_H:
-                //     switch (wl_key_state) {
-                //     case 0:
-                //         break;
-                //     case 1:
-                //         col--;
-                //         break;
-                //     case 2:
-                //         col--;
-                //         break;
-                //     }
-                //     break;
-                // case KEY_L:
-                //     switch (wl_key_state) {
-                //     case 0:
-                //         break;
-                //     case 1:
-                //         col++;
-                //         break;
-                //     case 2:
-                //         col++;
-                //         break;
-                //     }
-                //     break;
-                // case KEY_0:
-                //     switch (wl_key_state) {
-                //     case 0:
-                //         break;
-                //     case 1:
-                //         col = 0;
-                //         break;
-                //     case 2:
-                //         col = 0;
-                //         break;
-                //     }
-                //     break;
-                // case KEY_G:
-                //     switch (wl_key_state) {
-                //     case 0:
-                //         break;
-                //     case 1:
-                //         row = 0;
-                //         break;
-                //     case 2:
-                //         row = 0;
-                //         break;
-                //     }
-                //     break;
-                // }
-
                 war_wayland_holy_trinity(fd,
                                          wl_surface_id,
                                          wl_buffer_id,
@@ -1617,9 +1536,6 @@ void war_wayland_init() {
             wl_keyboard_modifiers:
                 dump_bytes(
                     "wl_keyboard_modifiers event", msg_buffer + offset, size);
-                mods_depressed = read_le32(msg_buffer + offset + 8 + 4);
-                mods_latched = read_le32(msg_buffer + offset + 8 + 8);
-                mods_locked = read_le32(msg_buffer + offset + 8 + 12);
                 goto done;
             wl_keyboard_repeat_info:
                 dump_bytes(

@@ -63,6 +63,7 @@ enum {
     max_objects = 1000,
     max_opcodes = 20,
     max_quads = 800,
+    max_fds = 50,
 };
 
 typedef struct WAR_VulkanContext {

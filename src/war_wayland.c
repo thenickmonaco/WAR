@@ -594,6 +594,8 @@ void war_wayland_init() {
                     uint32_t color;
                 } Vertex;
 
+                aslkdfjasdklfj
+
                 Vertex quad_verts[8] = {
                     {{-0.5f, -0.5f}, 0xFF000000}, // red in RGBA (red opaque)
                     {{0.5f, -0.5f}, 0xFF0000FF},

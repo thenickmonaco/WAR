@@ -97,36 +97,29 @@ void war_wayland_init() {
     WAR_VulkanContext vulkan_context =
         war_vulkan_init(physical_width, physical_height);
     assert(vulkan_context.dmabuf_fd >= 0);
+    uint32_t zwp_linux_dmabuf_v1_id = 0;
+    uint32_t zwp_linux_buffer_params_v1_id = 0;
+    uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
 #endif
 
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
-
     if (shm_fd < 0) {
         call_carmack("error: memfd_create");
         return;
     }
-
     if (syscall(SYS_ftruncate, shm_fd, stride * physical_height) < 0) {
         call_carmack("error: ftruncate");
         close(shm_fd);
         return;
     }
-
+    uint32_t wl_shm_id = 0;
+    uint32_t wl_shm_pool_id = 0;
     void* pixel_buffer;
 #endif
 
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
-#if DMABUF
-    uint32_t zwp_linux_dmabuf_v1_id = 0;
-    uint32_t zwp_linux_buffer_params_v1_id = 0;
-    uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
-#endif
-#if WL_SHM
-    uint32_t wl_shm_id = 0;
-    uint32_t wl_shm_pool_id = 0;
-#endif
     uint32_t wl_buffer_id = 0;
     uint32_t wl_callback_id = 0;
     uint32_t wl_compositor_id = 0;

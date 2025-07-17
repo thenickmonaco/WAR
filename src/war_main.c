@@ -47,6 +47,7 @@ int main() {
     // }
     // }
 
+    jaskdfl
     war_wayland_init();
 
     END("main");

@@ -87,7 +87,6 @@ void war_wayland_init() {
     uint32_t row = 0;
 
     struct xkb_context* xkb_context;
-    struct xkb_keymap* xkb_keymap;
     struct xkb_state* xkb_state;
 
     enum {
@@ -1439,7 +1438,7 @@ void war_wayland_init() {
                     NULL, keymap_size, PROT_READ, MAP_PRIVATE, keymap_fd, 0);
                 assert(keymap_map != MAP_FAILED);
 
-                xkb_keymap = xkb_keymap_new_from_string(
+                struct xkb_keymap* xkb_keymap = xkb_keymap_new_from_string(
                     xkb_context, keymap_map, XKB_KEYMAP_FORMAT_TEXT_V1, 0);
                 assert(xkb_keymap);
 
@@ -1448,9 +1447,10 @@ void war_wayland_init() {
 
                 munmap(keymap_map, keymap_size);
                 close(keymap_fd);
+                xkb_keymap_unref(xkb_keymap);
+                xkb_keymap = NULL;
                 goto done;
             wl_keyboard_enter:
-
                 dump_bytes("wl_keyboard_enter event",
                            msg_buffer + msg_buffer_offset,
                            size);
@@ -1733,7 +1733,6 @@ void war_wayland_init() {
 #endif
 
     xkb_state_unref(xkb_state);
-    xkb_keymap_unref(xkb_keymap);
     xkb_context_unref(xkb_context);
 
     end("war_wayland_init");

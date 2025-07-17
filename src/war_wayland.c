@@ -594,12 +594,10 @@ void war_wayland_init() {
                     uint32_t color;
                 } Vertex;
 
-                testlajflkdjadskfl
-
                 Vertex quad_verts[8] = {
-                    {{-0.5f, -0.5f}, 0xFF0000FF}, // red in RGBA (red opaque)
+                    {{-0.5f, -0.5f}, 0xFF000000}, // red in RGBA (red opaque)
                     {{0.5f, -0.5f}, 0xFF0000FF},
-                    {{0.5f, 0.5f}, 0xFF0000FF},
+                    {{0.5f, 0.5f}, 0xFFFFFFFF},
                     {{-0.5f, 0.5f}, 0xFF0000FF},
                     // cursor
                     {{(col * col_width_px) / physical_width * 2.0f - 1.0f,

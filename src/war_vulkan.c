@@ -312,7 +312,7 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     };
     VkAttachmentReference color_attachment_ref = {
         .attachment = 0,

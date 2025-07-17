@@ -22,22 +22,6 @@
 // src/war_main.c
 //-----------------------------------------------------------------------------
 
-ajsdflkasjdflkasjdfalsdk
-asdfljk
-ajsdfklajs
-ajsdflkasjdflsakdjf
-adjslkf
-ajsdkflkjasdfk
-asjdflkaj
-jalkfsdjjafs
-asdflkjsalkfjdsakldjfalskdjfsalkfdj
-alsdfjaslkdfj
-asdjflkasjdflksjdflaskjdfksajfd
-asldfjaskdfj
-asdfjlkasjdfl
-asjdfklasjd 
-asdlkfsja
-alsdkjfasklf
 #include "war_drm.c"
 #include "war_vulkan.c"
 #include "war_wayland.c"
@@ -46,6 +30,8 @@ alsdkjfasklf
 #include "h/war_debug_macros.h"
 #include "h/war_macros.h"
 #include "h/war_main.h"
+
+asjdlfkjasdf
 
 #include <stdint.h>
 #include <unistd.h>

@@ -22,7 +22,7 @@
 // src/war_main.c
 //-----------------------------------------------------------------------------
 
-asdjlfkasjdfl
+adlfjkasdjf
 #include "war_drm.c"
 #include "war_vulkan.c"
 #include "war_wayland.c"

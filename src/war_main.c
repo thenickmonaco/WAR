@@ -30,25 +30,6 @@
 #include "h/war_debug_macros.h"
 #include "h/war_macros.h"
 #include "h/war_main.h"
-asldjfsdjlf
-ajdsflk
-asdlfjsdakf
-asjlfdkasdfasdfdasio
-asdflkasdjfl
-asjdflk
-ajsdkfldasj
-asjdflskafj
-ajsdlf
-
-jiasdf
-asdfjl
-asdfjlkaj
-asjdkfldas
-ajdfksl
-asdfasdfjl
-asd
-askdfl
-ajdsflakjsf
 
 #include <stdint.h>
 #include <unistd.h>

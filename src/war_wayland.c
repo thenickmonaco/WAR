@@ -561,6 +561,7 @@ void war_wayland_init() {
                 // 0.5, 1.0)
                 VkClearValue clear_color = {
                     .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
+asdlfjasdlkfjda
 
                 VkRenderPassBeginInfo render_pass_info = {
                     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,

@@ -745,6 +745,9 @@ void war_wayland_init() {
                                          0,
                                          physical_width,
                                          physical_height);
+                call_carmack("SOMETHING RENDERED");
+                call_carmack("COL: %u", col);
+                call_carmack("ROW: %u", row);
                 goto done;
             wl_display_error:
                 dump_bytes("wl_display::error event",
@@ -1578,6 +1581,8 @@ void war_wayland_init() {
                 cursor_y = (float)(int32_t)read_le32(msg_buffer +
                                                      msg_buffer_offset + 16) /
                            256.0f * scale_factor;
+                call_carmack("cursor_x: %f", cursor_x);
+                call_carmack("cursor_y: %f", cursor_y);
                 goto done;
             wl_pointer_button:
                 dump_bytes("wl_pointer_button event",
@@ -1588,8 +1593,9 @@ void war_wayland_init() {
                     if (read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
                         BTN_LEFT) {
                         col = (uint32_t)(cursor_x / col_width_px);
-                        row =
-                            (uint32_t)((cursor_y) / row_height_px); // flipped Y
+                        row = (uint32_t)((physical_height - cursor_y) /
+                                         row_height_px); // because top left =
+                                                         // 0,0 in wayland
 
                         war_wayland_holy_trinity(fd,
                                                  wl_surface_id,

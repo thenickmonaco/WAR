@@ -1,5 +1,7 @@
 # WAR
 
+![WAR](/assets/images/WAR-over-rose-circle-white.jpg)
+
 # Piano Roll GUI Demo
 
 [![Watch the video](https://img.youtube.com/vi/b7Bf17YH_uQ/0.jpg)](https://youtu.be/b7Bf17YH_uQ)

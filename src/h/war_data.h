@@ -25,6 +25,7 @@
 #ifndef WAR_DATA_H
 #define WAR_DATA_H
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -64,9 +65,19 @@ enum {
     max_opcodes = 20,
     max_quads = 800,
     max_fds = 50,
+    ring_buffer_size = 256,
 };
 
-typedef struct WAR_VulkanContext {
+typedef struct war_thread_args {
+    uint8_t* window_render_to_audio_ring_buffer;
+    uint8_t* audio_to_window_render_ring_buffer;
+    uint8_t* write_to_audio_index;
+    uint8_t* read_from_audio_index;
+    uint8_t* write_to_window_render_index;
+    uint8_t* read_from_window_render_index;
+} war_thread_args;
+
+typedef struct war_vulkan_context {
     int dmabuf_fd;
     VkInstance instance;
     VkPhysicalDevice physical_device;
@@ -95,13 +106,13 @@ typedef struct WAR_VulkanContext {
     VkSampler texture_sampler;
     VkDescriptorSet texture_descriptor_set;
     VkDescriptorPool texture_descriptor_pool;
-} WAR_VulkanContext;
+} war_vulkan_context;
 
-typedef struct WAR_DRMContext {
+typedef struct war_drm_context {
     int drm_fd;
     uint32_t connector_id;
     uint32_t crtc_id;
     drmModeModeInfo mode;
-} WAR_DRMContext;
+} war_drm_context;
 
 #endif // WAR_DATA_H

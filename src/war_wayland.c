@@ -96,7 +96,7 @@ void war_wayland_init() {
     };
 
 #if DMABUF
-    WAR_VulkanContext vulkan_context =
+    war_vulkan_context vulkan_context =
         war_vulkan_init(physical_width, physical_height);
     assert(vulkan_context.dmabuf_fd >= 0);
     uint32_t zwp_linux_dmabuf_v1_id = 0;
@@ -1544,13 +1544,13 @@ void war_wayland_init() {
                     break;
                 case XKB_KEY_dollar:
                     switch (wl_key_state) {
-                        case 0:
-                            break;
-                        case 1:
-                            col = max_cols - 1;
-                            break;
-                        case 2:
-                            break;
+                    case 0:
+                        break;
+                    case 1:
+                        col = max_cols - 1;
+                        break;
+                    case 2:
+                        break;
                     }
                 }
                 war_wayland_holy_trinity(fd,

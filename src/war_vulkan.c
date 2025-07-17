@@ -53,7 +53,7 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
+war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     header("war_vulkan_init");
 
     // ???
@@ -842,7 +842,7 @@ WAR_VulkanContext war_vulkan_init(uint32_t width, uint32_t height) {
 
     end("war_vulkan_init");
     // no tuple?!
-    return (WAR_VulkanContext){
+    return (war_vulkan_context){
         .dmabuf_fd = dmabuf_fd,
         .instance = instance,
         .physical_device = physical_device,

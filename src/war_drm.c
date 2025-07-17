@@ -39,9 +39,9 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-WAR_DRMContext war_drm_init() {
+war_drm_context war_drm_init() {
     header("war_drm_init");
-    WAR_DRMContext drm_context = {0};
+    war_drm_context drm_context = {0};
 
     DIR* dir = opendir("/dev/dri");
     assert(dir);
@@ -101,7 +101,7 @@ WAR_DRMContext war_drm_init() {
     return drm_context;
 }
 
-void war_drm_present_dmabuf(WAR_DRMContext* drm_context,
+void war_drm_present_dmabuf(war_drm_context* drm_context,
                             int dmabuf_fd,
                             uint32_t width,
                             uint32_t height,

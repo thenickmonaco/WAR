@@ -25,4 +25,8 @@
 #ifndef WAR_MAIN_H
 #define WAR_MAIN_H
 
+void* war_window_render(void* args);
+
+void* war_audio(void* args);
+
 #endif // WAR_MAIN_H

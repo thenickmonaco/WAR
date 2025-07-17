@@ -19,14 +19,6 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// src/h/war_vulkan.h
+// src/war_audio.c
 //-----------------------------------------------------------------------------
 
-#ifndef WAR_VULKAN_H
-#define WAR_VULKAN_H
-
-#include "war_data.h"
-
-war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height);
-
-#endif // WAR_VULKAN_H

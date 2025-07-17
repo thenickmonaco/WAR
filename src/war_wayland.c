@@ -89,7 +89,7 @@ void war_wayland_init() {
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
 
-    uint8_t end_war = 0;
+    int end_war = 0;
 
     enum {
         ARGB8888 = 0,
@@ -1462,17 +1462,21 @@ void war_wayland_init() {
 
                 uint32_t wl_key_state =
                     read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
+                call_carmack("wl_key_state: %u", wl_key_state);
                 uint32_t keycode =
                     read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) +
-                    8; // raw keycode
+                    8; // + 8 cuz wayland
+                call_carmack("raw keycode: %u", keycode);
                 xkb_keysym_t keysym =
                     xkb_state_key_get_one_sym(xkb_state, keycode);
-                bool shift_active = xkb_state_mod_name_is_active(
+                int shift_active = xkb_state_mod_name_is_active(
                     xkb_state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_DEPRESSED);
+                call_carmack("keysym: %i", keysym);
+                call_carmack("shift active: %i", shift_active);
 
                 // 0 = released (not pressed), 1 = pressed, 2 = repeated
                 switch (keysym) {
-                case XKB_KEY_K:
+                case XKB_KEY_k:
                     switch (wl_key_state) {
                     case 0:
                         break;
@@ -1483,7 +1487,7 @@ void war_wayland_init() {
                         break;
                     }
                     break;
-                case XKB_KEY_J:
+                case XKB_KEY_j:
                     switch (wl_key_state) {
                     case 0:
                         break;
@@ -1494,7 +1498,7 @@ void war_wayland_init() {
                         break;
                     }
                     break;
-                case XKB_KEY_H:
+                case XKB_KEY_h:
                     switch (wl_key_state) {
                     case 0:
                         break;
@@ -1505,7 +1509,7 @@ void war_wayland_init() {
                         break;
                     }
                     break;
-                case XKB_KEY_L:
+                case XKB_KEY_l:
                     switch (wl_key_state) {
                     case 0:
                         break;
@@ -1532,12 +1536,22 @@ void war_wayland_init() {
                     case 0:
                         break;
                     case 1:
-                        if (shift_active) { row = 0; }
+                        row = 0;
                         break;
                     case 2:
                         break;
                     }
                     break;
+                case XKB_KEY_dollar:
+                    switch (wl_key_state) {
+                        case 0:
+                            break;
+                        case 1:
+                            col = max_cols - 1;
+                            break;
+                        case 2:
+                            break;
+                    }
                 }
                 war_wayland_holy_trinity(fd,
                                          wl_surface_id,
@@ -1553,6 +1567,16 @@ void war_wayland_init() {
                 dump_bytes("wl_keyboard_modifiers event",
                            msg_buffer + msg_buffer_offset,
                            size);
+                xkb_state_update_mask(
+                    xkb_state,
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4),
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4),
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4),
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4 +
+                              4),
+                    0,
+                    0);
+
                 goto done;
             wl_keyboard_repeat_info:
                 dump_bytes("wl_keyboard_repeat_info event",

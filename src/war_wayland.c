@@ -89,6 +89,8 @@ void war_wayland_init() {
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
 
+    uint8_t end_war = 0;
+
     enum {
         ARGB8888 = 0,
     };
@@ -191,7 +193,7 @@ void war_wayland_init() {
     //-------------------------------------------------------------------------
     // main loop
     //-------------------------------------------------------------------------
-    while (1) {
+    while (!end_war) {
         int ret = poll(&pfd, 1, -1);
         assert(ret >= 0);
         if (ret == 0) { call_carmack("timeout"); }
@@ -977,10 +979,7 @@ void war_wayland_init() {
                     "wl_surface::destroy request", wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
-#if DMABUF
-                close(vulkan_context.dmabuf_fd);
-                vulkan_context.dmabuf_fd = -1;
-#endif
+                end_war = 1;
                 goto done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
@@ -1462,26 +1461,25 @@ void war_wayland_init() {
                            size);
 
                 uint32_t wl_key_state =
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 12);
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
                 uint32_t keycode =
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 8) +
+                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) +
                     8; // raw keycode
                 xkb_keysym_t keysym =
                     xkb_state_key_get_one_sym(xkb_state, keycode);
                 bool shift_active = xkb_state_mod_name_is_active(
                     xkb_state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_DEPRESSED);
 
+                // 0 = released (not pressed), 1 = pressed, 2 = repeated
                 switch (keysym) {
                 case XKB_KEY_K:
                     switch (wl_key_state) {
                     case 0:
-                        row++;
                         break;
                     case 1:
                         row++;
                         break;
                     case 2:
-                        row++;
                         break;
                     }
                     break;
@@ -1581,8 +1579,8 @@ void war_wayland_init() {
                 cursor_y = (float)(int32_t)read_le32(msg_buffer +
                                                      msg_buffer_offset + 16) /
                            256.0f * scale_factor;
-                call_carmack("cursor_x: %f", cursor_x);
-                call_carmack("cursor_y: %f", cursor_y);
+                call_carmack("CURSOR_X: %f", cursor_x);
+                call_carmack("CURSOR_Y: %f", cursor_y);
                 goto done;
             wl_pointer_button:
                 dump_bytes("wl_pointer_button event",
@@ -1596,16 +1594,6 @@ void war_wayland_init() {
                         row = (uint32_t)((physical_height - cursor_y) /
                                          row_height_px); // because top left =
                                                          // 0,0 in wayland
-
-                        war_wayland_holy_trinity(fd,
-                                                 wl_surface_id,
-                                                 wl_buffer_id,
-                                                 0,
-                                                 0,
-                                                 0,
-                                                 0,
-                                                 physical_width,
-                                                 physical_height);
                     }
                 }
                 goto done;
@@ -1618,6 +1606,15 @@ void war_wayland_init() {
                 dump_bytes("wl_pointer_frame event",
                            msg_buffer + msg_buffer_offset,
                            size);
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
                 goto done;
             wl_pointer_axis_source:
                 dump_bytes("wl_pointer_axis_source event",
@@ -1725,7 +1722,9 @@ void war_wayland_init() {
             }
         }
     }
-
+    //-------------------------------------------------------------------------
+    // CLEANUP
+    //-------------------------------------------------------------------------
 #if DMABUF
     close(vulkan_context.dmabuf_fd);
     vulkan_context.dmabuf_fd = -1;

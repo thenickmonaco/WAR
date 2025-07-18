@@ -78,9 +78,8 @@ void* war_window_render(void* args) {
 
     war_wayland_init();
 
-    // uint8_t end_window_render = 0;
-    // while (!end_window_render) {
-    // }
+    uint8_t end_window_render = 0;
+    while (!end_window_render) {}
 
     end("war_audio");
     return 0;
@@ -92,7 +91,8 @@ void* war_audio(void* args) {
 
     // uint8_t end_audio = 0;
     // while (!end_audio) {
-    // }
+
+    //}
 
     end("war_audio");
     return 0;

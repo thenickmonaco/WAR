@@ -82,31 +82,40 @@ void war_wayland_init() {
     uint32_t col = 0;
     uint32_t row = 0;
 
+    enum war_execute_sequence {
+        SEQUENCE_EXECUTE = 0,
+        SEQUENCE_NONE = 1,
+    };
+    uint8_t input_sequence_ring_buffer[ring_buffer_size];
+    uint8_t write_input_sequence_index = 0;
+    uint8_t read_input_sequence_index = 0;
+    uint8_t execute_input_sequence = SEQUENCE_NONE;
+
     uint32_t numeric_prefix = 1;
-    uint8_t sequence_ring_buffer[ring_buffer_size];
-    uint8_t write_sequence_index = 0;
-    uint8_t read_sequence_index = 0;
-    uint8_t execute_sequence = 0;
+
     char command_buffer[256];
     size_t command_buffer_size;
 
     enum war_mode {
         MODE_NORMAL = 0,
         MODE_VISUAL = 1,
-        MODE_VISUAL_BLOCK = 2,
-        MODE_VISUAL_LINE = 3,
-        MODE_COMMAND = 4,
-        MODE_INSERT = 5,
+        MODE_VISUAL_LINE = 2,
+        MODE_VISUAL_BLOCK = 3,
+        MODE_INSERT = 4,
+        MODE_COMMAND = 5,
         MODE_TERMINAL = 6,
+        MODE_MIDI = 7,
+        MODE_SAMPLE = 8,
+        MODE_RECORD = 9,
     };
     uint8_t mode = MODE_NORMAL;
 
-    enum war_macro_recording {
-        Q_NOT_RECORDING = 0,
-        Q_RECORDING = 1,
-        Q_STORING = 2,
+    enum war_q_recording {
+        q_NOT_RECORDING = 0,
+        q_RECORDING = 1,
+        q_STORING = 2,
     };
-    uint8_t recording_macro = Q_RECORDING;
+    uint8_t q_recording_macro = q_RECORDING;
     uint8_t recording_ring_buffer[ring_buffer_size];
     uint8_t write_recording_index;
     uint8_t read_recording_index;

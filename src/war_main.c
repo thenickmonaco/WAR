@@ -74,12 +74,15 @@ int main() {
 
 void* war_window_render(void* args) {
     header("war_window_render");
+
+    war_vulkan_context vulkan_context = war_vulkan_init(1920, 1080);
+
     war_thread_args* a = (war_thread_args*)args;
 
     war_wayland_init();
 
-    uint8_t end_window_render = 0;
-    while (!end_window_render) {}
+    // uint8_t end_window_render = 0;
+    // while (!end_window_render) {}
 
     end("war_audio");
     return 0;
@@ -89,10 +92,11 @@ void* war_audio(void* args) {
     header("war_audio");
     war_thread_args* a = (war_thread_args*)args;
 
+    // war_alsa_init();
+
     // uint8_t end_audio = 0;
     // while (!end_audio) {
-
-    //}
+    // }
 
     end("war_audio");
     return 0;

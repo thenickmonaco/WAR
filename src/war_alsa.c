@@ -65,7 +65,7 @@ void war_alsa_init() {
 
     // timing
     snd_pcm_sframes_t frames = snd_pcm_avail_update(pcm_handle);
-    snd_pcm_avail_update(pcm_handle);
+    // snd_pcm_avail_update(pcm_handle);
 
     // timestamp
     snd_pcm_status_t* status;
@@ -73,5 +73,13 @@ void war_alsa_init() {
     result = snd_pcm_status(pcm_handle, status);
     assert(result >= 0);
     snd_timestamp_t ts;
-    snd_pcm_status_get_tstamp(status, &ts);
+    // snd_pcm_status_get_tstamp(status, &ts);
+
+    enum {
+        START_PLAYBACK = 0,
+        STOP_PLAYBACK = 1,
+        GET_TIMESTAMP = 2,
+    };
+
+    while (1) {}
 }

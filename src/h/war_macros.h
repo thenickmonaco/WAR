@@ -32,6 +32,9 @@
 
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
+#define keysym_mode_modifier_state_index(keysym, mode, keystate, mod) \
+    ((keysym) + max_keysyms * ((mode) + max_modes * ((keystate) + max_keystates * (mod))))
+
 // COMMENT OPTIMIZE: Duff's Device + SIMD (intrinsics)
 
 static inline int32_t to_fixed(float f) {

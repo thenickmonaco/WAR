@@ -35,7 +35,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-enum WAR_WaylandInterfaceHashValue {
+enum war_wayland_interface_hash_value {
     WL_SHM_HASH_VALUE = 1,
     WL_COMPOSITOR_HASH_VALUE = 2,
     WL_OUTPUT_HASH_VALUE = 3,
@@ -60,7 +60,7 @@ enum WAR_WaylandInterfaceHashValue {
     WP_CONTENT_TYPE_MANAGER_V1_HASH_VALUE = 22,
 };
 
-enum {
+enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
     max_quads = 800,

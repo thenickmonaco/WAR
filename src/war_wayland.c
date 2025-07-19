@@ -60,9 +60,6 @@
 void war_wayland_init() {
     header("war_wayland_init");
 
-    int fd = war_wayland_make_fd();
-    assert(fd >= 0);
-
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
 
@@ -85,14 +82,59 @@ void war_wayland_init() {
     uint32_t col = 0;
     uint32_t row = 0;
 
-    struct xkb_context* xkb_context;
-    struct xkb_state* xkb_state;
+    uint32_t numeric_prefix = 1;
+    uint8_t sequence_ring_buffer[ring_buffer_size];
+    uint8_t write_sequence_index = 0;
+    uint8_t read_sequence_index = 0;
+    uint8_t execute_sequence = 0;
+    char command_buffer[256];
+    size_t command_buffer_size;
+
+    enum war_mode {
+        MODE_NORMAL = 0,
+        MODE_VISUAL = 1,
+        MODE_VISUAL_BLOCK = 2,
+        MODE_VISUAL_LINE = 3,
+        MODE_COMMAND = 4,
+        MODE_INSERT = 5,
+        MODE_TERMINAL = 6,
+    };
+    uint8_t mode = MODE_NORMAL;
+
+    enum war_macro_recording {
+        Q_NOT_RECORDING = 0,
+        Q_RECORDING = 1,
+        Q_STORING = 2,
+    };
+    uint8_t recording_macro = Q_RECORDING;
+    uint8_t recording_ring_buffer[ring_buffer_size];
+    uint8_t write_recording_index;
+    uint8_t read_recording_index;
+
+    enum war_input_jump_table {
+        max_keysyms = 128,
+        max_modes = 8,
+        max_keystates = 3,
+        max_modifiers = 8,
+    };
+    void* keysym_mode_modifier_state[max_keysyms * max_modes * max_keystates *
+                                     max_modifiers];
 
     int end_war = 0;
 
-    enum {
+    enum war_pixel_format {
         ARGB8888 = 0,
     };
+
+    uint8_t quads_buffer[sizeof(float) * max_quads * 4 +
+                         sizeof(float) * max_quads * 4 +
+                         sizeof(uint32_t) * max_quads * 4 +
+                         sizeof(uint16_t) * max_quads * 6];
+    float* quads_x = (float*)quads_buffer;
+    float* quads_y = (float*)(quads_x + max_quads * 4);
+    uint32_t* quads_colors = (uint32_t*)(quads_y + max_quads * 4);
+    uint16_t* quads_indices = (uint16_t*)(quads_colors + max_quads * 4);
+    uint16_t quads_count = 0;
 
 #if DMABUF
     war_vulkan_context vulkan_context =
@@ -154,6 +196,9 @@ void war_wayland_init() {
     // uint32_t wl_pointer_id = 0;
     // uint32_t zwp_linux_explicit_synchronization_v1_id = 0;
 
+    int fd = war_wayland_make_fd();
+    assert(fd >= 0);
+
     uint8_t get_registry[12];
     write_le32(get_registry, wl_display_id);
     write_le16(get_registry + 4, 1);
@@ -179,15 +224,8 @@ void war_wayland_init() {
     obj_op[obj_op_index(wl_registry_id, 0)] = &&wl_registry_global;
     obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
 
-    uint8_t quads_buffer[sizeof(float) * max_quads * 4 +
-                         sizeof(float) * max_quads * 4 +
-                         sizeof(uint32_t) * max_quads * 4 +
-                         sizeof(uint16_t) * max_quads * 6];
-    float* quads_x = (float*)quads_buffer;
-    float* quads_y = (float*)(quads_x + max_quads * 4);
-    uint32_t* quads_colors = (uint32_t*)(quads_y + max_quads * 4);
-    uint16_t* quads_indices = (uint16_t*)(quads_colors + max_quads * 4);
-    uint16_t quads_count = 0;
+    struct xkb_context* xkb_context;
+    struct xkb_state* xkb_state;
 
     //-------------------------------------------------------------------------
     // main loop
@@ -1468,11 +1506,11 @@ void war_wayland_init() {
                 call_carmack("raw keycode: %u", keycode);
                 xkb_keysym_t keysym =
                     xkb_state_key_get_one_sym(xkb_state, keycode);
-                int shift_active = xkb_state_mod_name_is_active(
-                    xkb_state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_DEPRESSED);
+                int alt_active = xkb_state_mod_name_is_active(
+                    xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_DEPRESSED);
                 call_carmack("keysym: %i", keysym);
-                call_carmack("shift active: %i", shift_active);
 
+                // COMMENT REFACTOR: jump table
                 // 0 = released (not pressed), 1 = pressed, 2 = repeated
                 switch (keysym) {
                 case XKB_KEY_k:

@@ -77,6 +77,12 @@ int main() {
 void* war_window_render(void* args) {
     header("war_window_render");
     war_thread_args* a = (war_thread_args*)args;
+    uint8_t* window_render_to_audio_ring_buffer =
+        a->window_render_to_audio_ring_buffer;
+    uint8_t* write_to_audio_index = a->write_to_audio_index;
+    uint8_t* audio_to_window_render_ring_buffer =
+        a->audio_to_window_render_ring_buffer;
+    uint8_t* read_from_audio_index = a->read_from_audio_index;
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
@@ -146,8 +152,6 @@ void* war_window_render(void* args) {
     };
     void* keysym_mode_modifier_state[max_keysyms * max_modes * max_keystates *
                                      max_modifiers];
-
-    int end_war = 0;
 
     enum war_pixel_format {
         ARGB8888 = 0,
@@ -257,7 +261,8 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     // main loop
     //-------------------------------------------------------------------------
-    while (!end_war) {
+    int end_window_render = 0;
+    while (!end_window_render) {
         int ret = poll(&pfd, 1, -1);
         assert(ret >= 0);
         if (ret == 0) { call_carmack("timeout"); }
@@ -1043,7 +1048,7 @@ void* war_window_render(void* args) {
                     "wl_surface::destroy request", wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
-                end_war = 1;
+                end_window_render = 1;
                 goto done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
@@ -1828,6 +1833,13 @@ void* war_window_render(void* args) {
 void* war_audio(void* args) {
     header("war_audio");
     war_thread_args* a = (war_thread_args*)args;
+    uint8_t* audio_to_window_render_ring_buffer =
+        a->audio_to_window_render_ring_buffer;
+    uint8_t* write_to_window_render_index = a->write_to_window_render_index;
+    uint8_t* window_render_to_audio_ring_buffer =
+        a->window_render_to_audio_ring_buffer;
+    uint8_t* read_from_window_render_index = a->read_from_window_render_index;
+    uint8_t* write_to_audio_index = a->write_to_audio_index;
 
     // Open the default PCM device for playback (blocking mode)
     snd_pcm_t* pcm_handle;
@@ -1878,13 +1890,18 @@ void* war_audio(void* args) {
     snd_timestamp_t ts;
     // snd_pcm_status_get_tstamp(status, &ts);
 
-    enum {
-        START_PLAYBACK = 0,
-        STOP_PLAYBACK = 1,
-        GET_TIMESTAMP = 2,
-    };
+    uint8_t from_window_render = 0;
+    uint8_t end_audio = 0;
+    while (!end_audio) {
+        if (read_from_window_render_index != write_to_audio_index) {
+            from_window_render = window_render_to_audio_ring_buffer
+                [*read_from_window_render_index];
+            (*read_from_window_render_index) =
+                ((*read_from_window_render_index) + 1) % ring_buffer_size;
+        }
 
-    // while (1) {}
+        // logic
+    }
 
     end("war_audio");
     return 0;

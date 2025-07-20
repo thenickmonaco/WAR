@@ -60,6 +60,12 @@ enum war_wayland_interface_hash_value {
     WP_CONTENT_TYPE_MANAGER_V1_HASH_VALUE = 22,
 };
 
+enum war_audio_functions {
+    AUDIO_START_PLAYBACK = 0,
+    AUDIO_STOP_PLAYBACK = 1,
+    AUDIO_GET_TIMESTAMP = 2,
+};
+
 enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,

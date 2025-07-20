@@ -1884,7 +1884,7 @@ void* war_audio(void* args) {
         GET_TIMESTAMP = 2,
     };
 
-    //while (1) {}
+    // while (1) {}
 
     end("war_audio");
     return 0;

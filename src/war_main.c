@@ -164,7 +164,7 @@ void* war_window_render(void* args) {
     uint16_t different_bpm = 200;
     uint64_t current_u_seconds = 0;
     uint64_t next_u_seconds = 0;
-    uint64_t repeat_interval_u_seconds = repeat_interval;
+    uint64_t repeat_rate_u_seconds = 500 * 1000;
     uint32_t repeat_key = 0;
 
     enum war_pixel_format {
@@ -298,24 +298,21 @@ void* war_window_render(void* args) {
             }
         }
 
-        if (repeat_key) {
-            switch (repeat_key) {
-            case XKB_KEY_k:
-                window_render_to_audio_ring_buffer[*write_to_audio_index] =
-                    AUDIO_GET_TIMESTAMP;
-                *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
+        switch (repeat_key) {
+        case XKB_KEY_k:
+            window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                AUDIO_GET_TIMESTAMP;
+            *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
 
-                if (!next_u_seconds && current_u_seconds) {
-                    next_u_seconds =
-                        current_u_seconds + repeat_interval_u_seconds;
-                }
-
-                while (current_u_seconds >= next_u_seconds) {
-                    row++;
-                    next_u_seconds += repeat_interval_u_seconds;
-                }
-                break;
+            if (!next_u_seconds && current_u_seconds) {
+                next_u_seconds = current_u_seconds + repeat_rate_u_seconds;
             }
+
+            while (current_u_seconds >= next_u_seconds) {
+                row++;
+                next_u_seconds += repeat_rate_u_seconds;
+            }
+            break;
         }
 
         int ret = poll(&pfd, 1, -1);
@@ -1611,9 +1608,6 @@ void* war_window_render(void* args) {
                         break;
                     case 1:
                         row++;
-                        break;
-                    case 2:
-                        call_carmack("REPEATED: %u", keysym);
                         repeat_key = keysym;
                         break;
                     }
@@ -1625,8 +1619,6 @@ void* war_window_render(void* args) {
                     case 1:
                         row--;
                         break;
-                    case 2:
-                        break;
                     }
                     break;
                 case XKB_KEY_h:
@@ -1635,8 +1627,6 @@ void* war_window_render(void* args) {
                         break;
                     case 1:
                         col--;
-                        break;
-                    case 2:
                         break;
                     }
                     break;
@@ -1647,8 +1637,6 @@ void* war_window_render(void* args) {
                     case 1:
                         col++;
                         break;
-                    case 2:
-                        break;
                     }
                     break;
                 case XKB_KEY_0:
@@ -1657,8 +1645,6 @@ void* war_window_render(void* args) {
                         break;
                     case 1:
                         col = 0;
-                        break;
-                    case 2:
                         break;
                     }
                     break;
@@ -1669,8 +1655,6 @@ void* war_window_render(void* args) {
                     case 1:
                         row = 0;
                         break;
-                    case 2:
-                        break;
                     }
                     break;
                 case XKB_KEY_dollar:
@@ -1679,8 +1663,6 @@ void* war_window_render(void* args) {
                         break;
                     case 1:
                         col = max_cols - 1;
-                        break;
-                    case 2:
                         break;
                     }
                 }

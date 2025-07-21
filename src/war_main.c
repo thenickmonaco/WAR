@@ -83,6 +83,7 @@ void* war_window_render(void* args) {
     uint8_t* audio_to_window_render_ring_buffer =
         a->audio_to_window_render_ring_buffer;
     uint8_t* read_from_audio_index = a->read_from_audio_index;
+    uint8_t* write_to_window_render_index = a->write_to_window_render_index;
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
@@ -152,6 +153,12 @@ void* war_window_render(void* args) {
     };
     void* keysym_mode_modifier_state[max_keysyms * max_modes * max_keystates *
                                      max_modifiers];
+
+    uint64_t seconds = 0;
+    uint64_t u_seconds = 0;
+    uint64_t total_u_seconds = 0;
+    uint64_t last_repeat_u_seconds = 0;
+    uint32_t off_grid_repeat_interval_u_seconds = 500 * 1000;
 
     enum war_pixel_format {
         ARGB8888 = 0,
@@ -259,10 +266,32 @@ void* war_window_render(void* args) {
     struct xkb_state* xkb_state;
 
     //-------------------------------------------------------------------------
-    // main loop
+    // window_render loop
     //-------------------------------------------------------------------------
     int end_window_render = 0;
     while (!end_window_render) {
+        if (*read_from_audio_index != *write_to_window_render_index) {
+            switch (
+                audio_to_window_render_ring_buffer[*read_from_audio_index]) {
+            case AUDIO_GET_TIMESTAMP:
+                *read_from_audio_index = (*read_from_audio_index + 1) & 0xFF;
+
+                size_t space_till_end =
+                    ring_buffer_size - *read_from_audio_index;
+                if (space_till_end < 16) { *read_from_audio_index = 0; }
+                seconds = read_le64(audio_to_window_render_ring_buffer +
+                                    *read_from_audio_index);
+                u_seconds = read_le64(audio_to_window_render_ring_buffer +
+                                      *read_from_audio_index + 8);
+                if (!total_u_seconds) {
+                    total_u_seconds = seconds * 1000000 + u_seconds;
+                }
+
+                *read_from_audio_index = (*read_from_audio_index + 16) & 0xFF;
+                break;
+            }
+        }
+
         int ret = poll(&pfd, 1, -1);
         assert(ret >= 0);
         if (ret == 0) { call_carmack("timeout"); }
@@ -1048,6 +1077,10 @@ void* war_window_render(void* args) {
                     "wl_surface::destroy request", wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
+                window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                    AUDIO_END_WAR;
+                *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
+
                 end_window_render = 1;
                 goto done;
             xdg_toplevel_configure_bounds:
@@ -1548,11 +1581,21 @@ void* war_window_render(void* args) {
                 case XKB_KEY_k:
                     switch (wl_key_state) {
                     case 0:
+                        seconds = 0;
+                        u_seconds = 0;
                         break;
                     case 1:
                         row++;
                         break;
                     case 2:
+                        call_carmack("REPEATED");
+                        window_render_to_audio_ring_buffer
+                            [*write_to_audio_index] = AUDIO_GET_TIMESTAMP;
+                        *write_to_audio_index =
+                            (*write_to_audio_index + 1) & 0xFF;
+
+                        if (seconds && last_repeat_seconds) {}
+
                         break;
                     }
                     break;
@@ -1840,6 +1883,7 @@ void* war_audio(void* args) {
         a->window_render_to_audio_ring_buffer;
     uint8_t* read_from_window_render_index = a->read_from_window_render_index;
     uint8_t* write_to_audio_index = a->write_to_audio_index;
+    uint8_t from_window_render = 0;
 
     // Open the default PCM device for playback (blocking mode)
     snd_pcm_t* pcm_handle;
@@ -1853,54 +1897,94 @@ void* war_audio(void* args) {
     snd_pcm_hw_params_any(pcm_handle, hw_params);
     snd_pcm_hw_params_set_access(
         pcm_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
-    snd_pcm_hw_params_set_format(pcm_handle, hw_params, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_format(
+        pcm_handle, hw_params, SND_PCM_FORMAT_FLOAT_LE);
 
-    // uint?
-    unsigned int sample_rate = 48000;
+    unsigned int sample_rate = SAMPLE_RATE;
     snd_pcm_hw_params_set_rate_near(pcm_handle, hw_params, &sample_rate, 0);
 
-    snd_pcm_hw_params_set_channels(pcm_handle, hw_params, 2); // stereo
+    snd_pcm_hw_params_set_channels(
+        pcm_handle, hw_params, NUM_CHANNELS); // stereo
 
-    // uint?
-    snd_pcm_uframes_t period_size = 512;
+    snd_pcm_uframes_t period_size = PERIOD_SIZE;
     snd_pcm_hw_params_set_period_size_near(
         pcm_handle, hw_params, &period_size, 0);
 
-    // uint?
-    snd_pcm_uframes_t buffer_size = 2048;
+    snd_pcm_uframes_t buffer_size = period_size * 4;
     snd_pcm_hw_params_set_buffer_size_near(pcm_handle, hw_params, &buffer_size);
 
     result = snd_pcm_hw_params(pcm_handle, hw_params);
     assert(result >= 0);
 
-    // Optional: prepare the device (not strictly necessary unless writing
-    // audio)
-    // result = snd_pcm_prepare(pcm_handle);
-    // assert(result >= 0);
-
-    // timing
-    snd_pcm_sframes_t frames = snd_pcm_avail_update(pcm_handle);
-    // snd_pcm_avail_update(pcm_handle);
+    // prepare the device
+    result = snd_pcm_prepare(pcm_handle);
+    assert(result >= 0);
 
     // timestamp
     snd_pcm_status_t* status;
     snd_pcm_status_alloca(&status);
     result = snd_pcm_status(pcm_handle, status);
     assert(result >= 0);
-    snd_timestamp_t ts;
-    // snd_pcm_status_get_tstamp(status, &ts);
+    snd_timestamp_t time_stamp;
 
-    uint8_t from_window_render = 0;
+    size_t sec_size = sizeof(time_stamp.tv_sec);
+    assert(sec_size == 8);
+    size_t usec_size = sizeof(time_stamp.tv_usec);
+    assert(usec_size == 8);
+
+    float sample_buffer[PERIOD_SIZE * NUM_CHANNELS];
+
     uint8_t end_audio = 0;
     while (!end_audio) {
         if (read_from_window_render_index != write_to_audio_index) {
             from_window_render = window_render_to_audio_ring_buffer
                 [*read_from_window_render_index];
             (*read_from_window_render_index) =
-                ((*read_from_window_render_index) + 1) % ring_buffer_size;
+                ((*read_from_window_render_index) + 1) & 0xFF;
+
+            switch (from_window_render) {
+            case AUDIO_GET_TIMESTAMP:
+                snd_pcm_status(pcm_handle, status);
+                snd_pcm_status_get_tstamp(status, &time_stamp);
+                audio_to_window_render_ring_buffer
+                    [*write_to_window_render_index] = AUDIO_GET_TIMESTAMP;
+                *write_to_window_render_index =
+                    (*write_to_window_render_index + 1) & 0xFF;
+                size_t space_till_end =
+                    ring_buffer_size - *write_to_window_render_index;
+                if (space_till_end < 16) { *write_to_window_render_index = 0; }
+                write_le64(audio_to_window_render_ring_buffer +
+                               *write_to_window_render_index,
+                           time_stamp.tv_sec);
+                write_le64(audio_to_window_render_ring_buffer +
+                               *write_to_window_render_index + 8,
+                           time_stamp.tv_usec);
+                *write_to_window_render_index =
+                    (*write_to_window_render_index + 16) & 0xFF;
+
+                from_window_render = 0;
+                break;
+            case AUDIO_END_WAR:
+                call_carmack("AUDIO_END_WAR");
+
+                end_audio = 1;
+                continue;
+                break;
+            }
         }
 
-        // logic
+        for (int i = 0; i < PERIOD_SIZE * NUM_CHANNELS; i++) {
+            sample_buffer[i] = 0;
+        }
+
+        snd_pcm_sframes_t frames =
+            snd_pcm_writei(pcm_handle, sample_buffer, PERIOD_SIZE);
+        if (frames < 0) {
+            frames = snd_pcm_recover(pcm_handle, frames, 1);
+            if (frames < 0) {
+                call_carmack("snd_pcm_writei failed: %s", snd_strerror(frames));
+            }
+        }
     }
 
     end("war_audio");

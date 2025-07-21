@@ -39,6 +39,7 @@ enum war_audio {
     SAMPLE_RATE = 48000,
     PERIOD_SIZE = 512,
     NUM_CHANNELS = 2,
+    BPM = 100,
 };
 
 enum war_audio_functions {
@@ -55,6 +56,7 @@ enum war_misc {
     max_quads = 800,
     max_fds = 50,
     ring_buffer_size = 256,
+    repeat_interval = 500 * 1000, // u seconds
 };
 
 typedef struct war_thread_args {

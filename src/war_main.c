@@ -154,11 +154,18 @@ void* war_window_render(void* args) {
     void* keysym_mode_modifier_state[max_keysyms * max_modes * max_keystates *
                                      max_modifiers];
 
-    uint64_t seconds = 0;
-    uint64_t u_seconds = 0;
-    uint64_t total_u_seconds = 0;
-    uint64_t last_repeat_u_seconds = 0;
-    uint32_t off_grid_repeat_interval_u_seconds = 500 * 1000;
+    enum war_input_repeat {
+        REPEAT_OFF_GRID = 1,
+        REPEAT_OFF_GRID_BPM = 2,
+        REPEAT_OFF_GRID_DIFFERENT_BPM = 3,
+        REPEAT_BPM = 4,
+        REPEAT_DIFFERENT_BPM = 5,
+    };
+    uint16_t different_bpm = 200;
+    uint64_t current_u_seconds = 0;
+    uint64_t next_u_seconds = 0;
+    uint64_t repeat_interval_u_seconds = repeat_interval;
+    uint32_t repeat_key = 0;
 
     enum war_pixel_format {
         ARGB8888 = 0,
@@ -279,15 +286,34 @@ void* war_window_render(void* args) {
                 size_t space_till_end =
                     ring_buffer_size - *read_from_audio_index;
                 if (space_till_end < 16) { *read_from_audio_index = 0; }
-                seconds = read_le64(audio_to_window_render_ring_buffer +
-                                    *read_from_audio_index);
-                u_seconds = read_le64(audio_to_window_render_ring_buffer +
-                                      *read_from_audio_index + 8);
-                if (!total_u_seconds) {
-                    total_u_seconds = seconds * 1000000 + u_seconds;
-                }
+                current_u_seconds =
+                    read_le64(audio_to_window_render_ring_buffer +
+                              *read_from_audio_index) *
+                        1000000 +
+                    read_le64(audio_to_window_render_ring_buffer +
+                              *read_from_audio_index + 8);
 
                 *read_from_audio_index = (*read_from_audio_index + 16) & 0xFF;
+                break;
+            }
+        }
+
+        if (repeat_key) {
+            switch (repeat_key) {
+            case XKB_KEY_k:
+                window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                    AUDIO_GET_TIMESTAMP;
+                *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
+
+                if (!next_u_seconds && current_u_seconds) {
+                    next_u_seconds =
+                        current_u_seconds + repeat_interval_u_seconds;
+                }
+
+                while (current_u_seconds >= next_u_seconds) {
+                    row++;
+                    next_u_seconds += repeat_interval_u_seconds;
+                }
                 break;
             }
         }
@@ -1581,21 +1607,14 @@ void* war_window_render(void* args) {
                 case XKB_KEY_k:
                     switch (wl_key_state) {
                     case 0:
-                        seconds = 0;
-                        u_seconds = 0;
+                        repeat_key = 0;
                         break;
                     case 1:
                         row++;
                         break;
                     case 2:
-                        call_carmack("REPEATED");
-                        window_render_to_audio_ring_buffer
-                            [*write_to_audio_index] = AUDIO_GET_TIMESTAMP;
-                        *write_to_audio_index =
-                            (*write_to_audio_index + 1) & 0xFF;
-
-                        if (seconds && last_repeat_seconds) {}
-
+                        call_carmack("REPEATED: %u", keysym);
+                        repeat_key = keysym;
                         break;
                     }
                     break;

@@ -35,6 +35,16 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+enum war_mods {
+    MOD_SHIFT = (1 << 0),
+    MOD_CTRL = (1 << 1),
+    MOD_ALT = (1 << 2),
+    MOD_LOGO = (1 << 3),
+    MOD_CAPS = (1 << 4),
+    MOD_NUM = (1 << 5),
+    MOD_FN = (1 << 6),
+};
+
 enum war_audio {
     SAMPLE_RATE = 48000,
     PERIOD_SIZE = 512,
@@ -57,6 +67,13 @@ enum war_misc {
     max_fds = 50,
     ring_buffer_size = 256,
 };
+
+typedef struct war_key_event {
+    uint32_t keysym;
+    uint8_t mod;
+    uint8_t state;
+    uint64_t timestamp_us;
+} war_key_event;
 
 typedef struct war_thread_args {
     uint8_t* window_render_to_audio_ring_buffer;

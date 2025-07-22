@@ -108,14 +108,16 @@ void* war_window_render(void* args) {
     uint32_t col = 0;
     uint32_t row = 0;
 
-    enum war_execute_sequence {
-        SEQUENCE_EXECUTE = 0,
-        SEQUENCE_NONE = 1,
-    };
-    uint8_t input_sequence_ring_buffer[ring_buffer_size];
+    war_key_event input_sequence_ring_buffer[ring_buffer_size];
     uint8_t write_input_sequence_index = 0;
     uint8_t read_input_sequence_index = 0;
-    uint8_t execute_input_sequence = SEQUENCE_NONE;
+    uint32_t mod_shift;
+    uint32_t mod_ctrl;
+    uint32_t mod_alt;
+    uint32_t mod_logo;
+    uint32_t mod_caps;
+    uint32_t mod_num;
+    uint32_t mod_fn;
 
     uint32_t numeric_prefix = 1;
 
@@ -1711,6 +1713,21 @@ void* war_window_render(void* args) {
                     xkb_state = xkb_state_new(xkb_keymap);
                     assert(xkb_state);
 
+                    mod_shift = xkb_keymap_mod_get_index(xkb_keymap,
+                                                         XKB_MOD_NAME_SHIFT);
+                    mod_ctrl =
+                        xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_CTRL);
+                    mod_alt =
+                        xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_ALT);
+                    mod_logo = xkb_keymap_mod_get_index(
+                        xkb_keymap, XKB_MOD_NAME_LOGO); // Super/Meta
+                    mod_caps = xkb_keymap_mod_get_index(
+                        xkb_keymap, XKB_MOD_NAME_CAPS); // Super/Meta
+                    mod_num = xkb_keymap_mod_get_index(
+                        xkb_keymap, XKB_MOD_NAME_NUM); // Super/Meta
+                    // mod_fn = xkb_keymap_mod_get_index(
+                    //     xkb_keymap, XKB_MOD_NAME_MOD1); // Super/Meta
+
                     munmap(keymap_map, keymap_size);
                     close(keymap_fd);
                     xkb_keymap_unref(xkb_keymap);
@@ -1733,140 +1750,154 @@ void* war_window_render(void* args) {
 
                     uint32_t wl_key_state = read_le32(
                         msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
-                    call_carmack("wl_key_state: %u", wl_key_state);
                     uint32_t keycode =
                         read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) +
                         8; // + 8 cuz wayland
-                    call_carmack("raw keycode: %u", keycode);
                     xkb_keysym_t keysym =
                         xkb_state_key_get_one_sym(xkb_state, keycode);
-                    int alt_active = xkb_state_mod_name_is_active(
-                        xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_DEPRESSED);
-                    call_carmack("keysym: %i", keysym);
+                    xkb_mod_mask_t mods = xkb_state_serialize_mods(
+                        xkb_state, XKB_STATE_MODS_DEPRESSED);
+                    uint8_t mod = 0;
+                    if (mods & (1 << mod_shift)) mod |= MOD_SHIFT;
+                    if (mods & (1 << mod_ctrl)) mod |= MOD_CTRL;
+                    if (mods & (1 << mod_alt)) mod |= MOD_ALT;
+                    if (mods & (1 << mod_logo)) mod |= MOD_LOGO;
+                    if (mods & (1 << mod_caps)) mod |= MOD_CAPS;
+                    if (mods & (1 << mod_num)) mod |= MOD_NUM;
+                    // if (mods & (1 << mod_fn)) mod |= MOD_FN;
+                    input_sequence_ring_buffer[write_input_sequence_index] =
+                        (war_key_event){
+                            .keysym = keysym,
+                            .mod = mod,
+                            .state = wl_key_state,
+                            .timestamp_us = get_monotonic_time_us(),
+                        };
+                    write_input_sequence_index =
+                        (write_input_sequence_index + 1) & 0xFF;
 
                     // COMMENT REFACTOR: jump table
                     // 0 = released (not pressed), 1 = pressed, 2 = repeated
-                    switch (keysym) {
-                    case XKB_KEY_k:
-                        switch (wl_key_state) {
-                        case 0:
-                            if (repeat_key == keysym) {
-                                repeat_key = 0;
-                                repeat_start_time_us = 0;
-                                next_repeat_time_us = 0;
-                            }
-                            break;
-                        case 1:
-                            row++;
-                            if (repeat_key != keysym) {
-                                repeat_key = keysym;
+                    // switch (keysym) {
+                    // case XKB_KEY_k:
+                    //    switch (wl_key_state) {
+                    //    case 0:
+                    //        if (repeat_key == keysym) {
+                    //            repeat_key = 0;
+                    //            repeat_start_time_us = 0;
+                    //            next_repeat_time_us = 0;
+                    //        }
+                    //        break;
+                    //    case 1:
+                    //        row++;
+                    //        if (repeat_key != keysym) {
+                    //            repeat_key = keysym;
 
-                                repeat_start_time_us = now;
-                                next_repeat_time_us =
-                                    repeat_start_time_us + repeat_delay_us;
-                            }
-                            break;
-                        }
-                        break;
-                    case XKB_KEY_j:
-                        switch (wl_key_state) {
-                        case 0:
-                            if (repeat_key == keysym) {
-                                repeat_key = 0;
-                                repeat_start_time_us = 0;
-                                next_repeat_time_us = 0;
-                            }
-                            break;
-                        case 1:
-                            row--;
-                            if (repeat_key != keysym) {
-                                repeat_key = keysym;
+                    //            repeat_start_time_us =
+                    //            get_monotonic_time_us(); next_repeat_time_us =
+                    //                repeat_start_time_us + repeat_delay_us;
+                    //        }
+                    //        break;
+                    //    }
+                    //    break;
+                    // case XKB_KEY_j:
+                    //    switch (wl_key_state) {
+                    //    case 0:
+                    //        if (repeat_key == keysym) {
+                    //            repeat_key = 0;
+                    //            repeat_start_time_us = 0;
+                    //            next_repeat_time_us = 0;
+                    //        }
+                    //        break;
+                    //    case 1:
+                    //        row--;
+                    //        if (repeat_key != keysym) {
+                    //            repeat_key = keysym;
 
-                                repeat_start_time_us = now;
-                                next_repeat_time_us =
-                                    repeat_start_time_us + repeat_delay_us;
-                            }
-                            break;
-                        }
-                        break;
-                    case XKB_KEY_h:
-                        switch (wl_key_state) {
-                        case 0:
-                            if (repeat_key == keysym) {
-                                repeat_key = 0;
-                                repeat_start_time_us = 0;
-                                next_repeat_time_us = 0;
-                            }
-                            break;
-                        case 1:
-                            col--;
-                            if (repeat_key != keysym) {
-                                repeat_key = keysym;
+                    //            repeat_start_time_us =
+                    //            get_monotonic_time_us(); next_repeat_time_us =
+                    //                repeat_start_time_us + repeat_delay_us;
+                    //        }
+                    //        break;
+                    //    }
+                    //    break;
+                    // case XKB_KEY_h:
+                    //    switch (wl_key_state) {
+                    //    case 0:
+                    //        if (repeat_key == keysym) {
+                    //            repeat_key = 0;
+                    //            repeat_start_time_us = 0;
+                    //            next_repeat_time_us = 0;
+                    //        }
+                    //        break;
+                    //    case 1:
+                    //        col--;
+                    //        if (repeat_key != keysym) {
+                    //            repeat_key = keysym;
 
-                                repeat_start_time_us = now;
-                                next_repeat_time_us =
-                                    repeat_start_time_us + repeat_delay_us;
-                            }
-                            break;
-                        }
-                        break;
-                    case XKB_KEY_l:
-                        switch (wl_key_state) {
-                        case 0:
-                            if (repeat_key == keysym) {
-                                repeat_key = 0;
-                                repeat_start_time_us = 0;
-                                next_repeat_time_us = 0;
-                            }
-                            break;
-                        case 1:
-                            col++;
-                            if (repeat_key != keysym) {
-                                repeat_key = keysym;
+                    //            repeat_start_time_us =
+                    //            get_monotonic_time_us(); next_repeat_time_us =
+                    //                repeat_start_time_us + repeat_delay_us;
+                    //        }
+                    //        break;
+                    //    }
+                    //    break;
+                    // case XKB_KEY_l:
+                    //    switch (wl_key_state) {
+                    //    case 0:
+                    //        if (repeat_key == keysym) {
+                    //            repeat_key = 0;
+                    //            repeat_start_time_us = 0;
+                    //            next_repeat_time_us = 0;
+                    //        }
+                    //        break;
+                    //    case 1:
+                    //        col++;
+                    //        if (repeat_key != keysym) {
+                    //            repeat_key = keysym;
 
-                                repeat_start_time_us = now;
-                                next_repeat_time_us =
-                                    repeat_start_time_us + repeat_delay_us;
-                            }
-                            break;
-                        }
-                        break;
-                    case XKB_KEY_0:
-                        switch (wl_key_state) {
-                        case 0:
-                            break;
-                        case 1:
-                            col = 0;
-                            break;
-                        }
-                        break;
-                    case XKB_KEY_G:
-                        switch (wl_key_state) {
-                        case 0:
-                            break;
-                        case 1:
-                            row = 0;
-                            break;
-                        }
-                        break;
-                    case XKB_KEY_dollar:
-                        switch (wl_key_state) {
-                        case 0:
-                            break;
-                        case 1:
-                            col = max_cols - 1;
-                            break;
-                        }
-                    }
-                    war_wayland_holy_trinity(fd,
-                                             wl_surface_id,
-                                             wl_buffer_id,
-                                             0,
-                                             0,
-                                             0,
-                                             0,
-                                             physical_width,
-                                             physical_height);
+                    //            repeat_start_time_us =
+                    //            get_monotonic_time_us(); next_repeat_time_us =
+                    //                repeat_start_time_us + repeat_delay_us;
+                    //        }
+                    //        break;
+                    //    }
+                    //    break;
+                    // case XKB_KEY_0:
+                    //    switch (wl_key_state) {
+                    //    case 0:
+                    //        break;
+                    //    case 1:
+                    //        col = 0;
+                    //        break;
+                    //    }
+                    //    break;
+                    // case XKB_KEY_G:
+                    //    switch (wl_key_state) {
+                    //    case 0:
+                    //        break;
+                    //    case 1:
+                    //        row = 0;
+                    //        break;
+                    //    }
+                    //    break;
+                    // case XKB_KEY_dollar:
+                    //    switch (wl_key_state) {
+                    //    case 0:
+                    //        break;
+                    //    case 1:
+                    //        col = max_cols - 1;
+                    //        break;
+                    //    }
+                    //}
+                    // war_wayland_holy_trinity(fd,
+                    //                         wl_surface_id,
+                    //                         wl_buffer_id,
+                    //                         0,
+                    //                         0,
+                    //                         0,
+                    //                         0,
+                    //                         physical_width,
+                    //                         physical_height);
                     goto done;
                 wl_keyboard_modifiers:
                     dump_bytes("wl_keyboard_modifiers event",

@@ -275,6 +275,22 @@ void* war_window_render(void* args) {
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
 
+    war_key_trie_pool pool = {
+        .node_count = 1,
+        .nodes =
+            {
+                [0] =
+                    {
+                        .keysym = 0,
+                        .mod = 0,
+                        .is_terminal = 0,
+                        .command = NULL,
+                        .child_count = 0,
+                        .children = {NULL},
+                    },
+            },
+    };
+
     //-------------------------------------------------------------------------
     // window_render loop
     //-------------------------------------------------------------------------

@@ -75,6 +75,24 @@ typedef struct war_key_event {
     uint64_t timestamp_us;
 } war_key_event;
 
+typedef struct war_key_trie_node {
+    uint32_t keysym;
+    uint8_t mod;
+    uint8_t is_terminal;
+    void* command;
+    struct war_key_trie_node* children[32];
+    size_t child_count;
+} war_key_trie_node;
+
+enum war_key_trie {
+    MAX_NODES = 1024,
+};
+
+typedef struct war_key_trie_pool {
+    war_key_trie_node nodes[MAX_NODES];
+    size_t node_count;
+} war_key_trie_pool;
+
 typedef struct war_thread_args {
     uint8_t* window_render_to_audio_ring_buffer;
     uint8_t* audio_to_window_render_ring_buffer;

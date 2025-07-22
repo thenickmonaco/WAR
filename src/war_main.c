@@ -162,10 +162,10 @@ void* war_window_render(void* args) {
         REPEAT_BPM = 4,
         REPEAT_DIFFERENT_BPM = 5,
     };
-    uint16_t different_bpm = 200;
-    uint64_t current_repeat_us = 0;
-    uint64_t next_repeat_us = 0;
-    uint64_t repeat_rate_us = 500 * 1000;
+    uint64_t repeat_start_time_us = 0;
+    uint64_t next_repeat_time_us = 0;
+    const uint64_t repeat_delay_us = 150000;
+    const uint64_t repeat_rate_us = 40000;
     uint32_t repeat_key = 0;
 
     enum war_pixel_format {
@@ -283,44 +283,103 @@ void* war_window_render(void* args) {
         uint64_t now = get_monotonic_time_us();
         if (now - last_frame_time >= frame_duration_us) {
             last_frame_time += frame_duration_us;
-            if (*read_from_audio_index != *write_to_window_render_index) {
-                switch (audio_to_window_render_ring_buffer
-                            [*read_from_audio_index]) {
-                case AUDIO_GET_TIMESTAMP:
-                    *read_from_audio_index =
-                        (*read_from_audio_index + 1) & 0xFF;
 
-                    size_t space_till_end =
-                        ring_buffer_size - *read_from_audio_index;
-                    if (space_till_end < 16) { *read_from_audio_index = 0; }
-                    current_repeat_us =
-                        read_le64(audio_to_window_render_ring_buffer +
-                                  *read_from_audio_index) *
-                            1000000 +
-                        read_le64(audio_to_window_render_ring_buffer +
-                                  *read_from_audio_index + 8);
-                    call_carmack("current_repeat_us: %lu", current_repeat_us);
+            // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
+            // if (*read_from_audio_index != *write_to_window_render_index) {
+            //     switch (audio_to_window_render_ring_buffer
+            //                 [*read_from_audio_index]) {
+            //     case AUDIO_GET_TIMESTAMP:
+            //         *read_from_audio_index =
+            //             (*read_from_audio_index + 1) & 0xFF;
 
-                    *read_from_audio_index =
-                        (*read_from_audio_index + 16) & 0xFF;
-                    break;
-                }
-            }
+            //        size_t space_till_end =
+            //            ring_buffer_size - *read_from_audio_index;
+            //        if (space_till_end < 16) { *read_from_audio_index = 0; }
+            //        current_repeat_us =
+            //            read_le64(audio_to_window_render_ring_buffer +
+            //                      *read_from_audio_index) *
+            //                1000000 +
+            //            read_le64(audio_to_window_render_ring_buffer +
+            //                      *read_from_audio_index + 8);
+            //        call_carmack("current_repeat_us: %lu", current_repeat_us);
+
+            //        *read_from_audio_index =
+            //            (*read_from_audio_index + 16) & 0xFF;
+            //        break;
+            //    }
+            //}
 
             switch (repeat_key) {
             case XKB_KEY_k:
-                call_carmack("repeating k: %lu", repeat_key);
-                window_render_to_audio_ring_buffer[*write_to_audio_index] =
-                    AUDIO_GET_TIMESTAMP;
-                *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
+                if (now >= next_repeat_time_us) {
+                    call_carmack("repeat: %u", repeat_key);
 
-                if (!next_repeat_us && current_repeat_us) {
-                    next_repeat_us = current_repeat_us + repeat_rate_us;
-                }
-
-                if (current_repeat_us >= next_repeat_us) {
                     row++;
-                    next_repeat_us = current_repeat_us + repeat_rate_us;
+
+                    next_repeat_time_us += repeat_rate_us;
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                }
+                break;
+            case XKB_KEY_j:
+                if (now >= next_repeat_time_us) {
+                    call_carmack("repeat: %u", repeat_key);
+
+                    row--;
+
+                    next_repeat_time_us += repeat_rate_us;
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                }
+                break;
+            case XKB_KEY_h:
+                if (now >= next_repeat_time_us) {
+                    call_carmack("repeat: %u", repeat_key);
+
+                    col--;
+
+                    next_repeat_time_us += repeat_rate_us;
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                }
+                break;
+            case XKB_KEY_l:
+                if (now >= next_repeat_time_us) {
+                    call_carmack("repeat: %u", repeat_key);
+
+                    col++;
+
+                    next_repeat_time_us += repeat_rate_us;
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
                 }
                 break;
             }
@@ -1691,38 +1750,84 @@ void* war_window_render(void* args) {
                     case XKB_KEY_k:
                         switch (wl_key_state) {
                         case 0:
-                            repeat_key = 0;
+                            if (repeat_key == keysym) {
+                                repeat_key = 0;
+                                repeat_start_time_us = 0;
+                                next_repeat_time_us = 0;
+                            }
                             break;
                         case 1:
                             row++;
-                            repeat_key = keysym;
+                            if (repeat_key != keysym) {
+                                repeat_key = keysym;
+
+                                repeat_start_time_us = now;
+                                next_repeat_time_us =
+                                    repeat_start_time_us + repeat_delay_us;
+                            }
                             break;
                         }
                         break;
                     case XKB_KEY_j:
                         switch (wl_key_state) {
                         case 0:
+                            if (repeat_key == keysym) {
+                                repeat_key = 0;
+                                repeat_start_time_us = 0;
+                                next_repeat_time_us = 0;
+                            }
                             break;
                         case 1:
                             row--;
+                            if (repeat_key != keysym) {
+                                repeat_key = keysym;
+
+                                repeat_start_time_us = now;
+                                next_repeat_time_us =
+                                    repeat_start_time_us + repeat_delay_us;
+                            }
                             break;
                         }
                         break;
                     case XKB_KEY_h:
                         switch (wl_key_state) {
                         case 0:
+                            if (repeat_key == keysym) {
+                                repeat_key = 0;
+                                repeat_start_time_us = 0;
+                                next_repeat_time_us = 0;
+                            }
                             break;
                         case 1:
                             col--;
+                            if (repeat_key != keysym) {
+                                repeat_key = keysym;
+
+                                repeat_start_time_us = now;
+                                next_repeat_time_us =
+                                    repeat_start_time_us + repeat_delay_us;
+                            }
                             break;
                         }
                         break;
                     case XKB_KEY_l:
                         switch (wl_key_state) {
                         case 0:
+                            if (repeat_key == keysym) {
+                                repeat_key = 0;
+                                repeat_start_time_us = 0;
+                                next_repeat_time_us = 0;
+                            }
                             break;
                         case 1:
                             col++;
+                            if (repeat_key != keysym) {
+                                repeat_key = keysym;
+
+                                repeat_start_time_us = now;
+                                next_repeat_time_us =
+                                    repeat_start_time_us + repeat_delay_us;
+                            }
                             break;
                         }
                         break;

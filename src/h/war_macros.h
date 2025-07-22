@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
@@ -37,6 +38,12 @@
                                                      max_keystates * (mod))))
 
 // COMMENT OPTIMIZE: Duff's Device + SIMD (intrinsics)
+
+static inline uint64_t get_monotonic_time_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
 
 static inline int32_t to_fixed(float f) { return (int32_t)(f * 256.0f); }
 

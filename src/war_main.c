@@ -36,6 +36,7 @@
 #include <alsa/timer.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <time.h>
 #include <unistd.h>
 
 int main() {
@@ -162,9 +163,9 @@ void* war_window_render(void* args) {
         REPEAT_DIFFERENT_BPM = 5,
     };
     uint16_t different_bpm = 200;
-    uint64_t current_u_seconds = 0;
-    uint64_t next_u_seconds = 0;
-    uint64_t repeat_rate_u_seconds = 500 * 1000;
+    uint64_t current_repeat_us = 0;
+    uint64_t next_repeat_us = 0;
+    uint64_t repeat_rate_us = 500 * 1000;
     uint32_t repeat_key = 0;
 
     enum war_pixel_format {
@@ -275,637 +276,972 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     // window_render loop
     //-------------------------------------------------------------------------
+    const uint64_t frame_duration_us = 16666; // 60 fps
+    uint64_t last_frame_time = get_monotonic_time_us();
     int end_window_render = 0;
     while (!end_window_render) {
-        if (*read_from_audio_index != *write_to_window_render_index) {
-            switch (
-                audio_to_window_render_ring_buffer[*read_from_audio_index]) {
-            case AUDIO_GET_TIMESTAMP:
-                *read_from_audio_index = (*read_from_audio_index + 1) & 0xFF;
+        uint64_t now = get_monotonic_time_us();
+        if (now - last_frame_time >= frame_duration_us) {
+            last_frame_time += frame_duration_us;
+            if (*read_from_audio_index != *write_to_window_render_index) {
+                switch (audio_to_window_render_ring_buffer
+                            [*read_from_audio_index]) {
+                case AUDIO_GET_TIMESTAMP:
+                    *read_from_audio_index =
+                        (*read_from_audio_index + 1) & 0xFF;
 
-                size_t space_till_end =
-                    ring_buffer_size - *read_from_audio_index;
-                if (space_till_end < 16) { *read_from_audio_index = 0; }
-                current_u_seconds =
-                    read_le64(audio_to_window_render_ring_buffer +
-                              *read_from_audio_index) *
-                        1000000 +
-                    read_le64(audio_to_window_render_ring_buffer +
-                              *read_from_audio_index + 8);
+                    size_t space_till_end =
+                        ring_buffer_size - *read_from_audio_index;
+                    if (space_till_end < 16) { *read_from_audio_index = 0; }
+                    current_repeat_us =
+                        read_le64(audio_to_window_render_ring_buffer +
+                                  *read_from_audio_index) *
+                            1000000 +
+                        read_le64(audio_to_window_render_ring_buffer +
+                                  *read_from_audio_index + 8);
+                    call_carmack("current_repeat_us: %lu", current_repeat_us);
 
-                *read_from_audio_index = (*read_from_audio_index + 16) & 0xFF;
+                    *read_from_audio_index =
+                        (*read_from_audio_index + 16) & 0xFF;
+                    break;
+                }
+            }
+
+            switch (repeat_key) {
+            case XKB_KEY_k:
+                call_carmack("repeating k: %lu", repeat_key);
+                window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                    AUDIO_GET_TIMESTAMP;
+                *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
+
+                if (!next_repeat_us && current_repeat_us) {
+                    next_repeat_us = current_repeat_us + repeat_rate_us;
+                }
+
+                if (current_repeat_us >= next_repeat_us) {
+                    row++;
+                    next_repeat_us = current_repeat_us + repeat_rate_us;
+                }
                 break;
             }
-        }
 
-        switch (repeat_key) {
-        case XKB_KEY_k:
-            window_render_to_audio_ring_buffer[*write_to_audio_index] =
-                AUDIO_GET_TIMESTAMP;
-            *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
+            int ret = poll(&pfd, 1, 0);
+            assert(ret >= 0);
+            // if (ret == 0) { call_carmack("timeout"); }
 
-            if (!next_u_seconds && current_u_seconds) {
-                next_u_seconds = current_u_seconds + repeat_rate_u_seconds;
+            if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                call_carmack("wayland socket error or hangup: %s",
+                             strerror(errno));
+                break;
             }
 
-            while (current_u_seconds >= next_u_seconds) {
-                row++;
-                next_u_seconds += repeat_rate_u_seconds;
-            }
-            break;
-        }
+            if (pfd.revents & POLLIN) {
+                struct msghdr poll_msg_hdr = {0};
+                struct iovec poll_iov;
+                poll_iov.iov_base = msg_buffer + msg_buffer_size;
+                poll_iov.iov_len = sizeof(msg_buffer) - msg_buffer_size;
+                poll_msg_hdr.msg_iov = &poll_iov;
+                poll_msg_hdr.msg_iovlen = 1;
+                char poll_ctrl_buf[CMSG_SPACE(sizeof(int) * 4)];
+                poll_msg_hdr.msg_control = poll_ctrl_buf;
+                poll_msg_hdr.msg_controllen = sizeof(poll_ctrl_buf);
+                ssize_t size_read = recvmsg(fd, &poll_msg_hdr, 0);
+                assert(size_read > 0);
+                msg_buffer_size += size_read;
 
-        int ret = poll(&pfd, 1, -1);
-        assert(ret >= 0);
-        if (ret == 0) { call_carmack("timeout"); }
+                size_t msg_buffer_offset = 0;
+                while (msg_buffer_size - msg_buffer_offset >= 8) {
+                    uint16_t size =
+                        read_le16(msg_buffer + msg_buffer_offset + 6);
 
-        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            call_carmack("wayland socket error or hangup: %s", strerror(errno));
-            break;
-        }
+                    if ((size < 8) ||
+                        (size > (msg_buffer_size - msg_buffer_offset))) {
+                        break;
+                    };
 
-        if (pfd.revents & POLLIN) {
-            struct msghdr poll_msg_hdr = {0};
-            struct iovec poll_iov;
-            poll_iov.iov_base = msg_buffer + msg_buffer_size;
-            poll_iov.iov_len = sizeof(msg_buffer) - msg_buffer_size;
-            poll_msg_hdr.msg_iov = &poll_iov;
-            poll_msg_hdr.msg_iovlen = 1;
-            char poll_ctrl_buf[CMSG_SPACE(sizeof(int) * 4)];
-            poll_msg_hdr.msg_control = poll_ctrl_buf;
-            poll_msg_hdr.msg_controllen = sizeof(poll_ctrl_buf);
-            ssize_t size_read = recvmsg(fd, &poll_msg_hdr, 0);
-            assert(size_read > 0);
-            msg_buffer_size += size_read;
+                    uint32_t object_id =
+                        read_le32(msg_buffer + msg_buffer_offset);
+                    uint16_t opcode =
+                        read_le16(msg_buffer + msg_buffer_offset + 4);
 
-            size_t msg_buffer_offset = 0;
-            while (msg_buffer_size - msg_buffer_offset >= 8) {
-                uint16_t size = read_le16(msg_buffer + msg_buffer_offset + 6);
+                    if (object_id >= max_objects || opcode >= max_opcodes) {
+                        // COMMENT CONCERN: INVALID OBJECT/OP 27 TIMES!
+                        // call_carmack(
+                        //    "invalid object/op: id=%u, op=%u", object_id,
+                        //    opcode);
+                        goto done;
+                    }
 
-                if ((size < 8) ||
-                    (size > (msg_buffer_size - msg_buffer_offset))) {
-                    break;
-                };
+                    size_t idx = obj_op_index(object_id, opcode);
+                    if (obj_op[idx]) {
+                        goto* obj_op[idx];
+                    } else {
+                        goto wayland_default;
+                    }
 
-                uint32_t object_id = read_le32(msg_buffer + msg_buffer_offset);
-                uint16_t opcode = read_le16(msg_buffer + msg_buffer_offset + 4);
-
-                if (object_id >= max_objects || opcode >= max_opcodes) {
-                    // COMMENT CONCERN: INVALID OBJECT/OP 27 TIMES!
-                    // call_carmack(
-                    //    "invalid object/op: id=%u, op=%u", object_id, opcode);
-                    goto done;
-                }
-
-                size_t idx = obj_op_index(object_id, opcode);
-                if (obj_op[idx]) {
-                    goto* obj_op[idx];
-                } else {
-                    goto wayland_default;
-                }
-
-            wl_registry_global:
-                dump_bytes(
-                    "global event", msg_buffer + msg_buffer_offset, size);
-                call_carmack("iname: %s",
-                             (const char*)msg_buffer + msg_buffer_offset + 16);
-
-                const char* iname = (const char*)msg_buffer +
-                                    msg_buffer_offset +
-                                    16; // COMMENT OPTIMIZE: perfect hash
-                if (strcmp(iname, "wl_shm") == 0) {
-#if WL_SHM
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wl_shm_id = new_id;
-                    obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
-                    new_id++;
-#endif
-                } else if (strcmp(iname, "wl_compositor") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wl_compositor_id = new_id;
-                    obj_op[obj_op_index(wl_compositor_id, 0)] =
-                        &&wl_compositor_jump;
-                    new_id++;
-                } else if (strcmp(iname, "wl_output") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wl_output_id = new_id;
-                    obj_op[obj_op_index(wl_output_id, 0)] =
-                        &&wl_output_geometry;
-                    obj_op[obj_op_index(wl_output_id, 1)] = &&wl_output_mode;
-                    obj_op[obj_op_index(wl_output_id, 2)] = &&wl_output_done;
-                    obj_op[obj_op_index(wl_output_id, 3)] = &&wl_output_scale;
-                    obj_op[obj_op_index(wl_output_id, 4)] = &&wl_output_name;
-                    obj_op[obj_op_index(wl_output_id, 5)] =
-                        &&wl_output_description;
-                    new_id++;
-                } else if (strcmp(iname, "wl_seat") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wl_seat_id = new_id;
-                    obj_op[obj_op_index(wl_seat_id, 0)] =
-                        &&wl_seat_capabilities;
-                    obj_op[obj_op_index(wl_seat_id, 1)] = &&wl_seat_name;
-                    new_id++;
-                } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
-#if DMABUF
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwp_linux_dmabuf_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
-                        &&zwp_linux_dmabuf_v1_format;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 1)] =
-                        &&zwp_linux_dmabuf_v1_modifier;
-                    new_id++;
-#endif
-                } else if (strcmp(iname, "xdg_wm_base") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    xdg_wm_base_id = new_id;
-                    obj_op[obj_op_index(xdg_wm_base_id, 0)] =
-                        &&xdg_wm_base_ping;
-                    new_id++;
-                } else if (strcmp(iname, "wp_linux_drm_syncobj_manager_v1") ==
-                           0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wp_linux_drm_syncobj_manager_v1_id = new_id;
-                    obj_op[obj_op_index(wp_linux_drm_syncobj_manager_v1_id,
-                                        0)] =
-                        &&wp_linux_drm_syncobj_manager_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "zwp_idle_inhibit_manager_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwp_idle_inhibit_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_idle_inhibit_manager_v1_id, 0)] =
-                        &&zwp_idle_inhibit_manager_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "zxdg_decoration_manager_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zxdg_decoration_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zxdg_decoration_manager_v1_id, 0)] =
-                        &&zxdg_decoration_manager_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "zwp_relative_pointer_manager_v1") ==
-                           0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwp_relative_pointer_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_relative_pointer_manager_v1_id,
-                                        0)] =
-                        &&zwp_relative_pointer_manager_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "zwp_pointer_constraints_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwp_pointer_constraints_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_pointer_constraints_v1_id, 0)] =
-                        &&zwp_pointer_constraints_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "zwlr_output_manager_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwlr_output_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwlr_output_manager_v1_id, 0)] =
-                        &&zwlr_output_manager_v1_head;
-                    obj_op[obj_op_index(zwlr_output_manager_v1_id, 1)] =
-                        &&zwlr_output_manager_v1_done;
-                    new_id++;
-                } else if (strcmp(iname, "zwlr_data_control_manager_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwlr_data_control_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwlr_data_control_manager_v1_id, 0)] =
-                        &&zwlr_data_control_manager_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "zwp_virtual_keyboard_manager_v1") ==
-                           0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwp_virtual_keyboard_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_virtual_keyboard_manager_v1_id,
-                                        0)] =
-                        &&zwp_virtual_keyboard_manager_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "wp_viewporter") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wp_viewporter_id = new_id;
-                    obj_op[obj_op_index(wp_viewporter_id, 0)] =
-                        &&wp_viewporter_jump;
-                    new_id++;
-                } else if (strcmp(iname, "wp_fractional_scale_manager_v1") ==
-                           0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wp_fractional_scale_manager_v1_id = new_id;
-                    obj_op[obj_op_index(wp_fractional_scale_manager_v1_id, 0)] =
-                        &&wp_fractional_scale_manager_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "zwp_pointer_gestures_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwp_pointer_gestures_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_pointer_gestures_v1_id, 0)] =
-                        &&zwp_pointer_gestures_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "xdg_activation_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    xdg_activation_v1_id = new_id;
-                    obj_op[obj_op_index(xdg_activation_v1_id, 0)] =
-                        &&xdg_activation_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "wp_presentation") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wp_presentation_id = new_id;
-                    obj_op[obj_op_index(wp_presentation_id, 0)] =
-                        &&wp_presentation_clock_id;
-                    new_id++;
-                } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    zwlr_layer_shell_v1_id = new_id;
-                    obj_op[obj_op_index(zwlr_layer_shell_v1_id, 0)] =
-                        &&zwlr_layer_shell_v1_jump;
-                    new_id++;
-                } else if (strcmp(iname, "ext_foreign_toplevel_list_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    ext_foreign_toplevel_list_v1_id = new_id;
-                    obj_op[obj_op_index(ext_foreign_toplevel_list_v1_id, 0)] =
-                        &&ext_foreign_toplevel_list_v1_toplevel;
-                    new_id++;
-                } else if (strcmp(iname, "wp_content_type_manager_v1") == 0) {
-                    war_wayland_registry_bind(
-                        fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wp_content_type_manager_v1_id = new_id;
-                    obj_op[obj_op_index(wp_content_type_manager_v1_id, 0)] =
-                        &&wp_content_type_manager_v1_jump;
-                    new_id++;
-                }
-                if (!wl_surface_id && wl_compositor_id) {
-                    uint8_t create_surface[12];
-                    write_le32(create_surface, wl_compositor_id);
-                    write_le16(create_surface + 4, 0);
-                    write_le16(create_surface + 6, 12);
-                    write_le32(create_surface + 8, new_id);
-                    dump_bytes("create_surface request", create_surface, 12);
-                    call_carmack("bound: wl_surface");
-                    ssize_t create_surface_written =
-                        write(fd, create_surface, 12);
-                    assert(create_surface_written == 12);
-                    wl_surface_id = new_id;
-                    obj_op[obj_op_index(wl_surface_id, 0)] = &&wl_surface_enter;
-                    obj_op[obj_op_index(wl_surface_id, 1)] = &&wl_surface_leave;
-                    obj_op[obj_op_index(wl_surface_id, 2)] =
-                        &&wl_surface_preferred_buffer_scale;
-                    obj_op[obj_op_index(wl_surface_id, 3)] =
-                        &&wl_surface_preferred_buffer_transform;
-                    new_id++;
-                }
-#if DMABUF
-                if (!zwp_linux_dmabuf_feedback_v1_id &&
-                    zwp_linux_dmabuf_v1_id && wl_surface_id) {
-                    uint8_t get_surface_feedback[16];
-                    write_le32(get_surface_feedback, zwp_linux_dmabuf_v1_id);
-                    write_le16(get_surface_feedback + 4, 3);
-                    write_le16(get_surface_feedback + 6, 16);
-                    write_le32(get_surface_feedback + 8, new_id);
-                    write_le32(get_surface_feedback + 12, wl_surface_id);
+                wl_registry_global:
                     dump_bytes(
-                        "zwp_linux_dmabuf_v1::get_surface_feedback request",
-                        get_surface_feedback,
-                        16);
-                    call_carmack("bound: xdg_surface");
-                    ssize_t get_surface_feedback_written =
-                        write(fd, get_surface_feedback, 16);
-                    assert(get_surface_feedback_written == 16);
-                    zwp_linux_dmabuf_feedback_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 0)] =
-                        &&zwp_linux_dmabuf_feedback_v1_done;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 1)] =
-                        &&zwp_linux_dmabuf_feedback_v1_format_table;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 2)] =
-                        &&zwp_linux_dmabuf_feedback_v1_main_device;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 3)] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_done;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 4)] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_target_device;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 5)] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 6)] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
-                    new_id++;
-                }
+                        "global event", msg_buffer + msg_buffer_offset, size);
+                    call_carmack("iname: %s",
+                                 (const char*)msg_buffer + msg_buffer_offset +
+                                     16);
+
+                    const char* iname = (const char*)msg_buffer +
+                                        msg_buffer_offset +
+                                        16; // COMMENT OPTIMIZE: perfect hash
+                    if (strcmp(iname, "wl_shm") == 0) {
+#if WL_SHM
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wl_shm_id = new_id;
+                        obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
+                        new_id++;
 #endif
-                if (!xdg_surface_id && xdg_wm_base_id && wl_surface_id) {
-                    uint8_t get_xdg_surface[16];
-                    write_le32(get_xdg_surface, xdg_wm_base_id);
-                    write_le16(get_xdg_surface + 4, 2);
-                    write_le16(get_xdg_surface + 6, 16);
-                    write_le32(get_xdg_surface + 8, new_id);
-                    write_le32(get_xdg_surface + 12, wl_surface_id);
-                    dump_bytes("get_xdg_surface request", get_xdg_surface, 16);
-                    call_carmack("bound: xdg_surface");
-                    ssize_t get_xdg_surface_written =
-                        write(fd, get_xdg_surface, 16);
-                    assert(get_xdg_surface_written == 16);
-                    xdg_surface_id = new_id;
-                    obj_op[obj_op_index(xdg_surface_id, 0)] =
-                        &&xdg_surface_configure;
-                    new_id++;
-
-                    uint8_t get_toplevel[12];
-                    write_le32(get_toplevel, xdg_surface_id);
-                    write_le16(get_toplevel + 4, 1);
-                    write_le16(get_toplevel + 6, 12);
-                    write_le32(get_toplevel + 8, new_id);
-                    dump_bytes("get_xdg_toplevel request", get_toplevel, 12);
-                    call_carmack("bound: xdg_toplevel");
-                    ssize_t get_toplevel_written = write(fd, get_toplevel, 12);
-                    assert(get_toplevel_written == 12);
-                    xdg_toplevel_id = new_id;
-                    obj_op[obj_op_index(xdg_toplevel_id, 0)] =
-                        &&xdg_toplevel_configure;
-                    obj_op[obj_op_index(xdg_toplevel_id, 1)] =
-                        &&xdg_toplevel_close;
-                    obj_op[obj_op_index(xdg_toplevel_id, 2)] =
-                        &&xdg_toplevel_configure_bounds;
-                    obj_op[obj_op_index(xdg_toplevel_id, 3)] =
-                        &&xdg_toplevel_wm_capabilities;
-                    new_id++;
-
-                    //---------------------------------------------------------
-                    // initial commit
-                    //---------------------------------------------------------
-                    war_wayland_wl_surface_commit(fd, wl_surface_id);
-                }
-                goto done;
-            wl_registry_global_remove:
-                dump_bytes(
-                    "global_rm event", msg_buffer + msg_buffer_offset, size);
-                goto done;
-            wl_callback_done:
-                dump_bytes("wl_callback::done event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
+                    } else if (strcmp(iname, "wl_compositor") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wl_compositor_id = new_id;
+                        obj_op[obj_op_index(wl_compositor_id, 0)] =
+                            &&wl_compositor_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "wl_output") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wl_output_id = new_id;
+                        obj_op[obj_op_index(wl_output_id, 0)] =
+                            &&wl_output_geometry;
+                        obj_op[obj_op_index(wl_output_id, 1)] =
+                            &&wl_output_mode;
+                        obj_op[obj_op_index(wl_output_id, 2)] =
+                            &&wl_output_done;
+                        obj_op[obj_op_index(wl_output_id, 3)] =
+                            &&wl_output_scale;
+                        obj_op[obj_op_index(wl_output_id, 4)] =
+                            &&wl_output_name;
+                        obj_op[obj_op_index(wl_output_id, 5)] =
+                            &&wl_output_description;
+                        new_id++;
+                    } else if (strcmp(iname, "wl_seat") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wl_seat_id = new_id;
+                        obj_op[obj_op_index(wl_seat_id, 0)] =
+                            &&wl_seat_capabilities;
+                        obj_op[obj_op_index(wl_seat_id, 1)] = &&wl_seat_name;
+                        new_id++;
+                    } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
 #if DMABUF
-                //-------------------------------------------------------------
-                // RENDER LOGIC
-                //-------------------------------------------------------------
-                // 1. Wait for previous frame to finish (optional but
-                // recommended)
-                vkWaitForFences(vulkan_context.device,
-                                1,
-                                &vulkan_context.in_flight_fence,
-                                VK_TRUE,
-                                UINT64_MAX);
-                vkResetFences(
-                    vulkan_context.device, 1, &vulkan_context.in_flight_fence);
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwp_linux_dmabuf_v1_id = new_id;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
+                            &&zwp_linux_dmabuf_v1_format;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 1)] =
+                            &&zwp_linux_dmabuf_v1_modifier;
+                        new_id++;
+#endif
+                    } else if (strcmp(iname, "xdg_wm_base") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        xdg_wm_base_id = new_id;
+                        obj_op[obj_op_index(xdg_wm_base_id, 0)] =
+                            &&xdg_wm_base_ping;
+                        new_id++;
+                    } else if (strcmp(iname,
+                                      "wp_linux_drm_syncobj_manager_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wp_linux_drm_syncobj_manager_v1_id = new_id;
+                        obj_op[obj_op_index(wp_linux_drm_syncobj_manager_v1_id,
+                                            0)] =
+                            &&wp_linux_drm_syncobj_manager_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "zwp_idle_inhibit_manager_v1") ==
+                               0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwp_idle_inhibit_manager_v1_id = new_id;
+                        obj_op[obj_op_index(zwp_idle_inhibit_manager_v1_id,
+                                            0)] =
+                            &&zwp_idle_inhibit_manager_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "zxdg_decoration_manager_v1") ==
+                               0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zxdg_decoration_manager_v1_id = new_id;
+                        obj_op[obj_op_index(zxdg_decoration_manager_v1_id, 0)] =
+                            &&zxdg_decoration_manager_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname,
+                                      "zwp_relative_pointer_manager_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwp_relative_pointer_manager_v1_id = new_id;
+                        obj_op[obj_op_index(zwp_relative_pointer_manager_v1_id,
+                                            0)] =
+                            &&zwp_relative_pointer_manager_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "zwp_pointer_constraints_v1") ==
+                               0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwp_pointer_constraints_v1_id = new_id;
+                        obj_op[obj_op_index(zwp_pointer_constraints_v1_id, 0)] =
+                            &&zwp_pointer_constraints_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "zwlr_output_manager_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwlr_output_manager_v1_id = new_id;
+                        obj_op[obj_op_index(zwlr_output_manager_v1_id, 0)] =
+                            &&zwlr_output_manager_v1_head;
+                        obj_op[obj_op_index(zwlr_output_manager_v1_id, 1)] =
+                            &&zwlr_output_manager_v1_done;
+                        new_id++;
+                    } else if (strcmp(iname, "zwlr_data_control_manager_v1") ==
+                               0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwlr_data_control_manager_v1_id = new_id;
+                        obj_op[obj_op_index(zwlr_data_control_manager_v1_id,
+                                            0)] =
+                            &&zwlr_data_control_manager_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname,
+                                      "zwp_virtual_keyboard_manager_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwp_virtual_keyboard_manager_v1_id = new_id;
+                        obj_op[obj_op_index(zwp_virtual_keyboard_manager_v1_id,
+                                            0)] =
+                            &&zwp_virtual_keyboard_manager_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "wp_viewporter") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wp_viewporter_id = new_id;
+                        obj_op[obj_op_index(wp_viewporter_id, 0)] =
+                            &&wp_viewporter_jump;
+                        new_id++;
+                    } else if (strcmp(iname,
+                                      "wp_fractional_scale_manager_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wp_fractional_scale_manager_v1_id = new_id;
+                        obj_op[obj_op_index(wp_fractional_scale_manager_v1_id,
+                                            0)] =
+                            &&wp_fractional_scale_manager_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "zwp_pointer_gestures_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwp_pointer_gestures_v1_id = new_id;
+                        obj_op[obj_op_index(zwp_pointer_gestures_v1_id, 0)] =
+                            &&zwp_pointer_gestures_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "xdg_activation_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        xdg_activation_v1_id = new_id;
+                        obj_op[obj_op_index(xdg_activation_v1_id, 0)] =
+                            &&xdg_activation_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "wp_presentation") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wp_presentation_id = new_id;
+                        obj_op[obj_op_index(wp_presentation_id, 0)] =
+                            &&wp_presentation_clock_id;
+                        new_id++;
+                    } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        zwlr_layer_shell_v1_id = new_id;
+                        obj_op[obj_op_index(zwlr_layer_shell_v1_id, 0)] =
+                            &&zwlr_layer_shell_v1_jump;
+                        new_id++;
+                    } else if (strcmp(iname, "ext_foreign_toplevel_list_v1") ==
+                               0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        ext_foreign_toplevel_list_v1_id = new_id;
+                        obj_op[obj_op_index(ext_foreign_toplevel_list_v1_id,
+                                            0)] =
+                            &&ext_foreign_toplevel_list_v1_toplevel;
+                        new_id++;
+                    } else if (strcmp(iname, "wp_content_type_manager_v1") ==
+                               0) {
+                        war_wayland_registry_bind(
+                            fd, msg_buffer, msg_buffer_offset, size, new_id);
+                        wp_content_type_manager_v1_id = new_id;
+                        obj_op[obj_op_index(wp_content_type_manager_v1_id, 0)] =
+                            &&wp_content_type_manager_v1_jump;
+                        new_id++;
+                    }
+                    if (!wl_surface_id && wl_compositor_id) {
+                        uint8_t create_surface[12];
+                        write_le32(create_surface, wl_compositor_id);
+                        write_le16(create_surface + 4, 0);
+                        write_le16(create_surface + 6, 12);
+                        write_le32(create_surface + 8, new_id);
+                        dump_bytes(
+                            "create_surface request", create_surface, 12);
+                        call_carmack("bound: wl_surface");
+                        ssize_t create_surface_written =
+                            write(fd, create_surface, 12);
+                        assert(create_surface_written == 12);
+                        wl_surface_id = new_id;
+                        obj_op[obj_op_index(wl_surface_id, 0)] =
+                            &&wl_surface_enter;
+                        obj_op[obj_op_index(wl_surface_id, 1)] =
+                            &&wl_surface_leave;
+                        obj_op[obj_op_index(wl_surface_id, 2)] =
+                            &&wl_surface_preferred_buffer_scale;
+                        obj_op[obj_op_index(wl_surface_id, 3)] =
+                            &&wl_surface_preferred_buffer_transform;
+                        new_id++;
+                    }
+#if DMABUF
+                    if (!zwp_linux_dmabuf_feedback_v1_id &&
+                        zwp_linux_dmabuf_v1_id && wl_surface_id) {
+                        uint8_t get_surface_feedback[16];
+                        write_le32(get_surface_feedback,
+                                   zwp_linux_dmabuf_v1_id);
+                        write_le16(get_surface_feedback + 4, 3);
+                        write_le16(get_surface_feedback + 6, 16);
+                        write_le32(get_surface_feedback + 8, new_id);
+                        write_le32(get_surface_feedback + 12, wl_surface_id);
+                        dump_bytes(
+                            "zwp_linux_dmabuf_v1::get_surface_feedback request",
+                            get_surface_feedback,
+                            16);
+                        call_carmack("bound: xdg_surface");
+                        ssize_t get_surface_feedback_written =
+                            write(fd, get_surface_feedback, 16);
+                        assert(get_surface_feedback_written == 16);
+                        zwp_linux_dmabuf_feedback_v1_id = new_id;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id,
+                                            0)] =
+                            &&zwp_linux_dmabuf_feedback_v1_done;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id,
+                                            1)] =
+                            &&zwp_linux_dmabuf_feedback_v1_format_table;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id,
+                                            2)] =
+                            &&zwp_linux_dmabuf_feedback_v1_main_device;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id,
+                                            3)] =
+                            &&zwp_linux_dmabuf_feedback_v1_tranche_done;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id,
+                                            4)] =
+                            &&zwp_linux_dmabuf_feedback_v1_tranche_target_device;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id,
+                                            5)] =
+                            &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
+                        obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id,
+                                            6)] =
+                            &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
+                        new_id++;
+                    }
+#endif
+                    if (!xdg_surface_id && xdg_wm_base_id && wl_surface_id) {
+                        uint8_t get_xdg_surface[16];
+                        write_le32(get_xdg_surface, xdg_wm_base_id);
+                        write_le16(get_xdg_surface + 4, 2);
+                        write_le16(get_xdg_surface + 6, 16);
+                        write_le32(get_xdg_surface + 8, new_id);
+                        write_le32(get_xdg_surface + 12, wl_surface_id);
+                        dump_bytes(
+                            "get_xdg_surface request", get_xdg_surface, 16);
+                        call_carmack("bound: xdg_surface");
+                        ssize_t get_xdg_surface_written =
+                            write(fd, get_xdg_surface, 16);
+                        assert(get_xdg_surface_written == 16);
+                        xdg_surface_id = new_id;
+                        obj_op[obj_op_index(xdg_surface_id, 0)] =
+                            &&xdg_surface_configure;
+                        new_id++;
 
-                // 2. Begin command buffer recording
-                VkCommandBufferBeginInfo begin_info = {
-                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-                };
-                VkResult result = vkBeginCommandBuffer(
-                    vulkan_context.cmd_buffer, &begin_info);
-                assert(result == VK_SUCCESS);
+                        uint8_t get_toplevel[12];
+                        write_le32(get_toplevel, xdg_surface_id);
+                        write_le16(get_toplevel + 4, 1);
+                        write_le16(get_toplevel + 6, 12);
+                        write_le32(get_toplevel + 8, new_id);
+                        dump_bytes(
+                            "get_xdg_toplevel request", get_toplevel, 12);
+                        call_carmack("bound: xdg_toplevel");
+                        ssize_t get_toplevel_written =
+                            write(fd, get_toplevel, 12);
+                        assert(get_toplevel_written == 12);
+                        xdg_toplevel_id = new_id;
+                        obj_op[obj_op_index(xdg_toplevel_id, 0)] =
+                            &&xdg_toplevel_configure;
+                        obj_op[obj_op_index(xdg_toplevel_id, 1)] =
+                            &&xdg_toplevel_close;
+                        obj_op[obj_op_index(xdg_toplevel_id, 2)] =
+                            &&xdg_toplevel_configure_bounds;
+                        obj_op[obj_op_index(xdg_toplevel_id, 3)] =
+                            &&xdg_toplevel_wm_capabilities;
+                        new_id++;
 
-                // 3. Begin render pass, clear color to gray (0.5, 0.5,
-                // 0.5, 1.0)
-                VkClearValue clear_color = {
-                    .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
+                        //---------------------------------------------------------
+                        // initial commit
+                        //---------------------------------------------------------
+                        war_wayland_wl_surface_commit(fd, wl_surface_id);
+                    }
+                    goto done;
+                wl_registry_global_remove:
+                    dump_bytes("global_rm event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_callback_done:
+                    dump_bytes("wl_callback::done event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+#if DMABUF
+                    //-------------------------------------------------------------
+                    // RENDER LOGIC
+                    //-------------------------------------------------------------
+                    // 1. Wait for previous frame to finish (optional but
+                    // recommended)
+                    vkWaitForFences(vulkan_context.device,
+                                    1,
+                                    &vulkan_context.in_flight_fence,
+                                    VK_TRUE,
+                                    UINT64_MAX);
+                    vkResetFences(vulkan_context.device,
+                                  1,
+                                  &vulkan_context.in_flight_fence);
 
-                VkRenderPassBeginInfo render_pass_info = {
-                    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-                    .renderPass = vulkan_context.render_pass,
-                    .framebuffer = vulkan_context.frame_buffer,
-                    .renderArea =
-                        {
-                            .offset = {0, 0},
-                            .extent = {physical_width, physical_height},
-                        },
-                    .clearValueCount = 1,
-                    .pClearValues = &clear_color,
-                };
+                    // 2. Begin command buffer recording
+                    VkCommandBufferBeginInfo begin_info = {
+                        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                    };
+                    VkResult result = vkBeginCommandBuffer(
+                        vulkan_context.cmd_buffer, &begin_info);
+                    assert(result == VK_SUCCESS);
 
-                vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
-                                     &render_pass_info,
-                                     VK_SUBPASS_CONTENTS_INLINE);
+                    // 3. Begin render pass, clear color to gray (0.5, 0.5,
+                    // 0.5, 1.0)
+                    VkClearValue clear_color = {
+                        .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
 
-                // 4. Bind pipeline
-                vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  vulkan_context.pipeline);
+                    VkRenderPassBeginInfo render_pass_info = {
+                        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+                        .renderPass = vulkan_context.render_pass,
+                        .framebuffer = vulkan_context.frame_buffer,
+                        .renderArea =
+                            {
+                                .offset = {0, 0},
+                                .extent = {physical_width, physical_height},
+                            },
+                        .clearValueCount = 1,
+                        .pClearValues = &clear_color,
+                    };
 
-                // 5. Update vertex buffer with red quad data
-                // Example: a simple quad in NDC coords (-0.5, -0.5) to
-                // (0.5, 0.5) Vertex format: vec2 position + uint32_t color
-                // (R8G8B8A8_UNORM) Let's prepare the data and upload it:
+                    vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
+                                         &render_pass_info,
+                                         VK_SUBPASS_CONTENTS_INLINE);
 
-                typedef struct {
-                    float pos[2];
-                    uint32_t color;
-                } Vertex;
+                    // 4. Bind pipeline
+                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                      vulkan_context.pipeline);
 
-                Vertex quad_verts[8] = {
-                    {{-0.5f, -0.5f}, 0xFF000000}, // red in RGBA (red opaque)
-                    {{0.5f, -0.5f}, 0xFF0000FF},
-                    {{0.5f, 0.5f}, 0xFFFFFFFF},
-                    {{-0.5f, 0.5f}, 0xFF0000FF},
-                    // cursor
-                    {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
-                      1.0f -
-                          ((row + 1) * row_height_px) / physical_height * 2.0f},
-                     0xFFFFFFFF},
-                    {{((col + 1) * col_width_px) / physical_width * 2.0f - 1.0f,
-                      1.0f -
-                          ((row + 1) * row_height_px) / physical_height * 2.0f},
-                     0xFFFFFFFF},
-                    {{((col + 1) * col_width_px) / physical_width * 2.0f - 1.0f,
-                      1.0f - (row * row_height_px) / physical_height * 2.0f},
-                     0xFFFFFFFF},
-                    {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
-                      1.0f - (row * row_height_px) / physical_height * 2.0f},
-                     0xFFFFFFFF},
-                };
+                    // 5. Update vertex buffer with red quad data
+                    // Example: a simple quad in NDC coords (-0.5, -0.5) to
+                    // (0.5, 0.5) Vertex format: vec2 position + uint32_t color
+                    // (R8G8B8A8_UNORM) Let's prepare the data and upload it:
 
-                uint16_t quad_indices[12] = {
-                    0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
+                    typedef struct {
+                        float pos[2];
+                        uint32_t color;
+                    } Vertex;
 
-                // Map vertex buffer memory and copy vertices
-                void* vertex_data;
-                vkMapMemory(vulkan_context.device,
-                            vulkan_context.quads_vertex_buffer_memory,
-                            0,
-                            sizeof(quad_verts),
-                            0,
-                            &vertex_data);
-                memcpy(vertex_data, quad_verts, sizeof(quad_verts));
-                vkUnmapMemory(vulkan_context.device,
-                              vulkan_context.quads_vertex_buffer_memory);
+                    Vertex quad_verts[8] = {
+                        {{-0.5f, -0.5f},
+                         0xFF000000}, // red in RGBA (red opaque)
+                        {{0.5f, -0.5f}, 0xFF0000FF},
+                        {{0.5f, 0.5f}, 0xFFFFFFFF},
+                        {{-0.5f, 0.5f}, 0xFF0000FF},
+                        // cursor
+                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
+                          1.0f - ((row + 1) * row_height_px) / physical_height *
+                                     2.0f},
+                         0xFFFFFFFF},
+                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
+                              1.0f,
+                          1.0f - ((row + 1) * row_height_px) / physical_height *
+                                     2.0f},
+                         0xFFFFFFFF},
+                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
+                              1.0f,
+                          1.0f -
+                              (row * row_height_px) / physical_height * 2.0f},
+                         0xFFFFFFFF},
+                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
+                          1.0f -
+                              (row * row_height_px) / physical_height * 2.0f},
+                         0xFFFFFFFF},
+                    };
 
-                // Map index buffer memory and copy indices
-                void* index_data;
-                vkMapMemory(vulkan_context.device,
-                            vulkan_context.quads_index_buffer_memory,
-                            0,
-                            sizeof(quad_indices),
-                            0,
-                            &index_data);
-                memcpy(index_data, quad_indices, sizeof(quad_indices));
-                vkUnmapMemory(vulkan_context.device,
-                              vulkan_context.quads_index_buffer_memory);
+                    uint16_t quad_indices[12] = {
+                        0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
 
-                // 6. Bind vertex and index buffers
-                VkDeviceSize offsets[] = {0};
-                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                                       0,
-                                       1,
-                                       &vulkan_context.quads_vertex_buffer,
-                                       offsets);
-                vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                                     vulkan_context.quads_index_buffer,
-                                     0,
-                                     VK_INDEX_TYPE_UINT16);
+                    // Map vertex buffer memory and copy vertices
+                    void* vertex_data;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_vertex_buffer_memory,
+                                0,
+                                sizeof(quad_verts),
+                                0,
+                                &vertex_data);
+                    memcpy(vertex_data, quad_verts, sizeof(quad_verts));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_vertex_buffer_memory);
 
-                // 7. Bind descriptor sets if needed (for texture). Since
-                // you want a red quad with no texture, you can bind a dummy
-                // descriptor set or create a pipeline without texture
-                // sampling. Or you can skip this if your shader supports
-                // vertex color without texture.
+                    // Map index buffer memory and copy indices
+                    void* index_data;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_index_buffer_memory,
+                                0,
+                                sizeof(quad_indices),
+                                0,
+                                &index_data);
+                    memcpy(index_data, quad_indices, sizeof(quad_indices));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_index_buffer_memory);
 
-                // 7. Set dynamic viewport and scissor (required!)
-                VkViewport viewport = {
-                    .x = 0.0f,
-                    .y = 0.0f,
-                    .width = (float)physical_width,
-                    .height = (float)physical_height,
-                    .minDepth = 0.0f,
-                    .maxDepth = 1.0f,
-                };
-                vkCmdSetViewport(vulkan_context.cmd_buffer, 0, 1, &viewport);
+                    // 6. Bind vertex and index buffers
+                    VkDeviceSize offsets[] = {0};
+                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                           0,
+                                           1,
+                                           &vulkan_context.quads_vertex_buffer,
+                                           offsets);
+                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                         vulkan_context.quads_index_buffer,
+                                         0,
+                                         VK_INDEX_TYPE_UINT16);
 
-                VkRect2D scissor = {
-                    .offset = {0, 0},
-                    .extent = {physical_width, physical_height},
-                };
-                vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
+                    // 7. Bind descriptor sets if needed (for texture). Since
+                    // you want a red quad with no texture, you can bind a dummy
+                    // descriptor set or create a pipeline without texture
+                    // sampling. Or you can skip this if your shader supports
+                    // vertex color without texture.
 
-                // 8. Draw indexed quad
-                vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
+                    // 7. Set dynamic viewport and scissor (required!)
+                    VkViewport viewport = {
+                        .x = 0.0f,
+                        .y = 0.0f,
+                        .width = (float)physical_width,
+                        .height = (float)physical_height,
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    };
+                    vkCmdSetViewport(
+                        vulkan_context.cmd_buffer, 0, 1, &viewport);
 
-                // 9. End render pass and command buffer
-                vkCmdEndRenderPass(vulkan_context.cmd_buffer);
-                result = vkEndCommandBuffer(vulkan_context.cmd_buffer);
-                assert(result == VK_SUCCESS);
+                    VkRect2D scissor = {
+                        .offset = {0, 0},
+                        .extent = {physical_width, physical_height},
+                    };
+                    vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
 
-                // 10. Submit command buffer
-                VkSubmitInfo submit_info = {
-                    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                    .commandBufferCount = 1,
-                    .pCommandBuffers = &vulkan_context.cmd_buffer,
-                    //.waitSemaphoreCount = 0,
-                    //.pWaitSemaphores = NULL, // Optional unless syncing with
-                    //                         // buffer acquisition
-                    //.signalSemaphoreCount = 1,
-                    //.pSignalSemaphores =
-                    //    &vulkan_context.render_finished_semaphore,
-                };
-                result = vkQueueSubmit(vulkan_context.queue,
-                                       1,
-                                       &submit_info,
-                                       vulkan_context.in_flight_fence);
-                assert(result == VK_SUCCESS);
+                    // 8. Draw indexed quad
+                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
+
+                    // 9. End render pass and command buffer
+                    vkCmdEndRenderPass(vulkan_context.cmd_buffer);
+                    result = vkEndCommandBuffer(vulkan_context.cmd_buffer);
+                    assert(result == VK_SUCCESS);
+
+                    // 10. Submit command buffer
+                    VkSubmitInfo submit_info = {
+                        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                        .commandBufferCount = 1,
+                        .pCommandBuffers = &vulkan_context.cmd_buffer,
+                        //.waitSemaphoreCount = 0,
+                        //.pWaitSemaphores = NULL, // Optional unless syncing
+                        // with
+                        //                         // buffer acquisition
+                        //.signalSemaphoreCount = 1,
+                        //.pSignalSemaphores =
+                        //    &vulkan_context.render_finished_semaphore,
+                    };
+                    result = vkQueueSubmit(vulkan_context.queue,
+                                           1,
+                                           &submit_info,
+                                           vulkan_context.in_flight_fence);
+                    assert(result == VK_SUCCESS);
 #endif
 #if WL_SHM
-                uint32_t* pixels = (uint32_t*)pixel_buffer;
-                for (uint32_t y = 0; y < physical_height; y++) {
-                    for (uint32_t x = 0; x < physical_width; x++) {
-                        pixels[y * physical_width + x] = 0xFF808080;
+                    uint32_t* pixels = (uint32_t*)pixel_buffer;
+                    for (uint32_t y = 0; y < physical_height; y++) {
+                        for (uint32_t x = 0; x < physical_width; x++) {
+                            pixels[y * physical_width + x] = 0xFF808080;
+                        }
                     }
-                }
 
-                uint32_t quad_w = physical_width / 2;
-                uint32_t quad_h = physical_height / 2;
-                uint32_t quad_x = (physical_width - quad_w) / 2;
-                uint32_t quad_y = (physical_height - quad_h) / 2;
+                    uint32_t quad_w = physical_width / 2;
+                    uint32_t quad_h = physical_height / 2;
+                    uint32_t quad_x = (physical_width - quad_w) / 2;
+                    uint32_t quad_y = (physical_height - quad_h) / 2;
 
-                for (uint32_t y = quad_y; y < quad_y + quad_h; ++y) {
-                    for (uint32_t x = quad_x; x < quad_x + quad_w; ++x) {
-                        pixels[y * physical_width + x] =
-                            0xFFFF0000; // red in ARGB
+                    for (uint32_t y = quad_y; y < quad_y + quad_h; ++y) {
+                        for (uint32_t x = quad_x; x < quad_x + quad_w; ++x) {
+                            pixels[y * physical_width + x] =
+                                0xFFFF0000; // red in ARGB
+                        }
                     }
-                }
 
-                uint32_t cursor_w = col_width_px;
-                uint32_t cursor_h = row_height_px;
-                uint32_t cursor_x = col * col_width_px;
-                uint32_t cursor_y =
-                    (physical_height - 1) - (row * row_height_px);
+                    uint32_t cursor_w = col_width_px;
+                    uint32_t cursor_h = row_height_px;
+                    uint32_t cursor_x = col * col_width_px;
+                    uint32_t cursor_y =
+                        (physical_height - 1) - (row * row_height_px);
 
-                for (uint32_t y = cursor_y; y < cursor_y + cursor_h; ++y) {
-                    if (y >= physical_height) break;
-                    for (uint32_t x = cursor_x; x < cursor_x + cursor_w; ++x) {
-                        if (x >= physical_width) break;
-                        pixels[y * physical_width + x] = 0xFFFFFFFF; // white
+                    for (uint32_t y = cursor_y; y < cursor_y + cursor_h; ++y) {
+                        if (y >= physical_height) break;
+                        for (uint32_t x = cursor_x; x < cursor_x + cursor_w;
+                             ++x) {
+                            if (x >= physical_width) break;
+                            pixels[y * physical_width + x] =
+                                0xFFFFFFFF; // white
+                        }
                     }
-                }
 #endif
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
-                call_carmack("SOMETHING RENDERED");
-                call_carmack("COL: %u", col);
-                call_carmack("ROW: %u", row);
-                goto done;
-            wl_display_error:
-                dump_bytes("wl_display::error event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_display_delete_id:
-                dump_bytes("wl_display::delete_id event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                    call_carmack("SOMETHING RENDERED");
+                    call_carmack("COL: %u", col);
+                    call_carmack("ROW: %u", row);
+                    goto done;
+                wl_display_error:
+                    dump_bytes("wl_display::error event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_display_delete_id:
+                    dump_bytes("wl_display::delete_id event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
 
-                if (read_le32(msg_buffer + msg_buffer_offset + 8) ==
-                    wl_callback_id) {
-                    war_wayland_wl_surface_frame(
-                        fd, wl_surface_id, wl_callback_id);
-                }
-                goto done;
+                    if (read_le32(msg_buffer + msg_buffer_offset + 8) ==
+                        wl_callback_id) {
+                        war_wayland_wl_surface_frame(
+                            fd, wl_surface_id, wl_callback_id);
+                    }
+                    goto done;
 #if WL_SHM
-            wl_shm_format:
-                dump_bytes("wl_shm_format event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                if (read_le32(msg_buffer + msg_buffer_offset + 8) == ARGB8888) {
-                    uint8_t create_pool[12];
-                    write_le32(create_pool, wl_shm_id); // object id
-                    write_le16(create_pool + 4, 0);     // opcode 0
-                    write_le16(create_pool + 6,
-                               16); // message size = 12 + 4 bytes for pool size
-                    write_le32(create_pool + 8, new_id); // new pool id
-                    uint32_t pool_size = stride * physical_height;
+                wl_shm_format:
+                    dump_bytes("wl_shm_format event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    if (read_le32(msg_buffer + msg_buffer_offset + 8) ==
+                        ARGB8888) {
+                        uint8_t create_pool[12];
+                        write_le32(create_pool, wl_shm_id); // object id
+                        write_le16(create_pool + 4, 0);     // opcode 0
+                        write_le16(
+                            create_pool + 6,
+                            16); // message size = 12 + 4 bytes for pool size
+                        write_le32(create_pool + 8, new_id); // new pool id
+                        uint32_t pool_size = stride * physical_height;
+                        struct iovec iov[2] = {
+                            {.iov_base = create_pool, .iov_len = 12},
+                            {.iov_base = &pool_size, .iov_len = 4}};
+                        char cmsgbuf[CMSG_SPACE(sizeof(int))];
+                        memset(cmsgbuf, 0, sizeof(cmsgbuf));
+                        struct msghdr msg = {0};
+                        msg.msg_iov = iov;
+                        msg.msg_iovlen = 2;
+                        msg.msg_control = cmsgbuf;
+                        msg.msg_controllen = sizeof(cmsgbuf);
+                        struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+                        cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+                        cmsg->cmsg_level = SOL_SOCKET;
+                        cmsg->cmsg_type = SCM_RIGHTS;
+                        *((int*)CMSG_DATA(cmsg)) = shm_fd;
+                        ssize_t sent = sendmsg(fd, &msg, 0);
+                        if (sent < 0) perror("sendmsg");
+                        assert(sent == 16);
+                        dump_bytes("wl_shm_create_pool request",
+                                   create_pool,
+                                   sizeof(create_pool));
+                        call_carmack("bound wl_shm_pool");
+                        wl_shm_pool_id = new_id;
+                        new_id++;
+
+                        uint8_t create_buffer[32];
+                        write_le32(create_buffer, wl_shm_pool_id);
+                        write_le16(create_buffer + 4, 0);
+                        write_le16(create_buffer + 6, 32);
+                        write_le32(create_buffer + 8, new_id);
+                        write_le32(create_buffer + 12, 0); // msg_buffer_offset
+                        write_le32(create_buffer + 16, physical_width);
+                        write_le32(create_buffer + 20, physical_height);
+                        write_le32(create_buffer + 24, stride);
+                        write_le32(create_buffer + 28, ARGB8888);
+                        dump_bytes("wl_shm_pool_create_buffer request",
+                                   create_buffer,
+                                   32);
+                        call_carmack("bound wl_buffer");
+                        ssize_t create_buffer_written =
+                            write(fd, create_buffer, 32);
+                        assert(create_buffer_written == 32);
+                        wl_buffer_id = new_id;
+                        obj_op[obj_op_index(wl_buffer_id, 0)] =
+                            &&wl_buffer_release;
+                        new_id++;
+
+                        pixel_buffer = mmap(NULL,
+                                            pool_size,
+                                            PROT_READ | PROT_WRITE,
+                                            MAP_SHARED,
+                                            shm_fd,
+                                            0);
+                        assert(pixel_buffer != MAP_FAILED);
+                    }
+                    goto done;
+#endif
+                wl_buffer_release:
+                    dump_bytes("wl_buffer_release event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                xdg_wm_base_ping:
+                    dump_bytes("xdg_wm_base_ping event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    assert(size == 12);
+                    uint8_t pong[12];
+                    write_le32(pong, xdg_wm_base_id);
+                    write_le16(pong + 4, 3);
+                    write_le16(pong + 6, 12);
+                    write_le32(pong + 8,
+                               read_le32(msg_buffer + msg_buffer_offset + 8));
+                    dump_bytes("xdg_wm_base_pong request", pong, 12);
+                    ssize_t pong_written = write(fd, pong, 12);
+                    assert(pong_written == 12);
+                    goto done;
+                xdg_surface_configure:
+                    dump_bytes("xdg_surface_configure event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    assert(size == 12);
+
+                    uint8_t ack_configure[12];
+                    write_le32(ack_configure, xdg_surface_id);
+                    write_le16(ack_configure + 4, 4);
+                    write_le16(ack_configure + 6, 12);
+                    write_le32(ack_configure + 8,
+                               read_le32(msg_buffer + msg_buffer_offset + 8));
+                    dump_bytes(
+                        "xdg_surface_ack_configure request", ack_configure, 12);
+                    ssize_t ack_configure_written =
+                        write(fd, ack_configure, 12);
+                    assert(ack_configure_written == 12);
+
+                    if (!wp_viewport_id) {
+                        uint8_t get_viewport[16];
+                        write_le32(get_viewport, wp_viewporter_id);
+                        write_le16(get_viewport + 4, 1);
+                        write_le16(get_viewport + 6, 16);
+                        write_le32(get_viewport + 8, new_id);
+                        write_le32(get_viewport + 12, wl_surface_id);
+                        dump_bytes("wp_viewporter::get_viewport request",
+                                   get_viewport,
+                                   16);
+                        call_carmack("bound: wp_viewport");
+                        ssize_t get_viewport_written =
+                            write(fd, get_viewport, 16);
+                        assert(get_viewport_written == 16);
+                        wp_viewport_id = new_id;
+                        new_id++;
+
+                        // COMMENT: unecessary
+                        // uint8_t set_source[24];
+                        // write_le32(set_source, wp_viewport_id);
+                        // write_le16(set_source + 4, 1);
+                        // write_le16(set_source + 6, 24);
+                        // write_le32(set_source + 8, 0);
+                        // write_le32(set_source + 12, 0);
+                        // write_le32(set_source + 16, physical_width);
+                        // write_le32(set_source + 20, physical_height);
+                        // dump_bytes(
+                        //     "wp_viewport::set_source request", set_source,
+                        //     24);
+                        // ssize_t set_source_written = write(fd, set_source,
+                        // 24); assert(set_source_written == 24);
+
+                        uint8_t set_destination[16];
+                        write_le32(set_destination, wp_viewport_id);
+                        write_le16(set_destination + 4, 2);
+                        write_le16(set_destination + 6, 16);
+                        write_le32(set_destination + 8, logical_width);
+                        write_le32(set_destination + 12, logical_height);
+                        dump_bytes("wp_viewport::set_destination request",
+                                   set_destination,
+                                   16);
+                        ssize_t set_destination_written =
+                            write(fd, set_destination, 16);
+                        assert(set_destination_written == 16);
+                    }
+                    //-------------------------------------------------------------
+                    // initial attach, initial frame, commit
+                    //-------------------------------------------------------------
+                    war_wayland_wl_surface_attach(
+                        fd, wl_surface_id, wl_buffer_id, 0, 0);
+                    if (!wl_callback_id) {
+                        war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
+                        wl_callback_id = new_id;
+                        obj_op[obj_op_index(wl_callback_id, 0)] =
+                            &&wl_callback_done;
+                        new_id++;
+                    }
+                    war_wayland_wl_surface_commit(fd, wl_surface_id);
+
+                    goto done;
+                xdg_toplevel_configure:
+                    dump_bytes("xdg_toplevel_configure event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                xdg_toplevel_close:
+                    dump_bytes("xdg_toplevel_close event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+
+                    uint8_t xdg_toplevel_destroy[8];
+                    write_le32(xdg_toplevel_destroy, xdg_toplevel_id);
+                    write_le16(xdg_toplevel_destroy + 4, 0);
+                    write_le16(xdg_toplevel_destroy + 6, 8);
+                    ssize_t xdg_toplevel_destroy_written =
+                        write(fd, xdg_toplevel_destroy, 8);
+                    dump_bytes("xdg_toplevel::destroy request",
+                               xdg_toplevel_destroy,
+                               8);
+                    assert(xdg_toplevel_destroy_written == 8);
+
+                    uint8_t xdg_surface_destroy[8];
+                    write_le32(xdg_surface_destroy, xdg_surface_id);
+                    write_le16(xdg_surface_destroy + 4, 0);
+                    write_le16(xdg_surface_destroy + 6, 8);
+                    ssize_t xdg_surface_destroy_written =
+                        write(fd, xdg_surface_destroy, 8);
+                    dump_bytes(
+                        "xdg_surface::destroy request", xdg_surface_destroy, 8);
+                    assert(xdg_surface_destroy_written == 8);
+
+                    uint8_t wl_buffer_destroy[8];
+                    write_le32(wl_buffer_destroy, wl_buffer_id);
+                    write_le16(wl_buffer_destroy + 4, 0);
+                    write_le16(wl_buffer_destroy + 6, 8);
+                    ssize_t wl_buffer_destroy_written =
+                        write(fd, wl_buffer_destroy, 8);
+                    dump_bytes(
+                        "wl_buffer::destroy request", wl_buffer_destroy, 8);
+                    assert(wl_buffer_destroy_written == 8);
+
+                    uint8_t wl_surface_destroy[8];
+                    write_le32(wl_surface_destroy, wl_surface_id);
+                    write_le16(wl_surface_destroy + 4, 0);
+                    write_le16(wl_surface_destroy + 6, 8);
+                    ssize_t wl_surface_destroy_written =
+                        write(fd, wl_surface_destroy, 8);
+                    dump_bytes(
+                        "wl_surface::destroy request", wl_surface_destroy, 8);
+                    assert(wl_surface_destroy_written == 8);
+
+                    window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                        AUDIO_END_WAR;
+                    *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
+
+                    end_window_render = 1;
+                    goto done;
+                xdg_toplevel_configure_bounds:
+                    dump_bytes("xdg_toplevel_configure_bounds event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                xdg_toplevel_wm_capabilities:
+                    dump_bytes("xdg_toplevel_wm_capabilities event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+#if DMABUF
+                zwp_linux_dmabuf_v1_format:
+                    dump_bytes("zwp_linux_dmabuf_v1_format event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_linux_dmabuf_v1_modifier:
+                    dump_bytes("zwp_linux_dmabuf_v1_modifier event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_linux_buffer_params_v1_created:
+                    dump_bytes(
+                        "zwp_linux_buffer_params_v1_created", // COMMENT
+                                                              // REFACTOR: to ::
+                        msg_buffer + msg_buffer_offset,
+                        size);
+                    goto done;
+                zwp_linux_buffer_params_v1_failed:
+                    dump_bytes("zwp_linux_buffer_params_v1_failed event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_linux_dmabuf_feedback_v1_done:
+                    dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    uint8_t create_params[12]; // REFACTOR: zero initialize
+                    write_le32(create_params, zwp_linux_dmabuf_v1_id);
+                    write_le16(create_params + 4, 1);
+                    write_le16(create_params + 6, 12);
+                    write_le32(create_params + 8, new_id);
+                    dump_bytes("zwp_linux_dmabuf_v1_create_params request",
+                               create_params,
+                               12);
+                    call_carmack("bound: zwp_linux_buffer_params_v1");
+                    ssize_t create_params_written =
+                        write(fd, create_params, 12);
+                    assert(create_params_written == 12);
+                    zwp_linux_buffer_params_v1_id = new_id;
+                    obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
+                        &&zwp_linux_buffer_params_v1_created;
+                    obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
+                        &&zwp_linux_buffer_params_v1_failed;
+                    new_id++; // COMMENT REFACTOR: move increment to declaration
+                              // (one line it)
+
+                    uint8_t header[8];
+                    write_le32(header, zwp_linux_buffer_params_v1_id);
+                    write_le16(header + 4, 1);
+                    write_le16(header + 6, 28);
+                    uint8_t tail[20];
+                    write_le32(tail, 0);
+                    write_le32(tail + 4, 0);
+                    write_le32(tail + 8, stride);
+                    write_le32(tail + 12, 0);
+                    write_le32(tail + 16, 0);
                     struct iovec iov[2] = {
-                        {.iov_base = create_pool, .iov_len = 12},
-                        {.iov_base = &pool_size, .iov_len = 4}};
-                    char cmsgbuf[CMSG_SPACE(sizeof(int))];
-                    memset(cmsgbuf, 0, sizeof(cmsgbuf));
+                        {.iov_base = header, .iov_len = 8},
+                        {.iov_base = tail, .iov_len = 20},
+                    };
+                    char cmsgbuf[CMSG_SPACE(sizeof(int))] = {0};
                     struct msghdr msg = {0};
                     msg.msg_iov = iov;
                     msg.msg_iovlen = 2;
@@ -915,947 +1251,702 @@ void* war_window_render(void* args) {
                     cmsg->cmsg_len = CMSG_LEN(sizeof(int));
                     cmsg->cmsg_level = SOL_SOCKET;
                     cmsg->cmsg_type = SCM_RIGHTS;
-                    *((int*)CMSG_DATA(cmsg)) = shm_fd;
-                    ssize_t sent = sendmsg(fd, &msg, 0);
-                    if (sent < 0) perror("sendmsg");
-                    assert(sent == 16);
-                    dump_bytes("wl_shm_create_pool request",
-                               create_pool,
-                               sizeof(create_pool));
-                    call_carmack("bound wl_shm_pool");
-                    wl_shm_pool_id = new_id;
-                    new_id++;
+                    *((int*)CMSG_DATA(cmsg)) = vulkan_context.dmabuf_fd;
+                    ssize_t dmabuf_sent = sendmsg(fd, &msg, 0);
+                    if (dmabuf_sent < 0) perror("sendmsg");
+                    assert(dmabuf_sent == 28);
+#if DEBUG
+                    uint8_t full_msg[32] = {0};
+                    memcpy(full_msg, header, 8);
+                    memcpy(full_msg + 8, tail, 20);
+#endif
+                    dump_bytes("zwp_linux_buffer_params_v1::add request",
+                               full_msg,
+                               28);
 
-                    uint8_t create_buffer[32];
-                    write_le32(create_buffer, wl_shm_pool_id);
-                    write_le16(create_buffer + 4, 0);
-                    write_le16(create_buffer + 6, 32);
-                    write_le32(create_buffer + 8, new_id);
-                    write_le32(create_buffer + 12, 0); // msg_buffer_offset
-                    write_le32(create_buffer + 16, physical_width);
-                    write_le32(create_buffer + 20, physical_height);
-                    write_le32(create_buffer + 24, stride);
-                    write_le32(create_buffer + 28, ARGB8888);
+                    uint8_t create_immed[28]; // REFACTOR: maybe 0 initialize
+                    write_le32(
+                        create_immed,
+                        zwp_linux_buffer_params_v1_id); // COMMENT REFACTOR: is
+                                                        // it faster to copy the
+                                                        // incoming message
+                                                        // header and increment
+                                                        // accordingly?
+                    write_le16(create_immed + 4,
+                               3); // COMMENT REFACTOR CONCERN: check for
+                                   // duplicate variables names
+                    write_le16(create_immed + 6, 28);
+                    write_le32(create_immed + 8, new_id);
+                    write_le32(create_immed + 12, physical_width);
+                    write_le32(create_immed + 16, physical_height);
+                    write_le32(create_immed + 20, DRM_FORMAT_ARGB8888);
+                    write_le32(create_immed + 24, 0);
                     dump_bytes(
-                        "wl_shm_pool_create_buffer request", create_buffer, 32);
-                    call_carmack("bound wl_buffer");
-                    ssize_t create_buffer_written =
-                        write(fd, create_buffer, 32);
-                    assert(create_buffer_written == 32);
+                        "zwp_linux_buffer_params_v1::create_immed request",
+                        create_immed,
+                        28);
+                    call_carmack("bound: wl_buffer");
+                    ssize_t create_immed_written = write(fd, create_immed, 28);
+                    assert(create_immed_written == 28);
                     wl_buffer_id = new_id;
                     obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
                     new_id++;
 
-                    pixel_buffer = mmap(NULL,
-                                        pool_size,
-                                        PROT_READ | PROT_WRITE,
-                                        MAP_SHARED,
-                                        shm_fd,
-                                        0);
-                    assert(pixel_buffer != MAP_FAILED);
-                }
-                goto done;
-#endif
-            wl_buffer_release:
-                dump_bytes("wl_buffer_release event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            xdg_wm_base_ping:
-                dump_bytes("xdg_wm_base_ping event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                assert(size == 12);
-                uint8_t pong[12];
-                write_le32(pong, xdg_wm_base_id);
-                write_le16(pong + 4, 3);
-                write_le16(pong + 6, 12);
-                write_le32(pong + 8,
-                           read_le32(msg_buffer + msg_buffer_offset + 8));
-                dump_bytes("xdg_wm_base_pong request", pong, 12);
-                ssize_t pong_written = write(fd, pong, 12);
-                assert(pong_written == 12);
-                goto done;
-            xdg_surface_configure:
-                dump_bytes("xdg_surface_configure event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                assert(size == 12);
-
-                uint8_t ack_configure[12];
-                write_le32(ack_configure, xdg_surface_id);
-                write_le16(ack_configure + 4, 4);
-                write_le16(ack_configure + 6, 12);
-                write_le32(ack_configure + 8,
-                           read_le32(msg_buffer + msg_buffer_offset + 8));
-                dump_bytes(
-                    "xdg_surface_ack_configure request", ack_configure, 12);
-                ssize_t ack_configure_written = write(fd, ack_configure, 12);
-                assert(ack_configure_written == 12);
-
-                if (!wp_viewport_id) {
-                    uint8_t get_viewport[16];
-                    write_le32(get_viewport, wp_viewporter_id);
-                    write_le16(get_viewport + 4, 1);
-                    write_le16(get_viewport + 6, 16);
-                    write_le32(get_viewport + 8, new_id);
-                    write_le32(get_viewport + 12, wl_surface_id);
-                    dump_bytes("wp_viewporter::get_viewport request",
-                               get_viewport,
-                               16);
-                    call_carmack("bound: wp_viewport");
-                    ssize_t get_viewport_written = write(fd, get_viewport, 16);
-                    assert(get_viewport_written == 16);
-                    wp_viewport_id = new_id;
-                    new_id++;
-
-                    // COMMENT: unecessary
-                    // uint8_t set_source[24];
-                    // write_le32(set_source, wp_viewport_id);
-                    // write_le16(set_source + 4, 1);
-                    // write_le16(set_source + 6, 24);
-                    // write_le32(set_source + 8, 0);
-                    // write_le32(set_source + 12, 0);
-                    // write_le32(set_source + 16, physical_width);
-                    // write_le32(set_source + 20, physical_height);
-                    // dump_bytes(
-                    //     "wp_viewport::set_source request", set_source, 24);
-                    // ssize_t set_source_written = write(fd, set_source, 24);
-                    // assert(set_source_written == 24);
-
-                    uint8_t set_destination[16];
-                    write_le32(set_destination, wp_viewport_id);
-                    write_le16(set_destination + 4, 2);
-                    write_le16(set_destination + 6, 16);
-                    write_le32(set_destination + 8, logical_width);
-                    write_le32(set_destination + 12, logical_height);
-                    dump_bytes("wp_viewport::set_destination request",
-                               set_destination,
-                               16);
-                    ssize_t set_destination_written =
-                        write(fd, set_destination, 16);
-                    assert(set_destination_written == 16);
-                }
-                //-------------------------------------------------------------
-                // initial attach, initial frame, commit
-                //-------------------------------------------------------------
-                war_wayland_wl_surface_attach(
-                    fd, wl_surface_id, wl_buffer_id, 0, 0);
-                if (!wl_callback_id) {
-                    war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
-                    wl_callback_id = new_id;
-                    obj_op[obj_op_index(wl_callback_id, 0)] =
-                        &&wl_callback_done;
-                    new_id++;
-                }
-                war_wayland_wl_surface_commit(fd, wl_surface_id);
-
-                goto done;
-            xdg_toplevel_configure:
-                dump_bytes("xdg_toplevel_configure event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            xdg_toplevel_close:
-                dump_bytes("xdg_toplevel_close event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-
-                uint8_t xdg_toplevel_destroy[8];
-                write_le32(xdg_toplevel_destroy, xdg_toplevel_id);
-                write_le16(xdg_toplevel_destroy + 4, 0);
-                write_le16(xdg_toplevel_destroy + 6, 8);
-                ssize_t xdg_toplevel_destroy_written =
-                    write(fd, xdg_toplevel_destroy, 8);
-                dump_bytes(
-                    "xdg_toplevel::destroy request", xdg_toplevel_destroy, 8);
-                assert(xdg_toplevel_destroy_written == 8);
-
-                uint8_t xdg_surface_destroy[8];
-                write_le32(xdg_surface_destroy, xdg_surface_id);
-                write_le16(xdg_surface_destroy + 4, 0);
-                write_le16(xdg_surface_destroy + 6, 8);
-                ssize_t xdg_surface_destroy_written =
-                    write(fd, xdg_surface_destroy, 8);
-                dump_bytes(
-                    "xdg_surface::destroy request", xdg_surface_destroy, 8);
-                assert(xdg_surface_destroy_written == 8);
-
-                uint8_t wl_buffer_destroy[8];
-                write_le32(wl_buffer_destroy, wl_buffer_id);
-                write_le16(wl_buffer_destroy + 4, 0);
-                write_le16(wl_buffer_destroy + 6, 8);
-                ssize_t wl_buffer_destroy_written =
-                    write(fd, wl_buffer_destroy, 8);
-                dump_bytes("wl_buffer::destroy request", wl_buffer_destroy, 8);
-                assert(wl_buffer_destroy_written == 8);
-
-                uint8_t wl_surface_destroy[8];
-                write_le32(wl_surface_destroy, wl_surface_id);
-                write_le16(wl_surface_destroy + 4, 0);
-                write_le16(wl_surface_destroy + 6, 8);
-                ssize_t wl_surface_destroy_written =
-                    write(fd, wl_surface_destroy, 8);
-                dump_bytes(
-                    "wl_surface::destroy request", wl_surface_destroy, 8);
-                assert(wl_surface_destroy_written == 8);
-
-                window_render_to_audio_ring_buffer[*write_to_audio_index] =
-                    AUDIO_END_WAR;
-                *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
-
-                end_window_render = 1;
-                goto done;
-            xdg_toplevel_configure_bounds:
-                dump_bytes("xdg_toplevel_configure_bounds event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            xdg_toplevel_wm_capabilities:
-                dump_bytes("xdg_toplevel_wm_capabilities event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-#if DMABUF
-            zwp_linux_dmabuf_v1_format:
-                dump_bytes("zwp_linux_dmabuf_v1_format event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_linux_dmabuf_v1_modifier:
-                dump_bytes("zwp_linux_dmabuf_v1_modifier event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_linux_buffer_params_v1_created:
-                dump_bytes(
-                    "zwp_linux_buffer_params_v1_created", // COMMENT REFACTOR:
-                                                          // to ::
-                    msg_buffer + msg_buffer_offset,
-                    size);
-                goto done;
-            zwp_linux_buffer_params_v1_failed:
-                dump_bytes("zwp_linux_buffer_params_v1_failed event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_linux_dmabuf_feedback_v1_done:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                uint8_t create_params[12]; // REFACTOR: zero initialize
-                write_le32(create_params, zwp_linux_dmabuf_v1_id);
-                write_le16(create_params + 4, 1);
-                write_le16(create_params + 6, 12);
-                write_le32(create_params + 8, new_id);
-                dump_bytes("zwp_linux_dmabuf_v1_create_params request",
-                           create_params,
-                           12);
-                call_carmack("bound: zwp_linux_buffer_params_v1");
-                ssize_t create_params_written = write(fd, create_params, 12);
-                assert(create_params_written == 12);
-                zwp_linux_buffer_params_v1_id = new_id;
-                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
-                    &&zwp_linux_buffer_params_v1_created;
-                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
-                    &&zwp_linux_buffer_params_v1_failed;
-                new_id++; // COMMENT REFACTOR: move increment to declaration
-                          // (one line it)
-
-                uint8_t header[8];
-                write_le32(header, zwp_linux_buffer_params_v1_id);
-                write_le16(header + 4, 1);
-                write_le16(header + 6, 28);
-                uint8_t tail[20];
-                write_le32(tail, 0);
-                write_le32(tail + 4, 0);
-                write_le32(tail + 8, stride);
-                write_le32(tail + 12, 0);
-                write_le32(tail + 16, 0);
-                struct iovec iov[2] = {
-                    {.iov_base = header, .iov_len = 8},
-                    {.iov_base = tail, .iov_len = 20},
-                };
-                char cmsgbuf[CMSG_SPACE(sizeof(int))] = {0};
-                struct msghdr msg = {0};
-                msg.msg_iov = iov;
-                msg.msg_iovlen = 2;
-                msg.msg_control = cmsgbuf;
-                msg.msg_controllen = sizeof(cmsgbuf);
-                struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
-                cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-                cmsg->cmsg_level = SOL_SOCKET;
-                cmsg->cmsg_type = SCM_RIGHTS;
-                *((int*)CMSG_DATA(cmsg)) = vulkan_context.dmabuf_fd;
-                ssize_t dmabuf_sent = sendmsg(fd, &msg, 0);
-                if (dmabuf_sent < 0) perror("sendmsg");
-                assert(dmabuf_sent == 28);
-#if DEBUG
-                uint8_t full_msg[32] = {0};
-                memcpy(full_msg, header, 8);
-                memcpy(full_msg + 8, tail, 20);
-#endif
-                dump_bytes(
-                    "zwp_linux_buffer_params_v1::add request", full_msg, 28);
-
-                uint8_t create_immed[28]; // REFACTOR: maybe 0 initialize
-                write_le32(
-                    create_immed,
-                    zwp_linux_buffer_params_v1_id); // COMMENT REFACTOR: is it
-                                                    // faster to copy the
-                                                    // incoming message header
-                                                    // and increment
-                                                    // accordingly?
-                write_le16(create_immed + 4,
-                           3); // COMMENT REFACTOR CONCERN: check for duplicate
-                               // variables names
-                write_le16(create_immed + 6, 28);
-                write_le32(create_immed + 8, new_id);
-                write_le32(create_immed + 12, physical_width);
-                write_le32(create_immed + 16, physical_height);
-                write_le32(create_immed + 20, DRM_FORMAT_ARGB8888);
-                write_le32(create_immed + 24, 0);
-                dump_bytes("zwp_linux_buffer_params_v1::create_immed request",
-                           create_immed,
-                           28);
-                call_carmack("bound: wl_buffer");
-                ssize_t create_immed_written = write(fd, create_immed, 28);
-                assert(create_immed_written == 28);
-                wl_buffer_id = new_id;
-                obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
-                new_id++;
-
-                uint8_t destroy[8];
-                write_le32(destroy, zwp_linux_buffer_params_v1_id);
-                write_le16(destroy + 4, 0);
-                write_le16(destroy + 6, 8);
-                ssize_t destroy_written = write(fd, destroy, 8);
-                assert(destroy_written == 8);
-                dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
-                           destroy,
-                           8);
-                goto done;
-            zwp_linux_dmabuf_feedback_v1_format_table:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event",
-                           msg_buffer + msg_buffer_offset,
-                           size); // REFACTOR: event
-                goto done;
-            zwp_linux_dmabuf_feedback_v1_main_device:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_main_device event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_linux_dmabuf_feedback_v1_tranche_done:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_done event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_linux_dmabuf_feedback_v1_tranche_target_device:
-                dump_bytes(
-                    "zwp_linux_dmabuf_feedback_v1_tranche_target_device event",
-                    msg_buffer + msg_buffer_offset,
-                    size);
-                goto done;
-            zwp_linux_dmabuf_feedback_v1_tranche_formats:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_formats event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_linux_dmabuf_feedback_v1_tranche_flags:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_flags event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-#endif
-            wp_linux_drm_syncobj_manager_v1_jump:
-                dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_compositor_jump:
-                dump_bytes("wl_compositor_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_surface_enter:
-                dump_bytes("wl_surface_enter event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_surface_leave:
-                dump_bytes("wl_surface_leave event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_surface_preferred_buffer_scale:
-                dump_bytes("wl_surface_preferred_buffer_scale event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                assert(size == 12);
-
-                uint8_t set_buffer_scale[12];
-                write_le32(set_buffer_scale, wl_surface_id);
-                write_le16(set_buffer_scale + 4, 8);
-                write_le16(set_buffer_scale + 6, 12);
-                write_le32(set_buffer_scale + 8,
-                           read_le32(msg_buffer + msg_buffer_offset + 8));
-                dump_bytes("wl_surface::set_buffer_scale request",
-                           set_buffer_scale,
-                           12);
-                ssize_t set_buffer_scale_written =
-                    write(fd, set_buffer_scale, 12);
-                assert(set_buffer_scale_written == 12);
-
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
-                goto done;
-            wl_surface_preferred_buffer_transform:
-                dump_bytes("wl_surface_preferred_buffer_transform event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                assert(size == 12);
-
-                uint8_t set_buffer_transform[12];
-                write_le32(set_buffer_transform, wl_surface_id);
-                write_le16(set_buffer_transform + 4, 7);
-                write_le16(set_buffer_transform + 6, 12);
-                write_le32(set_buffer_transform + 8,
-                           read_le32(msg_buffer + msg_buffer_offset + 8));
-                dump_bytes("wl_surface::set_buffer_transform request",
-                           set_buffer_transform,
-                           12);
-                ssize_t set_buffer_transform_written =
-                    write(fd, set_buffer_transform, 12);
-                assert(set_buffer_transform_written == 12);
-
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
-                goto done;
-            zwp_idle_inhibit_manager_v1_jump:
-                dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwlr_layer_shell_v1_jump:
-                dump_bytes("zwlr_layer_shell_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zxdg_decoration_manager_v1_jump:
-                dump_bytes("zxdg_decoration_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_relative_pointer_manager_v1_jump:
-                dump_bytes("zwp_relative_pointer_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_pointer_constraints_v1_jump:
-                dump_bytes("zwp_pointer_constraints_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wp_presentation_clock_id:
-                dump_bytes("wp_presentation_clock_id event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwlr_output_manager_v1_head:
-                dump_bytes("zwlr_output_manager_v1_head event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwlr_output_manager_v1_done:
-                dump_bytes("zwlr_output_manager_v1_done event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            ext_foreign_toplevel_list_v1_toplevel:
-                dump_bytes("ext_foreign_toplevel_list_v1_toplevel event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwlr_data_control_manager_v1_jump:
-                dump_bytes("zwlr_data_control_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wp_viewporter_jump:
-                dump_bytes("wp_viewporter_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wp_content_type_manager_v1_jump:
-                dump_bytes("wp_content_type_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wp_fractional_scale_manager_v1_jump:
-                dump_bytes("wp_fractional_scale_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            xdg_activation_v1_jump:
-                dump_bytes("xdg_activation_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_virtual_keyboard_manager_v1_jump:
-                dump_bytes("zwp_virtual_keyboard_manager_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            zwp_pointer_gestures_v1_jump:
-                dump_bytes("zwp_pointer_gestures_v1_jump event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_seat_capabilities:
-                dump_bytes("wl_seat_capabilities event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                enum {
-                    wl_seat_pointer = 0x01,
-                    wl_seat_keyboard = 0x02,
-                    wl_seat_touch = 0x04,
-                };
-                uint32_t capabilities =
-                    read_le32(msg_buffer + msg_buffer_offset + 8);
-                if (capabilities & wl_seat_keyboard) {
-                    call_carmack("keyboard detected");
-                    assert(size == 12);
-                    uint8_t get_keyboard[12];
-                    write_le32(get_keyboard, wl_seat_id);
-                    write_le16(get_keyboard + 4, 1);
-                    write_le16(get_keyboard + 6, 12);
-                    write_le32(get_keyboard + 8, new_id);
-                    dump_bytes("get_keyboard request", get_keyboard, 12);
-                    call_carmack("bound: wl_keyboard",
-                                 (const char*)msg_buffer + msg_buffer_offset +
-                                     12);
-                    ssize_t get_keyboard_written = write(fd, get_keyboard, 12);
-                    assert(get_keyboard_written == 12);
-                    wl_keyboard_id = new_id;
-                    obj_op[obj_op_index(wl_keyboard_id, 0)] =
-                        &&wl_keyboard_keymap;
-                    obj_op[obj_op_index(wl_keyboard_id, 1)] =
-                        &&wl_keyboard_enter;
-                    obj_op[obj_op_index(wl_keyboard_id, 2)] =
-                        &&wl_keyboard_leave;
-                    obj_op[obj_op_index(wl_keyboard_id, 3)] = &&wl_keyboard_key;
-                    obj_op[obj_op_index(wl_keyboard_id, 4)] =
-                        &&wl_keyboard_modifiers;
-                    obj_op[obj_op_index(wl_keyboard_id, 5)] =
-                        &&wl_keyboard_repeat_info;
-                    new_id++;
-                }
-                if (capabilities & wl_seat_pointer) {
-                    call_carmack("pointer detected");
-                    assert(size == 12);
-                    uint8_t get_pointer[12];
-                    write_le32(get_pointer, wl_seat_id);
-                    write_le16(get_pointer + 4, 0);
-                    write_le16(get_pointer + 6, 12);
-                    write_le32(get_pointer + 8, new_id);
-                    dump_bytes("get_pointer request", get_pointer, 12);
-                    call_carmack("bound: wl_pointer");
-                    ssize_t get_pointer_written = write(fd, get_pointer, 12);
-                    assert(get_pointer_written == 12);
-                    wl_pointer_id = new_id;
-                    obj_op[obj_op_index(wl_pointer_id, 0)] = &&wl_pointer_enter;
-                    obj_op[obj_op_index(wl_pointer_id, 1)] = &&wl_pointer_leave;
-                    obj_op[obj_op_index(wl_pointer_id, 2)] =
-                        &&wl_pointer_motion;
-                    obj_op[obj_op_index(wl_pointer_id, 3)] =
-                        &&wl_pointer_button;
-                    obj_op[obj_op_index(wl_pointer_id, 4)] = &&wl_pointer_axis;
-                    obj_op[obj_op_index(wl_pointer_id, 5)] = &&wl_pointer_frame;
-                    obj_op[obj_op_index(wl_pointer_id, 6)] =
-                        &&wl_pointer_axis_source;
-                    obj_op[obj_op_index(wl_pointer_id, 7)] =
-                        &&wl_pointer_axis_stop;
-                    obj_op[obj_op_index(wl_pointer_id, 8)] =
-                        &&wl_pointer_axis_discrete;
-                    obj_op[obj_op_index(wl_pointer_id, 9)] =
-                        &&wl_pointer_axis_value120;
-                    obj_op[obj_op_index(wl_pointer_id, 10)] =
-                        &&wl_pointer_axis_relative_direction;
-                    new_id++;
-                }
-                if (capabilities & wl_seat_touch) {
-                    call_carmack("touch detected");
-                    assert(size == 12);
-                    uint8_t get_touch[12];
-                    write_le32(get_touch, wl_seat_id);
-                    write_le16(get_touch + 4, 2);
-                    write_le16(get_touch + 6, 12);
-                    write_le32(get_touch + 8, new_id);
-                    dump_bytes("get_touch request", get_touch, 12);
-                    call_carmack("bound: wl_touch");
-                    ssize_t get_touch_written = write(fd, get_touch, 12);
-                    assert(get_touch_written == 12);
-                    wl_touch_id = new_id;
-                    obj_op[obj_op_index(wl_touch_id, 0)] = &&wl_touch_down;
-                    obj_op[obj_op_index(wl_touch_id, 1)] = &&wl_touch_up;
-                    obj_op[obj_op_index(wl_touch_id, 2)] = &&wl_touch_motion;
-                    obj_op[obj_op_index(wl_touch_id, 3)] = &&wl_touch_frame;
-                    obj_op[obj_op_index(wl_touch_id, 4)] = &&wl_touch_cancel;
-                    obj_op[obj_op_index(wl_touch_id, 5)] = &&wl_touch_shape;
-                    obj_op[obj_op_index(wl_touch_id, 6)] =
-                        &&wl_touch_orientation;
-                    new_id++;
-                }
-                goto done;
-            wl_seat_name:
-                dump_bytes(
-                    "wl_seat_name event", msg_buffer + msg_buffer_offset, size);
-                call_carmack("seat: %s",
-                             (const char*)msg_buffer + msg_buffer_offset + 12,
-                             size);
-                goto done;
-            wl_keyboard_keymap:
-                dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
-                assert(size == 16);
-
-                int keymap_fd = -1;
-                for (struct cmsghdr* poll_cmsg = CMSG_FIRSTHDR(&poll_msg_hdr);
-                     poll_cmsg != NULL;
-                     poll_cmsg = CMSG_NXTHDR(&poll_msg_hdr, poll_cmsg)) {
-                    if (poll_cmsg->cmsg_level == SOL_SOCKET &&
-                        poll_cmsg->cmsg_type == SCM_RIGHTS) {
-                        keymap_fd = *(int*)CMSG_DATA(poll_cmsg);
-                        break;
-                    }
-                }
-                assert(keymap_fd >= 0);
-
-                uint32_t keymap_format =
-                    read_le32(msg_buffer + msg_buffer_offset + 8);
-                assert(keymap_format == XKB_KEYMAP_FORMAT_TEXT_V1);
-                uint32_t keymap_size =
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4);
-                assert(keymap_size > 0);
-
-                xkb_context = xkb_context_new(0);
-                assert(xkb_context);
-
-                char* keymap_map = mmap(
-                    NULL, keymap_size, PROT_READ, MAP_PRIVATE, keymap_fd, 0);
-                assert(keymap_map != MAP_FAILED);
-
-                struct xkb_keymap* xkb_keymap = xkb_keymap_new_from_string(
-                    xkb_context, keymap_map, XKB_KEYMAP_FORMAT_TEXT_V1, 0);
-                assert(xkb_keymap);
-
-                xkb_state = xkb_state_new(xkb_keymap);
-                assert(xkb_state);
-
-                munmap(keymap_map, keymap_size);
-                close(keymap_fd);
-                xkb_keymap_unref(xkb_keymap);
-                xkb_keymap = NULL;
-                goto done;
-            wl_keyboard_enter:
-                dump_bytes("wl_keyboard_enter event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_keyboard_leave:
-                dump_bytes("wl_keyboard_leave event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_keyboard_key:
-                dump_bytes("wl_keyboard_key event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-
-                uint32_t wl_key_state =
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
-                call_carmack("wl_key_state: %u", wl_key_state);
-                uint32_t keycode =
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) +
-                    8; // + 8 cuz wayland
-                call_carmack("raw keycode: %u", keycode);
-                xkb_keysym_t keysym =
-                    xkb_state_key_get_one_sym(xkb_state, keycode);
-                int alt_active = xkb_state_mod_name_is_active(
-                    xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_DEPRESSED);
-                call_carmack("keysym: %i", keysym);
-
-                // COMMENT REFACTOR: jump table
-                // 0 = released (not pressed), 1 = pressed, 2 = repeated
-                switch (keysym) {
-                case XKB_KEY_k:
-                    switch (wl_key_state) {
-                    case 0:
-                        repeat_key = 0;
-                        break;
-                    case 1:
-                        row++;
-                        repeat_key = keysym;
-                        break;
-                    }
-                    break;
-                case XKB_KEY_j:
-                    switch (wl_key_state) {
-                    case 0:
-                        break;
-                    case 1:
-                        row--;
-                        break;
-                    }
-                    break;
-                case XKB_KEY_h:
-                    switch (wl_key_state) {
-                    case 0:
-                        break;
-                    case 1:
-                        col--;
-                        break;
-                    }
-                    break;
-                case XKB_KEY_l:
-                    switch (wl_key_state) {
-                    case 0:
-                        break;
-                    case 1:
-                        col++;
-                        break;
-                    }
-                    break;
-                case XKB_KEY_0:
-                    switch (wl_key_state) {
-                    case 0:
-                        break;
-                    case 1:
-                        col = 0;
-                        break;
-                    }
-                    break;
-                case XKB_KEY_G:
-                    switch (wl_key_state) {
-                    case 0:
-                        break;
-                    case 1:
-                        row = 0;
-                        break;
-                    }
-                    break;
-                case XKB_KEY_dollar:
-                    switch (wl_key_state) {
-                    case 0:
-                        break;
-                    case 1:
-                        col = max_cols - 1;
-                        break;
-                    }
-                }
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
-                goto done;
-            wl_keyboard_modifiers:
-                dump_bytes("wl_keyboard_modifiers event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                xkb_state_update_mask(
-                    xkb_state,
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4),
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4),
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4),
-                    read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4 +
-                              4),
-                    0,
-                    0);
-
-                goto done;
-            wl_keyboard_repeat_info:
-                dump_bytes("wl_keyboard_repeat_info event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_enter:
-                dump_bytes("wl_pointer_enter event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_leave:
-                dump_bytes("wl_pointer_leave event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_motion:
-                dump_bytes("wl_pointer_motion event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                cursor_x = (float)(int32_t)read_le32(msg_buffer +
-                                                     msg_buffer_offset + 12) /
-                           256.0f * scale_factor;
-                cursor_y = (float)(int32_t)read_le32(msg_buffer +
-                                                     msg_buffer_offset + 16) /
-                           256.0f * scale_factor;
-                call_carmack("CURSOR_X: %f", cursor_x);
-                call_carmack("CURSOR_Y: %f", cursor_y);
-                goto done;
-            wl_pointer_button:
-                dump_bytes("wl_pointer_button event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                switch (read_le32(msg_buffer + msg_buffer_offset + 8 + 12)) {
-                case 1:
-                    if (read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
-                        BTN_LEFT) {
-                        col = (uint32_t)(cursor_x / col_width_px);
-                        row = (uint32_t)((physical_height - cursor_y) /
-                                         row_height_px); // because top left =
-                                                         // 0,0 in wayland
-                    }
-                }
-                goto done;
-            wl_pointer_axis:
-                dump_bytes("wl_pointer_axis event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_frame:
-                dump_bytes("wl_pointer_frame event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
-                goto done;
-            wl_pointer_axis_source:
-                dump_bytes("wl_pointer_axis_source event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_axis_stop:
-                dump_bytes("wl_pointer_axis_stop event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_axis_discrete:
-                dump_bytes("wl_pointer_axis_discrete event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_axis_value120:
-                dump_bytes("wl_pointer_axis_value120 event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_pointer_axis_relative_direction:
-                dump_bytes("wl_pointer_axis_relative_direction event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_touch_down:
-                dump_bytes("wl_touch_down event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_touch_up:
-                dump_bytes(
-                    "wl_touch_up event", msg_buffer + msg_buffer_offset, size);
-                goto done;
-            wl_touch_motion:
-                dump_bytes("wl_touch_motion event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_touch_frame:
-                dump_bytes("wl_touch_frame event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_touch_cancel:
-                dump_bytes("wl_touch_cancel event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_touch_shape:
-                dump_bytes("wl_touch_shape event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_touch_orientation:
-                dump_bytes("wl_touch_orientation event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_output_geometry:
-                dump_bytes("wl_output_geometry event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_output_mode:
-                dump_bytes("wl_output_mode event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_output_done:
-                dump_bytes("wl_output_done event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_output_scale:
-                dump_bytes("wl_output_scale event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_output_name:
-                dump_bytes("wl_output_name event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wl_output_description:
-                dump_bytes("wl_output_description event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
-                goto done;
-            wayland_default:
-                dump_bytes(
-                    "default event", msg_buffer + msg_buffer_offset, size);
-                goto done;
-            done:
-                msg_buffer_offset += size;
-                continue;
-            }
-
-            if (msg_buffer_offset > 0) {
-                memmove(msg_buffer,
+                    uint8_t destroy[8];
+                    write_le32(destroy, zwp_linux_buffer_params_v1_id);
+                    write_le16(destroy + 4, 0);
+                    write_le16(destroy + 6, 8);
+                    ssize_t destroy_written = write(fd, destroy, 8);
+                    assert(destroy_written == 8);
+                    dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
+                               destroy,
+                               8);
+                    goto done;
+                zwp_linux_dmabuf_feedback_v1_format_table:
+                    dump_bytes(
+                        "zwp_linux_dmabuf_feedback_v1_format_table event",
                         msg_buffer + msg_buffer_offset,
-                        msg_buffer_size - msg_buffer_offset);
-                msg_buffer_size -= msg_buffer_offset;
+                        size); // REFACTOR: event
+                    goto done;
+                zwp_linux_dmabuf_feedback_v1_main_device:
+                    dump_bytes("zwp_linux_dmabuf_feedback_v1_main_device event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_linux_dmabuf_feedback_v1_tranche_done:
+                    dump_bytes(
+                        "zwp_linux_dmabuf_feedback_v1_tranche_done event",
+                        msg_buffer + msg_buffer_offset,
+                        size);
+                    goto done;
+                zwp_linux_dmabuf_feedback_v1_tranche_target_device:
+                    dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_target_"
+                               "device event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_linux_dmabuf_feedback_v1_tranche_formats:
+                    dump_bytes(
+                        "zwp_linux_dmabuf_feedback_v1_tranche_formats event",
+                        msg_buffer + msg_buffer_offset,
+                        size);
+                    goto done;
+                zwp_linux_dmabuf_feedback_v1_tranche_flags:
+                    dump_bytes(
+                        "zwp_linux_dmabuf_feedback_v1_tranche_flags event",
+                        msg_buffer + msg_buffer_offset,
+                        size);
+                    goto done;
+#endif
+                wp_linux_drm_syncobj_manager_v1_jump:
+                    dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_compositor_jump:
+                    dump_bytes("wl_compositor_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_surface_enter:
+                    dump_bytes("wl_surface_enter event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_surface_leave:
+                    dump_bytes("wl_surface_leave event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_surface_preferred_buffer_scale:
+                    dump_bytes("wl_surface_preferred_buffer_scale event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    assert(size == 12);
+
+                    uint8_t set_buffer_scale[12];
+                    write_le32(set_buffer_scale, wl_surface_id);
+                    write_le16(set_buffer_scale + 4, 8);
+                    write_le16(set_buffer_scale + 6, 12);
+                    write_le32(set_buffer_scale + 8,
+                               read_le32(msg_buffer + msg_buffer_offset + 8));
+                    dump_bytes("wl_surface::set_buffer_scale request",
+                               set_buffer_scale,
+                               12);
+                    ssize_t set_buffer_scale_written =
+                        write(fd, set_buffer_scale, 12);
+                    assert(set_buffer_scale_written == 12);
+
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                    goto done;
+                wl_surface_preferred_buffer_transform:
+                    dump_bytes("wl_surface_preferred_buffer_transform event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    assert(size == 12);
+
+                    uint8_t set_buffer_transform[12];
+                    write_le32(set_buffer_transform, wl_surface_id);
+                    write_le16(set_buffer_transform + 4, 7);
+                    write_le16(set_buffer_transform + 6, 12);
+                    write_le32(set_buffer_transform + 8,
+                               read_le32(msg_buffer + msg_buffer_offset + 8));
+                    dump_bytes("wl_surface::set_buffer_transform request",
+                               set_buffer_transform,
+                               12);
+                    ssize_t set_buffer_transform_written =
+                        write(fd, set_buffer_transform, 12);
+                    assert(set_buffer_transform_written == 12);
+
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                    goto done;
+                zwp_idle_inhibit_manager_v1_jump:
+                    dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwlr_layer_shell_v1_jump:
+                    dump_bytes("zwlr_layer_shell_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zxdg_decoration_manager_v1_jump:
+                    dump_bytes("zxdg_decoration_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_relative_pointer_manager_v1_jump:
+                    dump_bytes("zwp_relative_pointer_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_pointer_constraints_v1_jump:
+                    dump_bytes("zwp_pointer_constraints_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wp_presentation_clock_id:
+                    dump_bytes("wp_presentation_clock_id event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwlr_output_manager_v1_head:
+                    dump_bytes("zwlr_output_manager_v1_head event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwlr_output_manager_v1_done:
+                    dump_bytes("zwlr_output_manager_v1_done event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                ext_foreign_toplevel_list_v1_toplevel:
+                    dump_bytes("ext_foreign_toplevel_list_v1_toplevel event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwlr_data_control_manager_v1_jump:
+                    dump_bytes("zwlr_data_control_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wp_viewporter_jump:
+                    dump_bytes("wp_viewporter_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wp_content_type_manager_v1_jump:
+                    dump_bytes("wp_content_type_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wp_fractional_scale_manager_v1_jump:
+                    dump_bytes("wp_fractional_scale_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                xdg_activation_v1_jump:
+                    dump_bytes("xdg_activation_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_virtual_keyboard_manager_v1_jump:
+                    dump_bytes("zwp_virtual_keyboard_manager_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                zwp_pointer_gestures_v1_jump:
+                    dump_bytes("zwp_pointer_gestures_v1_jump event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_seat_capabilities:
+                    dump_bytes("wl_seat_capabilities event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    enum {
+                        wl_seat_pointer = 0x01,
+                        wl_seat_keyboard = 0x02,
+                        wl_seat_touch = 0x04,
+                    };
+                    uint32_t capabilities =
+                        read_le32(msg_buffer + msg_buffer_offset + 8);
+                    if (capabilities & wl_seat_keyboard) {
+                        call_carmack("keyboard detected");
+                        assert(size == 12);
+                        uint8_t get_keyboard[12];
+                        write_le32(get_keyboard, wl_seat_id);
+                        write_le16(get_keyboard + 4, 1);
+                        write_le16(get_keyboard + 6, 12);
+                        write_le32(get_keyboard + 8, new_id);
+                        dump_bytes("get_keyboard request", get_keyboard, 12);
+                        call_carmack("bound: wl_keyboard",
+                                     (const char*)msg_buffer +
+                                         msg_buffer_offset + 12);
+                        ssize_t get_keyboard_written =
+                            write(fd, get_keyboard, 12);
+                        assert(get_keyboard_written == 12);
+                        wl_keyboard_id = new_id;
+                        obj_op[obj_op_index(wl_keyboard_id, 0)] =
+                            &&wl_keyboard_keymap;
+                        obj_op[obj_op_index(wl_keyboard_id, 1)] =
+                            &&wl_keyboard_enter;
+                        obj_op[obj_op_index(wl_keyboard_id, 2)] =
+                            &&wl_keyboard_leave;
+                        obj_op[obj_op_index(wl_keyboard_id, 3)] =
+                            &&wl_keyboard_key;
+                        obj_op[obj_op_index(wl_keyboard_id, 4)] =
+                            &&wl_keyboard_modifiers;
+                        obj_op[obj_op_index(wl_keyboard_id, 5)] =
+                            &&wl_keyboard_repeat_info;
+                        new_id++;
+                    }
+                    if (capabilities & wl_seat_pointer) {
+                        call_carmack("pointer detected");
+                        assert(size == 12);
+                        uint8_t get_pointer[12];
+                        write_le32(get_pointer, wl_seat_id);
+                        write_le16(get_pointer + 4, 0);
+                        write_le16(get_pointer + 6, 12);
+                        write_le32(get_pointer + 8, new_id);
+                        dump_bytes("get_pointer request", get_pointer, 12);
+                        call_carmack("bound: wl_pointer");
+                        ssize_t get_pointer_written =
+                            write(fd, get_pointer, 12);
+                        assert(get_pointer_written == 12);
+                        wl_pointer_id = new_id;
+                        obj_op[obj_op_index(wl_pointer_id, 0)] =
+                            &&wl_pointer_enter;
+                        obj_op[obj_op_index(wl_pointer_id, 1)] =
+                            &&wl_pointer_leave;
+                        obj_op[obj_op_index(wl_pointer_id, 2)] =
+                            &&wl_pointer_motion;
+                        obj_op[obj_op_index(wl_pointer_id, 3)] =
+                            &&wl_pointer_button;
+                        obj_op[obj_op_index(wl_pointer_id, 4)] =
+                            &&wl_pointer_axis;
+                        obj_op[obj_op_index(wl_pointer_id, 5)] =
+                            &&wl_pointer_frame;
+                        obj_op[obj_op_index(wl_pointer_id, 6)] =
+                            &&wl_pointer_axis_source;
+                        obj_op[obj_op_index(wl_pointer_id, 7)] =
+                            &&wl_pointer_axis_stop;
+                        obj_op[obj_op_index(wl_pointer_id, 8)] =
+                            &&wl_pointer_axis_discrete;
+                        obj_op[obj_op_index(wl_pointer_id, 9)] =
+                            &&wl_pointer_axis_value120;
+                        obj_op[obj_op_index(wl_pointer_id, 10)] =
+                            &&wl_pointer_axis_relative_direction;
+                        new_id++;
+                    }
+                    if (capabilities & wl_seat_touch) {
+                        call_carmack("touch detected");
+                        assert(size == 12);
+                        uint8_t get_touch[12];
+                        write_le32(get_touch, wl_seat_id);
+                        write_le16(get_touch + 4, 2);
+                        write_le16(get_touch + 6, 12);
+                        write_le32(get_touch + 8, new_id);
+                        dump_bytes("get_touch request", get_touch, 12);
+                        call_carmack("bound: wl_touch");
+                        ssize_t get_touch_written = write(fd, get_touch, 12);
+                        assert(get_touch_written == 12);
+                        wl_touch_id = new_id;
+                        obj_op[obj_op_index(wl_touch_id, 0)] = &&wl_touch_down;
+                        obj_op[obj_op_index(wl_touch_id, 1)] = &&wl_touch_up;
+                        obj_op[obj_op_index(wl_touch_id, 2)] =
+                            &&wl_touch_motion;
+                        obj_op[obj_op_index(wl_touch_id, 3)] = &&wl_touch_frame;
+                        obj_op[obj_op_index(wl_touch_id, 4)] =
+                            &&wl_touch_cancel;
+                        obj_op[obj_op_index(wl_touch_id, 5)] = &&wl_touch_shape;
+                        obj_op[obj_op_index(wl_touch_id, 6)] =
+                            &&wl_touch_orientation;
+                        new_id++;
+                    }
+                    goto done;
+                wl_seat_name:
+                    dump_bytes("wl_seat_name event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    call_carmack("seat: %s",
+                                 (const char*)msg_buffer + msg_buffer_offset +
+                                     12,
+                                 size);
+                    goto done;
+                wl_keyboard_keymap:
+                    dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
+                    assert(size == 16);
+
+                    int keymap_fd = -1;
+                    for (struct cmsghdr* poll_cmsg =
+                             CMSG_FIRSTHDR(&poll_msg_hdr);
+                         poll_cmsg != NULL;
+                         poll_cmsg = CMSG_NXTHDR(&poll_msg_hdr, poll_cmsg)) {
+                        if (poll_cmsg->cmsg_level == SOL_SOCKET &&
+                            poll_cmsg->cmsg_type == SCM_RIGHTS) {
+                            keymap_fd = *(int*)CMSG_DATA(poll_cmsg);
+                            break;
+                        }
+                    }
+                    assert(keymap_fd >= 0);
+
+                    uint32_t keymap_format =
+                        read_le32(msg_buffer + msg_buffer_offset + 8);
+                    assert(keymap_format == XKB_KEYMAP_FORMAT_TEXT_V1);
+                    uint32_t keymap_size =
+                        read_le32(msg_buffer + msg_buffer_offset + 8 + 4);
+                    assert(keymap_size > 0);
+
+                    xkb_context = xkb_context_new(0);
+                    assert(xkb_context);
+
+                    char* keymap_map = mmap(NULL,
+                                            keymap_size,
+                                            PROT_READ,
+                                            MAP_PRIVATE,
+                                            keymap_fd,
+                                            0);
+                    assert(keymap_map != MAP_FAILED);
+
+                    struct xkb_keymap* xkb_keymap = xkb_keymap_new_from_string(
+                        xkb_context, keymap_map, XKB_KEYMAP_FORMAT_TEXT_V1, 0);
+                    assert(xkb_keymap);
+
+                    xkb_state = xkb_state_new(xkb_keymap);
+                    assert(xkb_state);
+
+                    munmap(keymap_map, keymap_size);
+                    close(keymap_fd);
+                    xkb_keymap_unref(xkb_keymap);
+                    xkb_keymap = NULL;
+                    goto done;
+                wl_keyboard_enter:
+                    dump_bytes("wl_keyboard_enter event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_keyboard_leave:
+                    dump_bytes("wl_keyboard_leave event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_keyboard_key:
+                    dump_bytes("wl_keyboard_key event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+
+                    uint32_t wl_key_state = read_le32(
+                        msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
+                    call_carmack("wl_key_state: %u", wl_key_state);
+                    uint32_t keycode =
+                        read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) +
+                        8; // + 8 cuz wayland
+                    call_carmack("raw keycode: %u", keycode);
+                    xkb_keysym_t keysym =
+                        xkb_state_key_get_one_sym(xkb_state, keycode);
+                    int alt_active = xkb_state_mod_name_is_active(
+                        xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_DEPRESSED);
+                    call_carmack("keysym: %i", keysym);
+
+                    // COMMENT REFACTOR: jump table
+                    // 0 = released (not pressed), 1 = pressed, 2 = repeated
+                    switch (keysym) {
+                    case XKB_KEY_k:
+                        switch (wl_key_state) {
+                        case 0:
+                            repeat_key = 0;
+                            break;
+                        case 1:
+                            row++;
+                            repeat_key = keysym;
+                            break;
+                        }
+                        break;
+                    case XKB_KEY_j:
+                        switch (wl_key_state) {
+                        case 0:
+                            break;
+                        case 1:
+                            row--;
+                            break;
+                        }
+                        break;
+                    case XKB_KEY_h:
+                        switch (wl_key_state) {
+                        case 0:
+                            break;
+                        case 1:
+                            col--;
+                            break;
+                        }
+                        break;
+                    case XKB_KEY_l:
+                        switch (wl_key_state) {
+                        case 0:
+                            break;
+                        case 1:
+                            col++;
+                            break;
+                        }
+                        break;
+                    case XKB_KEY_0:
+                        switch (wl_key_state) {
+                        case 0:
+                            break;
+                        case 1:
+                            col = 0;
+                            break;
+                        }
+                        break;
+                    case XKB_KEY_G:
+                        switch (wl_key_state) {
+                        case 0:
+                            break;
+                        case 1:
+                            row = 0;
+                            break;
+                        }
+                        break;
+                    case XKB_KEY_dollar:
+                        switch (wl_key_state) {
+                        case 0:
+                            break;
+                        case 1:
+                            col = max_cols - 1;
+                            break;
+                        }
+                    }
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                    goto done;
+                wl_keyboard_modifiers:
+                    dump_bytes("wl_keyboard_modifiers event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    xkb_state_update_mask(
+                        xkb_state,
+                        read_le32(msg_buffer + msg_buffer_offset + 8 + 4),
+                        read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4),
+                        read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 +
+                                  4),
+                        read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 +
+                                  4 + 4),
+                        0,
+                        0);
+
+                    goto done;
+                wl_keyboard_repeat_info:
+                    dump_bytes("wl_keyboard_repeat_info event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_enter:
+                    dump_bytes("wl_pointer_enter event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_leave:
+                    dump_bytes("wl_pointer_leave event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_motion:
+                    dump_bytes("wl_pointer_motion event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    cursor_x = (float)(int32_t)read_le32(
+                                   msg_buffer + msg_buffer_offset + 12) /
+                               256.0f * scale_factor;
+                    cursor_y = (float)(int32_t)read_le32(
+                                   msg_buffer + msg_buffer_offset + 16) /
+                               256.0f * scale_factor;
+                    call_carmack("CURSOR_X: %f", cursor_x);
+                    call_carmack("CURSOR_Y: %f", cursor_y);
+                    goto done;
+                wl_pointer_button:
+                    dump_bytes("wl_pointer_button event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    switch (
+                        read_le32(msg_buffer + msg_buffer_offset + 8 + 12)) {
+                    case 1:
+                        if (read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
+                            BTN_LEFT) {
+                            col = (uint32_t)(cursor_x / col_width_px);
+                            row = (uint32_t)((physical_height - cursor_y) /
+                                             row_height_px); // because top left
+                                                             // = 0,0 in wayland
+                        }
+                    }
+                    goto done;
+                wl_pointer_axis:
+                    dump_bytes("wl_pointer_axis event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_frame:
+                    dump_bytes("wl_pointer_frame event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    war_wayland_holy_trinity(fd,
+                                             wl_surface_id,
+                                             wl_buffer_id,
+                                             0,
+                                             0,
+                                             0,
+                                             0,
+                                             physical_width,
+                                             physical_height);
+                    goto done;
+                wl_pointer_axis_source:
+                    dump_bytes("wl_pointer_axis_source event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_axis_stop:
+                    dump_bytes("wl_pointer_axis_stop event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_axis_discrete:
+                    dump_bytes("wl_pointer_axis_discrete event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_axis_value120:
+                    dump_bytes("wl_pointer_axis_value120 event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_pointer_axis_relative_direction:
+                    dump_bytes("wl_pointer_axis_relative_direction event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_touch_down:
+                    dump_bytes("wl_touch_down event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_touch_up:
+                    dump_bytes("wl_touch_up event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_touch_motion:
+                    dump_bytes("wl_touch_motion event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_touch_frame:
+                    dump_bytes("wl_touch_frame event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_touch_cancel:
+                    dump_bytes("wl_touch_cancel event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_touch_shape:
+                    dump_bytes("wl_touch_shape event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_touch_orientation:
+                    dump_bytes("wl_touch_orientation event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_output_geometry:
+                    dump_bytes("wl_output_geometry event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_output_mode:
+                    dump_bytes("wl_output_mode event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_output_done:
+                    dump_bytes("wl_output_done event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_output_scale:
+                    dump_bytes("wl_output_scale event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_output_name:
+                    dump_bytes("wl_output_name event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wl_output_description:
+                    dump_bytes("wl_output_description event",
+                               msg_buffer + msg_buffer_offset,
+                               size);
+                    goto done;
+                wayland_default:
+                    dump_bytes(
+                        "default event", msg_buffer + msg_buffer_offset, size);
+                    goto done;
+                done:
+                    msg_buffer_offset += size;
+                    continue;
+                }
+
+                if (msg_buffer_offset > 0) {
+                    memmove(msg_buffer,
+                            msg_buffer + msg_buffer_offset,
+                            msg_buffer_size - msg_buffer_offset);
+                    msg_buffer_size -= msg_buffer_offset;
+                }
             }
         }
     }
@@ -1866,7 +1957,6 @@ void* war_window_render(void* args) {
     close(vulkan_context.dmabuf_fd);
     vulkan_context.dmabuf_fd = -1;
 #endif
-
     xkb_state_unref(xkb_state);
     xkb_context_unref(xkb_context);
 
@@ -1987,7 +2077,6 @@ void* war_audio(void* args) {
             }
         }
     }
-
     end("war_audio");
     return 0;
 }

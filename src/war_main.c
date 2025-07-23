@@ -291,12 +291,13 @@ void* war_window_render(void* args) {
             },
     };
 
-    //-------------------------------------------------------------------------
-    // window_render loop
-    //-------------------------------------------------------------------------
     const uint64_t frame_duration_us = 16666; // 60 fps
     uint64_t last_frame_time = get_monotonic_time_us();
     int end_window_render = 0;
+
+    //-------------------------------------------------------------------------
+    // window_render loop
+    //-------------------------------------------------------------------------
     while (!end_window_render) {
         uint64_t now = get_monotonic_time_us();
         if (now - last_frame_time >= frame_duration_us) {
@@ -326,6 +327,57 @@ void* war_window_render(void* args) {
             //        break;
             //    }
             //}
+
+            uint8_t trinity = 0;
+            while (read_input_sequence_index != write_input_sequence_index) {
+                war_key_event evt =
+                    input_sequence_ring_buffer[read_input_sequence_index];
+                if (!evt.state) {
+                    read_input_sequence_index =
+                        (read_input_sequence_index + 1) & 0xFF;
+                    continue;
+                }
+
+                size_t available =
+                    (write_input_sequence_index - read_input_sequence_index) &
+                    0xFF;
+                size_t matched_length = 0;
+
+                // Construct a temporary array or pass pointer to ring buffer
+                // (handle wrap-around carefully)
+                war_key_event temp_sequence[MAX_SEQUENCE_LENGTH];
+                for (size_t i = 0; i < available && i < MAX_SEQUENCE_LENGTH;
+                     i++) {
+                    temp_sequence[i] = input_sequence_ring_buffer
+                        [(read_input_sequence_index + i) & 0xFF];
+                }
+
+                void (*matched_command)(uint32_t*, uint32_t*, uint32_t) =
+                    war_match_sequence_in_trie(
+                        &pool, temp_sequence, available, &matched_length);
+
+                if (matched_length > 0 && matched_command) {
+                    matched_command(&row, &col, numeric_prefix);
+                    read_input_sequence_index =
+                        (read_input_sequence_index + matched_length) & 0xFF;
+                    numeric_prefix = 1;
+                    if (!trinity) {
+                        war_wayland_holy_trinity(fd,
+                                                 wl_surface_id,
+                                                 wl_buffer_id,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 physical_width,
+                                                 physical_height);
+                        trinity = 1;
+                    }
+                } else {
+                    read_input_sequence_index =
+                        (read_input_sequence_index + 1) & 0xFF;
+                }
+            }
 
             switch (repeat_key) {
             case XKB_KEY_k:
@@ -1744,6 +1796,73 @@ void* war_window_render(void* args) {
                     // mod_fn = xkb_keymap_mod_get_index(
                     //     xkb_keymap, XKB_MOD_NAME_MOD1); // Super/Meta
 
+                    // COMMENT CONCERN: potential padding issue i don't care
+                    // about
+                    war_key_event
+                        key_sequences[NUM_SEQUENCES][MAX_SEQUENCE_LENGTH] = {
+                            {
+                                {.keysym = XKB_KEY_k, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_j, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_h, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_l, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_0, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_dollar, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_G, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_g, .mod = 0},
+                                {.keysym = XKB_KEY_g, .mod = 0},
+                                {0},
+                            },
+                        };
+                    void (*key_commands[NUM_SEQUENCES])(
+                        uint32_t*, uint32_t*, uint32_t) = {
+                        cmd_increment_row,
+                        cmd_decrement_row,
+                        cmd_decrement_col,
+                        cmd_increment_col,
+
+                        cmd_goto_col,
+                        cmd_goto_col,
+                        cmd_goto_row,
+                        cmd_goto_row,
+                    };
+                    size_t key_sequence_lengths[NUM_SEQUENCES];
+                    for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;
+                         seq_idx++) {
+                        size_t len = 0;
+                        while (len < MAX_SEQUENCE_LENGTH &&
+                               key_sequences[seq_idx][len].keysym != 0) {
+                            len++;
+                        }
+                        key_sequence_lengths[seq_idx] = len;
+                    }
+                    for (size_t i = 0; i < NUM_SEQUENCES; i++) {
+                        war_insert_trie_node(&pool,
+                                             key_sequences[i],
+                                             key_sequence_lengths[i],
+                                             key_commands[i]);
+                    }
+
                     munmap(keymap_map, keymap_size);
                     close(keymap_fd);
                     xkb_keymap_unref(xkb_keymap);
@@ -2114,6 +2233,63 @@ void* war_window_render(void* args) {
 
     end("war_window_render");
     return 0;
+}
+
+war_key_trie_node* war_insert_trie_node(war_key_trie_pool* pool,
+                                        war_key_event* key_seq,
+                                        size_t key_seq_size,
+                                        void* cmd) {
+    war_key_trie_node* node = &pool->nodes[0];
+
+    for (size_t i = 0; i < key_seq_size; i++) {
+        uint32_t keysym = key_seq[i].keysym;
+        uint8_t mod = key_seq[i].mod;
+
+        war_key_trie_node* child = NULL;
+        for (size_t c = 0; c < node->child_count; c++) {
+            war_key_trie_node* candidate = node->children[c];
+            if (candidate->keysym == keysym && candidate->mod == mod) {
+                child = candidate;
+                break;
+            }
+        }
+
+        if (!child) {
+            if (pool->node_count >= MAX_NODES) {
+                call_carmack("error, child not found");
+                return NULL;
+            }
+
+            war_key_trie_node* new_node = &pool->nodes[pool->node_count];
+            pool->node_count++;
+
+            new_node->keysym = keysym;
+            new_node->mod = mod;
+            new_node->is_terminal = 0;
+            new_node->command = NULL;
+            new_node->child_count = 0;
+            for (size_t j = 0; j < MAX_CHILDREN; j++) {
+                new_node->children[j] = NULL;
+            }
+
+            if (node->child_count < MAX_CHILDREN) {
+                node->children[node->child_count] = new_node;
+                node->child_count++;
+            } else {
+                call_carmack("error: too many children");
+                return NULL;
+            }
+
+            child = new_node;
+        }
+
+        node = child;
+    }
+
+    node->is_terminal = 1;
+    node->command = cmd;
+
+    return node;
 }
 
 void* war_audio(void* args) {

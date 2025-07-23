@@ -86,6 +86,9 @@ typedef struct war_key_trie_node {
 
 enum war_key_trie {
     MAX_NODES = 1024,
+    MAX_SEQUENCE_LENGTH = 4,
+    MAX_CHILDREN = 32,
+    NUM_SEQUENCES = 8,
 };
 
 typedef struct war_key_trie_pool {

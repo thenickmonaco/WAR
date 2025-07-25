@@ -99,8 +99,8 @@ void* war_window_render(void* args) {
     const uint32_t logical_height =
         (uint32_t)floor(physical_height / scale_factor);
 
-    const uint32_t max_cols = 71;
-    const uint32_t max_rows = 20;
+    uint32_t max_cols = 71;
+    uint32_t max_rows = 20;
     const float col_width_px = (float)physical_width / max_cols;
     const float row_height_px = (float)physical_height / max_rows;
     float cursor_x;
@@ -168,7 +168,8 @@ void* war_window_render(void* args) {
     uint64_t next_repeat_time_us = 0;
     const uint64_t repeat_delay_us = 150000;
     const uint64_t repeat_rate_us = 40000;
-    uint32_t repeat_key = 0;
+    void (*repeat_command)(uint32_t*, uint32_t*, uint32_t) = NULL;
+    war_key_event repeat_event;
 
     enum war_pixel_format {
         ARGB8888 = 0,
@@ -328,11 +329,21 @@ void* war_window_render(void* args) {
             //    }
             //}
 
-            uint8_t trinity = 0;
+            enum {
+                TRINITY_NOT_CALLED = 0,
+                TRINITY_CALLED = 1,
+            };
+            uint8_t trinity = TRINITY_NOT_CALLED;
             while (read_input_sequence_index != write_input_sequence_index) {
                 war_key_event evt =
                     input_sequence_ring_buffer[read_input_sequence_index];
-                if (!evt.state) {
+                if (evt.state == 0) {
+                    if (repeat_event.keysym == evt.keysym) {
+                        repeat_command = NULL;
+                        repeat_start_time_us = 0;
+                        next_repeat_time_us = 0;
+                    }
+
                     read_input_sequence_index =
                         (read_input_sequence_index + 1) & 0xFF;
                     continue;
@@ -357,10 +368,20 @@ void* war_window_render(void* args) {
                         &pool, temp_sequence, available, &matched_length);
 
                 if (matched_length > 0 && matched_command) {
-                    matched_command(&row, &col, numeric_prefix);
+                    matched_command(&col, &row, numeric_prefix);
                     read_input_sequence_index =
                         (read_input_sequence_index + matched_length) & 0xFF;
                     numeric_prefix = 1;
+
+                    if (matched_command != repeat_command ||
+                        evt.keysym != repeat_event.keysym) {
+                        repeat_start_time_us = 0;
+                        next_repeat_time_us = 0;
+                    }
+
+                    repeat_command = matched_command;
+                    repeat_event = evt;
+
                     if (!trinity) {
                         war_wayland_holy_trinity(fd,
                                                  wl_surface_id,
@@ -371,20 +392,31 @@ void* war_window_render(void* args) {
                                                  0,
                                                  physical_width,
                                                  physical_height);
-                        trinity = 1;
+                        trinity = TRINITY_CALLED;
                     }
                 } else {
                     read_input_sequence_index =
                         (read_input_sequence_index + 1) & 0xFF;
                 }
             }
+            trinity = TRINITY_NOT_CALLED;
 
-            switch (repeat_key) {
-            case XKB_KEY_k:
-                if (now >= next_repeat_time_us) {
-                    call_carmack("repeat: %u", repeat_key);
+            if (repeat_command != NULL) {
+                if (repeat_start_time_us == 0) {
+                    repeat_start_time_us = now;
+                    next_repeat_time_us = now + repeat_delay_us;
+                }
 
-                    row++;
+                if (repeat_start_time_us && now >= next_repeat_time_us) {
+                    call_carmack("repeat");
+
+                    repeat_command(&col, &row, numeric_prefix);
+                    input_sequence_ring_buffer[write_input_sequence_index] =
+                        repeat_event;
+                    write_input_sequence_index =
+                        (write_input_sequence_index + 1) & 0xFF;
+                    read_input_sequence_index =
+                        (read_input_sequence_index + 1) & 0xFF;
 
                     next_repeat_time_us += repeat_rate_us;
                     war_wayland_holy_trinity(fd,
@@ -397,61 +429,10 @@ void* war_window_render(void* args) {
                                              physical_width,
                                              physical_height);
                 }
-                break;
-            case XKB_KEY_j:
-                if (now >= next_repeat_time_us) {
-                    call_carmack("repeat: %u", repeat_key);
-
-                    row--;
-
-                    next_repeat_time_us += repeat_rate_us;
-                    war_wayland_holy_trinity(fd,
-                                             wl_surface_id,
-                                             wl_buffer_id,
-                                             0,
-                                             0,
-                                             0,
-                                             0,
-                                             physical_width,
-                                             physical_height);
-                }
-                break;
-            case XKB_KEY_h:
-                if (now >= next_repeat_time_us) {
-                    call_carmack("repeat: %u", repeat_key);
-
-                    col--;
-
-                    next_repeat_time_us += repeat_rate_us;
-                    war_wayland_holy_trinity(fd,
-                                             wl_surface_id,
-                                             wl_buffer_id,
-                                             0,
-                                             0,
-                                             0,
-                                             0,
-                                             physical_width,
-                                             physical_height);
-                }
-                break;
-            case XKB_KEY_l:
-                if (now >= next_repeat_time_us) {
-                    call_carmack("repeat: %u", repeat_key);
-
-                    col++;
-
-                    next_repeat_time_us += repeat_rate_us;
-                    war_wayland_holy_trinity(fd,
-                                             wl_surface_id,
-                                             wl_buffer_id,
-                                             0,
-                                             0,
-                                             0,
-                                             0,
-                                             physical_width,
-                                             physical_height);
-                }
-                break;
+            } else {
+                repeat_command = NULL;
+                repeat_start_time_us = 0;
+                next_repeat_time_us = 0;
             }
 
             int ret = poll(&pfd, 1, 0);
@@ -1821,11 +1802,11 @@ void* war_window_render(void* args) {
                                 {0},
                             },
                             {
-                                {.keysym = XKB_KEY_dollar, .mod = 0},
+                                {.keysym = XKB_KEY_dollar, .mod = MOD_SHIFT},
                                 {0},
                             },
                             {
-                                {.keysym = XKB_KEY_G, .mod = 0},
+                                {.keysym = XKB_KEY_G, .mod = MOD_SHIFT},
                                 {0},
                             },
                             {
@@ -1841,10 +1822,11 @@ void* war_window_render(void* args) {
                         cmd_decrement_col,
                         cmd_increment_col,
 
-                        cmd_goto_col,
-                        cmd_goto_col,
-                        cmd_goto_row,
-                        cmd_goto_row,
+                        cmd_goto_col_0,
+                        cmd_goto_col_end,
+
+                        cmd_goto_row_end,
+                        cmd_goto_row_0,
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;
@@ -1909,130 +1891,8 @@ void* war_window_render(void* args) {
                         };
                     write_input_sequence_index =
                         (write_input_sequence_index + 1) & 0xFF;
-
-                    // COMMENT REFACTOR: jump table
-                    // 0 = released (not pressed), 1 = pressed, 2 = repeated
-                    // switch (keysym) {
-                    // case XKB_KEY_k:
-                    //    switch (wl_key_state) {
-                    //    case 0:
-                    //        if (repeat_key == keysym) {
-                    //            repeat_key = 0;
-                    //            repeat_start_time_us = 0;
-                    //            next_repeat_time_us = 0;
-                    //        }
-                    //        break;
-                    //    case 1:
-                    //        row++;
-                    //        if (repeat_key != keysym) {
-                    //            repeat_key = keysym;
-
-                    //            repeat_start_time_us =
-                    //            get_monotonic_time_us(); next_repeat_time_us =
-                    //                repeat_start_time_us + repeat_delay_us;
-                    //        }
-                    //        break;
-                    //    }
-                    //    break;
-                    // case XKB_KEY_j:
-                    //    switch (wl_key_state) {
-                    //    case 0:
-                    //        if (repeat_key == keysym) {
-                    //            repeat_key = 0;
-                    //            repeat_start_time_us = 0;
-                    //            next_repeat_time_us = 0;
-                    //        }
-                    //        break;
-                    //    case 1:
-                    //        row--;
-                    //        if (repeat_key != keysym) {
-                    //            repeat_key = keysym;
-
-                    //            repeat_start_time_us =
-                    //            get_monotonic_time_us(); next_repeat_time_us =
-                    //                repeat_start_time_us + repeat_delay_us;
-                    //        }
-                    //        break;
-                    //    }
-                    //    break;
-                    // case XKB_KEY_h:
-                    //    switch (wl_key_state) {
-                    //    case 0:
-                    //        if (repeat_key == keysym) {
-                    //            repeat_key = 0;
-                    //            repeat_start_time_us = 0;
-                    //            next_repeat_time_us = 0;
-                    //        }
-                    //        break;
-                    //    case 1:
-                    //        col--;
-                    //        if (repeat_key != keysym) {
-                    //            repeat_key = keysym;
-
-                    //            repeat_start_time_us =
-                    //            get_monotonic_time_us(); next_repeat_time_us =
-                    //                repeat_start_time_us + repeat_delay_us;
-                    //        }
-                    //        break;
-                    //    }
-                    //    break;
-                    // case XKB_KEY_l:
-                    //    switch (wl_key_state) {
-                    //    case 0:
-                    //        if (repeat_key == keysym) {
-                    //            repeat_key = 0;
-                    //            repeat_start_time_us = 0;
-                    //            next_repeat_time_us = 0;
-                    //        }
-                    //        break;
-                    //    case 1:
-                    //        col++;
-                    //        if (repeat_key != keysym) {
-                    //            repeat_key = keysym;
-
-                    //            repeat_start_time_us =
-                    //            get_monotonic_time_us(); next_repeat_time_us =
-                    //                repeat_start_time_us + repeat_delay_us;
-                    //        }
-                    //        break;
-                    //    }
-                    //    break;
-                    // case XKB_KEY_0:
-                    //    switch (wl_key_state) {
-                    //    case 0:
-                    //        break;
-                    //    case 1:
-                    //        col = 0;
-                    //        break;
-                    //    }
-                    //    break;
-                    // case XKB_KEY_G:
-                    //    switch (wl_key_state) {
-                    //    case 0:
-                    //        break;
-                    //    case 1:
-                    //        row = 0;
-                    //        break;
-                    //    }
-                    //    break;
-                    // case XKB_KEY_dollar:
-                    //    switch (wl_key_state) {
-                    //    case 0:
-                    //        break;
-                    //    case 1:
-                    //        col = max_cols - 1;
-                    //        break;
-                    //    }
-                    //}
-                    // war_wayland_holy_trinity(fd,
-                    //                         wl_surface_id,
-                    //                         wl_buffer_id,
-                    //                         0,
-                    //                         0,
-                    //                         0,
-                    //                         0,
-                    //                         physical_width,
-                    //                         physical_height);
+                    call_carmack("keysym pressed: %u", keysym);
+                    call_carmack("mod pressed: %u", mod);
                     goto done;
                 wl_keyboard_modifiers:
                     dump_bytes("wl_keyboard_modifiers event",

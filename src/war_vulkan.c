@@ -99,16 +99,25 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     uint32_t gpu_count = 0;
     vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
+    assert(gpu_count != 0 && gpu_count <= max_gpu_count);
+
     VkPhysicalDevice physical_devices[max_gpu_count];
     vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
-    assert(gpu_count != 0);
-    VkPhysicalDevice physical_device = physical_devices[1];
 
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties device_props;
-    vkGetPhysicalDeviceProperties(physical_device, &device_props);
-    call_carmack("Physical Device Name: %s", device_props.deviceName);
-    call_carmack("Vendor ID: 0x%x", device_props.vendorID);
-    call_carmack("Device ID: 0x%x", device_props.deviceID);
+    for (uint32_t i = 0; i < gpu_count; i++) {
+        vkGetPhysicalDeviceProperties(physical_devices[i], &device_props);
+        if (device_props.vendorID == 0x8086) {
+            call_carmack("Physical Device Name: %s", device_props.deviceName);
+            call_carmack("Vendor ID: 0x%x", device_props.vendorID);
+            call_carmack("Device ID: 0x%x", device_props.deviceID);
+            break;
+        }
+    }
+    if (physical_device == VK_NULL_HANDLE) {
+        physical_device = physical_devices[0];
+    }
 
     uint32_t device_extension_count = 0;
     vkEnumerateDeviceExtensionProperties(

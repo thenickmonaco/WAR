@@ -93,33 +93,43 @@ static inline void write_le16(uint8_t* p, uint16_t v) {
 }
 
 static inline void
-cmd_increment_row(uint32_t* row, uint32_t* col, uint32_t numeric_prefix) {
+cmd_increment_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *row += numeric_prefix;
 }
 
 static inline void
-cmd_decrement_row(uint32_t* row, uint32_t* col, uint32_t numeric_prefix) {
+cmd_decrement_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *row -= numeric_prefix;
 }
 
 static inline void
-cmd_increment_col(uint32_t* row, uint32_t* col, uint32_t numeric_prefix) {
+cmd_increment_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *col += numeric_prefix;
 }
 
 static inline void
-cmd_decrement_col(uint32_t* row, uint32_t* col, uint32_t numeric_prefix) {
+cmd_decrement_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *col -= numeric_prefix;
 }
 
 static inline void
-cmd_goto_row(uint32_t* row, uint32_t* col, uint32_t numeric_prefix) {
-    *row = numeric_prefix;
+cmd_goto_row_0(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+    *row = 0;
 }
 
 static inline void
-cmd_goto_col(uint32_t* row, uint32_t* col, uint32_t numeric_prefix) {
-    *col = numeric_prefix;
+cmd_goto_col_0(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+    *col = 0;
+}
+
+static inline void
+cmd_goto_row_end(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+    *row = 4;
+}
+
+static inline void
+cmd_goto_col_end(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+    *col = 4;
 }
 
 // Returns matched command, and sets *out_matched_length

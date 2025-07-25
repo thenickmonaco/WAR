@@ -338,17 +338,10 @@ void* war_window_render(void* args) {
                 war_key_event evt =
                     input_sequence_ring_buffer[read_input_sequence_index];
                 if (evt.state == 0) {
-                    if (repeat_event.keysym == evt.keysym) {
-                        repeat_command = NULL;
-                        repeat_start_time_us = 0;
-                        next_repeat_time_us = 0;
-                    }
-
                     read_input_sequence_index =
                         (read_input_sequence_index + 1) & 0xFF;
                     continue;
                 }
-
                 size_t available =
                     (write_input_sequence_index - read_input_sequence_index) &
                     0xFF;
@@ -395,8 +388,43 @@ void* war_window_render(void* args) {
                         trinity = TRINITY_CALLED;
                     }
                 } else {
-                    read_input_sequence_index =
-                        (read_input_sequence_index + 1) & 0xFF;
+                    // check if current sequence is a **prefix** of any known
+                    // command
+                    bool could_be_prefix = false;
+                    war_key_trie_node* node = &pool.nodes[0];
+
+                    for (size_t i = 0; i < available && i < MAX_SEQUENCE_LENGTH;
+                         i++) {
+                        uint32_t keysym = temp_sequence[i].keysym;
+                        uint8_t mod = temp_sequence[i].mod;
+
+                        war_key_trie_node* child = NULL;
+                        for (size_t c = 0; c < node->child_count; c++) {
+                            war_key_trie_node* candidate = node->children[c];
+                            if (candidate->keysym == keysym &&
+                                candidate->mod == mod) {
+                                child = candidate;
+                                break;
+                            }
+                        }
+
+                        if (!child) {
+                            could_be_prefix = false;
+                            break;
+                        };
+                        node = child;
+                        could_be_prefix = true;
+                    }
+
+                    if (!could_be_prefix) {
+                        // This sequence can't become a valid command later →
+                        // discard first key
+                        read_input_sequence_index =
+                            (read_input_sequence_index + 1) & 0xFF;
+                    } else {
+                        // Wait for more input
+                        break;
+                    }
                 }
             }
             trinity = TRINITY_NOT_CALLED;
@@ -1822,11 +1850,11 @@ void* war_window_render(void* args) {
                         cmd_decrement_col,
                         cmd_increment_col,
 
-                        cmd_goto_col_0,
-                        cmd_goto_col_end,
+                        cmd_goto_left_col,
+                        cmd_goto_right_col,
 
-                        cmd_goto_row_end,
-                        cmd_goto_row_0,
+                        cmd_goto_bottom_row,
+                        cmd_goto_top_row,
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;
@@ -1865,6 +1893,8 @@ void* war_window_render(void* args) {
                                msg_buffer + msg_buffer_offset,
                                size);
 
+                    if (end_window_render) { goto done; }
+
                     uint32_t wl_key_state = read_le32(
                         msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
                     uint32_t keycode =
@@ -1882,15 +1912,35 @@ void* war_window_render(void* args) {
                     if (mods & (1 << mod_caps)) mod |= MOD_CAPS;
                     if (mods & (1 << mod_num)) mod |= MOD_NUM;
                     // if (mods & (1 << mod_fn)) mod |= MOD_FN;
-                    input_sequence_ring_buffer[write_input_sequence_index] =
-                        (war_key_event){
-                            .keysym = keysym,
-                            .mod = mod,
-                            .state = wl_key_state,
-                            .timestamp_us = get_monotonic_time_us(),
-                        };
-                    write_input_sequence_index =
-                        (write_input_sequence_index + 1) & 0xFF;
+                    if (wl_key_state == 1) {
+                        size_t next_write =
+                            (write_input_sequence_index + 1) & 0xFF;
+
+                        if (next_write == read_input_sequence_index) {
+                            read_input_sequence_index =
+                                (read_input_sequence_index + 1) & 0xFF;
+                        }
+
+                        input_sequence_ring_buffer[write_input_sequence_index] =
+                            (war_key_event){
+                                .keysym = keysym,
+                                .mod = mod,
+                                .state = wl_key_state,
+                                .timestamp_us = get_monotonic_time_us(),
+                            };
+                        write_input_sequence_index =
+                            (write_input_sequence_index + 1) & 0xFF;
+                    } else if (wl_key_state == 0) {
+                        if (repeat_event.keysym == keysym) {
+                            repeat_command = NULL;
+                            repeat_start_time_us = 0;
+                            next_repeat_time_us = 0;
+                        }
+                    }
+
+                    call_carmack("read index: %u", read_input_sequence_index);
+                    call_carmack("write index: %u", write_input_sequence_index);
+
                     call_carmack("keysym pressed: %u", keysym);
                     call_carmack("mod pressed: %u", mod);
                     goto done;

@@ -113,22 +113,22 @@ cmd_decrement_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
 }
 
 static inline void
-cmd_goto_row_0(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+cmd_goto_bottom_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *row = 0;
 }
 
 static inline void
-cmd_goto_col_0(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+cmd_goto_left_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *col = 0;
 }
 
 static inline void
-cmd_goto_row_end(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+cmd_goto_top_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *row = 4;
 }
 
 static inline void
-cmd_goto_col_end(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
+cmd_goto_right_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
     *col = 4;
 }
 

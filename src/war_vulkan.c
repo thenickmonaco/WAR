@@ -98,26 +98,40 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         max_gpu_count = 10,
     };
     uint32_t gpu_count = 0;
+    VkPhysicalDevice physical_devices[max_gpu_count];
     vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
     assert(gpu_count != 0 && gpu_count <= max_gpu_count);
 
-    VkPhysicalDevice physical_devices[max_gpu_count];
     vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
 
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties device_props;
+
     for (uint32_t i = 0; i < gpu_count; i++) {
         vkGetPhysicalDeviceProperties(physical_devices[i], &device_props);
+
+        call_carmack("Found GPU %u: %s (vendorID=0x%x, deviceID=0x%x)",
+                     i,
+                     device_props.deviceName,
+                     device_props.vendorID,
+                     device_props.deviceID);
+
         if (device_props.vendorID == 0x8086) {
-            call_carmack("Physical Device Name: %s", device_props.deviceName);
-            call_carmack("Vendor ID: 0x%x", device_props.vendorID);
-            call_carmack("Device ID: 0x%x", device_props.deviceID);
+            physical_device = physical_devices[i];
+            call_carmack("Selected Intel GPU: %s", device_props.deviceName);
             break;
         }
     }
+
     if (physical_device == VK_NULL_HANDLE) {
         physical_device = physical_devices[0];
+        vkGetPhysicalDeviceProperties(physical_device, &device_props);
+        call_carmack("Fallback GPU selected: %s (vendorID=0x%x)",
+                     device_props.deviceName,
+                     device_props.vendorID);
     }
+
+    assert(physical_device != VK_NULL_HANDLE);
 
     uint32_t device_extension_count = 0;
     vkEnumerateDeviceExtensionProperties(

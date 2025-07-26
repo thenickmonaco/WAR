@@ -138,6 +138,8 @@ void* war_window_render(void* args) {
     };
     uint8_t mode = MODE_NORMAL;
 
+    uint8_t oled_toggle = false;
+
     enum war_q_recording {
         q_NOT_RECORDING = 0,
         q_RECORDING = 1,
@@ -275,6 +277,7 @@ void* war_window_render(void* args) {
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
+    uint8_t keys_pressed[256] = {0};
 
     war_key_trie_pool pool = {
         .node_count = 1,
@@ -342,6 +345,24 @@ void* war_window_render(void* args) {
                         (read_input_sequence_index + 1) & 0xFF;
                     continue;
                 }
+
+                // If this evt's keysym differs from the repeating one, stop
+                // repeat immediately
+                if (repeat_command && evt.keysym != repeat_event.keysym) {
+                    repeat_command = NULL;
+                    repeat_start_time_us = 0;
+                    next_repeat_time_us = 0;
+                    for (size_t i = read_input_sequence_index;
+                         i != write_input_sequence_index;
+                         i = (i + 1) & 0xFF) {
+                        if (input_sequence_ring_buffer[i].keysym ==
+                            repeat_event.keysym) {
+                            // Remove or mark as state=0
+                            input_sequence_ring_buffer[i].state = 0;
+                        }
+                    }
+                }
+
                 size_t available =
                     (write_input_sequence_index - read_input_sequence_index) &
                     0xFF;
@@ -390,7 +411,7 @@ void* war_window_render(void* args) {
                 } else {
                     // check if current sequence is a **prefix** of any known
                     // command
-                    bool could_be_prefix = false;
+                    uint8_t could_be_prefix = false;
                     war_key_trie_node* node = &pool.nodes[0];
 
                     for (size_t i = 0; i < available && i < MAX_SEQUENCE_LENGTH;

@@ -66,6 +66,7 @@ enum war_misc {
     max_quads = 800,
     max_fds = 50,
     ring_buffer_size = 256,
+    OLED_MODE = 0,
 };
 
 typedef struct war_key_event {

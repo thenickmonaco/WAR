@@ -89,8 +89,22 @@ enum war_key_trie {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 8,
+    NUM_SEQUENCES = 21,
 };
+
+typedef struct war_input_cmd_context {
+    uint32_t col;
+    uint32_t row;
+    uint32_t col_increment;
+    uint32_t row_increment;
+    uint32_t col_leap_increment;
+    uint32_t row_leap_increment;
+    uint32_t numeric_prefix;
+    uint32_t max_cols;
+    uint32_t max_rows;
+    float cursor_x;
+    float cursor_y;
+} war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
     war_key_trie_node nodes[MAX_NODES];

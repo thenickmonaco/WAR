@@ -99,14 +99,23 @@ void* war_window_render(void* args) {
     const uint32_t logical_height =
         (uint32_t)floor(physical_height / scale_factor);
 
-    uint32_t max_cols = 71;
-    uint32_t max_rows = 20;
-    const float col_width_px = (float)physical_width / max_cols;
-    const float row_height_px = (float)physical_height / max_rows;
-    float cursor_x;
-    float cursor_y;
-    uint32_t col = 0;
-    uint32_t row = 0;
+    war_input_cmd_context input_cmd_context = {
+        .max_cols = 71,
+        .max_rows = 20,
+        .col = 0,
+        .row = 0,
+        .col_increment = 1,
+        .row_increment = 1,
+        .col_leap_increment = 13,
+        .row_leap_increment = 7,
+        .cursor_x = 0,
+        .cursor_y = 0,
+        .numeric_prefix = 0,
+    };
+    const float col_width_px =
+        (float)physical_width / input_cmd_context.max_cols;
+    const float row_height_px =
+        (float)physical_height / input_cmd_context.max_rows;
 
     war_key_event input_sequence_ring_buffer[ring_buffer_size];
     uint8_t write_input_sequence_index = 0;
@@ -119,7 +128,7 @@ void* war_window_render(void* args) {
     uint32_t mod_num;
     uint32_t mod_fn;
 
-    uint32_t numeric_prefix = 1;
+    uint32_t numeric_prefix = 0;
 
     char command_buffer[256];
     size_t command_buffer_size;
@@ -170,7 +179,7 @@ void* war_window_render(void* args) {
     uint64_t next_repeat_time_us = 0;
     const uint64_t repeat_delay_us = 150000;
     const uint64_t repeat_rate_us = 40000;
-    void (*repeat_command)(uint32_t*, uint32_t*, uint32_t) = NULL;
+    void (*repeat_command)(war_input_cmd_context*) = NULL;
     war_key_event repeat_event;
 
     enum war_pixel_format {
@@ -386,15 +395,14 @@ void* war_window_render(void* args) {
                         [(read_input_sequence_index + i) & 0xFF];
                 }
 
-                void (*matched_command)(uint32_t*, uint32_t*, uint32_t) =
+                void (*matched_command)(war_input_cmd_context*) =
                     war_match_sequence_in_trie(
                         &pool, temp_sequence, available, &matched_length);
 
                 if (matched_length > 0 && matched_command) {
-                    matched_command(&col, &row, numeric_prefix);
+                    matched_command(&input_cmd_context);
                     read_input_sequence_index =
                         (read_input_sequence_index + matched_length) & 0xFF;
-                    numeric_prefix = 1;
 
                     if (matched_command != repeat_command) {
                         repeat_start_time_us = 0;
@@ -467,7 +475,8 @@ void* war_window_render(void* args) {
                 if (repeat_start_time_us && now >= next_repeat_time_us) {
                     call_carmack("repeat");
 
-                    repeat_command(&col, &row, numeric_prefix);
+                    repeat_command(&input_cmd_context);
+
                     input_sequence_ring_buffer[write_input_sequence_index] =
                         repeat_event;
                     write_input_sequence_index =
@@ -935,23 +944,29 @@ void* war_window_render(void* args) {
                         {{0.5f, 0.5f}, 0xFFFFFFFF},
                         {{-0.5f, 0.5f}, 0xFF0000FF},
                         // cursor
-                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
-                          1.0f - ((row + 1) * row_height_px) / physical_height *
-                                     2.0f},
-                         0xFFFFFFFF},
-                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
+                        {{(input_cmd_context.col * col_width_px) /
+                                  physical_width * 2.0f -
                               1.0f,
-                          1.0f - ((row + 1) * row_height_px) / physical_height *
-                                     2.0f},
+                          1.0f - ((input_cmd_context.row + 1) * row_height_px) /
+                                     physical_height * 2.0f},
                          0xFFFFFFFF},
-                        {{((col + 1) * col_width_px) / physical_width * 2.0f -
+                        {{((input_cmd_context.col + 1) * col_width_px) /
+                                  physical_width * 2.0f -
                               1.0f,
-                          1.0f -
-                              (row * row_height_px) / physical_height * 2.0f},
+                          1.0f - ((input_cmd_context.row + 1) * row_height_px) /
+                                     physical_height * 2.0f},
                          0xFFFFFFFF},
-                        {{(col * col_width_px) / physical_width * 2.0f - 1.0f,
-                          1.0f -
-                              (row * row_height_px) / physical_height * 2.0f},
+                        {{((input_cmd_context.col + 1) * col_width_px) /
+                                  physical_width * 2.0f -
+                              1.0f,
+                          1.0f - (input_cmd_context.row * row_height_px) /
+                                     physical_height * 2.0f},
+                         0xFFFFFFFF},
+                        {{(input_cmd_context.col * col_width_px) /
+                                  physical_width * 2.0f -
+                              1.0f,
+                          1.0f - (input_cmd_context.row * row_height_px) /
+                                     physical_height * 2.0f},
                          0xFFFFFFFF},
                     };
 
@@ -1067,13 +1082,18 @@ void* war_window_render(void* args) {
 
                     uint32_t cursor_w = col_width_px;
                     uint32_t cursor_h = row_height_px;
-                    uint32_t cursor_x = col * col_width_px;
-                    uint32_t cursor_y =
-                        (physical_height - 1) - (row * row_height_px);
+                    input_cmd_context.cursor_x =
+                        input_cmd_context.col * col_width_px;
+                    input_cmd_context.cursor_y =
+                        (physical_height - 1) -
+                        (input_cmd_context.row * row_height_px);
 
-                    for (uint32_t y = cursor_y; y < cursor_y + cursor_h; ++y) {
+                    for (uint32_t y = input_cmd_context.cursor_y;
+                         y < input_cmd_context.cursor_y + cursor_h;
+                         ++y) {
                         if (y >= physical_height) break;
-                        for (uint32_t x = cursor_x; x < cursor_x + cursor_w;
+                        for (uint32_t x = input_cmd_context.cursor_x;
+                             x < input_cmd_context.cursor_x + cursor_w;
                              ++x) {
                             if (x >= physical_width) break;
                             pixels[y * physical_width + x] =
@@ -1091,8 +1111,8 @@ void* war_window_render(void* args) {
                                              physical_width,
                                              physical_height);
                     call_carmack("SOMETHING RENDERED");
-                    call_carmack("COL: %u", col);
-                    call_carmack("ROW: %u", row);
+                    call_carmack("COL: %u", input_cmd_context.col);
+                    call_carmack("ROW: %u", input_cmd_context.row);
                     goto done;
                 wl_display_error:
                     dump_bytes("wl_display::error event",
@@ -1855,6 +1875,22 @@ void* war_window_render(void* args) {
                                 {0},
                             },
                             {
+                                {.keysym = XKB_KEY_k, .mod = MOD_ALT},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_j, .mod = MOD_ALT},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_h, .mod = MOD_ALT},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_l, .mod = MOD_ALT},
+                                {0},
+                            },
+                            {
                                 {.keysym = XKB_KEY_0, .mod = 0},
                                 {0},
                             },
@@ -1871,19 +1907,70 @@ void* war_window_render(void* args) {
                                 {.keysym = XKB_KEY_g, .mod = 0},
                                 {0},
                             },
+                            {
+                                {.keysym = XKB_KEY_1, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_2, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_3, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_4, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_5, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_6, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_7, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_8, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_9, .mod = 0},
+                                {0},
+                            },
                         };
                     void (*key_commands[NUM_SEQUENCES])(
-                        uint32_t*, uint32_t*, uint32_t) = {
+                        war_input_cmd_context*) = {
                         cmd_increment_row,
                         cmd_decrement_row,
                         cmd_decrement_col,
                         cmd_increment_col,
+
+                        cmd_leap_increment_row,
+                        cmd_leap_decrement_row,
+                        cmd_leap_decrement_col,
+                        cmd_leap_increment_col,
 
                         cmd_goto_left_col,
                         cmd_goto_right_col,
 
                         cmd_goto_bottom_row,
                         cmd_goto_top_row,
+
+                        cmd_append_1_to_numeric_prefix,
+                        cmd_append_2_to_numeric_prefix,
+                        cmd_append_3_to_numeric_prefix,
+                        cmd_append_4_to_numeric_prefix,
+                        cmd_append_5_to_numeric_prefix,
+                        cmd_append_6_to_numeric_prefix,
+                        cmd_append_7_to_numeric_prefix,
+                        cmd_append_8_to_numeric_prefix,
+                        cmd_append_9_to_numeric_prefix,
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;
@@ -2008,14 +2095,16 @@ void* war_window_render(void* args) {
                     dump_bytes("wl_pointer_motion event",
                                msg_buffer + msg_buffer_offset,
                                size);
-                    cursor_x = (float)(int32_t)read_le32(
-                                   msg_buffer + msg_buffer_offset + 12) /
-                               256.0f * scale_factor;
-                    cursor_y = (float)(int32_t)read_le32(
-                                   msg_buffer + msg_buffer_offset + 16) /
-                               256.0f * scale_factor;
-                    call_carmack("CURSOR_X: %f", cursor_x);
-                    call_carmack("CURSOR_Y: %f", cursor_y);
+                    input_cmd_context.cursor_x =
+                        (float)(int32_t)read_le32(msg_buffer +
+                                                  msg_buffer_offset + 12) /
+                        256.0f * scale_factor;
+                    input_cmd_context.cursor_y =
+                        (float)(int32_t)read_le32(msg_buffer +
+                                                  msg_buffer_offset + 16) /
+                        256.0f * scale_factor;
+                    call_carmack("CURSOR_X: %f", input_cmd_context.cursor_x);
+                    call_carmack("CURSOR_Y: %f", input_cmd_context.cursor_y);
                     goto done;
                 wl_pointer_button:
                     dump_bytes("wl_pointer_button event",
@@ -2026,10 +2115,14 @@ void* war_window_render(void* args) {
                     case 1:
                         if (read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
                             BTN_LEFT) {
-                            col = (uint32_t)(cursor_x / col_width_px);
-                            row = (uint32_t)((physical_height - cursor_y) /
-                                             row_height_px); // because top left
-                                                             // = 0,0 in wayland
+                            input_cmd_context.col =
+                                (uint32_t)(input_cmd_context.cursor_x /
+                                           col_width_px);
+                            input_cmd_context.row =
+                                (uint32_t)((physical_height -
+                                            input_cmd_context.cursor_y) /
+                                           row_height_px); // because top left
+                                                           // = 0,0 in wayland
                         }
                     }
                     goto done;

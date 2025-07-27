@@ -92,44 +92,154 @@ static inline void write_le16(uint8_t* p, uint16_t v) {
     p[1] = (uint8_t)(v >> 8);
 }
 
-static inline void
-cmd_increment_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *row += numeric_prefix;
+static inline void cmd_increment_row(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix != 0) {
+        ctx->row += ctx->row_increment * (ctx->numeric_prefix);
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->row) += ctx->row_increment;
+    ctx->numeric_prefix = 0;
 }
 
-static inline void
-cmd_decrement_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *row -= numeric_prefix;
+static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->row -= ctx->row_increment * (ctx->numeric_prefix);
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->row) -= ctx->row_increment;
+    ctx->numeric_prefix = 0;
 }
 
-static inline void
-cmd_increment_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *col += numeric_prefix;
+static inline void cmd_increment_col(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->col += ctx->col_increment * (ctx->numeric_prefix);
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->col) += ctx->col_increment;
+    ctx->numeric_prefix = 0;
 }
 
-static inline void
-cmd_decrement_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *col -= numeric_prefix;
+static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->col -= ctx->col_increment * (ctx->numeric_prefix);
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->col) -= ctx->col_increment;
+    ctx->numeric_prefix = 0;
 }
 
-static inline void
-cmd_goto_bottom_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *row = 0;
+static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix != 0) {
+        ctx->row += ctx->row_leap_increment * (ctx->numeric_prefix);
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->row) += ctx->row_leap_increment;
+    ctx->numeric_prefix = 0;
 }
 
-static inline void
-cmd_goto_left_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *col = 0;
+static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->row -= ctx->row_leap_increment * (ctx->numeric_prefix);
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->row) -= ctx->row_leap_increment;
+    ctx->numeric_prefix = 0;
 }
 
-static inline void
-cmd_goto_top_row(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *row = 4;
+static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->col += ctx->col_leap_increment * (ctx->numeric_prefix);
+
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->col) += ctx->col_leap_increment;
+    ctx->numeric_prefix = 0;
 }
 
-static inline void
-cmd_goto_right_col(uint32_t* col, uint32_t* row, uint32_t numeric_prefix) {
-    *col = 4;
+static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->col -= ctx->col_leap_increment * (ctx->numeric_prefix);
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
+    (ctx->col) -= ctx->col_leap_increment;
+    ctx->numeric_prefix = 0;
+}
+
+static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
+    ctx->row = 0;
+    ctx->numeric_prefix = 0;
+}
+
+static inline void cmd_goto_left_col(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->numeric_prefix = ctx->numeric_prefix * 10;
+        return;
+    }
+
+    ctx->col = 0;
+    ctx->numeric_prefix = 0;
+}
+
+static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
+    ctx->row = ctx->max_rows - 1;
+    ctx->numeric_prefix = 0;
+}
+
+static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
+    ctx->col = ctx->max_cols - 1;
+    ctx->numeric_prefix = 0;
+}
+
+static inline void cmd_append_1_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 1;
+}
+
+static inline void cmd_append_2_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 2;
+}
+
+static inline void cmd_append_3_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 3;
+}
+
+static inline void cmd_append_4_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 4;
+}
+
+static inline void cmd_append_5_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 5;
+}
+
+static inline void cmd_append_6_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 6;
+}
+
+static inline void cmd_append_7_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 7;
+}
+
+static inline void cmd_append_8_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 8;
+}
+
+static inline void cmd_append_9_to_numeric_prefix(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 9;
 }
 
 // Returns matched command, and sets *out_matched_length
@@ -137,9 +247,9 @@ static inline void (*war_match_sequence_in_trie(war_key_trie_pool* pool,
                                                 war_key_event* input_seq,
                                                 size_t input_len,
                                                 size_t* out_matched_length))(
-    uint32_t*, uint32_t*, uint32_t) {
+    war_input_cmd_context*) {
     war_key_trie_node* node = &pool->nodes[0];
-    void (*matched_command)(uint32_t*, uint32_t*, uint32_t) = NULL;
+    void (*matched_command)(war_input_cmd_context*) = NULL;
     size_t matched_len = 0;
 
     for (size_t len = 0; len < input_len; len++) {
@@ -162,8 +272,7 @@ static inline void (*war_match_sequence_in_trie(war_key_trie_pool* pool,
         node = child;
 
         if (node->is_terminal) {
-            matched_command =
-                (void (*)(uint32_t*, uint32_t*, uint32_t))node->command;
+            matched_command = (void (*)(war_input_cmd_context*))node->command;
             matched_len = len + 1;
         }
     }

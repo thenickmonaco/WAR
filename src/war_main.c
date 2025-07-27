@@ -120,6 +120,10 @@ void* war_window_render(void* args) {
         .anchor_y = 0.0f,
         .anchor_ndc_x = 0.0f,
         .anchor_ndc_y = 0.0f,
+        .viewport_cols = 0,
+        .viewport_rows = 0,
+        .scroll_margin_cols = 0,
+        .scroll_margin_rows = 0,
     };
     const float col_width_px =
         (float)physical_width / input_cmd_context.max_cols;

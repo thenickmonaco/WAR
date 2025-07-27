@@ -67,6 +67,7 @@ enum war_misc {
     max_fds = 50,
     ring_buffer_size = 256,
     OLED_MODE = 0,
+    MAX_MIDI_NOTES = 128,
 };
 
 typedef struct war_key_event {
@@ -113,6 +114,10 @@ typedef struct war_input_cmd_context {
     float anchor_y;
     float anchor_ndc_x;
     float anchor_ndc_y;
+    uint32_t scroll_margin_cols;
+    uint32_t scroll_margin_rows;
+    uint32_t viewport_cols;
+    uint32_t viewport_rows;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {

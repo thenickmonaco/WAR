@@ -182,6 +182,12 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
 }
 
 static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->row = ctx->numeric_prefix;
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
     ctx->row = 0;
     ctx->numeric_prefix = 0;
 }
@@ -197,11 +203,23 @@ static inline void cmd_goto_left_col(war_input_cmd_context* ctx) {
 }
 
 static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->row = ctx->numeric_prefix;
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
     ctx->row = ctx->max_rows - 1;
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
+    if (ctx->numeric_prefix) {
+        ctx->col = ctx->numeric_prefix;
+        ctx->numeric_prefix = 0;
+        return;
+    }
+
     ctx->col = ctx->max_cols - 1;
     ctx->numeric_prefix = 0;
 }

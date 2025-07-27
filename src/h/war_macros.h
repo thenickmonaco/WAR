@@ -96,22 +96,26 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix != 0) {
         ctx->row += ctx->row_increment * (ctx->numeric_prefix);
         ctx->numeric_prefix = 0;
+        ctx->panning_y += 0.1f;
         return;
     }
 
     (ctx->row) += ctx->row_increment;
     ctx->numeric_prefix = 0;
+    ctx->panning_y += 0.1f;
 }
 
 static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->row -= ctx->row_increment * (ctx->numeric_prefix);
         ctx->numeric_prefix = 0;
+        ctx->panning_y -= 0.1f;
         return;
     }
 
     (ctx->row) -= ctx->row_increment;
     ctx->numeric_prefix = 0;
+    ctx->panning_y -= 0.1f;
 }
 
 static inline void cmd_increment_col(war_input_cmd_context* ctx) {
@@ -124,18 +128,20 @@ static inline void cmd_increment_col(war_input_cmd_context* ctx) {
 
     (ctx->col) += ctx->col_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_x += 0.5f;
+    ctx->panning_x += 0.1f;
 }
 
 static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col -= ctx->col_increment * (ctx->numeric_prefix);
         ctx->numeric_prefix = 0;
+        ctx->panning_x -= 0.1f;
         return;
     }
 
     (ctx->col) -= ctx->col_increment;
     ctx->numeric_prefix = 0;
+    ctx->panning_x -= 0.1f;
 }
 
 static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {

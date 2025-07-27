@@ -1059,6 +1059,7 @@ void* war_window_render(void* args) {
 
                     typedef struct {
                         float zoom;
+                        float _pad1;
                         float pan[2];
                         float padding;
                     } PushConstants;
@@ -1071,6 +1072,7 @@ void* war_window_render(void* args) {
                     };
 
                     call_carmack("PANNING X: %f", input_cmd_context.panning_x);
+                    call_carmack("PANNING Y: %f", input_cmd_context.panning_y);
 
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.pipeline_layout,

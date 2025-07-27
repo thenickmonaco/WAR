@@ -348,7 +348,15 @@ void* war_window_render(void* args) {
 
                 // If this evt's keysym differs from the repeating one, stop
                 // repeat immediately
-                if (repeat_command && evt.keysym != repeat_event.keysym) {
+                if (repeat_command && (evt.keysym != repeat_event.keysym ||
+                                       evt.mod != repeat_event.mod)) {
+                    call_carmack(
+                        "Stopping repeat due to different key/mod combo: "
+                        "old %u+%u, new %u+%u\n",
+                        repeat_event.keysym,
+                        repeat_event.mod,
+                        evt.keysym,
+                        evt.mod);
                     repeat_command = NULL;
                     repeat_start_time_us = 0;
                     next_repeat_time_us = 0;
@@ -356,8 +364,9 @@ void* war_window_render(void* args) {
                          i != write_input_sequence_index;
                          i = (i + 1) & 0xFF) {
                         if (input_sequence_ring_buffer[i].keysym ==
-                            repeat_event.keysym) {
-                            // Remove or mark as state=0
+                                repeat_event.keysym &&
+                            input_sequence_ring_buffer[i].mod ==
+                                repeat_event.mod) {
                             input_sequence_ring_buffer[i].state = 0;
                         }
                     }
@@ -387,8 +396,7 @@ void* war_window_render(void* args) {
                         (read_input_sequence_index + matched_length) & 0xFF;
                     numeric_prefix = 1;
 
-                    if (matched_command != repeat_command ||
-                        evt.keysym != repeat_event.keysym) {
+                    if (matched_command != repeat_command) {
                         repeat_start_time_us = 0;
                         next_repeat_time_us = 0;
                     }
@@ -1952,7 +1960,7 @@ void* war_window_render(void* args) {
                         write_input_sequence_index =
                             (write_input_sequence_index + 1) & 0xFF;
                     } else if (wl_key_state == 0) {
-                        if (repeat_event.keysym == keysym) {
+                        if (repeat_event.keysym == keysym || mod) {
                             repeat_command = NULL;
                             repeat_start_time_us = 0;
                             next_repeat_time_us = 0;

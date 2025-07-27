@@ -118,11 +118,13 @@ static inline void cmd_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col += ctx->col_increment * (ctx->numeric_prefix);
         ctx->numeric_prefix = 0;
+        ctx->panning_x += 0.5f;
         return;
     }
 
     (ctx->col) += ctx->col_increment;
     ctx->numeric_prefix = 0;
+    ctx->panning_x += 0.5f;
 }
 
 static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
@@ -258,6 +260,40 @@ static inline void cmd_append_8_to_numeric_prefix(war_input_cmd_context* ctx) {
 
 static inline void cmd_append_9_to_numeric_prefix(war_input_cmd_context* ctx) {
     ctx->numeric_prefix = ctx->numeric_prefix * 10 + 9;
+}
+
+static inline void cmd_zoom_in(war_input_cmd_context* ctx) {
+    ctx->zoom_scale += ctx->zoom_increment;
+    if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
+    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+}
+
+static inline void cmd_zoom_out(war_input_cmd_context* ctx) {
+    ctx->zoom_scale -= ctx->zoom_increment;
+    if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
+    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+}
+
+static inline void cmd_zoom_in_leap(war_input_cmd_context* ctx) {
+    ctx->zoom_scale += ctx->zoom_leap_increment;
+    if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
+    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+}
+
+static inline void cmd_zoom_out_leap(war_input_cmd_context* ctx) {
+    ctx->zoom_scale -= ctx->zoom_leap_increment;
+    if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
+    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+}
+
+static inline void cmd_reset_zoom(war_input_cmd_context* ctx) {
+    ctx->zoom_scale = 1.0f;
+    ctx->panning_x = 0.0f;
+    ctx->panning_y = 0.0f;
 }
 
 // Returns matched command, and sets *out_matched_length

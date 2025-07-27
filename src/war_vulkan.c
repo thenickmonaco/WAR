@@ -470,9 +470,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             .pName = "main",
         }};
     VkPushConstantRange push_constant_range = {
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = sizeof(float) * 4,
+        .size = 16, // 4 bytes for zoom + 8 bytes for pan + padding
     };
     VkPipelineLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

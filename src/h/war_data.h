@@ -89,7 +89,7 @@ enum war_key_trie {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 21,
+    NUM_SEQUENCES = 26,
 };
 
 typedef struct war_input_cmd_context {
@@ -104,6 +104,15 @@ typedef struct war_input_cmd_context {
     uint32_t max_rows;
     float cursor_x;
     float cursor_y;
+    float zoom_scale;
+    float panning_x;
+    float panning_y;
+    float zoom_increment;
+    float zoom_leap_increment;
+    float anchor_x;
+    float anchor_y;
+    float anchor_ndc_x;
+    float anchor_ndc_y;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {

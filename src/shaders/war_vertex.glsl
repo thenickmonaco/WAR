@@ -29,8 +29,18 @@ layout(location = 1) in vec4 in_color;
 
 layout(location = 0) out vec4 color;
 
-void main() {
-    color = in_color;
-    gl_Position = vec4(in_pos, 0.0, 1.0);
-}
+// Add push constants or uniform for zoom and pan
+layout(push_constant) uniform PushConstants {
+    float zoom;
+    vec2 pan;  // pan.x and pan.y for horizontal and vertical panning
+    float padding;
+} pc;
 
+void main() {
+    // Apply pan and zoom to the input position before passing to gl_Position
+    vec2 zoomed = in_pos * pc.zoom;
+    vec2 translated = zoomed + pc.pan;
+
+    gl_Position = vec4(translated, 0.0, 1.0);
+    color = in_color;
+}

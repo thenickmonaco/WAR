@@ -111,6 +111,15 @@ void* war_window_render(void* args) {
         .cursor_x = 0,
         .cursor_y = 0,
         .numeric_prefix = 0,
+        .zoom_scale = 1.0f, // 1.0 = normal, <1 = zoom out, >1 = zoom in
+        .panning_x = 0.0f,
+        .panning_y = 0.0f,
+        .zoom_increment = 0.1f,
+        .zoom_leap_increment = 0.5f,
+        .anchor_x = 0.0f,
+        .anchor_y = 0.0f,
+        .anchor_ndc_x = 0.0f,
+        .anchor_ndc_y = 0.0f,
     };
     const float col_width_px =
         (float)physical_width / input_cmd_context.max_cols;
@@ -286,7 +295,6 @@ void* war_window_render(void* args) {
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
-    uint8_t keys_pressed[256] = {0};
 
     war_key_trie_pool pool = {
         .node_count = 1,
@@ -903,7 +911,7 @@ void* war_window_render(void* args) {
                     // 3. Begin render pass, clear color to gray (0.5, 0.5,
                     // 0.5, 1.0)
                     VkClearValue clear_color = {
-                        .color = {{0.5f, 0.5f, 0.5f, 1.0f}}};
+                        .color = {{0.1667f, 0.1667f, 0.1667f, 1.0f}}};
 
                     VkRenderPassBeginInfo render_pass_info = {
                         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -938,11 +946,10 @@ void* war_window_render(void* args) {
                     } Vertex;
 
                     Vertex quad_verts[8] = {
-                        {{-0.5f, -0.5f},
-                         0xFF000000}, // red in RGBA (red opaque)
-                        {{0.5f, -0.5f}, 0xFF0000FF},
-                        {{0.5f, 0.5f}, 0xFFFFFFFF},
-                        {{-0.5f, 0.5f}, 0xFF0000FF},
+                        {{-0.5f, -0.5f}, 0x000000FF},
+                        {{0.5f, -0.5f}, 0x000000FF},
+                        {{0.5f, 0.5f}, 0x000000FF},
+                        {{-0.5f, 0.5f}, 0x000000FF},
                         // cursor
                         {{(input_cmd_context.col * col_width_px) /
                                   physical_width * 2.0f -
@@ -969,6 +976,23 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          0xFFFFFFFF},
                     };
+
+                    float cursor_center_x_px =
+                        (input_cmd_context.col + 0.5f) * col_width_px;
+                    float cursor_center_y_px =
+                        (input_cmd_context.row + 0.5f) * row_height_px;
+                    input_cmd_context.anchor_ndc_x =
+                        (cursor_center_x_px / physical_width) * 2.0f - 1.0f;
+                    input_cmd_context.anchor_ndc_y =
+                        1.0f - (cursor_center_y_px / physical_height) * 2.0f;
+                    input_cmd_context.anchor_x =
+                        (input_cmd_context.anchor_ndc_x -
+                         input_cmd_context.panning_x) /
+                        input_cmd_context.zoom_scale;
+                    input_cmd_context.anchor_y =
+                        (input_cmd_context.anchor_ndc_y -
+                         input_cmd_context.panning_y) /
+                        input_cmd_context.zoom_scale;
 
                     uint16_t quad_indices[12] = {
                         0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
@@ -1033,6 +1057,28 @@ void* war_window_render(void* args) {
                     };
                     vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
 
+                    typedef struct {
+                        float zoom;
+                        float pan[2];
+                        float padding;
+                    } PushConstants;
+
+                    PushConstants pc = {
+                        .zoom = input_cmd_context.zoom_scale,
+                        .pan = {input_cmd_context.panning_x,
+                                input_cmd_context.panning_y},
+                        .padding = 0.0f,
+                    };
+
+                    call_carmack("PANNING X: %f", input_cmd_context.panning_x);
+
+                    vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                       vulkan_context.pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0,
+                                       sizeof(PushConstants),
+                                       &pc);
+
                     // 8. Draw indexed quad
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
 
@@ -1046,13 +1092,13 @@ void* war_window_render(void* args) {
                         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                         .commandBufferCount = 1,
                         .pCommandBuffers = &vulkan_context.cmd_buffer,
-                        //.waitSemaphoreCount = 0,
-                        //.pWaitSemaphores = NULL, // Optional unless syncing
-                        // with
-                        //                         // buffer acquisition
-                        //.signalSemaphoreCount = 1,
-                        //.pSignalSemaphores =
-                        //    &vulkan_context.render_finished_semaphore,
+
+                        // COMMENT: commented out earlier (semaphores)
+                        .waitSemaphoreCount = 0,
+                        .pWaitSemaphores = NULL,
+                        .signalSemaphoreCount = 1,
+                        .pSignalSemaphores =
+                            &vulkan_context.render_finished_semaphore,
                     };
                     result = vkQueueSubmit(vulkan_context.queue,
                                            1,
@@ -1943,6 +1989,28 @@ void* war_window_render(void* args) {
                                 {.keysym = XKB_KEY_9, .mod = 0},
                                 {0},
                             },
+                            {
+                                {.keysym = XKB_KEY_equal, .mod = MOD_CTRL},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_minus, .mod = MOD_CTRL},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_equal,
+                                 .mod = MOD_CTRL | MOD_ALT},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_minus,
+                                 .mod = MOD_CTRL | MOD_ALT},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_0, .mod = MOD_CTRL},
+                                {0},
+                            },
                         };
                     void (*key_commands[NUM_SEQUENCES])(
                         war_input_cmd_context*) = {
@@ -1971,6 +2039,12 @@ void* war_window_render(void* args) {
                         cmd_append_7_to_numeric_prefix,
                         cmd_append_8_to_numeric_prefix,
                         cmd_append_9_to_numeric_prefix,
+
+                        cmd_zoom_in,
+                        cmd_zoom_out,
+                        cmd_zoom_in_leap,
+                        cmd_zoom_out_leap,
+                        cmd_reset_zoom,
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;
@@ -2385,7 +2459,7 @@ void* war_audio(void* args) {
 
     float sample_buffer[PERIOD_SIZE * NUM_CHANNELS];
 
-    uint8_t end_audio = 0;
+    uint8_t end_audio = false;
     while (!end_audio) {
         if (read_from_window_render_index != write_to_audio_index) {
             from_window_render = window_render_to_audio_ring_buffer
@@ -2418,7 +2492,7 @@ void* war_audio(void* args) {
             case AUDIO_END_WAR:
                 call_carmack("AUDIO_END_WAR");
 
-                end_audio = 1;
+                end_audio = true;
                 continue;
                 break;
             }

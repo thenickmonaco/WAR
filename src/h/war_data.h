@@ -25,6 +25,7 @@
 #ifndef WAR_DATA_H
 #define WAR_DATA_H
 
+#include <ft2build.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -34,6 +35,7 @@
 #include <vulkan/vulkan_core.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include FT_FREETYPE_H
 
 enum war_mods {
     MOD_SHIFT = (1 << 0),
@@ -133,6 +135,31 @@ typedef struct war_thread_args {
     uint8_t* write_to_window_render_index;
     uint8_t* read_from_window_render_index;
 } war_thread_args;
+
+typedef struct war_sdf_font_context {
+    FT_Library ft_library;
+    FT_Face ft_regular;
+    FT_Face ft_bold;
+
+    VkImage sdf_image;
+    VkImageView sdf_image_view;
+    VkDeviceMemory sdf_image_mem;
+    VkSampler sdf_sampler;
+
+    struct {
+        float advance_x;
+        float advance_y;
+        float bearing_x;
+        float bearing_y;
+        float width;
+        float height;
+        float uv_x0, uv_y0, uv_x1, uv_y1; // uvs inside SDF atlas
+    } glyphs[128];
+
+    VkDescriptorSet descriptor_set;
+
+    uint32_t pixel_height;
+} war_sdf_font_context;
 
 typedef struct war_vulkan_context {
     int dmabuf_fd;

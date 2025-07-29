@@ -26,7 +26,6 @@
 #include "war_drm.c"
 #include "war_vulkan.c"
 #include "war_wayland.c"
-#include "war_sdf_font.c"
 
 #include "h/war_data.h"
 #include "h/war_debug_macros.h"
@@ -43,36 +42,34 @@
 int main() {
     CALL_CARMACK("main");
 
-    war_sdf_font_init();
+    uint8_t war_window_render_to_audio_ring_buffer[ring_buffer_size];
+    uint8_t war_audio_to_window_render_ring_buffer[ring_buffer_size];
+    uint8_t write_to_audio_index = 0;
+    uint8_t read_from_audio_index = 0;
+    uint8_t write_to_window_render_index = 0;
+    uint8_t read_from_window_render_index = 0;
+    war_thread_args war_ring_buffer_thread_args = {
+        .window_render_to_audio_ring_buffer =
+            war_window_render_to_audio_ring_buffer,
+        .audio_to_window_render_ring_buffer =
+            war_audio_to_window_render_ring_buffer,
+        .write_to_audio_index = &write_to_audio_index,
+        .read_from_audio_index = &read_from_audio_index,
+        .write_to_window_render_index = &write_to_window_render_index,
+        .read_from_window_render_index = &read_from_window_render_index,
+    };
+    pthread_t war_window_render_thread;
+    pthread_t war_audio_thread;
 
-    //uint8_t war_window_render_to_audio_ring_buffer[ring_buffer_size];
-    //uint8_t war_audio_to_window_render_ring_buffer[ring_buffer_size];
-    //uint8_t write_to_audio_index = 0;
-    //uint8_t read_from_audio_index = 0;
-    //uint8_t write_to_window_render_index = 0;
-    //uint8_t read_from_window_render_index = 0;
-    //war_thread_args war_ring_buffer_thread_args = {
-    //    .window_render_to_audio_ring_buffer =
-    //        war_window_render_to_audio_ring_buffer,
-    //    .audio_to_window_render_ring_buffer =
-    //        war_audio_to_window_render_ring_buffer,
-    //    .write_to_audio_index = &write_to_audio_index,
-    //    .read_from_audio_index = &read_from_audio_index,
-    //    .write_to_window_render_index = &write_to_window_render_index,
-    //    .read_from_window_render_index = &read_from_window_render_index,
-    //};
-    //pthread_t war_window_render_thread;
-    //pthread_t war_audio_thread;
+    pthread_create(&war_window_render_thread,
+                   NULL,
+                   war_window_render,
+                   &war_ring_buffer_thread_args);
+    pthread_create(
+        &war_audio_thread, NULL, war_audio, &war_ring_buffer_thread_args);
 
-    //pthread_create(&war_window_render_thread,
-    //               NULL,
-    //               war_window_render,
-    //               &war_ring_buffer_thread_args);
-    //pthread_create(
-    //    &war_audio_thread, NULL, war_audio, &war_ring_buffer_thread_args);
-
-    //pthread_join(war_window_render_thread, NULL);
-    //pthread_join(war_audio_thread, NULL);
+    pthread_join(war_window_render_thread, NULL);
+    pthread_join(war_audio_thread, NULL);
 
     END("main");
     return 0;

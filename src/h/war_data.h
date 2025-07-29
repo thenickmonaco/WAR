@@ -136,31 +136,6 @@ typedef struct war_thread_args {
     uint8_t* read_from_window_render_index;
 } war_thread_args;
 
-typedef struct war_sdf_font_context {
-    FT_Library ft_library;
-    FT_Face ft_regular;
-    FT_Face ft_bold;
-
-    VkImage sdf_image;
-    VkImageView sdf_image_view;
-    VkDeviceMemory sdf_image_mem;
-    VkSampler sdf_sampler;
-
-    struct {
-        float advance_x;
-        float advance_y;
-        float bearing_x;
-        float bearing_y;
-        float width;
-        float height;
-        float uv_x0, uv_y0, uv_x1, uv_y1; // uvs inside SDF atlas
-    } glyphs[128];
-
-    VkDescriptorSet descriptor_set;
-
-    uint32_t pixel_height;
-} war_sdf_font_context;
-
 typedef struct war_vulkan_context {
     int dmabuf_fd;
     VkInstance instance;
@@ -190,6 +165,34 @@ typedef struct war_vulkan_context {
     VkSampler texture_sampler;
     VkDescriptorSet texture_descriptor_set;
     VkDescriptorPool texture_descriptor_pool;
+
+    //-------------------------------------------------------------------------
+    // font
+    //-------------------------------------------------------------------------
+    FT_Library ft_library;
+    FT_Face ft_regular;
+    VkImage sdf_image;
+    VkImageView sdf_image_view;
+    VkDeviceMemory sdf_image_mem;
+    VkSampler sdf_sampler;
+    struct {
+        float advance_x;
+        float advance_y;
+        float bearing_x;
+        float bearing_y;
+        float width;
+        float height;
+        float uv_x0, uv_y0, uv_x1, uv_y1; // uvs inside SDF atlas
+    } glyphs[128];
+    VkDescriptorSet font_descriptor_set;
+    VkDescriptorSetLayout font_descriptor_set_layout;
+    VkDescriptorPool font_descriptor_pool;
+    VkPipeline sdf_pipeline;
+    VkPipelineLayout sdf_pipeline_layout;
+    VkShaderModule sdf_vert_shader;
+    VkShaderModule sdf_frag_shader;
+    VkPushConstantRange sdf_push_constant_range;
+    uint32_t pixel_height;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

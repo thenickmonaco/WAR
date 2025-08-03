@@ -228,7 +228,7 @@ static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->col = ctx->viewport_cols;
+    ctx->col = (int)((ctx->panning_x + 1.0f) / ctx->cell_width) + ctx->col;
     ctx->numeric_prefix = 0;
 }
 

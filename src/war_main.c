@@ -895,9 +895,10 @@ void* war_window_render(void* args) {
                     input_cmd_context.viewport_cols =
                         (int)(physical_width / (vulkan_context.cell_width *
                                                 input_cmd_context.zoom_scale));
+
                     input_cmd_context.viewport_rows =
-                        (int)(physical_width / (vulkan_context.cell_height *
-                                                input_cmd_context.zoom_scale));
+                        (int)(physical_height / (vulkan_context.cell_height *
+                                                 input_cmd_context.zoom_scale));
                     // 1. Wait for previous frame to finish (optional but
                     // recommended)
                     vkWaitForFences(vulkan_context.device,

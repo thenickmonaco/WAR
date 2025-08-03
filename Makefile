@@ -78,7 +78,7 @@ $(UNITY_O): $(UNITY_C)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
 
-$(TARGET): $(UNITY_O) $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV)
+$(TARGET): $(UNITY_O) $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV) $(SDF_FRAG_SHADER_SPV) $(SDF_VERT_SHADER_SPV)
 	$(Q)$(CC) $(CFLAGS) -o $@ $(UNITY_O) $(LDFLAGS)
 
 clean:

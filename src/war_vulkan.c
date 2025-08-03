@@ -1586,6 +1586,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_vertex_buffer = sdf_vertex_buffer,
         .sdf_vertex_buffer_memory = sdf_vertex_buffer_memory,
         .sdf_index_buffer = sdf_index_buffer,
+        .sdf_index_buffer_memory = sdf_index_buffer_memory,
         .sdf_fragment_shader = sdf_fragment_shader,
         .sdf_push_constant_range = sdf_push_constant_range,
         .font_pixel_height = font_pixel_height,

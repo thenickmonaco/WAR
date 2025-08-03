@@ -1142,21 +1142,30 @@ void* war_window_render(void* args) {
                          0.1f,
                          0.05f,
                          {1, 1, 0, 1}}, // top-left
-                        {{-0.5f, 1.0f},
+                        {{0.0f, 1.0f},
                          {1.0f, 0.0f},
                          0.1f,
                          0.05f,
                          {1, 1, 0, 1}}, // top-right
-                        {{-0.5f, 0.5f},
+                        {{0.0f, 0.0f},
                          {1.0f, 1.0f},
                          0.1f,
                          0.05f,
                          {1, 1, 0, 1}}, // bottom-right
-                        {{-1.0f, 0.5f},
+                        {{-1.0f, 0.0f},
                          {0.0f, 1.0f},
                          0.1f,
                          0.05f,
                          {1, 1, 0, 1}}, // bottom-left
+                    };
+
+                    uint16_t test_quad_indices[6] = {
+                        0,
+                        1,
+                        2, // first triangle
+                        2,
+                        3,
+                        0 // second triangle
                     };
 
                     // Upload the quad to sdf_vertex_buffer (assumes it's mapped
@@ -1180,8 +1189,25 @@ void* war_window_render(void* args) {
                                            &vulkan_context.sdf_vertex_buffer,
                                            sdf_offsets);
 
+                    void* sdf_index_ptr;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.sdf_index_buffer_memory,
+                                0,
+                                sizeof(test_quad_indices),
+                                0,
+                                &sdf_index_ptr);
+                    memcpy(sdf_index_ptr,
+                           test_quad_indices,
+                           sizeof(test_quad_indices));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.sdf_index_buffer_memory);
+                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                         vulkan_context.sdf_index_buffer,
+                                         0,
+                                         VK_INDEX_TYPE_UINT16);
+
                     // 8f. Draw a single quad (4 vertices)
-                    vkCmdDraw(vulkan_context.cmd_buffer, 4, 1, 0, 0);
+                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
                     //---------------------------------------------------------
                     // END SDF FONT RENDERING TEST
                     //---------------------------------------------------------

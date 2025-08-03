@@ -197,6 +197,7 @@ typedef struct war_vulkan_context {
     VkBuffer sdf_vertex_buffer;
     VkDeviceMemory sdf_vertex_buffer_memory;
     VkBuffer sdf_index_buffer;
+    VkDeviceMemory sdf_index_buffer_memory;
     uint32_t font_pixel_height;
     VkRenderPass sdf_render_pass;
 } war_vulkan_context;

@@ -96,39 +96,39 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix != 0) {
         ctx->row += ctx->row_increment * (ctx->numeric_prefix);
         ctx->numeric_prefix = 0;
-        ctx->panning_y += 0.1f;
+        ctx->panning_y += ctx->cell_height;
         return;
     }
 
     (ctx->row) += ctx->row_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_y += 0.1f;
+    ctx->panning_y += (2.0f * ctx->cell_height) / ctx->physical_height;
 }
 
 static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->row -= ctx->row_increment * (ctx->numeric_prefix);
         ctx->numeric_prefix = 0;
-        ctx->panning_y -= 0.1f;
+        ctx->panning_y -= ctx->cell_height;
         return;
     }
 
     (ctx->row) -= ctx->row_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_y -= 0.1f;
+    ctx->panning_y -= (2.0f * ctx->cell_height) / ctx->physical_height;
 }
 
 static inline void cmd_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col += ctx->col_increment * (ctx->numeric_prefix);
         ctx->numeric_prefix = 0;
-        ctx->panning_x -= 0.5f;
+        ctx->panning_x -= ctx->cell_width;
         return;
     }
 
     (ctx->col) += ctx->col_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_x -= 0.1f;
+    ctx->panning_x -= (2.0f * ctx->cell_width) / ctx->physical_width;
 }
 
 static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
@@ -141,7 +141,7 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
 
     (ctx->col) -= ctx->col_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_x += 0.1f;
+    ctx->panning_x += (2.0f * ctx->cell_width) / ctx->physical_width;
 }
 
 static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
@@ -196,7 +196,7 @@ static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->row = 0;
+    ctx->row = (int)(ctx->panning_y / ctx->cell_height);
     ctx->numeric_prefix = 0;
 }
 
@@ -206,7 +206,7 @@ static inline void cmd_goto_left_col(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->col = 0;
+    ctx->col = (int)(ctx->panning_x / ctx->cell_width);
     ctx->numeric_prefix = 0;
 }
 
@@ -217,7 +217,7 @@ static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->row = ctx->max_rows - 1;
+    ctx->row = ctx->viewport_rows;
     ctx->numeric_prefix = 0;
 }
 
@@ -228,7 +228,7 @@ static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->col = ctx->max_cols - 1;
+    ctx->col = ctx->viewport_cols;
     ctx->numeric_prefix = 0;
 }
 

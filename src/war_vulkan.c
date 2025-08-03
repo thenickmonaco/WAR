@@ -871,9 +871,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     FT_Init_FreeType(&ft_library);
     FT_Face ft_regular;
     FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
-    float font_pixel_height = 64.0f;
-    float font_pixel_width = 0.0f;
+    float font_pixel_height = 48.0f;
     FT_Set_Pixel_Sizes(ft_regular, 0, (int)font_pixel_height);
+    float ascent = ft_regular->size->metrics.ascender / 64.0f;
+    float descent = ft_regular->size->metrics.descender / 64.0f;
+    float cell_height = ft_regular->size->metrics.height / 64.0f;
+    float linegap = cell_height - (ascent - descent);
+    float cell_width = 0;
     enum {
         atlas_width = 512,
         atlas_height = 512,
@@ -884,7 +888,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     for (int c = 0; c < 128; c++) {
         FT_Load_Char(ft_regular, c, FT_LOAD_RENDER);
         if (c == 'M') {
-            font_pixel_width = ft_regular->glyph->advance.x / 64.0f;
+            call_carmack("for monospaced fonts");
+            cell_width = ft_regular->glyph->advance.x / 64.0f;
         }
         FT_Bitmap* bmp = &ft_regular->glyph->bitmap;
 
@@ -917,6 +922,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         pen_x += w + 1;
         if (h > row_height) { row_height = h; }
     }
+    assert(cell_width != 0);
 
     // sdf_image
     VkImageCreateInfo sdf_image_info = {
@@ -1595,7 +1601,10 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_fragment_shader = sdf_fragment_shader,
         .sdf_push_constant_range = sdf_push_constant_range,
         .sdf_render_pass = sdf_render_pass,
-        .font_pixel_height = font_pixel_height,
-        .font_pixel_width = font_pixel_width,
+        .ascent = ascent,
+        .descent = descent,
+        .linegap = linegap,
+        .cell_height = cell_height,
+        .cell_width = cell_width,
     };
 }

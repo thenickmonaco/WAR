@@ -93,6 +93,15 @@ void* war_window_render(void* args) {
     uint32_t physical_height = 1600;
     const uint32_t stride = physical_width * 4;
 
+#if DMABUF
+    war_vulkan_context vulkan_context =
+        war_vulkan_init(physical_width, physical_height);
+    assert(vulkan_context.dmabuf_fd >= 0);
+    uint32_t zwp_linux_dmabuf_v1_id = 0;
+    uint32_t zwp_linux_buffer_params_v1_id = 0;
+    uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
+#endif
+
     float scale_factor = 1.483333;
     const uint32_t logical_width =
         (uint32_t)floor(physical_width / scale_factor);
@@ -100,8 +109,6 @@ void* war_window_render(void* args) {
         (uint32_t)floor(physical_height / scale_factor);
 
     war_input_cmd_context input_cmd_context = {
-        .max_cols = 71,
-        .max_rows = 20,
         .col = 0,
         .row = 0,
         .col_increment = 1,
@@ -120,15 +127,17 @@ void* war_window_render(void* args) {
         .anchor_y = 0.0f,
         .anchor_ndc_x = 0.0f,
         .anchor_ndc_y = 0.0f,
-        .viewport_cols = 0,
-        .viewport_rows = 0,
+        .viewport_cols = (int)(physical_width / vulkan_context.cell_width),
+        .viewport_rows = (int)(physical_height / vulkan_context.cell_height),
         .scroll_margin_cols = 0,
         .scroll_margin_rows = 0,
+        .cell_width = vulkan_context.cell_width,
+        .cell_height = vulkan_context.cell_height,
+        .physical_width = physical_width,
+        .physical_height = physical_height,
+        .logical_width = logical_width,
+        .logical_height = logical_height,
     };
-    const float col_width_px =
-        (float)physical_width / input_cmd_context.max_cols;
-    const float row_height_px =
-        (float)physical_height / input_cmd_context.max_rows;
 
     war_key_event input_sequence_ring_buffer[ring_buffer_size];
     uint8_t write_input_sequence_index = 0;
@@ -208,15 +217,6 @@ void* war_window_render(void* args) {
     uint32_t* quads_colors = (uint32_t*)(quads_y + max_quads * 4);
     uint16_t* quads_indices = (uint16_t*)(quads_colors + max_quads * 4);
     uint16_t quads_count = 0;
-
-#if DMABUF
-    war_vulkan_context vulkan_context =
-        war_vulkan_init(physical_width, physical_height);
-    assert(vulkan_context.dmabuf_fd >= 0);
-    uint32_t zwp_linux_dmabuf_v1_id = 0;
-    uint32_t zwp_linux_buffer_params_v1_id = 0;
-    uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
-#endif
 
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
@@ -892,6 +892,12 @@ void* war_window_render(void* args) {
                     //-------------------------------------------------------------
                     // RENDER LOGIC
                     //-------------------------------------------------------------
+                    input_cmd_context.viewport_cols =
+                        (int)(physical_width / (vulkan_context.cell_width *
+                                                input_cmd_context.zoom_scale));
+                    input_cmd_context.viewport_rows =
+                        (int)(physical_width / (vulkan_context.cell_height *
+                                                input_cmd_context.zoom_scale));
                     // 1. Wait for previous frame to finish (optional but
                     // recommended)
                     vkWaitForFences(vulkan_context.device,
@@ -955,36 +961,42 @@ void* war_window_render(void* args) {
                         {{0.5f, 0.5f}, 0x000000FF},
                         {{-0.5f, 0.5f}, 0x000000FF},
                         // cursor
-                        {{(input_cmd_context.col * col_width_px) /
+                        {{(input_cmd_context.col * vulkan_context.cell_width) /
                                   physical_width * 2.0f -
                               1.0f,
-                          1.0f - ((input_cmd_context.row + 1) * row_height_px) /
+                          1.0f - ((input_cmd_context.row + 1) *
+                                  vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          0xFFFFFFFF},
-                        {{((input_cmd_context.col + 1) * col_width_px) /
+                        {{((input_cmd_context.col + 1) *
+                           vulkan_context.cell_width) /
                                   physical_width * 2.0f -
                               1.0f,
-                          1.0f - ((input_cmd_context.row + 1) * row_height_px) /
+                          1.0f - ((input_cmd_context.row + 1) *
+                                  vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          0xFFFFFFFF},
-                        {{((input_cmd_context.col + 1) * col_width_px) /
+                        {{((input_cmd_context.col + 1) *
+                           vulkan_context.cell_width) /
                                   physical_width * 2.0f -
                               1.0f,
-                          1.0f - (input_cmd_context.row * row_height_px) /
+                          1.0f - (input_cmd_context.row *
+                                  vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          0xFFFFFFFF},
-                        {{(input_cmd_context.col * col_width_px) /
+                        {{(input_cmd_context.col * vulkan_context.cell_width) /
                                   physical_width * 2.0f -
                               1.0f,
-                          1.0f - (input_cmd_context.row * row_height_px) /
+                          1.0f - (input_cmd_context.row *
+                                  vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          0xFFFFFFFF},
                     };
 
-                    float cursor_center_x_px =
-                        (input_cmd_context.col + 0.5f) * col_width_px;
-                    float cursor_center_y_px =
-                        (input_cmd_context.row + 0.5f) * row_height_px;
+                    float cursor_center_x_px = (input_cmd_context.col + 0.5f) *
+                                               vulkan_context.cell_width;
+                    float cursor_center_y_px = (input_cmd_context.row + 0.5f) *
+                                               vulkan_context.cell_height;
                     input_cmd_context.anchor_ndc_x =
                         (cursor_center_x_px / physical_width) * 2.0f - 1.0f;
                     input_cmd_context.anchor_ndc_y =
@@ -1138,10 +1150,9 @@ void* war_window_render(void* args) {
                     } sdf_vertex_t;
 
                     war_glyph_info glyph_test = vulkan_context.glyphs['m'];
-                    uint32_t num_columns =
-                        physical_width / vulkan_context.font_pixel_width;
+                    uint32_t num_columns = input_cmd_context.viewport_cols;
                     uint32_t num_rows =
-                        physical_width / vulkan_context.font_pixel_height;
+                        physical_width / input_cmd_context.viewport_rows;
                     float ndc_quad_width = 2.0f / num_columns;
                     float ndc_quad_height = 2.0f / num_rows;
                     float right = ndc_quad_width / 2.0f;
@@ -1271,13 +1282,13 @@ void* war_window_render(void* args) {
                         }
                     }
 
-                    uint32_t cursor_w = col_width_px;
-                    uint32_t cursor_h = row_height_px;
+                    uint32_t cursor_w = vulkan_context.cell_width;
+                    uint32_t cursor_h = vulkan_context.cell_height;
                     input_cmd_context.cursor_x =
-                        input_cmd_context.col * col_width_px;
+                        input_cmd_context.col * vulkan_context.cell_width;
                     input_cmd_context.cursor_y =
                         (physical_height - 1) -
-                        (input_cmd_context.row * row_height_px);
+                        (input_cmd_context.row * vulkan_context.cell_height);
 
                     for (uint32_t y = input_cmd_context.cursor_y;
                          y < input_cmd_context.cursor_y + cursor_h;
@@ -2336,12 +2347,14 @@ void* war_window_render(void* args) {
                             BTN_LEFT) {
                             input_cmd_context.col =
                                 (uint32_t)(input_cmd_context.cursor_x /
-                                           col_width_px);
+                                           vulkan_context.cell_width);
                             input_cmd_context.row =
                                 (uint32_t)((physical_height -
                                             input_cmd_context.cursor_y) /
-                                           row_height_px); // because top left
-                                                           // = 0,0 in wayland
+                                           vulkan_context
+                                               .cell_height); // because top
+                                                              // left = 0,0 in
+                                                              // wayland
                         }
                     }
                     goto done;

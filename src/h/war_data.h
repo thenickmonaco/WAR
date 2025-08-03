@@ -120,6 +120,12 @@ typedef struct war_input_cmd_context {
     uint32_t scroll_margin_rows;
     uint32_t viewport_cols;
     uint32_t viewport_rows;
+    float cell_width;  // from vulkan_context
+    float cell_height; // from vulkan_context
+    float physical_width;
+    float physical_height;
+    float logical_width;
+    float logical_height;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -199,8 +205,11 @@ typedef struct war_vulkan_context {
     VkBuffer sdf_index_buffer;
     VkDeviceMemory sdf_index_buffer_memory;
     VkRenderPass sdf_render_pass;
-    float font_pixel_height;
-    float font_pixel_width;
+    float ascent;
+    float descent;
+    float linegap;
+    float cell_height;
+    float cell_width;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

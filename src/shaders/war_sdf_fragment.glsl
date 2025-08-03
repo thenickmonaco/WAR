@@ -19,30 +19,29 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// src/shaders/war_vertex.glsl
+// src/shaders/war_sdf_fragment.glsl
 //-----------------------------------------------------------------------------
 
 #version 450
 
-layout(location = 0) in vec2 in_pos;    // vertex position (e.g. quad corners)
-layout(location = 1) in vec2 in_uv;     // uv coords for SDF sampling
+layout(location = 0) in vec2 frag_uv;
+layout(location = 1) in vec4 frag_color;
+layout(location = 2) in float frag_thickness;
+layout(location = 3) in float frag_feather;
 
-layout(location = 0) out vec2 frag_uv;  // pass UV to fragment shader
+layout(location = 0) out vec4 out_color;
 
-// Push constants for zoom and pan
-layout(push_constant) uniform PushConstants {
-    layout(offset = 0) float zoom;     // 4 bytes
-    layout(offset = 8) vec2 pan;       // 8-byte aligned, starts at 8
-    layout(offset = 16) float padding; // optional padding
-} pc;
+layout(binding = 0) uniform sampler2D sdf_sampler;
 
 void main() {
-    // Apply pan and zoom to the input position before passing to gl_Position
-    vec2 zoomed = in_pos * pc.zoom;
-    vec2 translated = zoomed + pc.pan;
+    float distance = texture(sdf_sampler, frag_uv).r;
 
-    gl_Position = vec4(translated, 0.0, 1.0);
+    float alpha = smoothstep(0.5 - frag_thickness - frag_feather,
+                             0.5 - frag_thickness + frag_feather,
+                             distance);
 
-    // Pass UV through to fragment shader
-    frag_uv = in_uv;
+    out_color = vec4(frag_color.rgb, frag_color.a * alpha);
+
+    if (out_color.a < 0.01)
+        discard;
 }

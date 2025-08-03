@@ -19,30 +19,38 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// src/shaders/war_vertex.glsl
+// src/shaders/war_sdf_vertex.glsl
 //-----------------------------------------------------------------------------
 
 #version 450
 
-layout(location = 0) in vec2 in_pos;    // vertex position (e.g. quad corners)
-layout(location = 1) in vec2 in_uv;     // uv coords for SDF sampling
+layout(location = 0) in vec2 in_pos;   // quad corner position
+layout(location = 1) in vec2 in_uv;    // SDF texture UV coords
+layout(location = 2) in vec4 in_color; // per-vertex color
+layout(location = 3) in float in_thickness; // per-vertex thickness
+layout(location = 4) in float in_feather;   // per-vertex feather
 
-layout(location = 0) out vec2 frag_uv;  // pass UV to fragment shader
+layout(location = 0) out vec2 frag_uv;
+layout(location = 1) out vec4 frag_color;
+layout(location = 2) out float frag_thickness;
+layout(location = 3) out float frag_feather;
 
-// Push constants for zoom and pan
+// Push constants for zoom/pan/padding with explicit offsets
 layout(push_constant) uniform PushConstants {
-    layout(offset = 0) float zoom;     // 4 bytes
-    layout(offset = 8) vec2 pan;       // 8-byte aligned, starts at 8
-    layout(offset = 16) float padding; // optional padding
+    layout(offset = 0) float zoom;      // 4 bytes
+    layout(offset = 8) vec2 pan;        // 8-byte aligned, starts at 8
+    layout(offset = 16) float padding;  // optional padding to 24 bytes total
 } pc;
 
 void main() {
-    // Apply pan and zoom to the input position before passing to gl_Position
+    // Apply zoom and pan
     vec2 zoomed = in_pos * pc.zoom;
     vec2 translated = zoomed + pc.pan;
 
     gl_Position = vec4(translated, 0.0, 1.0);
 
-    // Pass UV through to fragment shader
     frag_uv = in_uv;
+    frag_color = in_color;
+    frag_thickness = in_thickness;
+    frag_feather = in_feather;
 }

@@ -173,7 +173,7 @@ typedef struct war_vulkan_context {
     FT_Face ft_regular;
     VkImage sdf_image;
     VkImageView sdf_image_view;
-    VkDeviceMemory sdf_image_mem;
+    VkDeviceMemory sdf_image_memory;
     VkSampler sdf_sampler;
     struct {
         float advance_x;
@@ -189,8 +189,8 @@ typedef struct war_vulkan_context {
     VkDescriptorPool font_descriptor_pool;
     VkPipeline sdf_pipeline;
     VkPipelineLayout sdf_pipeline_layout;
-    VkShaderModule sdf_vert_shader;
-    VkShaderModule sdf_frag_shader;
+    VkShaderModule sdf_vertex_shader;
+    VkShaderModule sdf_fragment_shader;
     VkPushConstantRange sdf_push_constant_range;
     uint32_t pixel_height;
 } war_vulkan_context;

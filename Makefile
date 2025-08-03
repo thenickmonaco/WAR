@@ -44,6 +44,10 @@ VERT_SHADER_SRC := $(SHADER_SRC_DIR)/war_vertex.glsl
 FRAG_SHADER_SRC := $(SHADER_SRC_DIR)/war_fragment.glsl
 VERT_SHADER_SPV := $(SHADER_BUILD_DIR)/war_vertex.spv
 FRAG_SHADER_SPV := $(SHADER_BUILD_DIR)/war_fragment.spv
+SDF_VERT_SHADER_SRC := $(SHADER_SRC_DIR)/war_sdf_vertex.glsl
+SDF_FRAG_SHADER_SRC := $(SHADER_SRC_DIR)/war_sdf_fragment.glsl
+SDF_VERT_SHADER_SPV := $(SHADER_BUILD_DIR)/war_sdf_vertex.spv
+SDF_FRAG_SHADER_SPV := $(SHADER_BUILD_DIR)/war_sdf_fragment.spv
 
 SRC := $(shell find $(SRC_DIR) -type f -name '*.c')
 
@@ -53,7 +57,7 @@ DEP := $(UNITY_O:.o=.d)
 
 .PHONY: all clean gcc_check
 
-all: $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV) $(TARGET)
+all: $(VERT_SHADER_SPV) $(FRAG_SHADER_SPV) $(SDF_VERT_SHADER_SPV) $(SDF_FRAG_SHADER_SPV) $(TARGET)
 
 $(SHADER_BUILD_DIR):
 	mkdir -p $(SHADER_BUILD_DIR)
@@ -62,6 +66,12 @@ $(VERT_SHADER_SPV): $(VERT_SHADER_SRC) | $(SHADER_BUILD_DIR)
 	$(Q)$(GLSLC) -V -S vert $< -o $@
 
 $(FRAG_SHADER_SPV): $(FRAG_SHADER_SRC) | $(SHADER_BUILD_DIR)
+	$(Q)$(GLSLC) -V -S frag $< -o $@
+
+$(SDF_VERT_SHADER_SPV): $(SDF_VERT_SHADER_SRC) | $(SHADER_BUILD_DIR)
+	$(Q)$(GLSLC) -V -S vert $< -o $@
+
+$(SDF_FRAG_SHADER_SPV): $(SDF_FRAG_SHADER_SRC) | $(SHADER_BUILD_DIR)
 	$(Q)$(GLSLC) -V -S frag $< -o $@
 
 $(UNITY_O): $(UNITY_C)

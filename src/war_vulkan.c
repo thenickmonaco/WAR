@@ -1301,11 +1301,12 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         max_sdf_quads = 1000,
     };
     typedef struct sdf_vertex {
-        float pos[2];
-        float uv[2];
-        float color[4]; // RGBA float
-        float thickness;
-        float feather;
+        float pos[2];    // NDC position
+        float uv[2];     // UVs (0-1)
+        float thickness; // SDF edge width
+        float feather;   // SDF soft edge amount
+        float padding[4];
+        float color[4]; // RGBA
     } sdf_vertex_t;
     VkDeviceSize sdf_vertex_buffer_size =
         sizeof(sdf_vertex_t) * max_sdf_quads * 4;
@@ -1404,21 +1405,21 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .stride = sizeof(sdf_vertex_t),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
-    VkVertexInputAttributeDescription vertex_attribute_descs[] = {
-        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, pos)},
-        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},
-        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(sdf_vertex_t, color)},
-        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)},
-        {4, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},
-    };
-    VkPipelineVertexInputStateCreateInfo vertex_input_info = {
+    VkVertexInputAttributeDescription sdf_vertex_attribute_descs[] = {
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, pos)},    // 0
+        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},     // 8
+        {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)}, // 16
+        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},   // 20
+        {4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(sdf_vertex_t, color)},
+    }; // 40;
+    VkPipelineVertexInputStateCreateInfo sdf_vertex_input_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 1,
         .pVertexBindingDescriptions = &vertex_binding_desc,
         .vertexAttributeDescriptionCount =
-            (uint32_t)(sizeof(vertex_attribute_descs) /
-                       sizeof(vertex_attribute_descs[0])),
-        .pVertexAttributeDescriptions = vertex_attribute_descs,
+            (uint32_t)(sizeof(sdf_vertex_attribute_descs) /
+                       sizeof(sdf_vertex_attribute_descs[0])),
+        .pVertexAttributeDescriptions = sdf_vertex_attribute_descs,
     };
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -1453,7 +1454,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .stencilTestEnable = VK_FALSE,
     };
     VkPipelineColorBlendAttachmentState color_blend_attachment = {
-        .blendEnable = VK_TRUE,
+        .blendEnable = VK_FALSE,
         .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
         .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
         .colorBlendOp = VK_BLEND_OP_ADD,
@@ -1520,7 +1521,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .stageCount = 2,
         .pStages = sdf_shader_stages,
-        .pVertexInputState = &vertex_input_info,
+        .pVertexInputState = &sdf_vertex_input_info,
         .pInputAssemblyState = &input_assembly,
         .pViewportState = &viewport_state,
         .pRasterizationState = &rasterizer,

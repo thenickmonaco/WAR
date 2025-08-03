@@ -1133,7 +1133,8 @@ void* war_window_render(void* args) {
                         float uv[2];     // UVs (0-1)
                         float thickness; // SDF edge width
                         float feather;   // SDF soft edge amount
-                        float color[4];  // RGBA
+                        float padding[4];
+                        float color[4]; // RGBA
                     } sdf_vertex_t;
 
                     war_glyph_info glyph_test = vulkan_context.glyphs['M'];
@@ -1152,22 +1153,26 @@ void* war_window_render(void* args) {
                          {glyph_test.uv_x0, glyph_test.uv_y1},
                          0.5,
                          0.1,
-                         {1, 1, 0, 0}}, // top-left
+                         {0, 0, 0, 0},  // padding
+                         {0, 1, 0, 1}}, // top-left
                         {{right, top},
                          {glyph_test.uv_x1, glyph_test.uv_y1},
                          0.5,
                          0.1,
-                         {1, 1, 0, 0}}, // top-right
+                         {0, 0, 0, 0},  // padding
+                         {0, 1, 0, 1}}, // top-right
                         {{right, bottom},
                          {glyph_test.uv_x1, glyph_test.uv_y0},
                          0.5,
                          0.1,
-                         {1, 1, 0, 0}}, // bottom-right
+                         {0, 0, 0, 0},  // padding
+                         {0, 1, 0, 1}}, // bottom-right
                         {{left, bottom},
                          {glyph_test.uv_x0, glyph_test.uv_y0},
                          0.5,
                          0.1,
-                         {1, 1, 0, 0}}, // bottom-left
+                         {0, 0, 0, 0},  // padding
+                         {0, 1, 0, 1}}, // bottom-left
                     };
                     uint16_t test_quad_indices[6] = {
                         0,

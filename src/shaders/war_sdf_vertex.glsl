@@ -24,11 +24,11 @@
 
 #version 450
 
-layout(location = 0) in vec2 in_pos;   // quad corner position
-layout(location = 1) in vec2 in_uv;    // SDF texture UV coords
-layout(location = 2) in vec4 in_color; // per-vertex color
-layout(location = 3) in float in_thickness; // per-vertex thickness
-layout(location = 4) in float in_feather;   // per-vertex feather
+layout(location = 0) in vec2 in_pos;      // pos
+layout(location = 1) in vec2 in_uv;       // uv
+layout(location = 2) in float in_thickness; // thickness
+layout(location = 3) in float in_feather;   // feather
+layout(location = 4) in vec4 in_color;       // color
 
 layout(location = 0) out vec2 frag_uv;
 layout(location = 1) out vec4 frag_color;

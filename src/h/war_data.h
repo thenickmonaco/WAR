@@ -195,6 +195,7 @@ typedef struct war_vulkan_context {
     VkShaderModule sdf_fragment_shader;
     VkPushConstantRange sdf_push_constant_range;
     VkBuffer sdf_vertex_buffer;
+    VkDeviceMemory sdf_vertex_buffer_memory;
     VkBuffer sdf_index_buffer;
     uint32_t font_pixel_height;
     VkRenderPass sdf_render_pass;

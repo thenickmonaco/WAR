@@ -1085,6 +1085,106 @@ void* war_window_render(void* args) {
                     // 8. Draw indexed quad
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
 
+                    //---------------------------------------------------------
+                    // SDF FONT RENDERING TEST
+                    //---------------------------------------------------------
+                    // 8b. Bind the SDF pipeline
+                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                      vulkan_context.sdf_pipeline);
+
+                    // 8c. Bind the descriptor set (with font atlas bound at
+                    // binding 0)
+                    vkCmdBindDescriptorSets(vulkan_context.cmd_buffer,
+                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            vulkan_context.sdf_pipeline_layout,
+                                            0,
+                                            1,
+                                            &vulkan_context.font_descriptor_set,
+                                            0,
+                                            NULL);
+
+                    // 8d. Push constants for zoom/pan (match struct layout in
+                    // shader)
+                    typedef struct {
+                        float zoom;
+                        float pan[2];
+                        float padding;
+                    } SdfPushConstants;
+
+                    SdfPushConstants sdf_pc = {
+                        .zoom = input_cmd_context.zoom_scale,
+                        .pan = {input_cmd_context.panning_x,
+                                input_cmd_context.panning_y},
+                        .padding = 0.0f,
+                    };
+
+                    vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                       vulkan_context.sdf_pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0,
+                                       sizeof(SdfPushConstants),
+                                       &sdf_pc);
+
+                    // ==== FULLSCREEN DEBUG QUAD DATA UPLOAD ====
+                    typedef struct {
+                        float pos[2];    // NDC position
+                        float uv[2];     // UVs (0-1)
+                        float thickness; // SDF edge width
+                        float feather;   // SDF soft edge amount
+                        float color[4];  // RGBA
+                    } sdf_vertex_t;
+
+                    sdf_vertex_t test_quad[4] = {
+                        {{-1.0f, -1.0f},
+                         {0.0f, 1.0f},
+                         0.1f,
+                         0.05f,
+                         {1.0f, 1.0f, 0.0f, 1.0f}},
+                        {{1.0f, -1.0f},
+                         {1.0f, 1.0f},
+                         0.1f,
+                         0.05f,
+                         {1.0f, 1.0f, 0.0f, 1.0f}},
+                        {{1.0f, 1.0f},
+                         {1.0f, 0.0f},
+                         0.1f,
+                         0.05f,
+                         {1.0f, 1.0f, 0.0f, 1.0f}},
+                        {{-1.0f, 1.0f},
+                         {0.0f, 0.0f},
+                         0.1f,
+                         0.05f,
+                         {1.0f, 1.0f, 0.0f, 1.0f}},
+                    };
+
+                    // Upload the quad to sdf_vertex_buffer (assumes it's mapped
+                    // or host-visible)
+                    void* sdf_vertex_ptr;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.sdf_vertex_buffer_memory,
+                                0,
+                                sizeof(test_quad),
+                                0,
+                                &sdf_vertex_ptr);
+                    memcpy(sdf_vertex_ptr, test_quad, sizeof(test_quad));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.sdf_vertex_buffer_memory);
+
+                    // 8e. Bind the SDF vertex buffer
+                    VkDeviceSize sdf_offsets[] = {0};
+                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                           0,
+                                           1,
+                                           &vulkan_context.sdf_vertex_buffer,
+                                           sdf_offsets);
+
+                    // 8f. Draw a single quad (4 vertices)
+                    vkCmdDraw(vulkan_context.cmd_buffer, 4, 1, 0, 0);
+                    //---------------------------------------------------------
+                    // END SDF FONT RENDERING TEST
+                    //---------------------------------------------------------
+
                     // 9. End render pass and command buffer
                     vkCmdEndRenderPass(vulkan_context.cmd_buffer);
                     result = vkEndCommandBuffer(vulkan_context.cmd_buffer);

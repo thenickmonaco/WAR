@@ -864,7 +864,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, NULL);
 
     //-------------------------------------------------------------------------
-    // sdf font rendering
+    // sdf font rendering pipeline
     //-------------------------------------------------------------------------
     // ft_library, ft_regular, atlas_pixels, font_pixel_height
     FT_Library ft_library;
@@ -1584,6 +1584,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_pipeline_layout = sdf_pipeline_layout,
         .sdf_vertex_shader = sdf_vertex_shader,
         .sdf_vertex_buffer = sdf_vertex_buffer,
+        .sdf_vertex_buffer_memory = sdf_vertex_buffer_memory,
         .sdf_index_buffer = sdf_index_buffer,
         .sdf_fragment_shader = sdf_fragment_shader,
         .sdf_push_constant_range = sdf_push_constant_range,

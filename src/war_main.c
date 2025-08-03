@@ -1137,38 +1137,38 @@ void* war_window_render(void* args) {
                     } sdf_vertex_t;
 
                     war_glyph_info glyph_test = vulkan_context.glyphs['M'];
-                    float quad_width = 0.1f;  // 20% of screen width
-                    float quad_height = 0.1f; // 20% of screen height
-                    float left = -quad_width / 3.0f;
-                    float right = quad_width / 3.0f;
-                    float top = quad_height / 3.0f;
-                    float bottom = -quad_height / 3.0f;
+                    float quad_width = (vulkan_context.font_pixel_width /
+                                        (float)physical_width) *
+                                       2.0f;
+                    float quad_height = (vulkan_context.font_pixel_height /
+                                         (float)physical_height) *
+                                        2.0f;
+                    float right = quad_width / 2.0f;
+                    float left = -quad_width / 2.0f;
+                    float top = quad_height / 2.0f;
+                    float bottom = -quad_height / 2.0f;
                     sdf_vertex_t test_quad[4] = {
                         {{left, top},
                          {glyph_test.uv_x0, glyph_test.uv_y1},
-                         0.05f,
-                         0.01f,
+                         0.5,
+                         0.1,
                          {1, 1, 0, 0}}, // top-left
-
                         {{right, top},
                          {glyph_test.uv_x1, glyph_test.uv_y1},
-                         0.05f,
-                         0.01f,
+                         0.5,
+                         0.1,
                          {1, 1, 0, 0}}, // top-right
-
                         {{right, bottom},
                          {glyph_test.uv_x1, glyph_test.uv_y0},
-                         0.05f,
-                         0.01f,
+                         0.5,
+                         0.1,
                          {1, 1, 0, 0}}, // bottom-right
-
                         {{left, bottom},
                          {glyph_test.uv_x0, glyph_test.uv_y0},
-                         0.05f,
-                         0.01f,
+                         0.5,
+                         0.1,
                          {1, 1, 0, 0}}, // bottom-left
                     };
-
                     uint16_t test_quad_indices[6] = {
                         0,
                         1,

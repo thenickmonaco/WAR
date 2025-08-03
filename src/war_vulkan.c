@@ -872,6 +872,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     FT_Face ft_regular;
     FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
     float font_pixel_height = 48.0f;
+    float font_pixel_width = 0.0f;
     FT_Set_Pixel_Sizes(ft_regular, 0, (int)font_pixel_height);
     enum {
         atlas_width = 512,
@@ -882,6 +883,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     int pen_x = 0, pen_y = 0, row_height = 0;
     for (int c = 0; c < 128; c++) {
         FT_Load_Char(ft_regular, c, FT_LOAD_RENDER);
+        if (c == 'M') {
+            font_pixel_width = ft_regular->glyph->advance.x / 64.0f;
+        }
         FT_Bitmap* bmp = &ft_regular->glyph->bitmap;
 
         int w = bmp->width;
@@ -1589,7 +1593,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_index_buffer_memory = sdf_index_buffer_memory,
         .sdf_fragment_shader = sdf_fragment_shader,
         .sdf_push_constant_range = sdf_push_constant_range,
-        .font_pixel_height = font_pixel_height,
         .sdf_render_pass = sdf_render_pass,
+        .font_pixel_height = font_pixel_height,
+        .font_pixel_width = font_pixel_width,
     };
 }

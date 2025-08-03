@@ -1136,39 +1136,37 @@ void* war_window_render(void* args) {
                         float color[4];  // RGBA
                     } sdf_vertex_t;
 
-                    war_glyph_info glyph_M = vulkan_context.glyphs['M'];
-                    call_carmack("M UVs: (%.3f, %.3f) to (%.3f, %.3f)\n",
-                                 glyph_M.uv_x0,
-                                 glyph_M.uv_y0,
-                                 glyph_M.uv_x1,
-                                 glyph_M.uv_y1);
-
+                    war_glyph_info glyph_test = vulkan_context.glyphs['M'];
+                    float quad_width = 0.1f;  // 20% of screen width
+                    float quad_height = 0.1f; // 20% of screen height
+                    float left = -quad_width / 3.0f;
+                    float right = quad_width / 3.0f;
+                    float top = quad_height / 3.0f;
+                    float bottom = -quad_height / 3.0f;
                     sdf_vertex_t test_quad[4] = {
-                        // Top-left corner of quad, but using glyph_M.uv_y1
-                        // (swapped)
-                        {{-1.0f, 1.0f},
-                         {glyph_M.uv_x0, glyph_M.uv_y1},
-                         0.1f,
+                        {{left, top},
+                         {glyph_test.uv_x0, glyph_test.uv_y1},
                          0.05f,
-                         {1, 1, 0, 1}}, // top-left
+                         0.01f,
+                         {1, 1, 0, 0}}, // top-left
 
-                        {{0.0f, 1.0f},
-                         {glyph_M.uv_x1, glyph_M.uv_y1},
-                         0.1f,
+                        {{right, top},
+                         {glyph_test.uv_x1, glyph_test.uv_y1},
                          0.05f,
-                         {1, 1, 0, 1}}, // top-right
+                         0.01f,
+                         {1, 1, 0, 0}}, // top-right
 
-                        {{0.0f, 0.0f},
-                         {glyph_M.uv_x1, glyph_M.uv_y0},
-                         0.1f,
+                        {{right, bottom},
+                         {glyph_test.uv_x1, glyph_test.uv_y0},
                          0.05f,
-                         {1, 1, 0, 1}}, // bottom-right
+                         0.01f,
+                         {1, 1, 0, 0}}, // bottom-right
 
-                        {{-1.0f, 0.0f},
-                         {glyph_M.uv_x0, glyph_M.uv_y0},
-                         0.1f,
+                        {{left, bottom},
+                         {glyph_test.uv_x0, glyph_test.uv_y0},
                          0.05f,
-                         {1, 1, 0, 1}}, // bottom-left
+                         0.01f,
+                         {1, 1, 0, 0}}, // bottom-left
                     };
 
                     uint16_t test_quad_indices[6] = {

@@ -136,6 +136,16 @@ typedef struct war_thread_args {
     uint8_t* read_from_window_render_index;
 } war_thread_args;
 
+typedef struct war_glyph_info {
+    float advance_x;
+    float advance_y;
+    float bearing_x;
+    float bearing_y;
+    float width;
+    float height;
+    float uv_x0, uv_y0, uv_x1, uv_y1;
+} war_glyph_info;
+
 typedef struct war_vulkan_context {
     int dmabuf_fd;
     VkInstance instance;
@@ -175,15 +185,7 @@ typedef struct war_vulkan_context {
     VkImageView sdf_image_view;
     VkDeviceMemory sdf_image_memory;
     VkSampler sdf_sampler;
-    struct {
-        float advance_x;
-        float advance_y;
-        float bearing_x;
-        float bearing_y;
-        float width;
-        float height;
-        float uv_x0, uv_y0, uv_x1, uv_y1; // uvs inside SDF atlas
-    } glyphs[128];
+    war_glyph_info* glyphs;
     VkDescriptorSet font_descriptor_set;
     VkDescriptorSetLayout font_descriptor_set_layout;
     VkDescriptorPool font_descriptor_pool;
@@ -192,7 +194,9 @@ typedef struct war_vulkan_context {
     VkShaderModule sdf_vertex_shader;
     VkShaderModule sdf_fragment_shader;
     VkPushConstantRange sdf_push_constant_range;
-    uint32_t pixel_height;
+    VkBuffer sdf_vertex_buffer;
+    VkBuffer sdf_index_buffer;
+    uint32_t font_pixel_height;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

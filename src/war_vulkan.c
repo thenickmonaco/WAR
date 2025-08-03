@@ -875,15 +875,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         atlas_height = 512,
     };
     uint8_t atlas_pixels[atlas_width * atlas_height];
-    struct glyph_info {
-        float advance_x;
-        float advance_y;
-        float bearing_x;
-        float bearing_y;
-        float width;
-        float height;
-        float uv_x0, uv_y0, uv_x1, uv_y1;
-    } glyphs[128];
+    war_glyph_info glyphs[128];
     int pen_x = 0, pen_y = 0, row_height = 0;
     for (int c = 0; c < 128; c++) {
         FT_Load_Char(ft_regular, c, FT_LOAD_RENDER);
@@ -904,18 +896,16 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                     bmp->buffer[x + y * bmp->width];
             }
         }
-        glyphs[c] = (struct glyph_info){
-            .advance_x = ft_regular->glyph->advance.x / 64.0f,
-            .advance_y = ft_regular->glyph->advance.y / 64.0f,
-            .bearing_x = ft_regular->glyph->bitmap_left,
-            .bearing_y = ft_regular->glyph->bitmap_top,
-            .width = w,
-            .height = h,
-            .uv_x0 = (float)pen_x / atlas_width,
-            .uv_y0 = (float)pen_y / atlas_height,
-            .uv_x1 = (float)(pen_x + w) / atlas_width,
-            .uv_y1 = (float)(pen_y + h) / atlas_height,
-        };
+        glyphs[c].advance_x = ft_regular->glyph->advance.x / 64.0f;
+        glyphs[c].advance_y = ft_regular->glyph->advance.y / 64.0f;
+        glyphs[c].bearing_x = ft_regular->glyph->bitmap_left;
+        glyphs[c].bearing_y = ft_regular->glyph->bitmap_top;
+        glyphs[c].width = w;
+        glyphs[c].height = h;
+        glyphs[c].uv_x0 = (float)pen_x / atlas_width;
+        glyphs[c].uv_y0 = (float)pen_y / atlas_height;
+        glyphs[c].uv_x1 = (float)(pen_x + w) / atlas_width;
+        glyphs[c].uv_y1 = (float)(pen_y + h) / atlas_height;
 
         pen_x += w + 1;
         if (h > row_height) { row_height = h; }
@@ -1402,9 +1392,118 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkBindBufferMemory(
         device, sdf_index_buffer, sdf_index_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-
+    VkVertexInputBindingDescription vertex_binding_desc = {
+        .binding = 0,
+        .stride = sizeof(sdf_vertex_t),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+    };
+    VkVertexInputAttributeDescription vertex_attribute_descs[] = {
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, pos)},
+        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},
+        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(sdf_vertex_t, color)},
+        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)},
+        {4, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},
+    };
+    VkPipelineVertexInputStateCreateInfo vertex_input_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &vertex_binding_desc,
+        .vertexAttributeDescriptionCount =
+            (uint32_t)(sizeof(vertex_attribute_descs) /
+                       sizeof(vertex_attribute_descs[0])),
+        .pVertexAttributeDescriptions = vertex_attribute_descs,
+    };
+    VkPipelineInputAssemblyStateCreateInfo input_assembly = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE,
+    };
+    VkPipelineViewportStateCreateInfo viewport_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1,
+    };
+    VkPipelineRasterizationStateCreateInfo rasterizer = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .depthBiasEnable = VK_FALSE,
+        .lineWidth = 1.0f,
+    };
+    VkPipelineMultisampleStateCreateInfo multisampling = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .sampleShadingEnable = VK_FALSE,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    };
+    VkPipelineDepthStencilStateCreateInfo depth_stencil = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_FALSE,
+        .depthWriteEnable = VK_FALSE,
+        .depthCompareOp = VK_COMPARE_OP_ALWAYS,
+        .stencilTestEnable = VK_FALSE,
+    };
+    VkPipelineColorBlendAttachmentState color_blend_attachment = {
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    };
+    VkPipelineColorBlendStateCreateInfo color_blending = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .logicOpEnable = VK_FALSE,
+        .attachmentCount = 1,
+        .pAttachments = &color_blend_attachment,
+    };
+    VkDynamicState dynamic_states[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
+    VkPipelineDynamicStateCreateInfo dynamic_state = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = 2,
+        .pDynamicStates = dynamic_states,
+    };
+    VkPipelineLayoutCreateInfo pipeline_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        // Fill in descriptorSetLayouts and pushConstantRanges if you have them
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptor_set_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &sdf_push_constant_range,
+    };
+    VkGraphicsPipelineCreateInfo sdf_pipeline_info = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = 2,
+        .pStages = sdf_shader_stages,
+        .pVertexInputState = &vertex_input_info,
+        .pInputAssemblyState = &input_assembly,
+        .pViewportState = &viewport_state,
+        .pRasterizationState = &rasterizer,
+        .pMultisampleState = &multisampling,
+        .pDepthStencilState = &depth_stencil,
+        .pColorBlendState = &color_blending,
+        .pDynamicState = &dynamic_state,
+        .layout = sdf_pipeline_layout,
+        .renderPass = render_pass, // used from general quads pipeline
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1,
+    };
     VkPipeline sdf_pipeline;
+    result = vkCreateGraphicsPipelines(
+        device, VK_NULL_HANDLE, 1, &sdf_pipeline_info, NULL, &sdf_pipeline);
+    assert(result == VK_SUCCESS);
 
+    war_glyph_info* heap_glyphs = malloc(sizeof(war_glyph_info) * 128);
+    memcpy(heap_glyphs, glyphs, sizeof(war_glyph_info) * 128);
     return (war_vulkan_context){
         .dmabuf_fd = dmabuf_fd,
         .instance = instance,
@@ -1438,32 +1537,23 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         //---------------------------------------------------------------------
         // sdf_font
         //---------------------------------------------------------------------
-        //
-        // ft_library,
-        // ft_regular,
-        // sdf_image,
-        // sdf_image_view,
-        // sdf_image_memory,
-        // sdf_sampler,
-        // struct ,
-        //     advance_x,
-        //     advance_y,
-        //     bearing_x,
-        //     bearing_y,
-        //     width,
-        //     height,
-        //     uv_x0, uv_y0, uv_x1, uv_y1; // uvs inside SDF atla,
-        // } glyphs[128],
-        // font_descriptor_set,
-        // font_descriptor_set_layout,
-        // font_descriptor_pool,
-        // sdf_pipeline,
-        // sdf_pipeline_layout,
-        // sdf_vertex_shader,
-        // sdf_vertex_buffer,
-        // sdf_index_buffer,
-        // sdf_fragment_shader,
-        // sdf_push_constant_range,
-        // font_pixel_height,
+        .ft_library = ft_library,
+        .ft_regular = ft_regular,
+        .sdf_image = sdf_image,
+        .sdf_image_view = sdf_image_view,
+        .sdf_image_memory = sdf_image_memory,
+        .sdf_sampler = sdf_sampler,
+        .glyphs = heap_glyphs,
+        .font_descriptor_set = font_descriptor_set,
+        .font_descriptor_set_layout = font_descriptor_set_layout,
+        .font_descriptor_pool = font_descriptor_pool,
+        .sdf_pipeline = sdf_pipeline,
+        .sdf_pipeline_layout = sdf_pipeline_layout,
+        .sdf_vertex_shader = sdf_vertex_shader,
+        .sdf_vertex_buffer = sdf_vertex_buffer,
+        .sdf_index_buffer = sdf_index_buffer,
+        .sdf_fragment_shader = sdf_fragment_shader,
+        .sdf_push_constant_range = sdf_push_constant_range,
+        .font_pixel_height = font_pixel_height,
     };
 }

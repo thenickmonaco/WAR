@@ -1108,6 +1108,7 @@ void* war_window_render(void* args) {
                     // shader)
                     typedef struct {
                         float zoom;
+                        float _pad1;
                         float pan[2];
                         float padding;
                     } SdfPushConstants;
@@ -1136,26 +1137,26 @@ void* war_window_render(void* args) {
                     } sdf_vertex_t;
 
                     sdf_vertex_t test_quad[4] = {
-                        {{-1.0f, -1.0f},
-                         {0.0f, 1.0f},
-                         0.1f,
-                         0.05f,
-                         {1.0f, 1.0f, 0.0f, 1.0f}},
-                        {{1.0f, -1.0f},
-                         {1.0f, 1.0f},
-                         0.1f,
-                         0.05f,
-                         {1.0f, 1.0f, 0.0f, 1.0f}},
-                        {{1.0f, 1.0f},
-                         {1.0f, 0.0f},
-                         0.1f,
-                         0.05f,
-                         {1.0f, 1.0f, 0.0f, 1.0f}},
                         {{-1.0f, 1.0f},
                          {0.0f, 0.0f},
                          0.1f,
                          0.05f,
-                         {1.0f, 1.0f, 0.0f, 1.0f}},
+                         {1, 1, 0, 1}}, // top-left
+                        {{-0.5f, 1.0f},
+                         {1.0f, 0.0f},
+                         0.1f,
+                         0.05f,
+                         {1, 1, 0, 1}}, // top-right
+                        {{-0.5f, 0.5f},
+                         {1.0f, 1.0f},
+                         0.1f,
+                         0.05f,
+                         {1, 1, 0, 1}}, // bottom-right
+                        {{-1.0f, 0.5f},
+                         {0.0f, 1.0f},
+                         0.1f,
+                         0.05f,
+                         {1, 1, 0, 1}}, // bottom-left
                     };
 
                     // Upload the quad to sdf_vertex_buffer (assumes it's mapped

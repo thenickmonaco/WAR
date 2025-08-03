@@ -45,7 +45,7 @@ layout(push_constant) uniform PushConstants {
 void main() {
     // Apply zoom and pan
     vec2 zoomed = in_pos * pc.zoom;
-    vec2 translated = zoomed + pc.pan;
+    vec2 translated = zoomed + vec2(pc.pan.x, pc.pan.y);
 
     gl_Position = vec4(translated, 0.0, 1.0);
 

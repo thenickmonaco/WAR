@@ -119,6 +119,13 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
 
 static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
+        if (ctx->row <= ctx->row_increment * ctx->numeric_prefix) {
+            ctx->row = 0;
+            ctx->panning_y = 0.0f;
+            ctx->bottom_row = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
         ctx->row -= ctx->row_increment * ctx->numeric_prefix;
         if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
             ctx->bottom_row -= ctx->row_increment * ctx->numeric_prefix;
@@ -127,6 +134,13 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
                               ctx->physical_height;
         }
     } else {
+        if (ctx->row <= ctx->row_increment) {
+            ctx->row = 0;
+            ctx->panning_y = 0.0f;
+            ctx->bottom_row = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
         ctx->row -= ctx->row_increment;
         if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
             ctx->bottom_row -= ctx->row_increment;
@@ -140,68 +154,189 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
 static inline void cmd_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col += ctx->col_increment * ctx->numeric_prefix;
-        ctx->numeric_prefix = 0;
-        ctx->panning_x -= ctx->cell_width;
-        return;
+        if (ctx->col >=
+            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+            ctx->left_col += ctx->col_increment * ctx->numeric_prefix;
+            ctx->panning_x -= (2.0f * ctx->cell_width * ctx->col_increment *
+                               ctx->numeric_prefix) /
+                              ctx->physical_width;
+        }
+    } else {
+        ctx->col += ctx->col_increment;
+        if (ctx->col >=
+            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+            ctx->left_col += ctx->col_increment;
+            ctx->panning_x -= (2.0f * ctx->cell_width * ctx->col_increment) /
+                              ctx->physical_width;
+        }
     }
-    ctx->col += ctx->col_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_x -= (2.0f * ctx->cell_width) / ctx->physical_width;
-    ctx->left_col += ctx->col_increment;
 }
 
 static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
+        if (ctx->col <= ctx->col_increment * ctx->numeric_prefix) {
+            ctx->col = 0;
+            ctx->panning_x = 0.0f;
+            ctx->left_col = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
         ctx->col -= ctx->col_increment * ctx->numeric_prefix;
-        ctx->numeric_prefix = 0;
-        ctx->panning_x += 0.1f;
-        return;
+        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+            ctx->left_col -= ctx->col_increment * ctx->numeric_prefix;
+            ctx->panning_x += (2.0f * ctx->cell_width * ctx->col_increment *
+                               ctx->numeric_prefix) /
+                              ctx->physical_width;
+        }
+    } else {
+        if (ctx->col <= ctx->col_increment) {
+            ctx->col = 0;
+            ctx->panning_x = 0.0f;
+            ctx->left_col = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
+        ctx->col -= ctx->col_increment;
+        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+            ctx->left_col -= ctx->col_increment;
+            ctx->panning_x += (2.0f * ctx->cell_width * ctx->col_increment) /
+                              ctx->physical_width;
+        }
     }
-    ctx->col -= ctx->col_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_x += (2.0f * ctx->cell_width) / ctx->physical_width;
-    ctx->left_col -= ctx->col_increment;
+    if (ctx->col < 0) {
+        ctx->col = 0;
+        ctx->panning_x = 0.0f;
+    }
+    if (ctx->left_col < 0) {
+        ctx->left_col = 0;
+        ctx->panning_x = 0.0f;
+    }
 }
 
 static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->row += ctx->row_leap_increment * ctx->numeric_prefix;
-        ctx->numeric_prefix = 0;
-        return;
+        if (ctx->row >=
+            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+            ctx->bottom_row += ctx->row_leap_increment * ctx->numeric_prefix;
+            ctx->panning_y += (2.0f * ctx->cell_height *
+                               ctx->row_leap_increment * ctx->numeric_prefix) /
+                              ctx->physical_height;
+        }
+    } else {
+        ctx->row += ctx->row_leap_increment;
+        if (ctx->row >=
+            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+            ctx->bottom_row += ctx->row_leap_increment;
+            ctx->panning_y +=
+                (2.0f * ctx->cell_height * ctx->row_leap_increment) /
+                ctx->physical_height;
+        }
     }
-    ctx->row += ctx->row_leap_increment;
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
+        if (ctx->row <= ctx->row_leap_increment * ctx->numeric_prefix) {
+            ctx->row = 0;
+            ctx->panning_y = 0.0f;
+            ctx->bottom_row = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
         ctx->row -= ctx->row_leap_increment * ctx->numeric_prefix;
-        ctx->numeric_prefix = 0;
-        return;
+        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+            ctx->bottom_row -= ctx->row_leap_increment * ctx->numeric_prefix;
+            ctx->panning_y -= (2.0f * ctx->cell_height *
+                               ctx->row_leap_increment * ctx->numeric_prefix) /
+                              ctx->physical_height;
+        }
+    } else {
+        if (ctx->row <= ctx->row_leap_increment) {
+            ctx->row = 0;
+            ctx->panning_y = 0.0f;
+            ctx->bottom_row = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
+        ctx->row -= ctx->row_leap_increment;
+        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+            ctx->bottom_row -= ctx->row_leap_increment;
+            ctx->panning_y -=
+                (2.0f * ctx->cell_height * ctx->row_leap_increment) /
+                ctx->physical_height;
+        }
     }
-    ctx->row -= ctx->row_leap_increment;
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col += ctx->col_leap_increment * ctx->numeric_prefix;
-
-        ctx->numeric_prefix = 0;
-        return;
+        if (ctx->col >=
+            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+            ctx->left_col += ctx->col_leap_increment * ctx->numeric_prefix;
+            ctx->panning_x -= (2.0f * ctx->cell_width *
+                               ctx->col_leap_increment * ctx->numeric_prefix) /
+                              ctx->physical_width;
+        }
+    } else {
+        ctx->col += ctx->col_leap_increment;
+        if (ctx->col >=
+            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+            ctx->left_col += ctx->col_leap_increment;
+            ctx->panning_x -=
+                (2.0f * ctx->cell_width * ctx->col_leap_increment) /
+                ctx->physical_width;
+        }
     }
-    ctx->col += ctx->col_leap_increment;
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
+        if (ctx->col <= ctx->col_leap_increment * ctx->numeric_prefix) {
+            ctx->col = 0;
+            ctx->panning_x = 0.0f;
+            ctx->left_col = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
         ctx->col -= ctx->col_leap_increment * ctx->numeric_prefix;
-        ctx->numeric_prefix = 0;
-        return;
+        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+            ctx->left_col -= ctx->col_leap_increment * ctx->numeric_prefix;
+            ctx->panning_x += (2.0f * ctx->cell_width *
+                               ctx->col_leap_increment * ctx->numeric_prefix) /
+                              ctx->physical_width;
+        }
+    } else {
+        if (ctx->col <= ctx->col_leap_increment) {
+            ctx->col = 0;
+            ctx->panning_x = 0.0f;
+            ctx->left_col = 0;
+            ctx->numeric_prefix = 0;
+            return;
+        }
+        ctx->col -= ctx->col_leap_increment;
+        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+            ctx->left_col -= ctx->col_leap_increment;
+            ctx->panning_x +=
+                (2.0f * ctx->cell_width * ctx->col_leap_increment) /
+                ctx->physical_width;
+        }
     }
-    ctx->col -= ctx->col_leap_increment;
     ctx->numeric_prefix = 0;
+    if (ctx->col < 0) {
+        ctx->col = 0;
+        ctx->panning_x = 0.0f;
+    }
+    if (ctx->left_col < 0) {
+        ctx->left_col = 0;
+        ctx->panning_x = 0.0f;
+    }
 }
 
 static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {

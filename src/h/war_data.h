@@ -98,6 +98,8 @@ enum war_key_trie {
 typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;
+    uint32_t left_col;
+    uint32_t bottom_row;
     uint32_t col_increment;
     uint32_t row_increment;
     uint32_t col_leap_increment;

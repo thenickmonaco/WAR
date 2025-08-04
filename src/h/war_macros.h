@@ -26,6 +26,9 @@
 #define WAR_MACROS_H
 
 #include "h/war_data.h"
+#include "h/war_debug_macros.h"
+
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -103,6 +106,7 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
     (ctx->row) += ctx->row_increment;
     ctx->numeric_prefix = 0;
     ctx->panning_y += (2.0f * ctx->cell_height) / ctx->physical_height;
+    ctx->bottom_row++;
 }
 
 static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
@@ -116,6 +120,7 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     (ctx->row) -= ctx->row_increment;
     ctx->numeric_prefix = 0;
     ctx->panning_y -= (2.0f * ctx->cell_height) / ctx->physical_height;
+    ctx->bottom_row--;
 }
 
 static inline void cmd_increment_col(war_input_cmd_context* ctx) {
@@ -129,6 +134,7 @@ static inline void cmd_increment_col(war_input_cmd_context* ctx) {
     (ctx->col) += ctx->col_increment;
     ctx->numeric_prefix = 0;
     ctx->panning_x -= (2.0f * ctx->cell_width) / ctx->physical_width;
+    ctx->left_col++;
 }
 
 static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
@@ -142,6 +148,7 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
     (ctx->col) -= ctx->col_increment;
     ctx->numeric_prefix = 0;
     ctx->panning_x += (2.0f * ctx->cell_width) / ctx->physical_width;
+    ctx->left_col--;
 }
 
 static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
@@ -196,7 +203,7 @@ static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->row = (int)(ctx->panning_y / ctx->cell_height);
+    ctx->row = ctx->bottom_row;
     ctx->numeric_prefix = 0;
 }
 
@@ -206,7 +213,7 @@ static inline void cmd_goto_left_col(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->col = (int)(ctx->panning_x / ctx->cell_width);
+    ctx->col = ctx->left_col;
     ctx->numeric_prefix = 0;
 }
 
@@ -217,7 +224,7 @@ static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->row = ctx->viewport_rows;
+    ctx->row = ctx->bottom_row + ctx->viewport_rows - 1;
     ctx->numeric_prefix = 0;
 }
 
@@ -228,7 +235,7 @@ static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
         return;
     }
 
-    ctx->col = (int)((ctx->panning_x + 1.0f) / ctx->cell_width) + ctx->col;
+    ctx->col = ctx->left_col + ctx->viewport_cols - 1;
     ctx->numeric_prefix = 0;
 }
 

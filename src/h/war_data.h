@@ -92,7 +92,7 @@ enum war_key_trie {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 26,
+    NUM_SEQUENCES = 27,
 };
 
 typedef struct war_input_cmd_context {

@@ -131,8 +131,8 @@ void* war_window_render(void* args) {
         .anchor_ndc_y = 0.0f,
         .viewport_cols = (int)(physical_width / vulkan_context.cell_width),
         .viewport_rows = (int)(physical_height / vulkan_context.cell_height),
-        .scroll_margin_cols = 0,
-        .scroll_margin_rows = 0,
+        .scroll_margin_cols = 0, // cols from visible min/max col
+        .scroll_margin_rows = 0, // rows from visible min/max row
         .cell_width = vulkan_context.cell_width,
         .cell_height = vulkan_context.cell_height,
         .physical_width = physical_width,
@@ -2169,6 +2169,10 @@ void* war_window_render(void* args) {
                                 {.keysym = XKB_KEY_0, .mod = MOD_CTRL},
                                 {0},
                             },
+                            {
+                                {.keysym = XKB_KEY_Escape, .mod = 0},
+                                {0},
+                            },
                         };
                     void (*key_commands[NUM_SEQUENCES])(
                         war_input_cmd_context*) = {
@@ -2203,6 +2207,8 @@ void* war_window_render(void* args) {
                         cmd_zoom_in_leap,
                         cmd_zoom_out_leap,
                         cmd_reset_zoom,
+
+                        cmd_escape,
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;

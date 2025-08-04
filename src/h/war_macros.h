@@ -96,103 +96,111 @@ static inline void write_le16(uint8_t* p, uint16_t v) {
 }
 
 static inline void cmd_increment_row(war_input_cmd_context* ctx) {
-    if (ctx->numeric_prefix != 0) {
-        ctx->row += ctx->row_increment * (ctx->numeric_prefix);
-        ctx->numeric_prefix = 0;
-        ctx->panning_y += ctx->cell_height;
-        return;
+    if (ctx->numeric_prefix) {
+        ctx->row += ctx->row_increment * ctx->numeric_prefix;
+        if (ctx->row >=
+            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+            ctx->bottom_row += ctx->row_increment * ctx->numeric_prefix;
+            ctx->panning_y += (2.0f * ctx->cell_height * ctx->row_increment *
+                               ctx->numeric_prefix) /
+                              ctx->physical_height;
+        }
+    } else {
+        ctx->row += ctx->row_increment;
+        if (ctx->row >=
+            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+            ctx->bottom_row += ctx->row_increment;
+            ctx->panning_y += (2.0f * ctx->cell_height * ctx->row_increment) /
+                              ctx->physical_height;
+        }
     }
-
-    (ctx->row) += ctx->row_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_y += (2.0f * ctx->cell_height) / ctx->physical_height;
-    ctx->bottom_row++;
 }
 
 static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
-        ctx->row -= ctx->row_increment * (ctx->numeric_prefix);
-        ctx->numeric_prefix = 0;
-        ctx->panning_y -= ctx->cell_height;
-        return;
+        ctx->row -= ctx->row_increment * ctx->numeric_prefix;
+        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+            ctx->bottom_row -= ctx->row_increment * ctx->numeric_prefix;
+            ctx->panning_y -= (2.0f * ctx->cell_height * ctx->row_increment *
+                               ctx->numeric_prefix) /
+                              ctx->physical_height;
+        }
+    } else {
+        ctx->row -= ctx->row_increment;
+        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+            ctx->bottom_row -= ctx->row_increment;
+            ctx->panning_y -= (2.0f * ctx->cell_height * ctx->row_increment) /
+                              ctx->physical_height;
+        }
     }
-
-    (ctx->row) -= ctx->row_increment;
     ctx->numeric_prefix = 0;
-    ctx->panning_y -= (2.0f * ctx->cell_height) / ctx->physical_height;
-    ctx->bottom_row--;
 }
 
 static inline void cmd_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
-        ctx->col += ctx->col_increment * (ctx->numeric_prefix);
+        ctx->col += ctx->col_increment * ctx->numeric_prefix;
         ctx->numeric_prefix = 0;
         ctx->panning_x -= ctx->cell_width;
         return;
     }
-
-    (ctx->col) += ctx->col_increment;
+    ctx->col += ctx->col_increment;
     ctx->numeric_prefix = 0;
     ctx->panning_x -= (2.0f * ctx->cell_width) / ctx->physical_width;
-    ctx->left_col++;
+    ctx->left_col += ctx->col_increment;
 }
 
 static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
-        ctx->col -= ctx->col_increment * (ctx->numeric_prefix);
+        ctx->col -= ctx->col_increment * ctx->numeric_prefix;
         ctx->numeric_prefix = 0;
         ctx->panning_x += 0.1f;
         return;
     }
-
-    (ctx->col) -= ctx->col_increment;
+    ctx->col -= ctx->col_increment;
     ctx->numeric_prefix = 0;
     ctx->panning_x += (2.0f * ctx->cell_width) / ctx->physical_width;
-    ctx->left_col--;
+    ctx->left_col -= ctx->col_increment;
 }
 
 static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
-    if (ctx->numeric_prefix != 0) {
-        ctx->row += ctx->row_leap_increment * (ctx->numeric_prefix);
+    if (ctx->numeric_prefix) {
+        ctx->row += ctx->row_leap_increment * ctx->numeric_prefix;
         ctx->numeric_prefix = 0;
         return;
     }
-
-    (ctx->row) += ctx->row_leap_increment;
+    ctx->row += ctx->row_leap_increment;
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
-        ctx->row -= ctx->row_leap_increment * (ctx->numeric_prefix);
+        ctx->row -= ctx->row_leap_increment * ctx->numeric_prefix;
         ctx->numeric_prefix = 0;
         return;
     }
-
-    (ctx->row) -= ctx->row_leap_increment;
+    ctx->row -= ctx->row_leap_increment;
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
-        ctx->col += ctx->col_leap_increment * (ctx->numeric_prefix);
+        ctx->col += ctx->col_leap_increment * ctx->numeric_prefix;
 
         ctx->numeric_prefix = 0;
         return;
     }
-
-    (ctx->col) += ctx->col_leap_increment;
+    ctx->col += ctx->col_leap_increment;
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
-        ctx->col -= ctx->col_leap_increment * (ctx->numeric_prefix);
+        ctx->col -= ctx->col_leap_increment * ctx->numeric_prefix;
         ctx->numeric_prefix = 0;
         return;
     }
-
-    (ctx->col) -= ctx->col_leap_increment;
+    ctx->col -= ctx->col_leap_increment;
     ctx->numeric_prefix = 0;
 }
 
@@ -202,7 +210,6 @@ static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = 0;
         return;
     }
-
     ctx->row = ctx->bottom_row;
     ctx->numeric_prefix = 0;
 }
@@ -212,7 +219,6 @@ static inline void cmd_goto_left_col(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = ctx->numeric_prefix * 10;
         return;
     }
-
     ctx->col = ctx->left_col;
     ctx->numeric_prefix = 0;
 }
@@ -223,7 +229,6 @@ static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = 0;
         return;
     }
-
     ctx->row = ctx->bottom_row + ctx->viewport_rows - 1;
     ctx->numeric_prefix = 0;
 }
@@ -234,7 +239,6 @@ static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = 0;
         return;
     }
-
     ctx->col = ctx->left_col + ctx->viewport_cols - 1;
     ctx->numeric_prefix = 0;
 }
@@ -307,6 +311,10 @@ static inline void cmd_reset_zoom(war_input_cmd_context* ctx) {
     ctx->zoom_scale = 1.0f;
     ctx->panning_x = 0.0f;
     ctx->panning_y = 0.0f;
+}
+
+static inline void cmd_escape(war_input_cmd_context* ctx) {
+    ctx->numeric_prefix = 0;
 }
 
 // Returns matched command, and sets *out_matched_length

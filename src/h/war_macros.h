@@ -446,6 +446,8 @@ static inline void cmd_reset_zoom(war_input_cmd_context* ctx) {
     ctx->zoom_scale = 1.0f;
     ctx->panning_x = 0.0f;
     ctx->panning_y = 0.0f;
+    ctx->left_col = 0;
+    ctx->bottom_row = 0;
 }
 
 static inline void cmd_escape(war_input_cmd_context* ctx) {

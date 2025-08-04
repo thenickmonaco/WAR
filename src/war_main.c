@@ -480,6 +480,8 @@ void* war_window_render(void* args) {
             }
             trinity = TRINITY_NOT_CALLED;
 
+            // COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
+            // alt+k
             if (repeat_command != NULL) {
                 if (repeat_start_time_us == 0) {
                     repeat_start_time_us = now;

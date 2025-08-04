@@ -1080,11 +1080,19 @@ void* war_window_render(void* args) {
                           1.0f - ((0 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          red_status_bar_color},
-                        {{1.0f,
+                        {{((vulkan_context.cell_width *
+                            (input_cmd_context.viewport_cols)) /
+                           physical_width) *
+                                  2.0f -
+                              1.0f,
                           1.0f - ((0 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          red_status_bar_color},
-                        {{1.0f,
+                        {{((vulkan_context.cell_width *
+                            (input_cmd_context.viewport_cols)) /
+                           physical_width) *
+                                  2.0f -
+                              1.0f,
                           1.0f - (0 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          red_status_bar_color},
@@ -1093,16 +1101,25 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          red_status_bar_color},
                     };
+
                     Vertex vim_mode_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((1 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          dark_gray_status_bar_color},
-                        {{1.0f,
+                        {{((vulkan_context.cell_width *
+                            (input_cmd_context.viewport_cols)) /
+                           physical_width) *
+                                  2.0f -
+                              1.0f,
                           1.0f - ((1 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          dark_gray_status_bar_color},
-                        {{1.0f,
+                        {{((vulkan_context.cell_width *
+                            (input_cmd_context.viewport_cols)) /
+                           physical_width) *
+                                  2.0f -
+                              1.0f,
                           1.0f - (1 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          dark_gray_status_bar_color},
@@ -1111,16 +1128,25 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          dark_gray_status_bar_color},
                     };
+
                     Vertex vim_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((2 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          light_gray_status_bar_color},
-                        {{1.0f,
+                        {{((vulkan_context.cell_width *
+                            (input_cmd_context.viewport_cols)) /
+                           physical_width) *
+                                  2.0f -
+                              1.0f,
                           1.0f - ((2 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          light_gray_status_bar_color},
-                        {{1.0f,
+                        {{((vulkan_context.cell_width *
+                            (input_cmd_context.viewport_cols)) /
+                           physical_width) *
+                                  2.0f -
+                              1.0f,
                           1.0f - (2 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
                          light_gray_status_bar_color},

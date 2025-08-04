@@ -98,8 +98,9 @@ static inline void write_le16(uint8_t* p, uint16_t v) {
 static inline void cmd_increment_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->row += ctx->row_increment * ctx->numeric_prefix;
-        if (ctx->row >=
-            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
+                            ctx->scroll_margin_rows -
+                            ctx->num_rows_for_status_bars) {
             ctx->bottom_row += ctx->row_increment * ctx->numeric_prefix;
             ctx->panning_y += (2.0f * ctx->cell_height * ctx->row_increment *
                                ctx->numeric_prefix) /
@@ -107,8 +108,9 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
         }
     } else {
         ctx->row += ctx->row_increment;
-        if (ctx->row >=
-            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
+                            ctx->scroll_margin_rows -
+                            ctx->num_rows_for_status_bars) {
             ctx->bottom_row += ctx->row_increment;
             ctx->panning_y += (2.0f * ctx->cell_height * ctx->row_increment) /
                               ctx->physical_height;
@@ -121,7 +123,9 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         if (ctx->row <= ctx->row_increment * ctx->numeric_prefix) {
             ctx->row = 0;
-            ctx->panning_y = 0.0f;
+            ctx->panning_y =
+                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
+                ctx->physical_height;
             ctx->bottom_row = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -136,7 +140,9 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     } else {
         if (ctx->row <= ctx->row_increment) {
             ctx->row = 0;
-            ctx->panning_y = 0.0f;
+            ctx->panning_y =
+                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
+                ctx->physical_height;
             ctx->bottom_row = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -154,8 +160,9 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
 static inline void cmd_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col += ctx->col_increment * ctx->numeric_prefix;
-        if (ctx->col >=
-            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
+                            ctx->scroll_margin_cols -
+                            ctx->num_cols_for_line_numbers) {
             ctx->left_col += ctx->col_increment * ctx->numeric_prefix;
             ctx->panning_x -= (2.0f * ctx->cell_width * ctx->col_increment *
                                ctx->numeric_prefix) /
@@ -163,8 +170,9 @@ static inline void cmd_increment_col(war_input_cmd_context* ctx) {
         }
     } else {
         ctx->col += ctx->col_increment;
-        if (ctx->col >=
-            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
+                            ctx->scroll_margin_cols -
+                            ctx->num_cols_for_line_numbers) {
             ctx->left_col += ctx->col_increment;
             ctx->panning_x -= (2.0f * ctx->cell_width * ctx->col_increment) /
                               ctx->physical_width;
@@ -177,7 +185,9 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         if (ctx->col <= ctx->col_increment * ctx->numeric_prefix) {
             ctx->col = 0;
-            ctx->panning_x = 0.0f;
+            ctx->panning_x =
+                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
+                ctx->physical_width;
             ctx->left_col = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -192,7 +202,9 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
     } else {
         if (ctx->col <= ctx->col_increment) {
             ctx->col = 0;
-            ctx->panning_x = 0.0f;
+            ctx->panning_x =
+                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
+                ctx->physical_width;
             ctx->left_col = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -205,21 +217,14 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
         }
     }
     ctx->numeric_prefix = 0;
-    if (ctx->col < 0) {
-        ctx->col = 0;
-        ctx->panning_x = 0.0f;
-    }
-    if (ctx->left_col < 0) {
-        ctx->left_col = 0;
-        ctx->panning_x = 0.0f;
-    }
 }
 
 static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->row += ctx->row_leap_increment * ctx->numeric_prefix;
-        if (ctx->row >=
-            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
+                            ctx->scroll_margin_rows -
+                            ctx->num_rows_for_status_bars) {
             ctx->bottom_row += ctx->row_leap_increment * ctx->numeric_prefix;
             ctx->panning_y += (2.0f * ctx->cell_height *
                                ctx->row_leap_increment * ctx->numeric_prefix) /
@@ -227,8 +232,9 @@ static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
         }
     } else {
         ctx->row += ctx->row_leap_increment;
-        if (ctx->row >=
-            ctx->bottom_row + ctx->viewport_rows - ctx->scroll_margin_rows) {
+        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
+                            ctx->scroll_margin_rows -
+                            ctx->num_rows_for_status_bars) {
             ctx->bottom_row += ctx->row_leap_increment;
             ctx->panning_y +=
                 (2.0f * ctx->cell_height * ctx->row_leap_increment) /
@@ -242,7 +248,9 @@ static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         if (ctx->row <= ctx->row_leap_increment * ctx->numeric_prefix) {
             ctx->row = 0;
-            ctx->panning_y = 0.0f;
+            ctx->panning_y =
+                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
+                ctx->physical_height;
             ctx->bottom_row = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -257,7 +265,9 @@ static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
     } else {
         if (ctx->row <= ctx->row_leap_increment) {
             ctx->row = 0;
-            ctx->panning_y = 0.0f;
+            ctx->panning_y =
+                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
+                ctx->physical_height;
             ctx->bottom_row = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -276,8 +286,9 @@ static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
 static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col += ctx->col_leap_increment * ctx->numeric_prefix;
-        if (ctx->col >=
-            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
+                            ctx->scroll_margin_cols -
+                            ctx->num_cols_for_line_numbers) {
             ctx->left_col += ctx->col_leap_increment * ctx->numeric_prefix;
             ctx->panning_x -= (2.0f * ctx->cell_width *
                                ctx->col_leap_increment * ctx->numeric_prefix) /
@@ -285,8 +296,9 @@ static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
         }
     } else {
         ctx->col += ctx->col_leap_increment;
-        if (ctx->col >=
-            ctx->left_col + ctx->viewport_cols - ctx->scroll_margin_cols) {
+        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
+                            ctx->scroll_margin_cols -
+                            ctx->num_cols_for_line_numbers) {
             ctx->left_col += ctx->col_leap_increment;
             ctx->panning_x -=
                 (2.0f * ctx->cell_width * ctx->col_leap_increment) /
@@ -300,7 +312,9 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         if (ctx->col <= ctx->col_leap_increment * ctx->numeric_prefix) {
             ctx->col = 0;
-            ctx->panning_x = 0.0f;
+            ctx->panning_x =
+                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
+                ctx->physical_width;
             ctx->left_col = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -315,7 +329,9 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
     } else {
         if (ctx->col <= ctx->col_leap_increment) {
             ctx->col = 0;
-            ctx->panning_x = 0.0f;
+            ctx->panning_x =
+                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
+                ctx->physical_width;
             ctx->left_col = 0;
             ctx->numeric_prefix = 0;
             return;
@@ -329,14 +345,6 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
         }
     }
     ctx->numeric_prefix = 0;
-    if (ctx->col < 0) {
-        ctx->col = 0;
-        ctx->panning_x = 0.0f;
-    }
-    if (ctx->left_col < 0) {
-        ctx->left_col = 0;
-        ctx->panning_x = 0.0f;
-    }
 }
 
 static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
@@ -364,7 +372,8 @@ static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = 0;
         return;
     }
-    ctx->row = ctx->bottom_row + ctx->viewport_rows - 1;
+    ctx->row = ctx->bottom_row + ctx->viewport_rows -
+               ctx->num_rows_for_status_bars - 1;
     ctx->numeric_prefix = 0;
 }
 
@@ -374,7 +383,8 @@ static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = 0;
         return;
     }
-    ctx->col = ctx->left_col + ctx->viewport_cols - 1;
+    ctx->col =
+        ctx->left_col + ctx->viewport_cols - ctx->num_cols_for_line_numbers - 1;
     ctx->numeric_prefix = 0;
 }
 
@@ -444,8 +454,11 @@ static inline void cmd_zoom_out_leap(war_input_cmd_context* ctx) {
 
 static inline void cmd_reset_zoom(war_input_cmd_context* ctx) {
     ctx->zoom_scale = 1.0f;
-    ctx->panning_x = 0.0f;
-    ctx->panning_y = 0.0f;
+    ctx->panning_x = (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
+                     ctx->physical_width;
+    ctx->panning_y =
+        -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
+        ctx->physical_height;
     ctx->left_col = 0;
     ctx->bottom_row = 0;
 }

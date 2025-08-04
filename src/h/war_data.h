@@ -128,6 +128,8 @@ typedef struct war_input_cmd_context {
     float physical_height;
     float logical_width;
     float logical_height;
+    uint8_t num_rows_for_status_bars;
+    uint8_t num_cols_for_line_numbers;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {

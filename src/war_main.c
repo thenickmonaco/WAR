@@ -108,6 +108,8 @@ void* war_window_render(void* args) {
     const uint32_t logical_height =
         (uint32_t)floor(physical_height / scale_factor);
 
+    uint8_t num_rows_for_status_bars = 3;
+    uint8_t num_cols_for_line_numbers = 3;
     war_input_cmd_context input_cmd_context = {
         .col = 0,
         .row = 0,
@@ -121,8 +123,10 @@ void* war_window_render(void* args) {
         .cursor_y = 0,
         .numeric_prefix = 0,
         .zoom_scale = 1.0f, // 1.0 = normal, <1 = zoom out, >1 = zoom in
-        .panning_x = 0.0f,
-        .panning_y = 0.0f,
+        .num_rows_for_status_bars = num_rows_for_status_bars,
+        .num_cols_for_line_numbers = num_cols_for_line_numbers,
+        .panning_x = (2.0f * vulkan_context.cell_width * 3) / physical_width,
+        .panning_y = -(2.0f * vulkan_context.cell_height * 3) / physical_height,
         .zoom_increment = 0.1f,
         .zoom_leap_increment = 0.5f,
         .anchor_x = 0.0f,
@@ -2355,16 +2359,33 @@ void* war_window_render(void* args) {
                     case 1:
                         if (read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
                             BTN_LEFT) {
+                            if (((int)(input_cmd_context.cursor_x /
+                                       vulkan_context.cell_width) -
+                                 (int)input_cmd_context
+                                     .num_cols_for_line_numbers) < 0) {
+                                input_cmd_context.col = 0;
+                                break;
+                            }
+                            if ((((physical_height -
+                                   input_cmd_context.cursor_y) /
+                                  vulkan_context.cell_height) -
+                                 input_cmd_context.num_rows_for_status_bars) <
+                                0) {
+                                input_cmd_context.row = 0;
+                                break;
+                            }
                             input_cmd_context.col =
                                 (uint32_t)(input_cmd_context.cursor_x /
-                                           vulkan_context.cell_width);
+                                           vulkan_context.cell_width) -
+                                input_cmd_context.num_cols_for_line_numbers;
                             input_cmd_context.row =
                                 (uint32_t)((physical_height -
                                             input_cmd_context.cursor_y) /
-                                           vulkan_context
-                                               .cell_height); // because top
-                                                              // left = 0,0 in
-                                                              // wayland
+                                           vulkan_context.cell_height) -
+                                input_cmd_context
+                                    .num_rows_for_status_bars; // because top
+                                                               // left = 0,0 in
+                                                               // wayland
                         }
                     }
                     goto done;

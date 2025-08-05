@@ -1235,7 +1235,7 @@ void* war_window_render(void* args) {
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
 
                     //---------------------------------------------------------
-                    // SDF FONT RENDERING TEST
+                    // SDF FONT RENDERING FULL-SCREEN TEXT TEST
                     //---------------------------------------------------------
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1248,12 +1248,14 @@ void* war_window_render(void* args) {
                                             &vulkan_context.font_descriptor_set,
                                             0,
                                             NULL);
+
                     typedef struct {
                         float zoom;
                         float _pad1;
                         float pan[2];
                         float padding;
                     } SdfPushConstants;
+
                     SdfPushConstants sdf_pc = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {input_cmd_context.panning_x,
@@ -1266,23 +1268,14 @@ void* war_window_render(void* args) {
                                        0,
                                        sizeof(SdfPushConstants),
                                        &sdf_pc);
-                    const char* text = "WAR monaco";
-                    size_t text_len = strlen(text);
 
-                    uint32_t start_col =
-                        input_cmd_context.viewport_cols / 2 - (text_len / 2);
-                    uint32_t start_row = input_cmd_context.viewport_rows / 2;
+                    const char* base_text = "WAR monaco ";
+                    size_t base_text_len = strlen(base_text);
 
                     float ndc_cell_width =
                         2.0f / (float)input_cmd_context.viewport_cols;
                     float ndc_cell_height =
                         2.0f / (float)input_cmd_context.viewport_rows;
-
-                    float cell_origin_y = 1.0f - start_row * ndc_cell_height;
-                    float baseline_y =
-                        cell_origin_y - (vulkan_context.ascent /
-                                         input_cmd_context.cell_height) *
-                                            ndc_cell_height;
 
                     typedef struct {
                         float pos[2];
@@ -1293,97 +1286,125 @@ void* war_window_render(void* args) {
                         uint32_t color;
                     } sdf_vertex_t;
 
-                    sdf_vertex_t quads[4 * 10];
-                    uint16_t indices[6 * 10];
+                    // Allocate enough space for max vertices/indices for full
+                    // screen: max characters = viewport_cols * viewport_rows
+                    // Each char = 4 vertices, 6 indices
+                    size_t max_chars = input_cmd_context.viewport_cols *
+                                       input_cmd_context.viewport_rows;
+                    sdf_vertex_t* quads =
+                        malloc(sizeof(sdf_vertex_t) * 4 * max_chars);
+                    uint16_t* indices =
+                        malloc(sizeof(uint16_t) * 6 * max_chars);
+
                     uint32_t vertex_index = 0, index_index = 0;
 
-                    for (size_t i = 0; i < text_len; ++i) {
-                        char c = text[i];
-                        war_glyph_info glyph =
-                            vulkan_context.glyphs[(uint8_t)c];
-                        float cell_origin_x =
-                            -1.0f + (start_col + i) * ndc_cell_width;
-                        float horizontal_glyph_offset = ndc_cell_width * -0.2f;
-                        float cell_center_x =
-                            (cell_origin_x + ndc_cell_width / 2.0f) +
-                            horizontal_glyph_offset;
-                        bool is_lowercase = (c >= 'a' && c <= 'z');
-                        float vertical_glyph_offset = 0.0f;
-                        if (is_lowercase) {
-                            vertical_glyph_offset =
-                                ndc_cell_height *
-                                0.1f; // tweak this, negative = down
+                    for (uint32_t row = 0;
+                         row < input_cmd_context.viewport_rows;
+                         ++row) {
+                        float cell_origin_y = 1.0f - row * ndc_cell_height;
+
+                        for (uint32_t col = 0;
+                             col < input_cmd_context.viewport_cols;
+                             ++col) {
+                            // Wrap around base_text to fill cols
+                            char c = base_text[col % base_text_len];
+                            war_glyph_info glyph =
+                                vulkan_context.glyphs[(uint8_t)c];
+
+                            float cell_origin_x = -1.0f + col * ndc_cell_width;
+
+                            float horizontal_glyph_offset = 0.0f;
+                            float cell_center_x =
+                                (cell_origin_x + ndc_cell_width / 2.0f) +
+                                horizontal_glyph_offset;
+
+                            bool is_lowercase = (c >= 'a' && c <= 'z');
+                            float vertical_glyph_offset = 0.0f;
+                            if (is_lowercase) {
+                                vertical_glyph_offset =
+                                    ndc_cell_height * 0.1f; // tweak as you like
+                            }
+                            float cell_center_y =
+                                (cell_origin_y - ndc_cell_height / 2.0f) +
+                                vertical_glyph_offset;
+
+                            float glyph_ndc_width =
+                                (glyph.width / input_cmd_context.cell_width) *
+                                ndc_cell_width;
+                            float glyph_ndc_height =
+                                (glyph.height / input_cmd_context.cell_height) *
+                                ndc_cell_height;
+                            float bearing_x_ndc =
+                                (glyph.bearing_x /
+                                 input_cmd_context.cell_width) *
+                                ndc_cell_width;
+
+                            float quad_left = cell_center_x -
+                                              glyph_ndc_width / 2.0f +
+                                              bearing_x_ndc;
+                            float quad_right =
+                                cell_center_x + glyph_ndc_width / 2.0f;
+                            float quad_top =
+                                cell_center_y + glyph_ndc_height / 2.0f;
+                            float quad_bottom =
+                                cell_center_y - glyph_ndc_height / 2.0f;
+
+                            quads[vertex_index + 0] =
+                                (sdf_vertex_t){{quad_left, quad_top},
+                                               {glyph.uv_x0, glyph.uv_y1},
+                                               0,
+                                               0,
+                                               {0},
+                                               bright_white_hex};
+                            quads[vertex_index + 1] =
+                                (sdf_vertex_t){{quad_right, quad_top},
+                                               {glyph.uv_x1, glyph.uv_y1},
+                                               0,
+                                               0,
+                                               {0},
+                                               bright_white_hex};
+                            quads[vertex_index + 2] =
+                                (sdf_vertex_t){{quad_right, quad_bottom},
+                                               {glyph.uv_x1, glyph.uv_y0},
+                                               0,
+                                               0,
+                                               {0},
+                                               bright_white_hex};
+                            quads[vertex_index + 3] =
+                                (sdf_vertex_t){{quad_left, quad_bottom},
+                                               {glyph.uv_x0, glyph.uv_y0},
+                                               0,
+                                               0,
+                                               {0},
+                                               bright_white_hex};
+
+                            indices[index_index + 0] = vertex_index + 0;
+                            indices[index_index + 1] = vertex_index + 1;
+                            indices[index_index + 2] = vertex_index + 2;
+                            indices[index_index + 3] = vertex_index + 2;
+                            indices[index_index + 4] = vertex_index + 3;
+                            indices[index_index + 5] = vertex_index + 0;
+
+                            vertex_index += 4;
+                            index_index += 6;
                         }
-                        float cell_center_y =
-                            (cell_origin_y - ndc_cell_height / 2.0f) +
-                            vertical_glyph_offset;
-                        float glyph_ndc_width =
-                            (glyph.width / input_cmd_context.cell_width) *
-                            ndc_cell_width;
-                        float glyph_ndc_height =
-                            (glyph.height / input_cmd_context.cell_height) *
-                            ndc_cell_height;
-                        float bearing_x_ndc =
-                            (glyph.bearing_x / input_cmd_context.cell_width) *
-                            ndc_cell_width;
-                        float quad_left = cell_center_x -
-                                          glyph_ndc_width / 2.0f +
-                                          bearing_x_ndc;
-                        float quad_right =
-                            cell_center_x + glyph_ndc_width / 2.0f;
-                        float quad_top =
-                            cell_center_y + glyph_ndc_height / 2.0f;
-                        float quad_bottom =
-                            cell_center_y - glyph_ndc_height / 2.0f;
-                        quads[vertex_index + 0] =
-                            (sdf_vertex_t){{quad_left, quad_top},
-                                           {glyph.uv_x0, glyph.uv_y1},
-                                           0.0f,
-                                           0.0f,
-                                           {0},
-                                           bright_white_hex};
-                        quads[vertex_index + 1] =
-                            (sdf_vertex_t){{quad_right, quad_top},
-                                           {glyph.uv_x1, glyph.uv_y1},
-                                           0.0f,
-                                           0.0f,
-                                           {0},
-                                           bright_white_hex};
-                        quads[vertex_index + 2] =
-                            (sdf_vertex_t){{quad_right, quad_bottom},
-                                           {glyph.uv_x1, glyph.uv_y0},
-                                           0.0f,
-                                           0.0f,
-                                           {0},
-                                           bright_white_hex};
-                        quads[vertex_index + 3] =
-                            (sdf_vertex_t){{quad_left, quad_bottom},
-                                           {glyph.uv_x0, glyph.uv_y0},
-                                           0.0f,
-                                           0.0f,
-                                           {0},
-                                           bright_white_hex};
-
-                        indices[index_index + 0] = vertex_index + 0;
-                        indices[index_index + 1] = vertex_index + 1;
-                        indices[index_index + 2] = vertex_index + 2;
-                        indices[index_index + 3] = vertex_index + 2;
-                        indices[index_index + 4] = vertex_index + 3;
-                        indices[index_index + 5] = vertex_index + 0;
-
-                        vertex_index += 4;
-                        index_index += 6;
                     }
+
+                    // Upload vertex buffer
                     void* sdf_vertex_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_vertex_buffer_memory,
                                 0,
-                                sizeof(quads),
+                                sizeof(sdf_vertex_t) * 4 * max_chars,
                                 0,
                                 &sdf_vertex_ptr);
-                    memcpy(sdf_vertex_ptr, quads, sizeof(quads));
+                    memcpy(sdf_vertex_ptr,
+                           quads,
+                           sizeof(sdf_vertex_t) * 4 * max_chars);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_vertex_buffer_memory);
+
+                    // Bind vertex buffer
                     VkDeviceSize sdf_offsets[] = {0};
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
@@ -1391,28 +1412,38 @@ void* war_window_render(void* args) {
                                            &vulkan_context.sdf_vertex_buffer,
                                            sdf_offsets);
 
+                    // Upload index buffer
                     void* sdf_index_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_index_buffer_memory,
                                 0,
-                                sizeof(indices),
+                                sizeof(uint16_t) * 6 * max_chars,
                                 0,
                                 &sdf_index_ptr);
-                    memcpy(sdf_index_ptr, indices, sizeof(indices));
+                    memcpy(sdf_index_ptr,
+                           indices,
+                           sizeof(uint16_t) * 6 * max_chars);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_index_buffer_memory);
+
+                    // Bind index buffer
                     vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
                                          vulkan_context.sdf_index_buffer,
                                          0,
                                          VK_INDEX_TYPE_UINT16);
+
+                    // Draw all quads
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer,
-                                     (uint32_t)(6 * 10),
+                                     (uint32_t)(6 * max_chars),
                                      1,
                                      0,
                                      0,
                                      0);
+
+                    free(quads);
+                    free(indices);
                     //---------------------------------------------------------
-                    // END SDF FONT RENDERING TEST
+                    // END SDF FONT RENDERING FULL-SCREEN TEST
                     //---------------------------------------------------------
 
                     vkCmdEndRenderPass(vulkan_context.cmd_buffer);

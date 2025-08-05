@@ -1304,7 +1304,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         },
     };
     enum {
-        max_sdf_quads = 1000,
+        max_sdf_quads = 3000,
     };
     typedef struct sdf_vertex {
         float pos[2];    // NDC position

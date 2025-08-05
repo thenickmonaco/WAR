@@ -871,7 +871,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     FT_Init_FreeType(&ft_library);
     FT_Face ft_regular;
     FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
-    float font_pixel_height = 48.0f;
+    float font_pixel_height = 64.0f;
     FT_Set_Pixel_Sizes(ft_regular, 0, (int)font_pixel_height);
     float ascent = ft_regular->size->metrics.ascender / 64.0f;
     float descent = ft_regular->size->metrics.descender / 64.0f;

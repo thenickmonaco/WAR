@@ -928,8 +928,7 @@ void* war_window_render(void* args) {
                     const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
                     const uint32_t bright_white_hex =
                         0xFFEEEEEE; // tmux status text
-                    const uint32_t black_hex =
-                        0xFF000000;
+                    const uint32_t black_hex = 0xFF000000;
                     //----------------------------------------------------------
                     // RENDER LOGIC
                     //----------------------------------------------------------
@@ -1267,58 +1266,70 @@ void* war_window_render(void* args) {
                                        0,
                                        sizeof(SdfPushConstants),
                                        &sdf_pc);
-                    typedef struct {
-                        float pos[2];    // NDC position
-                        float uv[2];     // UVs (0-1)
-                        float thickness; // SDF edge width
-                        float feather;   // SDF soft edge amount
-                        float padding[4];
-                        uint32_t color; // RGBA
-                    } sdf_vertex_t;
                     war_glyph_info glyph_test = vulkan_context.glyphs['m'];
-                    uint32_t num_columns = input_cmd_context.viewport_cols;
-                    uint32_t num_rows =
-                        physical_width / input_cmd_context.viewport_rows;
-                    float ndc_quad_width = 2.0f / num_columns;
-                    float ndc_quad_height = 2.0f / num_rows;
-                    float right = ndc_quad_width / 2.0f;
-                    float left = -ndc_quad_width / 2.0f;
-                    float top = ndc_quad_height / 2.0f;
-                    float bottom = -ndc_quad_height / 2.0f;
+                    uint32_t col_for_test = 10;
+                    uint32_t row_for_test = 5;
+                    float ndc_cell_width =
+                        2.0f / (float)input_cmd_context.viewport_cols;
+                    float ndc_cell_height =
+                        2.0f / (float)input_cmd_context.viewport_rows;
+                    float cell_origin_x = -1.0f + col_for_test * ndc_cell_width;
+                    float cell_origin_y = 1.0f - row_for_test * ndc_cell_height;
+                    float baseline_y =
+                        cell_origin_y - (vulkan_context.ascent /
+                                         input_cmd_context.cell_height) *
+                                            ndc_cell_height;
+                    float glyph_width_ndc =
+                        (glyph_test.width / input_cmd_context.cell_width) *
+                        ndc_cell_width;
+                    float glyph_height_ndc =
+                        (glyph_test.height / input_cmd_context.cell_height) *
+                        ndc_cell_height;
+                    float bearing_x_ndc =
+                        (glyph_test.bearing_x / input_cmd_context.cell_width) *
+                        ndc_cell_width;
+                    float bearing_y_ndc =
+                        (glyph_test.bearing_y / input_cmd_context.cell_height) *
+                        ndc_cell_height;
+                    float quad_left = cell_origin_x + bearing_x_ndc;
+                    float quad_top = baseline_y - bearing_y_ndc;
+                    float quad_right = quad_left + glyph_width_ndc;
+                    float quad_bottom = quad_top - glyph_height_ndc;
+                    typedef struct {
+                        float pos[2];
+                        float uv[2];
+                        float thickness;
+                        float feather;
+                        float padding[4];
+                        uint32_t color;
+                    } sdf_vertex_t;
                     sdf_vertex_t test_quad[4] = {
-                        {{left, top},
+                        {{quad_left, quad_top},
                          {glyph_test.uv_x0, glyph_test.uv_y1},
-                         0.0,
-                         0.0,
-                         {0, 0, 0, 0}, // padding
+                         0.0f,
+                         0.0f,
+                         {0},
                          bright_white_hex},
-                        {{right, top},
+                        {{quad_right, quad_top},
                          {glyph_test.uv_x1, glyph_test.uv_y1},
-                         0.0,
-                         0.0,
-                         {0, 0, 0, 0}, // padding
+                         0.0f,
+                         0.0f,
+                         {0},
                          bright_white_hex},
-                        {{right, bottom},
+                        {{quad_right, quad_bottom},
                          {glyph_test.uv_x1, glyph_test.uv_y0},
-                         0.0,
-                         0.0,
-                         {0, 0, 0, 0}, // padding
+                         0.0f,
+                         0.0f,
+                         {0},
                          bright_white_hex},
-                        {{left, bottom},
+                        {{quad_left, quad_bottom},
                          {glyph_test.uv_x0, glyph_test.uv_y0},
-                         0.0,
-                         0.0,
-                         {0, 0, 0, 0}, // padding
+                         0.0f,
+                         0.0f,
+                         {0},
                          bright_white_hex},
                     };
-                    uint16_t test_quad_indices[6] = {
-                        0,
-                        1,
-                        2, // first triangle
-                        2,
-                        3,
-                        0 // second triangle
-                    };
+                    uint16_t test_quad_indices[6] = {0, 1, 2, 2, 3, 0};
                     void* sdf_vertex_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_vertex_buffer_memory,

@@ -1408,7 +1408,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},     // 8
         {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)}, // 16
         {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},   // 20
-        {4, 0, VK_FORMAT_B8G8R8A8_UNORM, offsetof(sdf_vertex_t, color)},
+        {4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex_t, color)},
     }; // 40;
     VkPipelineVertexInputStateCreateInfo sdf_vertex_input_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,

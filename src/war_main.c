@@ -1321,34 +1321,65 @@ void* war_window_render(void* args) {
                             float quad_top = center_y + glyph_ndc_height / 2.0f;
                             float quad_bottom =
                                 center_y - glyph_ndc_height / 2.0f;
-                            sdf_quads_text[vertex_index + 0] =
-                                (sdf_vertex_t){{quad_left, quad_top},
-                                               {glyph.uv_x0, glyph.uv_y1},
-                                               0.0f,
-                                               0.0f,
-                                               {0},
-                                               bright_white_hex};
-                            sdf_quads_text[vertex_index + 1] =
-                                (sdf_vertex_t){{quad_right, quad_top},
-                                               {glyph.uv_x1, glyph.uv_y1},
-                                               0.0f,
-                                               0.0f,
-                                               {0},
-                                               bright_white_hex};
-                            sdf_quads_text[vertex_index + 2] =
-                                (sdf_vertex_t){{quad_right, quad_bottom},
-                                               {glyph.uv_x1, glyph.uv_y0},
-                                               0.0f,
-                                               0.0f,
-                                               {0},
-                                               bright_white_hex};
-                            sdf_quads_text[vertex_index + 3] =
-                                (sdf_vertex_t){{quad_left, quad_bottom},
-                                               {glyph.uv_x0, glyph.uv_y0},
-                                               0.0f,
-                                               0.0f,
-                                               {0},
-                                               bright_white_hex};
+                            if (row == 0) {
+                                sdf_quads_text[vertex_index + 0] =
+                                    (sdf_vertex_t){{quad_left, quad_top},
+                                                   {glyph.uv_x0, glyph.uv_y1},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   bright_white_hex};
+                                sdf_quads_text[vertex_index + 1] =
+                                    (sdf_vertex_t){{quad_right, quad_top},
+                                                   {glyph.uv_x1, glyph.uv_y1},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   bright_white_hex};
+                                sdf_quads_text[vertex_index + 2] =
+                                    (sdf_vertex_t){{quad_right, quad_bottom},
+                                                   {glyph.uv_x1, glyph.uv_y0},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   bright_white_hex};
+                                sdf_quads_text[vertex_index + 3] =
+                                    (sdf_vertex_t){{quad_left, quad_bottom},
+                                                   {glyph.uv_x0, glyph.uv_y0},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   bright_white_hex};
+                            } else {
+                                sdf_quads_text[vertex_index + 0] =
+                                    (sdf_vertex_t){{quad_left, quad_top},
+                                                   {glyph.uv_x0, glyph.uv_y1},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   white_hex};
+                                sdf_quads_text[vertex_index + 1] =
+                                    (sdf_vertex_t){{quad_right, quad_top},
+                                                   {glyph.uv_x1, glyph.uv_y1},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   white_hex};
+                                sdf_quads_text[vertex_index + 2] =
+                                    (sdf_vertex_t){{quad_right, quad_bottom},
+                                                   {glyph.uv_x1, glyph.uv_y0},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   white_hex};
+                                sdf_quads_text[vertex_index + 3] =
+                                    (sdf_vertex_t){{quad_left, quad_bottom},
+                                                   {glyph.uv_x0, glyph.uv_y0},
+                                                   0.0f,
+                                                   0.0f,
+                                                   {0},
+                                                   white_hex};
+                            }
                             indices[index_index + 0] = vertex_index + 0;
                             indices[index_index + 1] = vertex_index + 1;
                             indices[index_index + 2] = vertex_index + 2;
@@ -1495,28 +1526,28 @@ void* war_window_render(void* args) {
                                                0.0f,
                                                0.0f,
                                                {0},
-                                               bright_white_hex};
+                                               light_gray_hex};
                             line_number_quads[line_vertex_index + 1] =
                                 (sdf_vertex_t){{quad_right, quad_top},
                                                {glyph.uv_x1, glyph.uv_y1},
                                                0.0f,
                                                0.0f,
                                                {0},
-                                               bright_white_hex};
+                                               light_gray_hex};
                             line_number_quads[line_vertex_index + 2] =
                                 (sdf_vertex_t){{quad_right, quad_bottom},
                                                {glyph.uv_x1, glyph.uv_y0},
                                                0.0f,
                                                0.0f,
                                                {0},
-                                               bright_white_hex};
+                                               light_gray_hex};
                             line_number_quads[line_vertex_index + 3] =
                                 (sdf_vertex_t){{quad_left, quad_bottom},
                                                {glyph.uv_x0, glyph.uv_y0},
                                                0.0f,
                                                0.0f,
                                                {0},
-                                               bright_white_hex};
+                                               light_gray_hex};
 
                             uint16_t vertex_offset = 4 * num_letters;
                             line_number_indices[line_index_index + 0] =
@@ -2618,12 +2649,30 @@ void* war_window_render(void* args) {
                             };
                         write_input_sequence_index =
                             (write_input_sequence_index + 1) & 0xFF;
+                        war_wayland_holy_trinity(fd,
+                                                 wl_surface_id,
+                                                 wl_buffer_id,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 physical_width,
+                                                 physical_height);
                     } else if (wl_key_state == 0) {
                         if (repeat_event.keysym == keysym || mod) {
                             repeat_command = NULL;
                             repeat_start_time_us = 0;
                             next_repeat_time_us = 0;
                         }
+                        war_wayland_holy_trinity(fd,
+                                                 wl_surface_id,
+                                                 wl_buffer_id,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 0,
+                                                 physical_width,
+                                                 physical_height);
                     }
 
                     call_carmack("read index: %u", read_input_sequence_index);

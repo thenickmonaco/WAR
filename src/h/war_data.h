@@ -95,6 +95,13 @@ enum war_key_trie {
     NUM_SEQUENCES = 27,
 };
 
+typedef struct rgba_t {
+    float r;
+    float g;
+    float b;
+    float a;
+} rgba_t;
+
 typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;

@@ -1312,7 +1312,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         float thickness; // SDF edge width
         float feather;   // SDF soft edge amount
         float padding[4];
-        float color[4]; // RGBA
+        uint32_t color;
     } sdf_vertex_t;
     VkDeviceSize sdf_vertex_buffer_size =
         sizeof(sdf_vertex_t) * max_sdf_quads * 4;
@@ -1416,7 +1416,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},     // 8
         {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)}, // 16
         {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},   // 20
-        {4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(sdf_vertex_t, color)},
+        {4, 0, VK_FORMAT_B8G8R8A8_UNORM, offsetof(sdf_vertex_t, color)},
     }; // 40;
     VkPipelineVertexInputStateCreateInfo sdf_vertex_input_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -1460,7 +1460,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .stencilTestEnable = VK_FALSE,
     };
     VkPipelineColorBlendAttachmentState color_blend_attachment = {
-        .blendEnable = VK_FALSE,
+        .blendEnable = VK_TRUE,
         .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
         .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
         .colorBlendOp = VK_BLEND_OP_ADD,

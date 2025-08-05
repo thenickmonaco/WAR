@@ -919,6 +919,15 @@ void* war_window_render(void* args) {
                     input_cmd_context.viewport_rows =
                         (int)(physical_height / (vulkan_context.cell_height *
                                                  input_cmd_context.zoom_scale));
+                    // dark gruvbox
+                    const uint32_t light_gray_hex = 0xFF454950;
+                    const uint32_t darker_light_gray_hex =
+                        0xFF36383C; // gutter / line numbers
+                    const uint32_t dark_gray_hex = 0xFF282828;
+                    const uint32_t red_hex = 0xFF011FDD;
+                    const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
+                    const uint32_t bright_white_hex =
+                        0xFFEEEEEE; // tmux status text
                     //----------------------------------------------------------
                     // RENDER LOGIC
                     //----------------------------------------------------------
@@ -938,7 +947,7 @@ void* war_window_render(void* args) {
                         vulkan_context.cmd_buffer, &begin_info);
                     assert(result == VK_SUCCESS);
                     VkClearValue clear_color = {
-                        .color = {{0.1667f, 0.1667f, 0.1667f, 1.0f}}};
+                        .color = {{0.1569f, 0.1569f, 0.1569f, 1.0f}}};
                     VkRenderPassBeginInfo render_pass_info = {
                         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                         .renderPass = vulkan_context.render_pass,
@@ -962,10 +971,10 @@ void* war_window_render(void* args) {
                         uint32_t color;
                     } Vertex;
                     Vertex quad_verts[8] = {
-                        {{-0.5f, -0.5f}, 0x000000FF},
-                        {{0.5f, -0.5f}, 0x000000FF},
-                        {{0.5f, 0.5f}, 0x000000FF},
-                        {{-0.5f, 0.5f}, 0x000000FF},
+                        {{-0.5f, -0.5f}, red_hex},
+                        {{0.5f, -0.5f}, red_hex},
+                        {{0.5f, 0.5f}, red_hex},
+                        {{-0.5f, 0.5f}, red_hex},
                         // cursor
                         {{(input_cmd_context.col * vulkan_context.cell_width) /
                                   physical_width * 2.0f -
@@ -973,7 +982,7 @@ void* war_window_render(void* args) {
                           1.0f - ((input_cmd_context.row + 1) *
                                   vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         0xFFFFFFFF},
+                         white_hex},
                         {{((input_cmd_context.col + 1) *
                            vulkan_context.cell_width) /
                                   physical_width * 2.0f -
@@ -981,7 +990,7 @@ void* war_window_render(void* args) {
                           1.0f - ((input_cmd_context.row + 1) *
                                   vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         0xFFFFFFFF},
+                         white_hex},
                         {{((input_cmd_context.col + 1) *
                            vulkan_context.cell_width) /
                                   physical_width * 2.0f -
@@ -989,14 +998,14 @@ void* war_window_render(void* args) {
                           1.0f - (input_cmd_context.row *
                                   vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         0xFFFFFFFF},
+                         white_hex},
                         {{(input_cmd_context.col * vulkan_context.cell_width) /
                                   physical_width * 2.0f -
                               1.0f,
                           1.0f - (input_cmd_context.row *
                                   vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         0xFFFFFFFF},
+                         white_hex},
                     };
                     uint16_t general_quad_indices[12] = {
                         0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
@@ -1070,16 +1079,11 @@ void* war_window_render(void* args) {
                     //---------------------------------------------------------
                     // STATUS BARS
                     //---------------------------------------------------------
-                    const uint32_t light_gray_status_bar_color =
-                        0xFFB0B0B0; // light gray
-                    const uint32_t dark_gray_status_bar_color =
-                        0xFF202020; // dark gray
-                    const uint32_t red_status_bar_color = 0xFF0000FF; // red
                     Vertex tmux_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((0 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         red_status_bar_color},
+                         red_hex},
                         {{((vulkan_context.cell_width *
                             (input_cmd_context.viewport_cols)) /
                            physical_width) *
@@ -1087,7 +1091,7 @@ void* war_window_render(void* args) {
                               1.0f,
                           1.0f - ((0 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         red_status_bar_color},
+                         red_hex},
                         {{((vulkan_context.cell_width *
                             (input_cmd_context.viewport_cols)) /
                            physical_width) *
@@ -1095,18 +1099,17 @@ void* war_window_render(void* args) {
                               1.0f,
                           1.0f - (0 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         red_status_bar_color},
+                         red_hex},
                         {{-1.0f,
                           1.0f - (0 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         red_status_bar_color},
+                         red_hex},
                     };
-
                     Vertex vim_mode_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((1 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         dark_gray_status_bar_color},
+                         dark_gray_hex},
                         {{((vulkan_context.cell_width *
                             (input_cmd_context.viewport_cols)) /
                            physical_width) *
@@ -1114,7 +1117,7 @@ void* war_window_render(void* args) {
                               1.0f,
                           1.0f - ((1 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         dark_gray_status_bar_color},
+                         dark_gray_hex},
                         {{((vulkan_context.cell_width *
                             (input_cmd_context.viewport_cols)) /
                            physical_width) *
@@ -1122,18 +1125,17 @@ void* war_window_render(void* args) {
                               1.0f,
                           1.0f - (1 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         dark_gray_status_bar_color},
+                         dark_gray_hex},
                         {{-1.0f,
                           1.0f - (1 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         dark_gray_status_bar_color},
+                         dark_gray_hex},
                     };
-
                     Vertex vim_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((2 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         light_gray_status_bar_color},
+                         light_gray_hex},
                         {{((vulkan_context.cell_width *
                             (input_cmd_context.viewport_cols)) /
                            physical_width) *
@@ -1141,7 +1143,7 @@ void* war_window_render(void* args) {
                               1.0f,
                           1.0f - ((2 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         light_gray_status_bar_color},
+                         light_gray_hex},
                         {{((vulkan_context.cell_width *
                             (input_cmd_context.viewport_cols)) /
                            physical_width) *
@@ -1149,11 +1151,11 @@ void* war_window_render(void* args) {
                               1.0f,
                           1.0f - (2 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         light_gray_status_bar_color},
+                         light_gray_hex},
                         {{-1.0f,
                           1.0f - (2 * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
-                         light_gray_status_bar_color},
+                         light_gray_hex},
                     };
                     uint16_t static_quads_indices[18] = {0,
                                                          1,
@@ -1234,13 +1236,9 @@ void* war_window_render(void* args) {
                     //---------------------------------------------------------
                     // SDF FONT RENDERING TEST
                     //---------------------------------------------------------
-                    // 8b. Bind the SDF pipeline
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       vulkan_context.sdf_pipeline);
-
-                    // 8c. Bind the descriptor set (with font atlas bound at
-                    // binding 0)
                     vkCmdBindDescriptorSets(vulkan_context.cmd_buffer,
                                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                                             vulkan_context.sdf_pipeline_layout,
@@ -1249,40 +1247,32 @@ void* war_window_render(void* args) {
                                             &vulkan_context.font_descriptor_set,
                                             0,
                                             NULL);
-
-                    // 8d. Push constants for zoom/pan (match struct layout in
-                    // shader)
                     typedef struct {
                         float zoom;
                         float _pad1;
                         float pan[2];
                         float padding;
                     } SdfPushConstants;
-
                     SdfPushConstants sdf_pc = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {input_cmd_context.panning_x,
                                 input_cmd_context.panning_y},
                         .padding = 0.0f,
                     };
-
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.sdf_pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
                                        sizeof(SdfPushConstants),
                                        &sdf_pc);
-
-                    // ==== FULLSCREEN DEBUG QUAD DATA UPLOAD ====
                     typedef struct {
                         float pos[2];    // NDC position
                         float uv[2];     // UVs (0-1)
                         float thickness; // SDF edge width
                         float feather;   // SDF soft edge amount
                         float padding[4];
-                        float color[4]; // RGBA
+                        uint32_t color; // RGBA
                     } sdf_vertex_t;
-
                     war_glyph_info glyph_test = vulkan_context.glyphs['m'];
                     uint32_t num_columns = input_cmd_context.viewport_cols;
                     uint32_t num_rows =
@@ -1298,26 +1288,26 @@ void* war_window_render(void* args) {
                          {glyph_test.uv_x0, glyph_test.uv_y1},
                          0.0,
                          0.0,
-                         {0, 0, 0, 0},    // padding
-                         {0, 1, 0, 0.5}}, // top-left
+                         {0, 0, 0, 0}, // padding
+                         0xFF000000},
                         {{right, top},
                          {glyph_test.uv_x1, glyph_test.uv_y1},
                          0.0,
                          0.0,
-                         {0, 0, 0, 0},    // padding
-                         {0, 1, 0, 0.5}}, // top-right
+                         {0, 0, 0, 0}, // padding
+                         0xFF000000},
                         {{right, bottom},
                          {glyph_test.uv_x1, glyph_test.uv_y0},
                          0.0,
                          0.0,
-                         {0, 0, 0, 0},    // padding
-                         {0, 1, 0, 0.5}}, // bottom-right
+                         {0, 0, 0, 0}, // padding
+                         0xFF000000},
                         {{left, bottom},
                          {glyph_test.uv_x0, glyph_test.uv_y0},
                          0.0,
                          0.0,
-                         {0, 0, 0, 0},    // padding
-                         {0, 1, 0, 0.5}}, // bottom-left
+                         {0, 0, 0, 0}, // padding
+                         0xFF000000},
                     };
                     uint16_t test_quad_indices[6] = {
                         0,
@@ -1327,9 +1317,6 @@ void* war_window_render(void* args) {
                         3,
                         0 // second triangle
                     };
-
-                    // Upload the quad to sdf_vertex_buffer (assumes it's mapped
-                    // or host-visible)
                     void* sdf_vertex_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_vertex_buffer_memory,
@@ -1340,8 +1327,6 @@ void* war_window_render(void* args) {
                     memcpy(sdf_vertex_ptr, test_quad, sizeof(test_quad));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_vertex_buffer_memory);
-
-                    // 8e. Bind the SDF vertex buffer
                     VkDeviceSize sdf_offsets[] = {0};
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
@@ -1365,25 +1350,18 @@ void* war_window_render(void* args) {
                                          vulkan_context.sdf_index_buffer,
                                          0,
                                          VK_INDEX_TYPE_UINT16);
-
-                    // 8f. Draw a single quad (4 vertices)
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
                     //---------------------------------------------------------
                     // END SDF FONT RENDERING TEST
                     //---------------------------------------------------------
 
-                    // 9. End render pass and command buffer
                     vkCmdEndRenderPass(vulkan_context.cmd_buffer);
                     result = vkEndCommandBuffer(vulkan_context.cmd_buffer);
                     assert(result == VK_SUCCESS);
-
-                    // 10. Submit command buffer
                     VkSubmitInfo submit_info = {
                         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                         .commandBufferCount = 1,
                         .pCommandBuffers = &vulkan_context.cmd_buffer,
-
-                        // COMMENT: commented out earlier (semaphores)
                         .waitSemaphoreCount = 0,
                         .pWaitSemaphores = NULL,
                         .signalSemaphoreCount = 1,

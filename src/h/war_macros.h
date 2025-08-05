@@ -49,6 +49,15 @@ static inline uint64_t get_monotonic_time_us(void) {
     return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
 
+static inline rgba_t unpack_abgr(uint32_t hex_color) {
+    rgba_t color;
+    color.r = ((hex_color >> 0) & 0xFF) / 255.0f;  // Red
+    color.g = ((hex_color >> 8) & 0xFF) / 255.0f;  // Green
+    color.b = ((hex_color >> 16) & 0xFF) / 255.0f; // Blue
+    color.a = ((hex_color >> 24) & 0xFF) / 255.0f; // Alpha
+    return color;
+}
+
 static inline int32_t to_fixed(float f) { return (int32_t)(f * 256.0f); }
 
 static inline uint32_t pad_to_scale(float value, uint32_t scale) {

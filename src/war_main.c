@@ -1235,7 +1235,7 @@ void* war_window_render(void* args) {
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
 
                     //---------------------------------------------------------
-                    // Fixed HUD text rendering
+                    // SDF text rendering
                     //---------------------------------------------------------
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1301,7 +1301,6 @@ void* war_window_render(void* args) {
                             char c = text[i];
                             war_glyph_info glyph =
                                 vulkan_context.glyphs[(uint8_t)c];
-
                             float glyph_ndc_width =
                                 (glyph.width / input_cmd_context.cell_width) *
                                 ndc_cell_width;
@@ -1325,49 +1324,44 @@ void* war_window_render(void* args) {
                             sdf_quads_text[vertex_index + 0] =
                                 (sdf_vertex_t){{quad_left, quad_top},
                                                {glyph.uv_x0, glyph.uv_y1},
-                                               0,
-                                               0,
+                                               0.10f,
+                                               0.1f,
                                                {0},
                                                bright_white_hex};
                             sdf_quads_text[vertex_index + 1] =
                                 (sdf_vertex_t){{quad_right, quad_top},
                                                {glyph.uv_x1, glyph.uv_y1},
-                                               0,
-                                               0,
+                                               0.10f,
+                                               0.1f,
                                                {0},
                                                bright_white_hex};
                             sdf_quads_text[vertex_index + 2] =
                                 (sdf_vertex_t){{quad_right, quad_bottom},
                                                {glyph.uv_x1, glyph.uv_y0},
-                                               0,
-                                               0,
+                                               0.10f,
+                                               0.1f,
                                                {0},
                                                bright_white_hex};
                             sdf_quads_text[vertex_index + 3] =
                                 (sdf_vertex_t){{quad_left, quad_bottom},
                                                {glyph.uv_x0, glyph.uv_y0},
-                                               0,
-                                               0,
+                                               0.10f,
+                                               0.1f,
                                                {0},
                                                bright_white_hex};
-
                             indices[index_index + 0] = vertex_index + 0;
                             indices[index_index + 1] = vertex_index + 1;
                             indices[index_index + 2] = vertex_index + 2;
                             indices[index_index + 3] = vertex_index + 2;
                             indices[index_index + 4] = vertex_index + 3;
                             indices[index_index + 5] = vertex_index + 0;
-
                             vertex_index += 4;
                             index_index += 6;
-
                             cursor_x_local += (glyph.advance_x /
                                                input_cmd_context.cell_width) *
                                               ndc_cell_width;
                         }
                     }
-
-                    // Upload vertex buffer
                     size_t num_letters = strlen(war_text) + strlen(cursor_text);
                     void* sdf_vertex_ptr;
                     vkMapMemory(vulkan_context.device,
@@ -1381,16 +1375,12 @@ void* war_window_render(void* args) {
                            sizeof(sdf_vertex_t) * 4 * num_letters);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_vertex_buffer_memory);
-
-                    // Bind vertex buffer
                     VkDeviceSize sdf_offsets[] = {0};
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
                                            1,
                                            &vulkan_context.sdf_vertex_buffer,
                                            sdf_offsets);
-
-                    // Upload index buffer
                     void* sdf_index_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_index_buffer_memory,
@@ -1403,22 +1393,16 @@ void* war_window_render(void* args) {
                            sizeof(uint16_t) * 6 * num_letters);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_index_buffer_memory);
-
-                    // Bind index buffer
                     vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
                                          vulkan_context.sdf_index_buffer,
                                          0,
                                          VK_INDEX_TYPE_UINT16);
-
-                    // Draw
                     vkCmdDrawIndexed(
                         vulkan_context.cmd_buffer, 6 * num_letters, 1, 0, 0, 0);
-
                     free(sdf_quads_text);
                     free(indices);
                     //---------------------------------------------------------
-                    // END Fixed HUD text rendering: one letter per top 3 rows
-                    // at col 0
+                    // END SDF text rendering
                     //---------------------------------------------------------
 
                     vkCmdEndRenderPass(vulkan_context.cmd_buffer);

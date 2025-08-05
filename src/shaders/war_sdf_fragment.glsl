@@ -42,6 +42,7 @@ void main() {
 
     out_color = vec4(frag_color.rgb, frag_color.a * alpha);
 
-    if (out_color.a < 0.01)
+    if (alpha <= 0.01) {
         discard;
+    }
 }

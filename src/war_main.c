@@ -1235,7 +1235,8 @@ void* war_window_render(void* args) {
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
 
                     //---------------------------------------------------------
-                    // SDF FONT RENDERING FULL-SCREEN TEXT TEST
+                    // SDF FONT RENDERING FULL-SCREEN TEXT TEST with proper
+                    // horizontal alignment
                     //---------------------------------------------------------
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1286,11 +1287,19 @@ void* war_window_render(void* args) {
                         uint32_t color;
                     } sdf_vertex_t;
 
-                    // Allocate enough space for max vertices/indices for full
-                    // screen: max characters = viewport_cols * viewport_rows
-                    // Each char = 4 vertices, 6 indices
-                    size_t max_chars = input_cmd_context.viewport_cols *
-                                       input_cmd_context.viewport_rows;
+                    // Allocate enough space for max vertices/indices for all
+                    // test positions + text length
+                    const uint32_t test_positions[][2] = {
+                        {500, 500}, // far right, far top
+                        {500, 0},   // far right, bottom
+                        {0, 500},   // far left, far top
+                        {0, 0},     // bottom left (normal)
+                        {250, 250}  // center-ish large coords
+                    };
+                    const size_t num_test_positions =
+                        sizeof(test_positions) / sizeof(test_positions[0]);
+
+                    size_t max_chars = base_text_len * num_test_positions;
                     sdf_vertex_t* quads =
                         malloc(sizeof(sdf_vertex_t) * 4 * max_chars);
                     uint16_t* indices =
@@ -1298,35 +1307,21 @@ void* war_window_render(void* args) {
 
                     uint32_t vertex_index = 0, index_index = 0;
 
-                    for (uint32_t row = 0;
-                         row < input_cmd_context.viewport_rows;
-                         ++row) {
-                        float cell_origin_y = 1.0f - row * ndc_cell_height;
+                    for (size_t pos_i = 0; pos_i < num_test_positions;
+                         ++pos_i) {
+                        uint32_t base_col = test_positions[pos_i][0];
+                        uint32_t base_row = test_positions[pos_i][1];
 
-                        for (uint32_t col = 0;
-                             col < input_cmd_context.viewport_cols;
-                             ++col) {
-                            // Wrap around base_text to fill cols
-                            char c = base_text[col % base_text_len];
+                        // Compute starting NDC positions for this string
+                        float start_ndc_x = -1.0f + base_col * ndc_cell_width;
+                        float start_ndc_y = 1.0f - base_row * ndc_cell_height;
+
+                        float cursor_x = start_ndc_x;
+
+                        for (size_t i = 0; i < base_text_len; ++i) {
+                            char c = base_text[i];
                             war_glyph_info glyph =
                                 vulkan_context.glyphs[(uint8_t)c];
-
-                            float cell_origin_x = -1.0f + col * ndc_cell_width;
-
-                            float horizontal_glyph_offset = 0.0f;
-                            float cell_center_x =
-                                (cell_origin_x + ndc_cell_width / 2.0f) +
-                                horizontal_glyph_offset;
-
-                            bool is_lowercase = (c >= 'a' && c <= 'z');
-                            float vertical_glyph_offset = 0.0f;
-                            if (is_lowercase) {
-                                vertical_glyph_offset =
-                                    ndc_cell_height * 0.1f; // tweak as you like
-                            }
-                            float cell_center_y =
-                                (cell_origin_y - ndc_cell_height / 2.0f) +
-                                vertical_glyph_offset;
 
                             float glyph_ndc_width =
                                 (glyph.width / input_cmd_context.cell_width) *
@@ -1339,16 +1334,22 @@ void* war_window_render(void* args) {
                                  input_cmd_context.cell_width) *
                                 ndc_cell_width;
 
-                            float quad_left = cell_center_x -
-                                              glyph_ndc_width / 2.0f +
-                                              bearing_x_ndc;
-                            float quad_right =
-                                cell_center_x + glyph_ndc_width / 2.0f;
+                            bool is_lowercase = (c >= 'a' && c <= 'z');
+                            float vertical_glyph_offset =
+                                is_lowercase ? ndc_cell_height * 0.1f : 0.0f;
+
+                            float quad_left = cursor_x + bearing_x_ndc;
+                            float quad_right = quad_left + glyph_ndc_width;
+
+                            float cell_center_y =
+                                (start_ndc_y - ndc_cell_height / 2.0f) +
+                                vertical_glyph_offset;
                             float quad_top =
                                 cell_center_y + glyph_ndc_height / 2.0f;
                             float quad_bottom =
                                 cell_center_y - glyph_ndc_height / 2.0f;
 
+                            // Construct vertices
                             quads[vertex_index + 0] =
                                 (sdf_vertex_t){{quad_left, quad_top},
                                                {glyph.uv_x0, glyph.uv_y1},
@@ -1387,6 +1388,11 @@ void* war_window_render(void* args) {
 
                             vertex_index += 4;
                             index_index += 6;
+
+                            // Advance cursor by glyph advance in NDC
+                            cursor_x += (glyph.advance_x /
+                                         input_cmd_context.cell_width) *
+                                        ndc_cell_width;
                         }
                     }
 

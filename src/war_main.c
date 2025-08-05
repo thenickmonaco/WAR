@@ -928,6 +928,8 @@ void* war_window_render(void* args) {
                     const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
                     const uint32_t bright_white_hex =
                         0xFFEEEEEE; // tmux status text
+                    const uint32_t black_hex =
+                        0xFF000000;
                     //----------------------------------------------------------
                     // RENDER LOGIC
                     //----------------------------------------------------------
@@ -1289,25 +1291,25 @@ void* war_window_render(void* args) {
                          0.0,
                          0.0,
                          {0, 0, 0, 0}, // padding
-                         0xFF000000},
+                         bright_white_hex},
                         {{right, top},
                          {glyph_test.uv_x1, glyph_test.uv_y1},
                          0.0,
                          0.0,
                          {0, 0, 0, 0}, // padding
-                         0xFF000000},
+                         bright_white_hex},
                         {{right, bottom},
                          {glyph_test.uv_x1, glyph_test.uv_y0},
                          0.0,
                          0.0,
                          {0, 0, 0, 0}, // padding
-                         0xFF000000},
+                         bright_white_hex},
                         {{left, bottom},
                          {glyph_test.uv_x0, glyph_test.uv_y0},
                          0.0,
                          0.0,
                          {0, 0, 0, 0}, // padding
-                         0xFF000000},
+                         bright_white_hex},
                     };
                     uint16_t test_quad_indices[6] = {
                         0,

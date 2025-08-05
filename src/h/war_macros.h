@@ -140,7 +140,7 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
             return;
         }
         ctx->row -= ctx->row_increment * ctx->numeric_prefix;
-        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+        if (ctx->row < ctx->bottom_row) {
             ctx->bottom_row -= ctx->row_increment * ctx->numeric_prefix;
             ctx->panning_y -= (2.0f * ctx->cell_height * ctx->row_increment *
                                ctx->numeric_prefix) /
@@ -157,7 +157,7 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
             return;
         }
         ctx->row -= ctx->row_increment;
-        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+        if (ctx->row < ctx->bottom_row) {
             ctx->bottom_row -= ctx->row_increment;
             ctx->panning_y -= (2.0f * ctx->cell_height * ctx->row_increment) /
                               ctx->physical_height;
@@ -202,7 +202,7 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
             return;
         }
         ctx->col -= ctx->col_increment * ctx->numeric_prefix;
-        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+        if (ctx->col < ctx->left_col) {
             ctx->left_col -= ctx->col_increment * ctx->numeric_prefix;
             ctx->panning_x += (2.0f * ctx->cell_width * ctx->col_increment *
                                ctx->numeric_prefix) /
@@ -219,7 +219,7 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
             return;
         }
         ctx->col -= ctx->col_increment;
-        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+        if (ctx->col < ctx->left_col) {
             ctx->left_col -= ctx->col_increment;
             ctx->panning_x += (2.0f * ctx->cell_width * ctx->col_increment) /
                               ctx->physical_width;
@@ -265,7 +265,7 @@ static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
             return;
         }
         ctx->row -= ctx->row_leap_increment * ctx->numeric_prefix;
-        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+        if (ctx->row < ctx->bottom_row) {
             ctx->bottom_row -= ctx->row_leap_increment * ctx->numeric_prefix;
             ctx->panning_y -= (2.0f * ctx->cell_height *
                                ctx->row_leap_increment * ctx->numeric_prefix) /
@@ -282,7 +282,7 @@ static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
             return;
         }
         ctx->row -= ctx->row_leap_increment;
-        if (ctx->row <= ctx->bottom_row + ctx->scroll_margin_rows) {
+        if (ctx->row < ctx->bottom_row) {
             ctx->bottom_row -= ctx->row_leap_increment;
             ctx->panning_y -=
                 (2.0f * ctx->cell_height * ctx->row_leap_increment) /
@@ -329,7 +329,7 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
             return;
         }
         ctx->col -= ctx->col_leap_increment * ctx->numeric_prefix;
-        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+        if (ctx->col < ctx->left_col) {
             ctx->left_col -= ctx->col_leap_increment * ctx->numeric_prefix;
             ctx->panning_x += (2.0f * ctx->cell_width *
                                ctx->col_leap_increment * ctx->numeric_prefix) /
@@ -346,7 +346,7 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
             return;
         }
         ctx->col -= ctx->col_leap_increment;
-        if (ctx->col <= ctx->left_col + ctx->scroll_margin_cols) {
+        if (ctx->col < ctx->left_col) {
             ctx->left_col -= ctx->col_leap_increment;
             ctx->panning_x +=
                 (2.0f * ctx->cell_width * ctx->col_leap_increment) /

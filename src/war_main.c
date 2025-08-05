@@ -1235,8 +1235,7 @@ void* war_window_render(void* args) {
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
 
                     //---------------------------------------------------------
-                    // SDF FONT RENDERING FULL-SCREEN TEXT TEST with proper
-                    // horizontal alignment
+                    // Fixed HUD text rendering
                     //---------------------------------------------------------
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1249,18 +1248,15 @@ void* war_window_render(void* args) {
                                             &vulkan_context.font_descriptor_set,
                                             0,
                                             NULL);
-
                     typedef struct {
                         float zoom;
                         float _pad1;
                         float pan[2];
                         float padding;
                     } SdfPushConstants;
-
-                    SdfPushConstants sdf_pc = {
-                        .zoom = input_cmd_context.zoom_scale,
-                        .pan = {input_cmd_context.panning_x,
-                                input_cmd_context.panning_y},
+                    SdfPushConstants ui_pc = {
+                        .zoom = 1.0f,
+                        .pan = {0.0f, 0.0f},
                         .padding = 0.0f,
                     };
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
@@ -1268,58 +1264,41 @@ void* war_window_render(void* args) {
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
                                        sizeof(SdfPushConstants),
-                                       &sdf_pc);
-
-                    const char* base_text = "WAR monaco ";
-                    size_t base_text_len = strlen(base_text);
-
-                    float ndc_cell_width =
-                        2.0f / (float)input_cmd_context.viewport_cols;
-                    float ndc_cell_height =
-                        2.0f / (float)input_cmd_context.viewport_rows;
-
-                    typedef struct {
-                        float pos[2];
-                        float uv[2];
-                        float thickness;
-                        float feather;
-                        float padding[4];
-                        uint32_t color;
-                    } sdf_vertex_t;
-
-                    // Allocate enough space for max vertices/indices for all
-                    // test positions + text length
-                    const uint32_t test_positions[][2] = {
-                        {500, 500}, // far right, far top
-                        {500, 0},   // far right, bottom
-                        {0, 500},   // far left, far top
-                        {0, 0},     // bottom left (normal)
-                        {250, 250}  // center-ish large coords
+                                       &ui_pc);
+                    const char* war_text = "WAR";
+                    char cursor_text[64];
+                    snprintf(cursor_text,
+                             sizeof(cursor_text),
+                             "R: %d  C: %d",
+                             input_cmd_context.row,
+                             input_cmd_context.col);
+                    struct {
+                        const char* text;
+                        uint32_t row;
+                    } ui_labels[] = {
+                        {war_text, 0},    // Top bar
+                        {cursor_text, 2}, // Bottom bar
                     };
-                    const size_t num_test_positions =
-                        sizeof(test_positions) / sizeof(test_positions[0]);
-
-                    size_t max_chars = base_text_len * num_test_positions;
-                    sdf_vertex_t* quads =
+                    const float ndc_cell_width =
+                        2.0f / input_cmd_context.viewport_cols;
+                    const float ndc_cell_height =
+                        2.0f / input_cmd_context.viewport_rows;
+                    size_t max_chars = 0;
+                    for (int i = 0; i < 2; ++i)
+                        max_chars += strlen(ui_labels[i].text);
+                    sdf_vertex_t* sdf_quads_text =
                         malloc(sizeof(sdf_vertex_t) * 4 * max_chars);
                     uint16_t* indices =
                         malloc(sizeof(uint16_t) * 6 * max_chars);
-
                     uint32_t vertex_index = 0, index_index = 0;
-
-                    for (size_t pos_i = 0; pos_i < num_test_positions;
-                         ++pos_i) {
-                        uint32_t base_col = test_positions[pos_i][0];
-                        uint32_t base_row = test_positions[pos_i][1];
-
-                        // Compute starting NDC positions for this string
-                        float start_ndc_x = -1.0f + base_col * ndc_cell_width;
-                        float start_ndc_y = 1.0f - base_row * ndc_cell_height;
-
-                        float cursor_x = start_ndc_x;
-
-                        for (size_t i = 0; i < base_text_len; ++i) {
-                            char c = base_text[i];
+                    for (int label_i = 0; label_i < 2; ++label_i) {
+                        const char* text = ui_labels[label_i].text;
+                        uint32_t row = ui_labels[label_i].row;
+                        float ndc_x = -1.0f; // col = 0
+                        float ndc_y = 1.0f - row * ndc_cell_height;
+                        float cursor_x_local = ndc_x;
+                        for (size_t i = 0; i < strlen(text); ++i) {
+                            char c = text[i];
                             war_glyph_info glyph =
                                 vulkan_context.glyphs[(uint8_t)c];
 
@@ -1333,45 +1312,38 @@ void* war_window_render(void* args) {
                                 (glyph.bearing_x /
                                  input_cmd_context.cell_width) *
                                 ndc_cell_width;
-
                             bool is_lowercase = (c >= 'a' && c <= 'z');
-                            float vertical_glyph_offset =
+                            float vertical_offset =
                                 is_lowercase ? ndc_cell_height * 0.1f : 0.0f;
-
-                            float quad_left = cursor_x + bearing_x_ndc;
+                            float quad_left = cursor_x_local + bearing_x_ndc;
                             float quad_right = quad_left + glyph_ndc_width;
-
-                            float cell_center_y =
-                                (start_ndc_y - ndc_cell_height / 2.0f) +
-                                vertical_glyph_offset;
-                            float quad_top =
-                                cell_center_y + glyph_ndc_height / 2.0f;
+                            float center_y = (ndc_y - ndc_cell_height / 2.0f) +
+                                             vertical_offset;
+                            float quad_top = center_y + glyph_ndc_height / 2.0f;
                             float quad_bottom =
-                                cell_center_y - glyph_ndc_height / 2.0f;
-
-                            // Construct vertices
-                            quads[vertex_index + 0] =
+                                center_y - glyph_ndc_height / 2.0f;
+                            sdf_quads_text[vertex_index + 0] =
                                 (sdf_vertex_t){{quad_left, quad_top},
                                                {glyph.uv_x0, glyph.uv_y1},
                                                0,
                                                0,
                                                {0},
                                                bright_white_hex};
-                            quads[vertex_index + 1] =
+                            sdf_quads_text[vertex_index + 1] =
                                 (sdf_vertex_t){{quad_right, quad_top},
                                                {glyph.uv_x1, glyph.uv_y1},
                                                0,
                                                0,
                                                {0},
                                                bright_white_hex};
-                            quads[vertex_index + 2] =
+                            sdf_quads_text[vertex_index + 2] =
                                 (sdf_vertex_t){{quad_right, quad_bottom},
                                                {glyph.uv_x1, glyph.uv_y0},
                                                0,
                                                0,
                                                {0},
                                                bright_white_hex};
-                            quads[vertex_index + 3] =
+                            sdf_quads_text[vertex_index + 3] =
                                 (sdf_vertex_t){{quad_left, quad_bottom},
                                                {glyph.uv_x0, glyph.uv_y0},
                                                0,
@@ -1389,24 +1361,24 @@ void* war_window_render(void* args) {
                             vertex_index += 4;
                             index_index += 6;
 
-                            // Advance cursor by glyph advance in NDC
-                            cursor_x += (glyph.advance_x /
-                                         input_cmd_context.cell_width) *
-                                        ndc_cell_width;
+                            cursor_x_local += (glyph.advance_x /
+                                               input_cmd_context.cell_width) *
+                                              ndc_cell_width;
                         }
                     }
 
                     // Upload vertex buffer
+                    size_t num_letters = strlen(war_text) + strlen(cursor_text);
                     void* sdf_vertex_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_vertex_buffer_memory,
                                 0,
-                                sizeof(sdf_vertex_t) * 4 * max_chars,
+                                sizeof(sdf_vertex_t) * 4 * num_letters,
                                 0,
                                 &sdf_vertex_ptr);
                     memcpy(sdf_vertex_ptr,
-                           quads,
-                           sizeof(sdf_vertex_t) * 4 * max_chars);
+                           sdf_quads_text,
+                           sizeof(sdf_vertex_t) * 4 * num_letters);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_vertex_buffer_memory);
 
@@ -1423,12 +1395,12 @@ void* war_window_render(void* args) {
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_index_buffer_memory,
                                 0,
-                                sizeof(uint16_t) * 6 * max_chars,
+                                sizeof(uint16_t) * 6 * num_letters,
                                 0,
                                 &sdf_index_ptr);
                     memcpy(sdf_index_ptr,
                            indices,
-                           sizeof(uint16_t) * 6 * max_chars);
+                           sizeof(uint16_t) * 6 * num_letters);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_index_buffer_memory);
 
@@ -1438,18 +1410,15 @@ void* war_window_render(void* args) {
                                          0,
                                          VK_INDEX_TYPE_UINT16);
 
-                    // Draw all quads
-                    vkCmdDrawIndexed(vulkan_context.cmd_buffer,
-                                     (uint32_t)(6 * max_chars),
-                                     1,
-                                     0,
-                                     0,
-                                     0);
+                    // Draw
+                    vkCmdDrawIndexed(
+                        vulkan_context.cmd_buffer, 6 * num_letters, 1, 0, 0, 0);
 
-                    free(quads);
+                    free(sdf_quads_text);
                     free(indices);
                     //---------------------------------------------------------
-                    // END SDF FONT RENDERING FULL-SCREEN TEST
+                    // END Fixed HUD text rendering: one letter per top 3 rows
+                    // at col 0
                     //---------------------------------------------------------
 
                     vkCmdEndRenderPass(vulkan_context.cmd_buffer);

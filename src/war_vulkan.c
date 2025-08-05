@@ -871,7 +871,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     FT_Init_FreeType(&ft_library);
     FT_Face ft_regular;
     FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
-    float font_pixel_height = 64.0f;
+    float font_pixel_height = 48.0f;
     FT_Set_Pixel_Sizes(ft_regular, 0, (int)font_pixel_height);
     float ascent = ft_regular->size->metrics.ascender / 64.0f;
     float descent = ft_regular->size->metrics.descender / 64.0f;
@@ -1306,14 +1306,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     enum {
         max_sdf_quads = 3000,
     };
-    typedef struct sdf_vertex {
-        float pos[2];    // NDC position
-        float uv[2];     // UVs (0-1)
-        float thickness; // SDF edge width
-        float feather;   // SDF soft edge amount
-        float padding[4];
-        uint32_t color;
-    } sdf_vertex_t;
     VkDeviceSize sdf_vertex_buffer_size =
         sizeof(sdf_vertex_t) * max_sdf_quads * 4;
     VkBufferCreateInfo sdf_vertex_buffer_info = {

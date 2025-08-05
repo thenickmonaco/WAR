@@ -163,6 +163,15 @@ typedef struct war_glyph_info {
     float uv_x0, uv_y0, uv_x1, uv_y1;
 } war_glyph_info;
 
+typedef struct sdf_vertex {
+    float pos[2];    // NDC position
+    float uv[2];     // UVs (0-1)
+    float thickness; // SDF edge width
+    float feather;   // SDF soft edge amount
+    float padding[4];
+    uint32_t color;
+} sdf_vertex_t;
+
 typedef struct war_vulkan_context {
     int dmabuf_fd;
     VkInstance instance;

@@ -55,8 +55,6 @@
 
 war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     header("war_vulkan_init");
-
-    // ???
     uint32_t instance_extension_count = 0;
     vkEnumerateInstanceExtensionProperties(
         NULL, &instance_extension_count, NULL);
@@ -93,7 +91,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkInstance instance;
     VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
     assert(result == VK_SUCCESS);
-
     enum {
         max_gpu_count = 10,
     };
@@ -101,28 +98,22 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkPhysicalDevice physical_devices[max_gpu_count];
     vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
     assert(gpu_count != 0 && gpu_count <= max_gpu_count);
-
     vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
-
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties device_props;
-
     for (uint32_t i = 0; i < gpu_count; i++) {
         vkGetPhysicalDeviceProperties(physical_devices[i], &device_props);
-
         call_carmack("Found GPU %u: %s (vendorID=0x%x, deviceID=0x%x)",
                      i,
                      device_props.deviceName,
                      device_props.vendorID,
                      device_props.deviceID);
-
         if (device_props.vendorID == 0x8086) {
             physical_device = physical_devices[i];
             call_carmack("Selected Intel GPU: %s", device_props.deviceName);
             break;
         }
     }
-
     if (physical_device == VK_NULL_HANDLE) {
         physical_device = physical_devices[0];
         vkGetPhysicalDeviceProperties(physical_device, &device_props);
@@ -130,9 +121,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                      device_props.deviceName,
                      device_props.vendorID);
     }
-
     assert(physical_device != VK_NULL_HANDLE);
-
     uint32_t device_extension_count = 0;
     vkEnumerateDeviceExtensionProperties(
         physical_device, NULL, &device_extension_count, NULL);
@@ -142,32 +131,26 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                                          NULL,
                                          &device_extension_count,
                                          device_extensions_properties);
-
     const char* device_extensions[] = {
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
         VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
     };
-
     uint32_t extension_count = 0;
     vkEnumerateDeviceExtensionProperties(
         physical_device, NULL, &extension_count, NULL);
-
     VkExtensionProperties* available_extensions =
         malloc(sizeof(VkExtensionProperties) * extension_count);
     vkEnumerateDeviceExtensionProperties(
         physical_device, NULL, &extension_count, available_extensions);
-
 #if DEBUG
     for (uint32_t i = 0; i < extension_count; i++) {
         call_carmack("%s", available_extensions[i].extensionName);
     }
 #endif
-
     uint8_t has_external_memory = 0;
     uint8_t has_external_memory_fd = 0;
-
     for (uint32_t i = 0; i < extension_count; i++) {
         if (strcmp(available_extensions[i].extensionName,
                    VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) == 0) {
@@ -178,11 +161,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             has_external_memory_fd = 1;
         }
     }
-
     free(available_extensions);
-
     assert(has_external_memory && has_external_memory_fd);
-
     enum {
         max_family_count = 16,
     };
@@ -195,7 +175,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkQueueFamilyProperties queue_families[max_family_count];
     vkGetPhysicalDeviceQueueFamilyProperties(
         physical_device, &queue_family_count, queue_families);
-
     uint32_t graphics_family_index = UINT32_MAX;
     for (uint32_t i = 0; i < queue_family_count; i++) {
         if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
@@ -205,7 +184,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     }
     assert(graphics_family_index != UINT32_MAX);
     uint32_t queue_family_index = graphics_family_index;
-
     float queue_priority = 1.0f;
     VkDeviceQueueCreateInfo queue_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -223,11 +201,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkDevice device;
     result = vkCreateDevice(physical_device, &device_info, NULL, &device);
     assert(result == VK_SUCCESS);
-
     VkQueue queue;
     vkGetDeviceQueue(device, queue_family_index, 0, &queue);
-
-    // ???
     VkCommandPool cmd_pool;
     VkCommandPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -236,8 +211,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     result = vkCreateCommandPool(device, &pool_info, NULL, &cmd_pool);
     assert(result == VK_SUCCESS);
-
-    // ???
     VkCommandBuffer cmd_buffer;
     VkCommandBufferAllocateInfo cmd_buf_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -247,8 +220,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     result = vkAllocateCommandBuffers(device, &cmd_buf_info, &cmd_buffer);
     assert(result == VK_SUCCESS);
-
-    // ???
     VkExternalMemoryImageCreateInfo ext_mem_image_info = {
         .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
         .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
@@ -271,8 +242,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkImage image;
     result = vkCreateImage(device, &image_create_info, NULL, &image);
     assert(result == VK_SUCCESS);
-
-    // ???
     VkMemoryRequirements mem_reqs;
     vkGetImageMemoryRequirements(device, image, &mem_reqs);
     VkExportMemoryAllocateInfo export_alloc_info = {
@@ -324,8 +293,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(dmabuf_fd > 0);
     int flags = fcntl(dmabuf_fd, F_GETFD);
     assert(flags != -1);
-
-    // ???
     VkAttachmentDescription color_attachment = {
         .flags = 0,
         .format = VK_FORMAT_B8G8R8A8_UNORM,
@@ -356,8 +323,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkRenderPass render_pass;
     result = vkCreateRenderPass(device, &render_pass_info, NULL, &render_pass);
     assert(result == VK_SUCCESS);
-
-    // ???
     VkImageViewCreateInfo image_view_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = image,
@@ -388,8 +353,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result =
         vkCreateFramebuffer(device, &frame_buffer_info, NULL, &frame_buffer);
     assert(result == VK_SUCCESS);
-
-    // vertex shader
     uint32_t* vertex_code;
     const char* vertex_path = "build/shaders/war_vertex.spv";
     FILE* vertex_spv = fopen(vertex_path, "rb");
@@ -413,8 +376,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         vkCreateShaderModule(device, &vertex_shader_info, NULL, &vertex_shader);
     assert(result == VK_SUCCESS);
     free(vertex_code);
-
-    // fragment shader
     uint32_t* fragment_code;
     const char* fragment_path = "build/shaders/war_fragment.spv";
     FILE* fragment_spv = fopen(fragment_path, "rb");
@@ -439,8 +400,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         device, &fragment_shader_info, NULL, &fragment_shader);
     assert(result == VK_SUCCESS);
     free(fragment_code);
-
-    // ???
     VkDescriptorSetLayoutBinding sampler_binding = {
         .binding = 0,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -487,8 +446,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result =
         vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline_layout);
     assert(result == VK_SUCCESS);
-
-    // ???
     VkVertexInputBindingDescription binding = {
         .binding = 0,
         .stride = 12,
@@ -513,8 +470,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .vertexAttributeDescriptionCount = 2,
         .pVertexAttributeDescriptions = attrs,
     };
-
-    // ???
     VkGraphicsPipelineCreateInfo pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .stageCount = 2,
@@ -582,8 +537,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkCreateGraphicsPipelines(
         device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
     assert(result == VK_SUCCESS);
-
-    // initial image transition for render target
     VkImageMemoryBarrier barrier = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -625,8 +578,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
     vkQueueWaitIdle(queue);
-
-    // double/triple buffering
     VkSemaphoreCreateInfo semaphore_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = NULL,
@@ -638,24 +589,18 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         device, &semaphore_info, NULL, &image_available_semaphore);
     vkCreateSemaphore(
         device, &semaphore_info, NULL, &render_finished_semaphore);
-
-    // fps
     VkFenceCreateInfo fence_info = {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
     };
     VkFence in_flight_fence;
     vkCreateFence(device, &fence_info, NULL, &in_flight_fence);
-
-    // quads vertex buffer
     VkBufferCreateInfo quads_vertex_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = max_quads * 4 * (sizeof(float) * 4 + sizeof(uint32_t)),
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
-
-    // quads index buffer
     VkBuffer quads_vertex_buffer;
     result = vkCreateBuffer(
         device, &quads_vertex_buffer_info, NULL, &quads_vertex_buffer);
@@ -670,9 +615,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkCreateBuffer(
         device, &quads_index_buffer_info, NULL, &quads_index_buffer);
     assert(result == VK_SUCCESS);
-
-    // COMMENT OPTIMIZE: make these 2 vertex+index allocations into one single
-    // allocate quads vertex memory
     VkMemoryRequirements quads_vertex_mem_reqs;
     vkGetBufferMemoryRequirements(
         device, quads_vertex_buffer, &quads_vertex_mem_reqs);
@@ -704,8 +646,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkBindBufferMemory(
         device, quads_vertex_buffer, quads_vertex_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-
-    // allocate quads index memory
     VkMemoryRequirements quads_index_mem_reqs;
     vkGetBufferMemoryRequirements(
         device, quads_index_buffer, &quads_index_mem_reqs);
@@ -737,8 +677,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkBindBufferMemory(
         device, quads_index_buffer, quads_index_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-
-    // make texture_image
     VkImageCreateInfo texture_image_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
@@ -754,8 +692,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     VkImage texture_image;
     vkCreateImage(device, &texture_image_info, NULL, &texture_image);
-
-    // query memory requirements for the image
     VkMemoryRequirements texture_image_mem_reqs;
     vkGetImageMemoryRequirements(
         device, texture_image, &texture_image_mem_reqs);
@@ -783,8 +719,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     result = vkBindImageMemory(device, texture_image, texture_memory, 0);
     assert(result == VK_SUCCESS);
-
-    // texture sampler
     VkSamplerCreateInfo sampler_info = {0};
     sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_info.magFilter = VK_FILTER_LINEAR;
@@ -805,8 +739,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkSampler texture_sampler;
     result = vkCreateSampler(device, &sampler_info, NULL, &texture_sampler);
     assert(result == VK_SUCCESS);
-
-    // 2d texture image view
     VkImageViewCreateInfo view_info = {0};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     view_info.image = texture_image; // Your VkImage handle
@@ -824,8 +756,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkImageView texture_image_view;
     result = vkCreateImageView(device, &view_info, NULL, &texture_image_view);
     assert(result == VK_SUCCESS);
-
-    // descriptor pool and allocation
     VkDescriptorPoolSize descriptor_pool_size = {
         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 1,
@@ -864,9 +794,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, NULL);
 
     //-------------------------------------------------------------------------
-    // sdf font rendering pipeline
+    // SDF FONT RENDERING PIPELINE
     //-------------------------------------------------------------------------
-    // ft_library, ft_regular, atlas_pixels, font_pixel_height
     FT_Library ft_library;
     FT_Init_FreeType(&ft_library);
     FT_Face ft_regular;
@@ -893,16 +822,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             cell_width = ft_regular->glyph->advance.x / 64.0f;
         }
         FT_Bitmap* bmp = &ft_regular->glyph->bitmap;
-
         int w = bmp->width;
         int h = bmp->rows;
-
         if (pen_x + w >= atlas_width) {
             pen_x = 0;
             pen_y += row_height + 1;
             row_height = 0;
         }
-
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 atlas_pixels[(pen_x + x) + (pen_y + y) * atlas_width] =
@@ -919,13 +845,10 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         glyphs[c].uv_y0 = (float)pen_y / atlas_height;
         glyphs[c].uv_x1 = (float)(pen_x + w) / atlas_width;
         glyphs[c].uv_y1 = (float)(pen_y + h) / atlas_height;
-
         pen_x += w + 1;
         if (h > row_height) { row_height = h; }
     }
     assert(cell_width != 0);
-
-    // sdf_image
     VkImageCreateInfo sdf_image_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
@@ -942,8 +865,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkImage sdf_image;
     result = vkCreateImage(device, &sdf_image_info, NULL, &sdf_image);
     assert(result == VK_SUCCESS);
-
-    // sdf_image_memory
     VkMemoryRequirements sdf_memory_requirements;
     vkGetImageMemoryRequirements(device, sdf_image, &sdf_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_image_memory_properties;
@@ -970,8 +891,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     result = vkBindImageMemory(device, sdf_image, sdf_image_memory, 0);
     assert(result == VK_SUCCESS);
-
-    // sdf_image_view
     VkImageViewCreateInfo sdf_view_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = sdf_image,
@@ -988,25 +907,26 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     VkImageView sdf_image_view;
     vkCreateImageView(device, &sdf_view_info, NULL, &sdf_image_view);
-
-    // sdf_sampler
     VkSamplerCreateInfo sdf_sampler_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .magFilter = VK_FILTER_LINEAR,
         .minFilter = VK_FILTER_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
         .anisotropyEnable = VK_FALSE,
+        .maxAnisotropy = 1.0f,
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
         .unnormalizedCoordinates = VK_FALSE,
         .compareEnable = VK_FALSE,
+        .compareOp = VK_COMPARE_OP_ALWAYS,
         .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .mipLodBias = 0.0f,
+        .minLod = 0.0f,
+        .maxLod = 0.0f,
     };
     VkSampler sdf_sampler;
-    vkCreateSampler(device, &sampler_info, NULL, &sdf_sampler);
-
-    // upload the atlas_pixels data to sdf_image
+    vkCreateSampler(device, &sdf_sampler_info, NULL, &sdf_sampler);
     VkDeviceSize sdf_image_size = atlas_width * atlas_height;
     VkBuffer sdf_staging_buffer;
     VkDeviceMemory sdf_staging_buffer_memory;
@@ -1161,8 +1081,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkFreeCommandBuffers(device, cmd_pool, 1, &sdf_copy_command_buffer);
     vkDestroyBuffer(device, sdf_staging_buffer, NULL);
     vkFreeMemory(device, sdf_staging_buffer_memory, NULL);
-
-    // font_descriptor_set_layout
     VkDescriptorSetLayoutBinding sdf_binding = {
         .binding = 0,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -1177,8 +1095,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkDescriptorSetLayout font_descriptor_set_layout;
     vkCreateDescriptorSetLayout(
         device, &sdf_layout_info, NULL, &font_descriptor_set_layout);
-
-    // font_descriptor_pool
     VkDescriptorPoolSize sdf_pool_size = {
         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 1,
@@ -1191,8 +1107,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     VkDescriptorPool font_descriptor_pool;
     vkCreateDescriptorPool(device, &sdf_pool_info, NULL, &font_descriptor_pool);
-
-    // font_descriptor_set
     VkDescriptorSetAllocateInfo sdf_descriptor_set_allocate_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .descriptorPool = font_descriptor_pool,
@@ -1216,8 +1130,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pImageInfo = &sdf_descriptor_info,
     };
     vkUpdateDescriptorSets(device, 1, &write_descriptor_sets, 0, NULL);
-
-    // sdf_vertex_shader
     uint32_t* sdf_vertex_code;
     const char* sdf_vertex_path = "build/shaders/war_sdf_vertex.spv";
     FILE* sdf_vertex_spv = fopen(sdf_vertex_path, "rb");
@@ -1242,8 +1154,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         device, &sdf_vertex_shader_info, NULL, &sdf_vertex_shader);
     assert(result == VK_SUCCESS);
     free(sdf_vertex_code);
-
-    // sdf_fragment_shader
     uint32_t* sdf_fragment_code;
     const char* sdf_fragment_path = "build/shaders/war_sdf_fragment.spv";
     FILE* sdf_fragment_spv = fopen(sdf_fragment_path, "rb");
@@ -1268,15 +1178,11 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         device, &sdf_fragment_shader_info, NULL, &sdf_fragment_shader);
     assert(result == VK_SUCCESS);
     free(sdf_fragment_code);
-
-    // sdf_push_constant_range
     VkPushConstantRange sdf_push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = 24,
+        .size = 20,
     };
-
-    // sdf_pipeline_layout
     VkPipelineLayoutCreateInfo sdf_pipeline_layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
@@ -1288,8 +1194,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkCreatePipelineLayout(
         device, &sdf_pipeline_layout_info, NULL, &sdf_pipeline_layout);
     assert(result == VK_SUCCESS);
-
-    // TODO: sdf_pipeline
     VkPipelineShaderStageCreateInfo sdf_shader_stages[] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -1353,9 +1257,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkBindBufferMemory(
         device, sdf_vertex_buffer, sdf_vertex_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-    VkDeviceSize sdf_index_buffer_size =
-        sizeof(uint16_t) * max_sdf_quads *
-        6; // usually 6 indices per quad * max_quads
+    VkDeviceSize sdf_index_buffer_size = sizeof(uint16_t) * max_sdf_quads * 6;
     VkBufferCreateInfo sdf_index_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_index_buffer_size,
@@ -1478,14 +1380,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .dynamicStateCount = 2,
         .pDynamicStates = dynamic_states,
     };
-    VkPipelineLayoutCreateInfo pipeline_layout_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        // Fill in descriptorSetLayouts and pushConstantRanges if you have them
-        .setLayoutCount = 1,
-        .pSetLayouts = &descriptor_set_layout,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &sdf_push_constant_range,
-    };
     VkAttachmentDescription sdf_color_attachment = {
         .format = VK_FORMAT_B8G8R8A8_UNORM, // e.g., VK_FORMAT_B8G8R8A8_UNORM
         .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -1529,7 +1423,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pColorBlendState = &color_blending,
         .pDynamicState = &dynamic_state,
         .layout = sdf_pipeline_layout,
-        .renderPass = sdf_render_pass, // used from general quads pipeline
+        .renderPass = sdf_render_pass,
         .subpass = 0,
         .basePipelineHandle = VK_NULL_HANDLE,
         .basePipelineIndex = -1,
@@ -1538,10 +1432,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkCreateGraphicsPipelines(
         device, VK_NULL_HANDLE, 1, &sdf_pipeline_info, NULL, &sdf_pipeline);
     assert(result == VK_SUCCESS);
-
     war_glyph_info* heap_glyphs = malloc(sizeof(war_glyph_info) * 128);
     memcpy(heap_glyphs, glyphs, sizeof(war_glyph_info) * 128);
+
     return (war_vulkan_context){
+        //----------------------------------------------------------------------
+        // QUADS RENDERING PIPELINE
+        //----------------------------------------------------------------------
         .dmabuf_fd = dmabuf_fd,
         .instance = instance,
         .physical_device = physical_device,
@@ -1570,9 +1467,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .texture_sampler = texture_sampler,
         .texture_descriptor_set = descriptor_set,
         .texture_descriptor_pool = descriptor_pool,
-
         //---------------------------------------------------------------------
-        // sdf_font
+        // SDF FONT RENDERING PIPELINE
         //---------------------------------------------------------------------
         .ft_library = ft_library,
         .ft_regular = ft_regular,

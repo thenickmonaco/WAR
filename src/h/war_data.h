@@ -70,6 +70,30 @@ enum war_misc {
     ring_buffer_size = 256,
     OLED_MODE = 0,
     MAX_MIDI_NOTES = 128,
+    UNSET = 0,
+};
+
+enum war_cursor_sizes {
+    CURSOR_128_CELLS_PER_BEAT_FACTOR = 32,
+    CURSOR_64_CELLS_PER_BEAT_FACTOR = 16,
+    CURSOR_32_CELLS_PER_BEAT_FACTOR = 8,
+    CURSOR_16_CELLS_PER_BEAT_FACTOR = 4,
+    CURSOR_8_CELLS_PER_BEAT_FACTOR = 2,
+    CURSOR_1_CELL_MULTIPLE = 1, // default
+    CURSOR_2_CELLS_MULTIPLE = 2,
+    CURSOR_4_CELLS_MULTIPLE = 4,
+    CURSOR_8_CELLS_MULTIPLE = 8,
+    CURSOR_16_CELLS_MULTIPLE = 16,
+    CURSOR_32_CELLS_MULTIPLE = 32,
+    CURSOR_64_CELLS_MULTIPLE = 64,
+    CURSOR_128_CELLS_MULTIPLE = 128,
+};
+
+enum war_key_trie {
+    MAX_NODES = 1024,
+    MAX_SEQUENCE_LENGTH = 4,
+    MAX_CHILDREN = 32,
+    NUM_SEQUENCES = 27,
 };
 
 typedef struct war_key_event {
@@ -88,13 +112,6 @@ typedef struct war_key_trie_node {
     size_t child_count;
 } war_key_trie_node;
 
-enum war_key_trie {
-    MAX_NODES = 1024,
-    MAX_SEQUENCE_LENGTH = 4,
-    MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 27,
-};
-
 typedef struct rgba_t {
     float r;
     float g;
@@ -105,6 +122,13 @@ typedef struct rgba_t {
 typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;
+    float cursor_size;
+    float cell_navigation;
+    float gridline_split;
+    float strongest_gridline_split;
+    float strong_gridline_split;
+    float weak_gridline_split;
+    float weakest_gridline_split;
     uint32_t left_col;
     uint32_t bottom_row;
     uint32_t col_increment;
@@ -171,6 +195,18 @@ typedef struct sdf_vertex {
     float padding[4];
     uint32_t color;
 } sdf_vertex_t;
+
+typedef struct {
+    float pos[2];
+    uint32_t color;
+} quad_vertex;
+
+typedef struct {
+    float zoom;
+    float _pad1;
+    float pan[2];
+    float padding;
+} push_constants;
 
 typedef struct war_vulkan_context {
     int dmabuf_fd;

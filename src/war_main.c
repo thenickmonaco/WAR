@@ -113,6 +113,12 @@ void* war_window_render(void* args) {
     war_input_cmd_context input_cmd_context = {
         .col = 0,
         .row = 0,
+        .cursor_size = CURSOR_1_CELL_MULTIPLE,
+        .cell_navigation = CURSOR_1_CELL_MULTIPLE,
+        .strongest_gridline_split = CURSOR_4_CELLS_MULTIPLE,
+        .strong_gridline_split = CURSOR_1_CELL_MULTIPLE,
+        .weak_gridline_split = UNSET,
+        .weakest_gridline_split = UNSET,
         .left_col = 0,
         .bottom_row = 0,
         .col_increment = 1,
@@ -919,7 +925,6 @@ void* war_window_render(void* args) {
                     input_cmd_context.viewport_rows =
                         (int)(physical_height / (vulkan_context.cell_height *
                                                  input_cmd_context.zoom_scale));
-                    // dark gruvbox
                     const uint32_t light_gray_hex = 0xFF454950;
                     const uint32_t darker_light_gray_hex =
                         0xFF36383C; // gutter / line numbers
@@ -930,7 +935,7 @@ void* war_window_render(void* args) {
                         0xFFEEEEEE; // tmux status text
                     const uint32_t black_hex = 0xFF000000;
                     //----------------------------------------------------------
-                    // RENDER LOGIC
+                    // GRIDLINES, CURSOR, NOTES
                     //----------------------------------------------------------
                     vkWaitForFences(vulkan_context.device,
                                     1,
@@ -967,16 +972,7 @@ void* war_window_render(void* args) {
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       vulkan_context.pipeline);
-                    typedef struct {
-                        float pos[2];
-                        uint32_t color;
-                    } Vertex;
-                    Vertex quad_verts[8] = {
-                        {{-0.5f, -0.5f}, red_hex},
-                        {{0.5f, -0.5f}, red_hex},
-                        {{0.5f, 0.5f}, red_hex},
-                        {{-0.5f, 0.5f}, red_hex},
-                        // cursor
+                    quad_vertex cursor_quad_verts[4] = {
                         {{(input_cmd_context.col * vulkan_context.cell_width) /
                                   physical_width * 2.0f -
                               1.0f,
@@ -1008,16 +1004,17 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          white_hex},
                     };
-                    uint16_t general_quad_indices[12] = {
-                        0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
+                    uint16_t general_quad_indices[6] = {0, 1, 2, 2, 3, 0};
                     void* vertex_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_vertex_buffer_memory,
                                 0,
-                                sizeof(quad_verts),
+                                sizeof(cursor_quad_verts),
                                 0,
                                 &vertex_data);
-                    memcpy(vertex_data, quad_verts, sizeof(quad_verts));
+                    memcpy(vertex_data,
+                           cursor_quad_verts,
+                           sizeof(cursor_quad_verts));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.quads_vertex_buffer_memory);
                     void* index_data;
@@ -1059,13 +1056,7 @@ void* war_window_render(void* args) {
                         .extent = {physical_width, physical_height},
                     };
                     vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
-                    typedef struct {
-                        float zoom;
-                        float _pad1;
-                        float pan[2];
-                        float padding;
-                    } PushConstants;
-                    PushConstants pc = {
+                    push_constants pc = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {input_cmd_context.panning_x,
                                 input_cmd_context.panning_y},
@@ -1075,14 +1066,13 @@ void* war_window_render(void* args) {
                                        vulkan_context.pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
-                                       sizeof(PushConstants),
+                                       sizeof(push_constants),
                                        &pc);
-                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 12, 1, 0, 0, 0);
-
+                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
                     //---------------------------------------------------------
                     // STATUS BARS
                     //---------------------------------------------------------
-                    Vertex tmux_status_bar_verts[4] = {
+                    quad_vertex tmux_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((0 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
@@ -1108,7 +1098,7 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          red_hex},
                     };
-                    Vertex vim_mode_status_bar_verts[4] = {
+                    quad_vertex vim_mode_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((1 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
@@ -1134,7 +1124,7 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          dark_gray_hex},
                     };
-                    Vertex vim_status_bar_verts[4] = {
+                    quad_vertex vim_status_bar_verts[4] = {
                         {{-1.0f,
                           1.0f - ((2 + 1) * vulkan_context.cell_height) /
                                      physical_height * 2.0f},
@@ -1181,7 +1171,7 @@ void* war_window_render(void* args) {
                     void* static_vertex_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_vertex_buffer_memory,
-                                sizeof(quad_verts),
+                                sizeof(cursor_quad_verts),
                                 sizeof(tmux_status_bar_verts) +
                                     sizeof(vim_mode_status_bar_verts) +
                                     sizeof(vim_status_bar_verts),
@@ -1211,7 +1201,8 @@ void* war_window_render(void* args) {
                            sizeof(static_quads_indices));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.quads_index_buffer_memory);
-                    VkDeviceSize static_offsets_verts[] = {sizeof(quad_verts)};
+                    VkDeviceSize static_offsets_verts[] = {
+                        sizeof(cursor_quad_verts)};
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
                                            1,
@@ -1229,7 +1220,7 @@ void* war_window_render(void* args) {
                     };
                     vkCmdSetScissor(
                         vulkan_context.cmd_buffer, 0, 1, &status_scissor);
-                    PushConstants pc_static = {
+                    push_constants pc_static = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {0.0f, 0.0f},
                         .padding = 0.0f,
@@ -1238,10 +1229,9 @@ void* war_window_render(void* args) {
                                        vulkan_context.pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
-                                       sizeof(PushConstants),
+                                       sizeof(push_constants),
                                        &pc_static);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
-
                     //---------------------------------------------------------
                     // SDF text rendering
                     //---------------------------------------------------------
@@ -1256,14 +1246,8 @@ void* war_window_render(void* args) {
                                             &vulkan_context.font_descriptor_set,
                                             0,
                                             NULL);
-                    typedef struct {
-                        float zoom;
-                        float _pad1;
-                        float pan[2];
-                        float padding;
-                    } SdfPushConstants;
-                    SdfPushConstants ui_pc = {
-                        .zoom = 1.0f,
+                    push_constants ui_pc = {
+                        .zoom = input_cmd_context.zoom_scale,
                         .pan = {0.0f, 0.0f},
                         .padding = 0.0f,
                     };
@@ -1271,7 +1255,7 @@ void* war_window_render(void* args) {
                                        vulkan_context.sdf_pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
-                                       sizeof(SdfPushConstants),
+                                       sizeof(push_constants),
                                        &ui_pc);
                     const char* war_text = "WAR";
                     char cursor_text[64];
@@ -1284,8 +1268,8 @@ void* war_window_render(void* args) {
                         const char* text;
                         uint32_t row;
                     } ui_labels[] = {
-                        {war_text, 0},    // Top bar
-                        {cursor_text, 2}, // Bottom bar
+                        {cursor_text, 2},
+                        {war_text, 0},
                     };
                     const float ndc_cell_width =
                         2.0f / input_cmd_context.viewport_cols;
@@ -1440,15 +1424,11 @@ void* war_window_render(void* args) {
                         vulkan_context.cmd_buffer, 6 * num_letters, 1, 0, 0, 0);
                     free(sdf_quads_text);
                     free(indices);
-
-                    // Line numbers rendering
-                    SdfPushConstants ui_pc_line_numbers = {
-                        .zoom = 1.0f,
+                    push_constants ui_pc_line_numbers = {
+                        .zoom = input_cmd_context.zoom_scale,
                         .pan = {0.0f, input_cmd_context.panning_y},
                         .padding = 0.0f,
                     };
-
-                    // Scissor excludes status bar
                     VkRect2D line_numbers_scissor = {
                         .offset = {0, 0},
                         .extent =
@@ -1460,50 +1440,34 @@ void* war_window_render(void* args) {
                                         input_cmd_context.cell_height,
                             },
                     };
-
                     vkCmdSetScissor(
                         vulkan_context.cmd_buffer, 0, 1, &line_numbers_scissor);
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.sdf_pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
-                                       sizeof(SdfPushConstants),
+                                       sizeof(push_constants),
                                        &ui_pc_line_numbers);
-
-                    // Prepare buffers
                     size_t total_digits = 127 * 3;
                     sdf_vertex_t* line_number_quads =
                         malloc(sizeof(sdf_vertex_t) * 4 * total_digits);
                     uint16_t* line_number_indices =
                         malloc(sizeof(uint16_t) * 6 * total_digits);
                     uint32_t line_vertex_index = 0, line_index_index = 0;
-
                     for (int midi_note = 0; midi_note < 127; ++midi_note) {
-                        // Base center Y position for this row
                         float center_y =
                             1.0f - (midi_note + 0.5f) * ndc_cell_height;
-
-                        // Gradual vertical offset increases as row number
-                        // increases Adjust the multiplier (0.02f) to control
-                        // the amount of offset per row
                         float gradual_vertical_offset =
                             midi_note * (ndc_cell_height * 0.01f);
-
-                        // Apply vertical offset by shifting center_y downwards
                         center_y += gradual_vertical_offset;
-
                         char digits[4];
                         snprintf(digits, sizeof(digits), "%3d", midi_note);
-
                         for (int digit_col = 0; digit_col < 3; ++digit_col) {
                             char c = digits[digit_col];
                             if (c == ' ') continue;
-
                             float ndc_x = -1.0f + digit_col * ndc_cell_width;
-
                             war_glyph_info glyph =
                                 vulkan_context.glyphs[(uint8_t)c];
-
                             float glyph_ndc_width =
                                 (glyph.width / input_cmd_context.cell_width) *
                                 ndc_cell_width;
@@ -1514,11 +1478,9 @@ void* war_window_render(void* args) {
                                 (glyph.bearing_x /
                                  input_cmd_context.cell_width) *
                                 ndc_cell_width;
-
                             bool is_lowercase = (c >= 'a' && c <= 'z');
                             float vertical_offset =
                                 is_lowercase ? ndc_cell_height * 0.1f : 0.0f;
-
                             float quad_left = ndc_x + bearing_x_ndc;
                             float quad_right = quad_left + glyph_ndc_width;
                             float quad_top = center_y +
@@ -1527,7 +1489,6 @@ void* war_window_render(void* args) {
                             float quad_bottom = center_y -
                                                 glyph_ndc_height / 2.0f +
                                                 vertical_offset;
-
                             line_number_quads[line_vertex_index + 0] =
                                 (sdf_vertex_t){{quad_left, quad_top},
                                                {glyph.uv_x0, glyph.uv_y1},
@@ -1556,7 +1517,6 @@ void* war_window_render(void* args) {
                                                0.0f,
                                                {0},
                                                light_gray_hex};
-
                             uint16_t vertex_offset = 4 * num_letters;
                             line_number_indices[line_index_index + 0] =
                                 line_vertex_index + 0 + vertex_offset;
@@ -1570,13 +1530,10 @@ void* war_window_render(void* args) {
                                 line_vertex_index + 3 + vertex_offset;
                             line_number_indices[line_index_index + 5] =
                                 line_vertex_index + 0 + vertex_offset;
-
                             line_vertex_index += 4;
                             line_index_index += 6;
                         }
                     }
-
-                    // Upload vertex buffer
                     void* line_vertex_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_vertex_buffer_memory,
@@ -1589,8 +1546,6 @@ void* war_window_render(void* args) {
                            sizeof(sdf_vertex_t) * 4 * total_digits);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_vertex_buffer_memory);
-
-                    // Upload index buffer
                     void* line_index_ptr;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.sdf_index_buffer_memory,
@@ -1603,21 +1558,17 @@ void* war_window_render(void* args) {
                            sizeof(uint16_t) * 6 * total_digits);
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.sdf_index_buffer_memory);
-
-                    // Draw
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                      6 * total_digits,
                                      1,
                                      6 * num_letters,
                                      0,
                                      0);
-
                     free(line_number_quads);
                     free(line_number_indices);
                     //---------------------------------------------------------
-                    // END SDF text rendering
+                    // END RENDER PASS
                     //---------------------------------------------------------
-
                     vkCmdEndRenderPass(vulkan_context.cmd_buffer);
                     result = vkEndCommandBuffer(vulkan_context.cmd_buffer);
                     assert(result == VK_SUCCESS);

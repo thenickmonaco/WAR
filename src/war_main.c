@@ -1053,7 +1053,9 @@ void* war_window_render(void* args) {
                     vkCmdSetViewport(
                         vulkan_context.cmd_buffer, 0, 1, &viewport);
                     VkRect2D scissor = {
-                        .offset = {0, 0},
+                        .offset = {input_cmd_context.num_cols_for_line_numbers *
+                                       input_cmd_context.cell_width,
+                                   0},
                         .extent = {physical_width, physical_height},
                     };
                     vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
@@ -1221,6 +1223,12 @@ void* war_window_render(void* args) {
                                          vulkan_context.quads_index_buffer,
                                          static_offsets_indices[0],
                                          VK_INDEX_TYPE_UINT16);
+                    VkRect2D status_scissor = {
+                        .offset = {0, 0},
+                        .extent = {physical_width, physical_height},
+                    };
+                    vkCmdSetScissor(
+                        vulkan_context.cmd_buffer, 0, 1, &status_scissor);
                     PushConstants pc_static = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {0.0f, 0.0f},

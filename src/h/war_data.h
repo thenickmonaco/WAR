@@ -125,10 +125,10 @@ typedef struct war_input_cmd_context {
     float cursor_size;
     float cell_navigation;
     float gridline_split;
-    float strongest_gridline_split;
-    float strong_gridline_split;
-    float weak_gridline_split;
-    float weakest_gridline_split;
+    float first_gridline_split;
+    float second_gridline_split;
+    float third_gridline_split;
+    float fourth_gridline_split;
     uint32_t left_col;
     uint32_t bottom_row;
     uint32_t col_increment;

@@ -906,14 +906,15 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             },
     };
     VkImageView sdf_image_view;
-    vkCreateImageView(device, &sdf_view_info, NULL, &sdf_image_view);
+    result = vkCreateImageView(device, &sdf_view_info, NULL, &sdf_image_view);
+    assert(result == VK_SUCCESS);
     VkSamplerCreateInfo sdf_sampler_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         .anisotropyEnable = VK_FALSE,
         .maxAnisotropy = 1.0f,
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
@@ -1209,7 +1210,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         },
     };
     enum {
-        max_sdf_quads = 3000,
+        max_sdf_quads = 500,
     };
     VkDeviceSize sdf_vertex_buffer_size =
         sizeof(sdf_vertex_t) * max_sdf_quads * 4;

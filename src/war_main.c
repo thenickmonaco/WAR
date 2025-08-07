@@ -339,7 +339,6 @@ void* war_window_render(void* args) {
         uint64_t now = get_monotonic_time_us();
         if (now - last_frame_time >= frame_duration_us) {
             last_frame_time += frame_duration_us;
-
             // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
             // if (*read_from_audio_index != *write_to_window_render_index) {
             //     switch (audio_to_window_render_ring_buffer
@@ -364,7 +363,6 @@ void* war_window_render(void* args) {
             //        break;
             //    }
             //}
-
             enum {
                 TRINITY_NOT_CALLED = 0,
                 TRINITY_CALLED = 1,
@@ -378,7 +376,6 @@ void* war_window_render(void* args) {
                         (read_input_sequence_index + 1) & 0xFF;
                     continue;
                 }
-
                 // If this evt's keysym differs from the repeating one, stop
                 // repeat immediately
                 if (repeat_command && (evt.keysym != repeat_event.keysym ||
@@ -404,12 +401,10 @@ void* war_window_render(void* args) {
                         }
                     }
                 }
-
                 size_t available =
                     (write_input_sequence_index - read_input_sequence_index) &
                     0xFF;
                 size_t matched_length = 0;
-
                 // Construct a temporary array or pass pointer to ring buffer
                 // (handle wrap-around carefully)
                 war_key_event temp_sequence[MAX_SEQUENCE_LENGTH];
@@ -418,24 +413,19 @@ void* war_window_render(void* args) {
                     temp_sequence[i] = input_sequence_ring_buffer
                         [(read_input_sequence_index + i) & 0xFF];
                 }
-
                 void (*matched_command)(war_input_cmd_context*) =
                     war_match_sequence_in_trie(
                         &pool, temp_sequence, available, &matched_length);
-
                 if (matched_length > 0 && matched_command) {
                     matched_command(&input_cmd_context);
                     read_input_sequence_index =
                         (read_input_sequence_index + matched_length) & 0xFF;
-
                     if (matched_command != repeat_command) {
                         repeat_start_time_us = 0;
                         next_repeat_time_us = 0;
                     }
-
                     repeat_command = matched_command;
                     repeat_event = evt;
-
                     if (!trinity) {
                         war_wayland_holy_trinity(fd,
                                                  wl_surface_id,
@@ -453,12 +443,10 @@ void* war_window_render(void* args) {
                     // command
                     uint8_t could_be_prefix = false;
                     war_key_trie_node* node = &pool.nodes[0];
-
                     for (size_t i = 0; i < available && i < MAX_SEQUENCE_LENGTH;
                          i++) {
                         uint32_t keysym = temp_sequence[i].keysym;
                         uint8_t mod = temp_sequence[i].mod;
-
                         war_key_trie_node* child = NULL;
                         for (size_t c = 0; c < node->child_count; c++) {
                             war_key_trie_node* candidate = node->children[c];
@@ -468,7 +456,6 @@ void* war_window_render(void* args) {
                                 break;
                             }
                         }
-
                         if (!child) {
                             could_be_prefix = false;
                             break;
@@ -934,9 +921,6 @@ void* war_window_render(void* args) {
                     const uint32_t bright_white_hex =
                         0xFFEEEEEE; // tmux status text
                     const uint32_t black_hex = 0xFF000000;
-                    //----------------------------------------------------------
-                    // GRIDLINES, CURSOR, NOTES
-                    //----------------------------------------------------------
                     vkWaitForFences(vulkan_context.device,
                                     1,
                                     &vulkan_context.in_flight_fence,
@@ -969,9 +953,128 @@ void* war_window_render(void* args) {
                     vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
                                          &render_pass_info,
                                          VK_SUBPASS_CONTENTS_INLINE);
+                    //----------------------------------------------------------
+                    // GRIDLINES
+                    //----------------------------------------------------------
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       vulkan_context.pipeline);
+                    uint32_t num_gridline_quads =
+                        input_cmd_context.viewport_cols;
+                    quad_vertex* gridline_quad_verts =
+                        malloc(num_gridline_quads * sizeof(quad_vertex) * 4);
+                    uint16_t* gridline_quad_indices =
+                        malloc(num_gridline_quads * sizeof(uint16_t) * 6);
+                    float thickness = 2.0f;
+                    float thickness_ndc = (thickness / physical_width) * 2.0f;
+                    for (size_t i = 0; i < num_gridline_quads; i++) {
+                        size_t vert_index = i * 4;
+                        size_t index_index = i * 6;
+                        float x_center =
+                            ((input_cmd_context.cell_width * (i + 1)) /
+                             physical_width) *
+                                2.0f -
+                            1.0f;
+                        gridline_quad_verts[vert_index + 0] = (quad_vertex){
+                            {x_center - thickness_ndc / 2.0f, -1.0f},
+                            white_hex,
+                        }; // bottom left
+                        gridline_quad_verts[vert_index + 1] = (quad_vertex){
+                            {x_center + thickness_ndc / 2.0f, -1.0f},
+                            white_hex,
+                        }; // bottom right
+                        gridline_quad_verts[vert_index + 2] = (quad_vertex){
+                            {x_center + thickness_ndc / 2.0f, 1.0f},
+                            white_hex,
+                        }; // top right
+                        gridline_quad_verts[vert_index + 3] = (quad_vertex){
+                            {x_center - thickness_ndc / 2.0f, 1.0f},
+                            white_hex,
+                        }; // top left
+                        gridline_quad_indices[index_index + 0] = vert_index + 0;
+                        gridline_quad_indices[index_index + 1] = vert_index + 1;
+                        gridline_quad_indices[index_index + 2] = vert_index + 2;
+                        gridline_quad_indices[index_index + 3] = vert_index + 2;
+                        gridline_quad_indices[index_index + 4] = vert_index + 3;
+                        gridline_quad_indices[index_index + 5] = vert_index + 0;
+                    }
+                    void* gridline_quad_verts_data = NULL;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_vertex_buffer_memory,
+                                0,
+                                sizeof(quad_vertex) * 4 * num_gridline_quads,
+                                0,
+                                &gridline_quad_verts_data);
+                    memcpy(gridline_quad_verts_data,
+                           gridline_quad_verts,
+                           sizeof(quad_vertex) * 4 * num_gridline_quads);
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_vertex_buffer_memory);
+                    void* gridline_quad_index_data;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_index_buffer_memory,
+                                0,
+                                sizeof(uint16_t) * 6 * num_gridline_quads,
+                                0,
+                                &gridline_quad_index_data);
+                    memcpy(gridline_quad_index_data,
+                           gridline_quad_indices,
+                           sizeof(uint16_t) * 6 * num_gridline_quads);
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_index_buffer_memory);
+                    VkDeviceSize gridline_vertex_offsets[] = {0};
+                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                           0,
+                                           1,
+                                           &vulkan_context.quads_vertex_buffer,
+                                           gridline_vertex_offsets);
+                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                         vulkan_context.quads_index_buffer,
+                                         0,
+                                         VK_INDEX_TYPE_UINT16);
+                    VkViewport gridline_viewport = {
+                        .x = 0.0f,
+                        .y = 0.0f,
+                        .width = (float)physical_width,
+                        .height = (float)physical_height,
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    };
+                    vkCmdSetViewport(
+                        vulkan_context.cmd_buffer, 0, 1, &gridline_viewport);
+                    VkRect2D gridline_scissor = {
+                        .offset = {input_cmd_context.num_cols_for_line_numbers *
+                                       input_cmd_context.cell_width,
+                                   0},
+                        .extent = {physical_width, physical_height},
+                    };
+                    vkCmdSetScissor(
+                        vulkan_context.cmd_buffer, 0, 1, &gridline_scissor);
+                    push_constants gridline_pc = {
+                        .zoom = input_cmd_context.zoom_scale,
+                        .pan = {0, 0},
+                        .padding = 0.0f,
+                    };
+                    vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                       vulkan_context.pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0,
+                                       sizeof(push_constants),
+                                       &gridline_pc);
+                    vkCmdDrawIndexed(vulkan_context.cmd_buffer,
+                                     num_gridline_quads * 6,
+                                     1,
+                                     0,
+                                     0,
+                                     0);
+                    free(gridline_quad_verts);
+                    free(gridline_quad_indices);
+                    //---------------------------------------------------------
+                    // TODO: NOTES
+                    //---------------------------------------------------------
+                    //---------------------------------------------------------
+                    // CURSOR
+                    //---------------------------------------------------------
                     quad_vertex cursor_quad_verts[4] = {
                         {{(input_cmd_context.col * vulkan_context.cell_width) /
                                   physical_width * 2.0f -
@@ -1004,42 +1107,44 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          white_hex},
                     };
-                    uint16_t general_quad_indices[6] = {0, 1, 2, 2, 3, 0};
-                    void* vertex_data;
+                    uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
+                    void* cursor_vertex_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_vertex_buffer_memory,
-                                0,
+                                sizeof(quad_vertex) * 4 * num_gridline_quads,
                                 sizeof(cursor_quad_verts),
                                 0,
-                                &vertex_data);
-                    memcpy(vertex_data,
+                                &cursor_vertex_data);
+                    memcpy(cursor_vertex_data,
                            cursor_quad_verts,
                            sizeof(cursor_quad_verts));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.quads_vertex_buffer_memory);
-                    void* index_data;
+                    void* cursor_index_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_index_buffer_memory,
+                                sizeof(uint16_t) * 6 * num_gridline_quads,
+                                sizeof(cursor_quad_indices),
                                 0,
-                                sizeof(general_quad_indices),
-                                0,
-                                &index_data);
-                    memcpy(index_data,
-                           general_quad_indices,
-                           sizeof(general_quad_indices));
+                                &cursor_index_data);
+                    memcpy(cursor_index_data,
+                           cursor_quad_indices,
+                           sizeof(cursor_quad_indices));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.quads_index_buffer_memory);
-                    VkDeviceSize offsets[] = {0};
+                    VkDeviceSize cursor_vertex_offsets[] = {
+                        4 * num_gridline_quads * sizeof(quad_vertex)};
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
                                            1,
                                            &vulkan_context.quads_vertex_buffer,
-                                           offsets);
+                                           cursor_vertex_offsets);
                     vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
                                          vulkan_context.quads_index_buffer,
-                                         0,
+                                         6 * num_gridline_quads *
+                                             sizeof(uint16_t),
                                          VK_INDEX_TYPE_UINT16);
-                    VkViewport viewport = {
+                    VkViewport cursor_viewport = {
                         .x = 0.0f,
                         .y = 0.0f,
                         .width = (float)physical_width,
@@ -1048,15 +1153,16 @@ void* war_window_render(void* args) {
                         .maxDepth = 1.0f,
                     };
                     vkCmdSetViewport(
-                        vulkan_context.cmd_buffer, 0, 1, &viewport);
-                    VkRect2D scissor = {
+                        vulkan_context.cmd_buffer, 0, 1, &cursor_viewport);
+                    VkRect2D cursor_scissor = {
                         .offset = {input_cmd_context.num_cols_for_line_numbers *
                                        input_cmd_context.cell_width,
                                    0},
                         .extent = {physical_width, physical_height},
                     };
-                    vkCmdSetScissor(vulkan_context.cmd_buffer, 0, 1, &scissor);
-                    push_constants pc = {
+                    vkCmdSetScissor(
+                        vulkan_context.cmd_buffer, 0, 1, &cursor_scissor);
+                    push_constants cursor_pc = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {input_cmd_context.panning_x,
                                 input_cmd_context.panning_y},
@@ -1067,7 +1173,7 @@ void* war_window_render(void* args) {
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
                                        sizeof(push_constants),
-                                       &pc);
+                                       &cursor_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
                     //---------------------------------------------------------
                     // STATUS BARS
@@ -1150,77 +1256,93 @@ void* war_window_render(void* args) {
                                      physical_height * 2.0f},
                          light_gray_hex},
                     };
-                    uint16_t static_quads_indices[18] = {0,
-                                                         1,
-                                                         2,
-                                                         2,
-                                                         3,
-                                                         0,
-                                                         4,
-                                                         5,
-                                                         6,
-                                                         6,
-                                                         7,
-                                                         4,
-                                                         8,
-                                                         9,
-                                                         10,
-                                                         10,
-                                                         11,
-                                                         8};
-                    void* static_vertex_data;
+                    uint16_t status_bar_quads_indices[18] = {0,
+                                                             1,
+                                                             2,
+                                                             2,
+                                                             3,
+                                                             0,
+                                                             4,
+                                                             5,
+                                                             6,
+                                                             6,
+                                                             7,
+                                                             4,
+                                                             8,
+                                                             9,
+                                                             10,
+                                                             10,
+                                                             11,
+                                                             8};
+                    void* status_bar_vertex_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_vertex_buffer_memory,
-                                sizeof(cursor_quad_verts),
+                                sizeof(cursor_quad_verts) +
+                                    sizeof(quad_vertex) * 4 *
+                                        num_gridline_quads,
                                 sizeof(tmux_status_bar_verts) +
                                     sizeof(vim_mode_status_bar_verts) +
                                     sizeof(vim_status_bar_verts),
                                 0,
-                                &static_vertex_data);
-                    memcpy(static_vertex_data,
+                                &status_bar_vertex_data);
+                    memcpy(status_bar_vertex_data,
                            tmux_status_bar_verts,
                            sizeof(tmux_status_bar_verts));
-                    memcpy(static_vertex_data + sizeof(tmux_status_bar_verts),
+                    memcpy(status_bar_vertex_data +
+                               sizeof(tmux_status_bar_verts),
                            vim_mode_status_bar_verts,
                            sizeof(vim_mode_status_bar_verts));
-                    memcpy(static_vertex_data + sizeof(tmux_status_bar_verts) +
+                    memcpy(status_bar_vertex_data +
+                               sizeof(tmux_status_bar_verts) +
                                sizeof(vim_mode_status_bar_verts),
                            vim_status_bar_verts,
                            sizeof(vim_status_bar_verts));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.quads_vertex_buffer_memory);
-                    void* static_index_data;
+                    void* status_bar_index_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_index_buffer_memory,
-                                sizeof(general_quad_indices),
-                                sizeof(static_quads_indices),
+                                sizeof(cursor_quad_indices) +
+                                    sizeof(uint16_t) * 6 * num_gridline_quads,
+                                sizeof(status_bar_quads_indices),
                                 0,
-                                &static_index_data);
-                    memcpy(static_index_data,
-                           static_quads_indices,
-                           sizeof(static_quads_indices));
+                                &status_bar_index_data);
+                    memcpy(status_bar_index_data,
+                           status_bar_quads_indices,
+                           sizeof(status_bar_quads_indices));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.quads_index_buffer_memory);
-                    VkDeviceSize static_offsets_verts[] = {
-                        sizeof(cursor_quad_verts)};
+                    VkDeviceSize status_bar_vert_offsets[] = {
+                        sizeof(cursor_quad_verts) +
+                        4 * sizeof(quad_vertex) * num_gridline_quads};
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
                                            1,
                                            &vulkan_context.quads_vertex_buffer,
-                                           static_offsets_verts);
-                    VkDeviceSize static_offsets_indices[] = {
-                        sizeof(general_quad_indices)};
+                                           status_bar_vert_offsets);
                     vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
                                          vulkan_context.quads_index_buffer,
-                                         static_offsets_indices[0],
+                                         sizeof(cursor_quad_indices) +
+                                             6 * sizeof(uint16_t) *
+                                                 num_gridline_quads,
                                          VK_INDEX_TYPE_UINT16);
-                    VkRect2D status_scissor = {
+                    VkViewport status_bar_viewport = {
+                        .x = 0.0f,
+                        .y = 0.0f,
+                        .width = (float)physical_width,
+                        .height = (float)physical_height,
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    };
+                    vkCmdSetViewport(
+                        vulkan_context.cmd_buffer, 0, 1, &status_bar_viewport);
+                    VkRect2D status_bar_scissor = {
                         .offset = {0, 0},
                         .extent = {physical_width, physical_height},
                     };
                     vkCmdSetScissor(
-                        vulkan_context.cmd_buffer, 0, 1, &status_scissor);
-                    push_constants pc_static = {
+                        vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
+                    push_constants status_bar_pc = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {0.0f, 0.0f},
                         .padding = 0.0f,
@@ -1230,10 +1352,10 @@ void* war_window_render(void* args) {
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
                                        sizeof(push_constants),
-                                       &pc_static);
+                                       &status_bar_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
                     //---------------------------------------------------------
-                    // SDF text rendering
+                    // STATUS BARS TEXT
                     //---------------------------------------------------------
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1246,17 +1368,6 @@ void* war_window_render(void* args) {
                                             &vulkan_context.font_descriptor_set,
                                             0,
                                             NULL);
-                    push_constants ui_pc = {
-                        .zoom = input_cmd_context.zoom_scale,
-                        .pan = {0.0f, 0.0f},
-                        .padding = 0.0f,
-                    };
-                    vkCmdPushConstants(vulkan_context.cmd_buffer,
-                                       vulkan_context.sdf_pipeline_layout,
-                                       VK_SHADER_STAGE_VERTEX_BIT,
-                                       0,
-                                       sizeof(push_constants),
-                                       &ui_pc);
                     const char* war_text = "WAR";
                     char cursor_text[64];
                     snprintf(cursor_text,
@@ -1428,6 +1539,17 @@ void* war_window_render(void* args) {
                                          vulkan_context.sdf_index_buffer,
                                          0,
                                          VK_INDEX_TYPE_UINT16);
+                    push_constants ui_pc = {
+                        .zoom = input_cmd_context.zoom_scale,
+                        .pan = {0.0f, 0.0f},
+                        .padding = 0.0f,
+                    };
+                    vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                       vulkan_context.sdf_pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0,
+                                       sizeof(push_constants),
+                                       &ui_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                      6 * sdf_status_text_max_chars,
                                      1,
@@ -1436,30 +1558,9 @@ void* war_window_render(void* args) {
                                      0);
                     free(status_text_quads);
                     free(status_text_indices);
-                    push_constants ui_pc_line_numbers = {
-                        .zoom = input_cmd_context.zoom_scale,
-                        .pan = {0.0f, input_cmd_context.panning_y},
-                        .padding = 0.0f,
-                    };
-                    VkRect2D line_numbers_scissor = {
-                        .offset = {0, 0},
-                        .extent =
-                            {
-                                input_cmd_context.viewport_cols *
-                                    input_cmd_context.cell_width,
-                                physical_height -
-                                    input_cmd_context.num_rows_for_status_bars *
-                                        input_cmd_context.cell_height,
-                            },
-                    };
-                    vkCmdSetScissor(
-                        vulkan_context.cmd_buffer, 0, 1, &line_numbers_scissor);
-                    vkCmdPushConstants(vulkan_context.cmd_buffer,
-                                       vulkan_context.sdf_pipeline_layout,
-                                       VK_SHADER_STAGE_VERTEX_BIT,
-                                       0,
-                                       sizeof(push_constants),
-                                       &ui_pc_line_numbers);
+                    //---------------------------------------------------------
+                    // LINE NUMBERS
+                    //---------------------------------------------------------
                     size_t total_digits = 0;
                     for (int midi_note = 0; midi_note < 127; ++midi_note) {
                         char digits[4];
@@ -1592,6 +1693,30 @@ void* war_window_render(void* args) {
                                          sizeof(uint16_t) * 6 *
                                              sdf_status_text_max_chars,
                                          VK_INDEX_TYPE_UINT16);
+                    push_constants ui_pc_line_numbers = {
+                        .zoom = input_cmd_context.zoom_scale,
+                        .pan = {0.0f, input_cmd_context.panning_y},
+                        .padding = 0.0f,
+                    };
+                    VkRect2D line_numbers_scissor = {
+                        .offset = {0, 0},
+                        .extent =
+                            {
+                                input_cmd_context.viewport_cols *
+                                    input_cmd_context.cell_width,
+                                physical_height -
+                                    input_cmd_context.num_rows_for_status_bars *
+                                        input_cmd_context.cell_height,
+                            },
+                    };
+                    vkCmdSetScissor(
+                        vulkan_context.cmd_buffer, 0, 1, &line_numbers_scissor);
+                    vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                       vulkan_context.sdf_pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0,
+                                       sizeof(push_constants),
+                                       &ui_pc_line_numbers);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                      6 * total_digits,
                                      1,

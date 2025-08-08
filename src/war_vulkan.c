@@ -354,7 +354,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         vkCreateFramebuffer(device, &frame_buffer_info, NULL, &frame_buffer);
     assert(result == VK_SUCCESS);
     uint32_t* vertex_code;
-    const char* vertex_path = "build/shaders/war_vertex.spv";
+    const char* vertex_path = "build/shaders/war_quad_vertex.spv";
     FILE* vertex_spv = fopen(vertex_path, "rb");
     assert(vertex_spv);
     fseek(vertex_spv, 0, SEEK_END);
@@ -377,7 +377,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     free(vertex_code);
     uint32_t* fragment_code;
-    const char* fragment_path = "build/shaders/war_fragment.spv";
+    const char* fragment_path = "build/shaders/war_quad_fragment.spv";
     FILE* fragment_spv = fopen(fragment_path, "rb");
     assert(fragment_spv);
     fseek(fragment_spv, 0, SEEK_END);
@@ -431,7 +431,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkPushConstantRange push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = 20, // 4 bytes for zoom + 8 bytes for pan + padding
+        .size = 40,
     };
     VkPipelineLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1438,7 +1438,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
 
     return (war_vulkan_context){
         //----------------------------------------------------------------------
-        // QUADS RENDERING PIPELINE
+        // QUAD PIPELINE
         //----------------------------------------------------------------------
         .dmabuf_fd = dmabuf_fd,
         .instance = instance,
@@ -1469,7 +1469,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .texture_descriptor_set = descriptor_set,
         .texture_descriptor_pool = descriptor_pool,
         //---------------------------------------------------------------------
-        // SDF FONT RENDERING PIPELINE
+        // SDF PIPELINE
         //---------------------------------------------------------------------
         .ft_library = ft_library,
         .ft_regular = ft_regular,

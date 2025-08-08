@@ -19,28 +19,15 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// src/shaders/war_vertex.glsl
+// src/shaders/war_quad_ndc_fragment.glsl
 //-----------------------------------------------------------------------------
 
 #version 450
 
-layout(location = 0) in vec2 in_pos;
-layout(location = 1) in vec4 in_color;
+layout(location = 0) in vec4 color;
 
-layout(location = 0) out vec4 color;
-
-// Add push constants or uniform for zoom and pan
-layout(push_constant) uniform PushConstants {
-    layout(offset = 0) float zoom;          // 4 bytes
-    layout(offset = 8) vec2 pan;            // 8-byte aligned, starts at 8
-    layout(offset = 16) float padding;      // optional, but avoids spillover
-} pc;
+layout(location = 0) out vec4 out_color;
 
 void main() {
-    // Apply pan and zoom to the input position before passing to gl_Position
-    vec2 zoomed = in_pos * pc.zoom;
-    vec2 translated = zoomed + vec2(pc.pan.x, pc.pan.y);
-
-    gl_Position = vec4(translated, 0.0, 1.0);
-    color = in_color;
+    out_color = color;
 }

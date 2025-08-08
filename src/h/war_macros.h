@@ -111,9 +111,8 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
                             ctx->scroll_margin_rows -
                             ctx->num_rows_for_status_bars) {
             ctx->bottom_row += ctx->row_increment * ctx->numeric_prefix;
-            ctx->panning_y += (2.0f * ctx->cell_height * ctx->row_increment *
-                               ctx->numeric_prefix) /
-                              ctx->physical_height;
+            ctx->panning_y -=
+                ctx->cell_height * ctx->row_increment * ctx->numeric_prefix;
         }
     } else {
         ctx->row += ctx->row_increment;
@@ -121,8 +120,7 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
                             ctx->scroll_margin_rows -
                             ctx->num_rows_for_status_bars) {
             ctx->bottom_row += ctx->row_increment;
-            ctx->panning_y += (2.0f * ctx->cell_height * ctx->row_increment) /
-                              ctx->physical_height;
+            ctx->panning_y -= ctx->cell_height * ctx->row_increment;
         }
     }
     ctx->numeric_prefix = 0;

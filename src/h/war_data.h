@@ -196,19 +196,31 @@ typedef struct sdf_vertex {
     uint32_t color;
 } sdf_vertex_t;
 
-typedef struct {
+typedef struct quad_vertex {
     float pos[2];
     uint32_t color;
 } quad_vertex;
 
-typedef struct {
+typedef struct push_constants {
     float zoom;
     float _pad1;
     float pan[2];
     float padding;
 } push_constants;
 
+typedef struct quad_push_constants {
+    float pan[2];
+    float viewport_size[2];
+    float cell_size[2];
+    float zoom;
+    int _pad1; // 40 bytes total
+    int cell_offsets[2];
+} quad_push_constants;
+
 typedef struct war_vulkan_context {
+    //-------------------------------------------------------------------------
+    // QUAD PIPELINE
+    //-------------------------------------------------------------------------
     int dmabuf_fd;
     VkInstance instance;
     VkPhysicalDevice physical_device;
@@ -239,7 +251,11 @@ typedef struct war_vulkan_context {
     VkDescriptorPool texture_descriptor_pool;
 
     //-------------------------------------------------------------------------
-    // font
+    // QUAD NDC PIPELINE
+    //-------------------------------------------------------------------------
+
+    //-------------------------------------------------------------------------
+    // SDF FONT PIPELINE
     //-------------------------------------------------------------------------
     FT_Library ft_library;
     FT_Face ft_regular;

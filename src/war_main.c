@@ -131,8 +131,8 @@ void* war_window_render(void* args) {
         .zoom_scale = 1.0f, // 1.0 = normal, <1 = zoom out, >1 = zoom in
         .num_rows_for_status_bars = num_rows_for_status_bars,
         .num_cols_for_line_numbers = num_cols_for_line_numbers,
-        .panning_x = (2.0f * vulkan_context.cell_width * 3) / physical_width,
-        .panning_y = -(2.0f * vulkan_context.cell_height * 3) / physical_height,
+        .panning_x = 0.0f,
+        .panning_y = 0.0f,
         .zoom_increment = 0.1f,
         .zoom_leap_increment = 0.5f,
         .anchor_x = 0.0f,
@@ -959,159 +959,128 @@ void* war_window_render(void* args) {
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       vulkan_context.pipeline);
-                    uint32_t num_gridline_quads =
-                        input_cmd_context.viewport_cols;
-                    quad_vertex* gridline_quad_verts =
-                        malloc(num_gridline_quads * sizeof(quad_vertex) * 4);
-                    uint16_t* gridline_quad_indices =
-                        malloc(num_gridline_quads * sizeof(uint16_t) * 6);
-                    float thickness = 2.0f;
-                    float thickness_ndc = (thickness / physical_width) * 2.0f;
-                    for (size_t i = 0; i < num_gridline_quads; i++) {
-                        size_t vert_index = i * 4;
-                        size_t index_index = i * 6;
-                        float x_center =
-                            ((input_cmd_context.cell_width * (i + 1)) /
-                             physical_width) *
-                                2.0f -
-                            1.0f;
-                        gridline_quad_verts[vert_index + 0] = (quad_vertex){
-                            {x_center - thickness_ndc / 2.0f, -1.0f},
-                            white_hex,
-                        }; // bottom left
-                        gridline_quad_verts[vert_index + 1] = (quad_vertex){
-                            {x_center + thickness_ndc / 2.0f, -1.0f},
-                            white_hex,
-                        }; // bottom right
-                        gridline_quad_verts[vert_index + 2] = (quad_vertex){
-                            {x_center + thickness_ndc / 2.0f, 1.0f},
-                            white_hex,
-                        }; // top right
-                        gridline_quad_verts[vert_index + 3] = (quad_vertex){
-                            {x_center - thickness_ndc / 2.0f, 1.0f},
-                            white_hex,
-                        }; // top left
-                        gridline_quad_indices[index_index + 0] = vert_index + 0;
-                        gridline_quad_indices[index_index + 1] = vert_index + 1;
-                        gridline_quad_indices[index_index + 2] = vert_index + 2;
-                        gridline_quad_indices[index_index + 3] = vert_index + 2;
-                        gridline_quad_indices[index_index + 4] = vert_index + 3;
-                        gridline_quad_indices[index_index + 5] = vert_index + 0;
-                    }
-                    void* gridline_quad_verts_data = NULL;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.quads_vertex_buffer_memory,
-                                0,
-                                sizeof(quad_vertex) * 4 * num_gridline_quads,
-                                0,
-                                &gridline_quad_verts_data);
-                    memcpy(gridline_quad_verts_data,
-                           gridline_quad_verts,
-                           sizeof(quad_vertex) * 4 * num_gridline_quads);
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.quads_vertex_buffer_memory);
-                    void* gridline_quad_index_data;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.quads_index_buffer_memory,
-                                0,
-                                sizeof(uint16_t) * 6 * num_gridline_quads,
-                                0,
-                                &gridline_quad_index_data);
-                    memcpy(gridline_quad_index_data,
-                           gridline_quad_indices,
-                           sizeof(uint16_t) * 6 * num_gridline_quads);
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.quads_index_buffer_memory);
-                    VkDeviceSize gridline_vertex_offsets[] = {0};
-                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                                           0,
-                                           1,
-                                           &vulkan_context.quads_vertex_buffer,
-                                           gridline_vertex_offsets);
-                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                                         vulkan_context.quads_index_buffer,
-                                         0,
-                                         VK_INDEX_TYPE_UINT16);
-                    VkViewport gridline_viewport = {
-                        .x = 0.0f,
-                        .y = 0.0f,
-                        .width = (float)physical_width,
-                        .height = (float)physical_height,
-                        .minDepth = 0.0f,
-                        .maxDepth = 1.0f,
-                    };
-                    vkCmdSetViewport(
-                        vulkan_context.cmd_buffer, 0, 1, &gridline_viewport);
-                    VkRect2D gridline_scissor = {
-                        .offset = {input_cmd_context.num_cols_for_line_numbers *
-                                       input_cmd_context.cell_width,
-                                   0},
-                        .extent = {physical_width, physical_height},
-                    };
-                    vkCmdSetScissor(
-                        vulkan_context.cmd_buffer, 0, 1, &gridline_scissor);
-                    push_constants gridline_pc = {
-                        .zoom = input_cmd_context.zoom_scale,
-                        .pan = {0, 0},
-                        .padding = 0.0f,
-                    };
-                    vkCmdPushConstants(vulkan_context.cmd_buffer,
-                                       vulkan_context.pipeline_layout,
-                                       VK_SHADER_STAGE_VERTEX_BIT,
-                                       0,
-                                       sizeof(push_constants),
-                                       &gridline_pc);
-                    vkCmdDrawIndexed(vulkan_context.cmd_buffer,
-                                     num_gridline_quads * 6,
-                                     1,
-                                     0,
-                                     0,
-                                     0);
-                    free(gridline_quad_verts);
-                    free(gridline_quad_indices);
+                    uint32_t num_gridline_quads = 0;
+                    // quad_vertex* gridline_quad_verts =
+                    //     malloc(num_gridline_quads * sizeof(quad_vertex) * 4);
+                    // uint16_t* gridline_quad_indices =
+                    //     malloc(num_gridline_quads * sizeof(uint16_t) * 6);
+                    // float half_thickness_in_cells =
+                    //     (1.0f / input_cmd_context.cell_width) * 0.5f;
+                    // for (uint32_t i = 0; i < num_gridline_quads; ++i) {
+                    //     size_t vi = i * 4;
+                    //     size_t ii = i * 6;
+                    //     float x_cell = (float)i + 0.5f;
+                    //     float x_left = x_cell - half_thickness_in_cells;
+                    //     float x_right = x_cell + half_thickness_in_cells;
+                    //     float y_bottom = 0.0f;
+                    //     float y_top = (float)input_cmd_context.viewport_rows;
+                    //     gridline_quad_verts[vi + 0] =
+                    //         (quad_vertex){{x_left, y_bottom}, white_hex};
+                    //     gridline_quad_verts[vi + 1] =
+                    //         (quad_vertex){{x_right, y_bottom}, white_hex};
+                    //     gridline_quad_verts[vi + 2] =
+                    //         (quad_vertex){{x_right, y_top}, white_hex};
+                    //     gridline_quad_verts[vi + 3] =
+                    //         (quad_vertex){{x_left, y_top}, white_hex};
+                    //     gridline_quad_indices[ii + 0] = vi + 0;
+                    //     gridline_quad_indices[ii + 1] = vi + 1;
+                    //     gridline_quad_indices[ii + 2] = vi + 2;
+                    //     gridline_quad_indices[ii + 3] = vi + 2;
+                    //     gridline_quad_indices[ii + 4] = vi + 3;
+                    //     gridline_quad_indices[ii + 5] = vi + 0;
+                    // }
+                    // void* gridline_quad_verts_data = NULL;
+                    // vkMapMemory(vulkan_context.device,
+                    //             vulkan_context.quads_vertex_buffer_memory,
+                    //             0,
+                    //             sizeof(quad_vertex) * 4 * num_gridline_quads,
+                    //             0,
+                    //             &gridline_quad_verts_data);
+                    // memcpy(gridline_quad_verts_data,
+                    //        gridline_quad_verts,
+                    //        sizeof(quad_vertex) * 4 * num_gridline_quads);
+                    // vkUnmapMemory(vulkan_context.device,
+                    //               vulkan_context.quads_vertex_buffer_memory);
+                    // void* gridline_quad_index_data;
+                    // vkMapMemory(vulkan_context.device,
+                    //             vulkan_context.quads_index_buffer_memory,
+                    //             0,
+                    //             sizeof(uint16_t) * 6 * num_gridline_quads,
+                    //             0,
+                    //             &gridline_quad_index_data);
+                    // memcpy(gridline_quad_index_data,
+                    //        gridline_quad_indices,
+                    //        sizeof(uint16_t) * 6 * num_gridline_quads);
+                    // vkUnmapMemory(vulkan_context.device,
+                    //               vulkan_context.quads_index_buffer_memory);
+                    // VkDeviceSize gridline_vertex_offsets[] = {0};
+                    // vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                    //                        0,
+                    //                        1,
+                    //                        &vulkan_context.quads_vertex_buffer,
+                    //                        gridline_vertex_offsets);
+                    // vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                    //                      vulkan_context.quads_index_buffer,
+                    //                      0,
+                    //                      VK_INDEX_TYPE_UINT16);
+                    // VkViewport gridline_viewport = {
+                    //     .x = 0.0f,
+                    //     .y = 0.0f,
+                    //     .width = (float)physical_width,
+                    //     .height = (float)physical_height,
+                    //     .minDepth = 0.0f,
+                    //     .maxDepth = 1.0f,
+                    // };
+                    // vkCmdSetViewport(
+                    //     vulkan_context.cmd_buffer, 0, 1, &gridline_viewport);
+                    // VkRect2D gridline_scissor = {
+                    //     .offset = {0, 0},
+                    //     .extent = {physical_width, physical_height},
+                    // };
+                    // vkCmdSetScissor(
+                    //     vulkan_context.cmd_buffer, 0, 1, &gridline_scissor);
+                    // quad_push_constants gridline_pc = {
+                    //     .zoom = input_cmd_context.zoom_scale,
+                    //     .pan = {input_cmd_context.panning_x,
+                    //             input_cmd_context.panning_y},
+                    //     .viewport_size = {physical_width, physical_height},
+                    //     .padding = 0.0f,
+                    // };
+                    // vkCmdPushConstants(vulkan_context.cmd_buffer,
+                    //                    vulkan_context.pipeline_layout,
+                    //                    VK_SHADER_STAGE_VERTEX_BIT,
+                    //                    0,
+                    //                    sizeof(quad_push_constants),
+                    //                    &gridline_pc);
+                    // vkCmdDrawIndexed(vulkan_context.cmd_buffer,
+                    //                  num_gridline_quads * 6,
+                    //                  1,
+                    //                  0,
+                    //                  0,
+                    //                  0);
+                    // free(gridline_quad_verts);
+                    // free(gridline_quad_indices);
                     //---------------------------------------------------------
-                    // TODO: NOTES
+                    //  TODO: NOTES
                     //---------------------------------------------------------
                     //---------------------------------------------------------
-                    // CURSOR
+                    //  CURSOR
                     //---------------------------------------------------------
                     quad_vertex cursor_quad_verts[4] = {
-                        {{(input_cmd_context.col * vulkan_context.cell_width) /
-                                  physical_width * 2.0f -
-                              1.0f,
-                          1.0f - ((input_cmd_context.row + 1) *
-                                  vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         white_hex},
-                        {{((input_cmd_context.col + 1) *
-                           vulkan_context.cell_width) /
-                                  physical_width * 2.0f -
-                              1.0f,
-                          1.0f - ((input_cmd_context.row + 1) *
-                                  vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         white_hex},
-                        {{((input_cmd_context.col + 1) *
-                           vulkan_context.cell_width) /
-                                  physical_width * 2.0f -
-                              1.0f,
-                          1.0f - (input_cmd_context.row *
-                                  vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         white_hex},
-                        {{(input_cmd_context.col * vulkan_context.cell_width) /
-                                  physical_width * 2.0f -
-                              1.0f,
-                          1.0f - (input_cmd_context.row *
-                                  vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         white_hex},
+                        {{input_cmd_context.col, input_cmd_context.row},
+                         red_hex},
+                        {{input_cmd_context.col + 1, input_cmd_context.row},
+                         red_hex},
+                        {{input_cmd_context.col + 1, input_cmd_context.row + 1},
+                         red_hex},
+                        {{input_cmd_context.col, input_cmd_context.row + 1},
+                         red_hex},
                     };
                     uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
                     void* cursor_vertex_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_vertex_buffer_memory,
-                                sizeof(quad_vertex) * 4 * num_gridline_quads,
+                                0,
                                 sizeof(cursor_quad_verts),
                                 0,
                                 &cursor_vertex_data);
@@ -1123,7 +1092,7 @@ void* war_window_render(void* args) {
                     void* cursor_index_data;
                     vkMapMemory(vulkan_context.device,
                                 vulkan_context.quads_index_buffer_memory,
-                                sizeof(uint16_t) * 6 * num_gridline_quads,
+                                0,
                                 sizeof(cursor_quad_indices),
                                 0,
                                 &cursor_index_data);
@@ -1132,8 +1101,7 @@ void* war_window_render(void* args) {
                            sizeof(cursor_quad_indices));
                     vkUnmapMemory(vulkan_context.device,
                                   vulkan_context.quads_index_buffer_memory);
-                    VkDeviceSize cursor_vertex_offsets[] = {
-                        4 * num_gridline_quads * sizeof(quad_vertex)};
+                    VkDeviceSize cursor_vertex_offsets[] = {0};
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
                                            1,
@@ -1141,8 +1109,7 @@ void* war_window_render(void* args) {
                                            cursor_vertex_offsets);
                     vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
                                          vulkan_context.quads_index_buffer,
-                                         6 * num_gridline_quads *
-                                             sizeof(uint16_t),
+                                         0,
                                          VK_INDEX_TYPE_UINT16);
                     VkViewport cursor_viewport = {
                         .x = 0.0f,
@@ -1155,106 +1122,50 @@ void* war_window_render(void* args) {
                     vkCmdSetViewport(
                         vulkan_context.cmd_buffer, 0, 1, &cursor_viewport);
                     VkRect2D cursor_scissor = {
-                        .offset = {input_cmd_context.num_cols_for_line_numbers *
-                                       input_cmd_context.cell_width,
-                                   0},
+                        .offset = {input_cmd_context.panning_x,
+                                   input_cmd_context.panning_y},
                         .extent = {physical_width, physical_height},
                     };
                     vkCmdSetScissor(
                         vulkan_context.cmd_buffer, 0, 1, &cursor_scissor);
-                    push_constants cursor_pc = {
-                        .zoom = input_cmd_context.zoom_scale,
+                    quad_push_constants cursor_pc = {
                         .pan = {input_cmd_context.panning_x,
                                 input_cmd_context.panning_y},
-                        .padding = 0.0f,
+                        .viewport_size = {physical_width, physical_height},
+                        .cell_size = {input_cmd_context.cell_width,
+                                      input_cmd_context.cell_height},
+                        .zoom = input_cmd_context.zoom_scale,
+                        .cell_offsets =
+                            {input_cmd_context.num_cols_for_line_numbers,
+                             input_cmd_context.num_rows_for_status_bars},
                     };
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
-                                       sizeof(push_constants),
+                                       sizeof(quad_push_constants),
                                        &cursor_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
                     //---------------------------------------------------------
                     // STATUS BARS
                     //---------------------------------------------------------
                     quad_vertex tmux_status_bar_verts[4] = {
-                        {{-1.0f,
-                          1.0f - ((0 + 1) * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         red_hex},
-                        {{((vulkan_context.cell_width *
-                            (input_cmd_context.viewport_cols)) /
-                           physical_width) *
-                                  2.0f -
-                              1.0f,
-                          1.0f - ((0 + 1) * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         red_hex},
-                        {{((vulkan_context.cell_width *
-                            (input_cmd_context.viewport_cols)) /
-                           physical_width) *
-                                  2.0f -
-                              1.0f,
-                          1.0f - (0 * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         red_hex},
-                        {{-1.0f,
-                          1.0f - (0 * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         red_hex},
+                        {{0, 0}, red_hex},
+                        {{input_cmd_context.viewport_cols, 0}, red_hex},
+                        {{input_cmd_context.viewport_cols, 1}, red_hex},
+                        {{0, 1}, red_hex},
                     };
                     quad_vertex vim_mode_status_bar_verts[4] = {
-                        {{-1.0f,
-                          1.0f - ((1 + 1) * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         dark_gray_hex},
-                        {{((vulkan_context.cell_width *
-                            (input_cmd_context.viewport_cols)) /
-                           physical_width) *
-                                  2.0f -
-                              1.0f,
-                          1.0f - ((1 + 1) * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         dark_gray_hex},
-                        {{((vulkan_context.cell_width *
-                            (input_cmd_context.viewport_cols)) /
-                           physical_width) *
-                                  2.0f -
-                              1.0f,
-                          1.0f - (1 * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         dark_gray_hex},
-                        {{-1.0f,
-                          1.0f - (1 * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         dark_gray_hex},
+                        {{0, 1}, red_hex},
+                        {{input_cmd_context.viewport_cols, 1}, red_hex},
+                        {{input_cmd_context.viewport_cols, 2}, red_hex},
+                        {{0, 2}, red_hex},
                     };
                     quad_vertex vim_status_bar_verts[4] = {
-                        {{-1.0f,
-                          1.0f - ((2 + 1) * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         light_gray_hex},
-                        {{((vulkan_context.cell_width *
-                            (input_cmd_context.viewport_cols)) /
-                           physical_width) *
-                                  2.0f -
-                              1.0f,
-                          1.0f - ((2 + 1) * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         light_gray_hex},
-                        {{((vulkan_context.cell_width *
-                            (input_cmd_context.viewport_cols)) /
-                           physical_width) *
-                                  2.0f -
-                              1.0f,
-                          1.0f - (2 * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         light_gray_hex},
-                        {{-1.0f,
-                          1.0f - (2 * vulkan_context.cell_height) /
-                                     physical_height * 2.0f},
-                         light_gray_hex},
+                        {{0, 2}, red_hex},
+                        {{input_cmd_context.viewport_cols, 2}, red_hex},
+                        {{input_cmd_context.viewport_cols, 3}, red_hex},
+                        {{0, 3}, red_hex},
                     };
                     uint16_t status_bar_quads_indices[18] = {0,
                                                              1,
@@ -1342,16 +1253,16 @@ void* war_window_render(void* args) {
                     };
                     vkCmdSetScissor(
                         vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
-                    push_constants status_bar_pc = {
-                        .zoom = input_cmd_context.zoom_scale,
+                    quad_push_constants status_bar_pc = {
                         .pan = {0.0f, 0.0f},
-                        .padding = 0.0f,
+                        .viewport_size = {physical_width, physical_height},
+                        .zoom = input_cmd_context.zoom_scale,
                     };
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
-                                       sizeof(push_constants),
+                                       sizeof(quad_push_constants),
                                        &status_bar_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
                     //---------------------------------------------------------
@@ -1539,7 +1450,23 @@ void* war_window_render(void* args) {
                                          vulkan_context.sdf_index_buffer,
                                          0,
                                          VK_INDEX_TYPE_UINT16);
-                    push_constants ui_pc = {
+                    VkViewport status_text_viewport = {
+                        .x = 0.0f,
+                        .y = 0.0f,
+                        .width = (float)physical_width,
+                        .height = (float)physical_height,
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    };
+                    vkCmdSetViewport(
+                        vulkan_context.cmd_buffer, 0, 1, &status_text_viewport);
+                    VkRect2D status_text_scissor = {
+                        .offset = {0, 0},
+                        .extent = {physical_width, physical_height},
+                    };
+                    vkCmdSetScissor(
+                        vulkan_context.cmd_buffer, 0, 1, &status_text_scissor);
+                    push_constants status_text_pc = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {0.0f, 0.0f},
                         .padding = 0.0f,
@@ -1549,7 +1476,7 @@ void* war_window_render(void* args) {
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
                                        sizeof(push_constants),
-                                       &ui_pc);
+                                       &status_text_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                      6 * sdf_status_text_max_chars,
                                      1,
@@ -1637,8 +1564,6 @@ void* war_window_render(void* args) {
                                                0.0f,
                                                {0, 0, 0, 0},
                                                light_gray_hex};
-                            uint16_t vertex_offset =
-                                4 * sdf_status_text_max_chars;
                             line_number_indices[line_index_index + 0] =
                                 line_vertex_index + 0;
                             line_number_indices[line_index_index + 1] =
@@ -1693,30 +1618,35 @@ void* war_window_render(void* args) {
                                          sizeof(uint16_t) * 6 *
                                              sdf_status_text_max_chars,
                                          VK_INDEX_TYPE_UINT16);
-                    push_constants ui_pc_line_numbers = {
+                    VkViewport line_numbers_viewport = {
+                        .x = 0.0f,
+                        .y = 0.0f,
+                        .width = (float)physical_width,
+                        .height = (float)physical_height,
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    };
+                    vkCmdSetViewport(vulkan_context.cmd_buffer,
+                                     0,
+                                     1,
+                                     &line_numbers_viewport);
+                    VkRect2D line_numbers_scissor = {
+                        .offset = {0, 0},
+                        .extent = {0.0f, 0.0f},
+                    };
+                    vkCmdSetScissor(
+                        vulkan_context.cmd_buffer, 0, 1, &line_numbers_scissor);
+                    push_constants line_numbers_pc = {
                         .zoom = input_cmd_context.zoom_scale,
                         .pan = {0.0f, input_cmd_context.panning_y},
                         .padding = 0.0f,
                     };
-                    VkRect2D line_numbers_scissor = {
-                        .offset = {0, 0},
-                        .extent =
-                            {
-                                input_cmd_context.viewport_cols *
-                                    input_cmd_context.cell_width,
-                                physical_height -
-                                    input_cmd_context.num_rows_for_status_bars *
-                                        input_cmd_context.cell_height,
-                            },
-                    };
-                    vkCmdSetScissor(
-                        vulkan_context.cmd_buffer, 0, 1, &line_numbers_scissor);
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.sdf_pipeline_layout,
                                        VK_SHADER_STAGE_VERTEX_BIT,
                                        0,
                                        sizeof(push_constants),
-                                       &ui_pc_line_numbers);
+                                       &line_numbers_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                      6 * total_digits,
                                      1,

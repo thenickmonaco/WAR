@@ -31,8 +31,8 @@ layout(location = 0) out vec4 color;
 
 // Push constants for zoom, pan, and viewport size in pixels
 layout(push_constant) uniform PushConstants {
-    layout(offset = 0)   vec2 pan;
-    layout(offset = 8)  vec2 viewport_size;
+    layout(offset = 0) vec2 pan;
+    layout(offset = 8) vec2 viewport_size;
     layout(offset = 16) vec2 cell_size;
     layout(offset = 24) float zoom;
     layout(offset = 28) int _pad1;

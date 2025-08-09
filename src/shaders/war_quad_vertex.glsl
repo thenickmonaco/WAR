@@ -24,38 +24,37 @@
 
 #version 450
 
-layout(location = 0) in vec2 in_pos;   // in pixels or cell units
+layout(location = 0) in uvec2 in_pos;   // in pixels or cell units
 layout(location = 1) in vec4 in_color;
 
 layout(location = 0) out vec4 color;
 
 // Push constants for zoom, pan, and viewport size in pixels
 layout(push_constant) uniform PushConstants {
-    layout(offset = 0) vec2 pan;
-    layout(offset = 8) vec2 viewport_size;
+    layout(offset = 0) uvec2 bottom_left;
+    layout(offset = 8) vec2 physical_size;
     layout(offset = 16) vec2 cell_size;
     layout(offset = 24) float zoom;
-    layout(offset = 28) int _pad1;
-    layout(offset = 32) ivec2 cell_offsets;
+    layout(offset = 28) uint _pad1;
+    layout(offset = 32) uvec2 cell_offsets;
+    layout(offset = 40) uvec2 scroll_margin; 
+    layout(offset = 48) uvec2 anchor_cell;
+    layout(offset = 56) uvec2 top_right;
+    // 64 bytes
 } pc;
 
 void main() {
-    // convert from cell coordinates to pixels
-    vec2 pixel_pos = in_pos * pc.cell_size; 
+    uvec2 local_cell = (in_pos - pc.bottom_left) + pc.cell_offsets;
 
-    // apply cell-based offsets (convert offsets to pixels, then add)
-    pixel_pos = pixel_pos + (vec2(pc.cell_offsets) * pc.cell_size);
+    vec2 pixel_pos = vec2(float(local_cell.x), float(local_cell.y)) * pc.cell_size;
 
-    // Apply zoom and pan in pixel/cell space
-    vec2 zoomed = pixel_pos * pc.zoom;
-    vec2 translated = zoomed + pc.pan;
+    vec2 anchor_pixel = vec2(float(pc.anchor_cell.x - pc.bottom_left.x), float(pc.anchor_cell.y - pc.bottom_left.y)) * pc.cell_size;
 
-    // Convert from pixel coords to normalized device coords (NDC)
-    // Vulkan NDC x: -1 (left) to 1 (right)
-    // Vulkan NDC y: -1 (bottom) to 1 (top)
+    vec2 zoomed = ((pixel_pos - anchor_pixel) * pc.zoom) + anchor_pixel;
+
     vec2 ndc = vec2(
-        (translated.x) / pc.viewport_size.x * 2.0 - 1.0,
-        1.0 - (translated.y) * 2.0 / pc.viewport_size.y
+        (zoomed.x / pc.physical_size.x) * 2.0 - 1.0,
+        1.0 - (zoomed.y / pc.physical_size.y) * 2.0
     );
 
     gl_Position = vec4(ndc, 0.0, 1.0);

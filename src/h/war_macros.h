@@ -104,252 +104,124 @@ static inline void write_le16(uint8_t* p, uint16_t v) {
     p[1] = (uint8_t)(v >> 8);
 }
 
+static inline uint32_t clamp_add_uint32(uint32_t a, uint32_t b) {
+    uint64_t sum = (uint64_t)a + b;
+    // create mask: 0 if no overflow, all 1s if overflow
+    uint64_t mask = -(sum > UINT32_MAX);
+    return (uint32_t)((sum & ~mask) | (UINT32_MAX & mask));
+}
+
+static inline uint32_t clamp_subtract_uint32(uint32_t a, uint32_t b) {
+    uint32_t diff = a - b;
+    uint32_t mask = -(a >= b);
+    return diff & mask;
+}
+
+static inline uint32_t clamp_multiply_uint32(uint32_t a, uint32_t b) {
+    uint64_t prod = (uint64_t)a * (uint64_t)b;
+    return (prod > UINT32_MAX) ? UINT32_MAX : (uint32_t)prod;
+}
+
 static inline void cmd_increment_row(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->row_increment;
     if (ctx->numeric_prefix) {
-        ctx->row += ctx->row_increment * ctx->numeric_prefix;
-        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
-                            ctx->scroll_margin_rows -
-                            ctx->num_rows_for_status_bars) {
-            ctx->bottom_row += ctx->row_increment * ctx->numeric_prefix;
-            ctx->panning_y -=
-                ctx->cell_height * ctx->row_increment * ctx->numeric_prefix;
-        }
-    } else {
-        ctx->row += ctx->row_increment;
-        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
-                            ctx->scroll_margin_rows -
-                            ctx->num_rows_for_status_bars) {
-            ctx->bottom_row += ctx->row_increment;
-            ctx->panning_y -= ctx->cell_height * ctx->row_increment;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->row = clamp_add_uint32(ctx->row, increment);
+    if (ctx->row > ctx->top_row - ctx->scroll_margin_rows) {
+        ctx->bottom_row = clamp_add_uint32(ctx->bottom_row, increment);
+        ctx->top_row = clamp_add_uint32(ctx->top_row, increment);
     }
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->row_increment;
     if (ctx->numeric_prefix) {
-        if (ctx->row <= ctx->row_increment * ctx->numeric_prefix) {
-            ctx->row = 0;
-            ctx->panning_y =
-                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
-                ctx->physical_height;
-            ctx->bottom_row = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->row -= ctx->row_increment * ctx->numeric_prefix;
-        if (ctx->row < ctx->bottom_row) {
-            ctx->bottom_row -= ctx->row_increment * ctx->numeric_prefix;
-            ctx->panning_y -= (2.0f * ctx->cell_height * ctx->row_increment *
-                               ctx->numeric_prefix) /
-                              ctx->physical_height;
-        }
-    } else {
-        if (ctx->row <= ctx->row_increment) {
-            ctx->row = 0;
-            ctx->panning_y =
-                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
-                ctx->physical_height;
-            ctx->bottom_row = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->row -= ctx->row_increment;
-        if (ctx->row < ctx->bottom_row) {
-            ctx->bottom_row -= ctx->row_increment;
-            ctx->panning_y -= (2.0f * ctx->cell_height * ctx->row_increment) /
-                              ctx->physical_height;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->row = clamp_subtract_uint32(ctx->row, increment);
+    if (ctx->row < ctx->bottom_row + ctx->scroll_margin_rows) {
+        ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, increment);
+        ctx->top_row = clamp_subtract_uint32(ctx->top_row, increment);
     }
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_increment_col(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->col_increment;
     if (ctx->numeric_prefix) {
-        ctx->col += ctx->col_increment * ctx->numeric_prefix;
-        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
-                            ctx->scroll_margin_cols -
-                            ctx->num_cols_for_line_numbers) {
-            ctx->left_col += ctx->col_increment * ctx->numeric_prefix;
-            ctx->panning_x -= (2.0f * ctx->cell_width * ctx->col_increment *
-                               ctx->numeric_prefix) /
-                              ctx->physical_width;
-        }
-    } else {
-        ctx->col += ctx->col_increment;
-        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
-                            ctx->scroll_margin_cols -
-                            ctx->num_cols_for_line_numbers) {
-            ctx->left_col += ctx->col_increment;
-            ctx->panning_x -= (2.0f * ctx->cell_width * ctx->col_increment) /
-                              ctx->physical_width;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->col = clamp_add_uint32(ctx->col, increment);
+    if (ctx->col > ctx->right_col - ctx->scroll_margin_cols) {
+        ctx->left_col = clamp_add_uint32(ctx->left_col, increment);
+        ctx->right_col = clamp_add_uint32(ctx->right_col, increment);
     }
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->col_increment;
     if (ctx->numeric_prefix) {
-        if (ctx->col <= ctx->col_increment * ctx->numeric_prefix) {
-            ctx->col = 0;
-            ctx->panning_x =
-                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
-                ctx->physical_width;
-            ctx->left_col = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->col -= ctx->col_increment * ctx->numeric_prefix;
-        if (ctx->col < ctx->left_col) {
-            ctx->left_col -= ctx->col_increment * ctx->numeric_prefix;
-            ctx->panning_x += (2.0f * ctx->cell_width * ctx->col_increment *
-                               ctx->numeric_prefix) /
-                              ctx->physical_width;
-        }
-    } else {
-        if (ctx->col <= ctx->col_increment) {
-            ctx->col = 0;
-            ctx->panning_x =
-                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
-                ctx->physical_width;
-            ctx->left_col = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->col -= ctx->col_increment;
-        if (ctx->col < ctx->left_col) {
-            ctx->left_col -= ctx->col_increment;
-            ctx->panning_x += (2.0f * ctx->cell_width * ctx->col_increment) /
-                              ctx->physical_width;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->col = clamp_subtract_uint32(ctx->col, increment);
+    if (ctx->col < ctx->left_col + ctx->scroll_margin_cols) {
+        ctx->left_col = clamp_subtract_uint32(ctx->left_col, increment);
+        ctx->right_col = clamp_subtract_uint32(ctx->right_col, increment);
     }
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->row_leap_increment;
     if (ctx->numeric_prefix) {
-        ctx->row += ctx->row_leap_increment * ctx->numeric_prefix;
-        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
-                            ctx->scroll_margin_rows -
-                            ctx->num_rows_for_status_bars) {
-            ctx->bottom_row += ctx->row_leap_increment * ctx->numeric_prefix;
-            ctx->panning_y += (2.0f * ctx->cell_height *
-                               ctx->row_leap_increment * ctx->numeric_prefix) /
-                              ctx->physical_height;
-        }
-    } else {
-        ctx->row += ctx->row_leap_increment;
-        if (ctx->row >= ctx->bottom_row + ctx->viewport_rows -
-                            ctx->scroll_margin_rows -
-                            ctx->num_rows_for_status_bars) {
-            ctx->bottom_row += ctx->row_leap_increment;
-            ctx->panning_y +=
-                (2.0f * ctx->cell_height * ctx->row_leap_increment) /
-                ctx->physical_height;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->row = clamp_add_uint32(ctx->row, increment);
+    if (ctx->row > ctx->top_row - ctx->scroll_margin_rows) {
+        ctx->bottom_row = clamp_add_uint32(ctx->bottom_row, increment);
+        ctx->top_row = clamp_add_uint32(ctx->top_row, increment);
     }
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->row_leap_increment;
     if (ctx->numeric_prefix) {
-        if (ctx->row <= ctx->row_leap_increment * ctx->numeric_prefix) {
-            ctx->row = 0;
-            ctx->panning_y =
-                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
-                ctx->physical_height;
-            ctx->bottom_row = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->row -= ctx->row_leap_increment * ctx->numeric_prefix;
-        if (ctx->row < ctx->bottom_row) {
-            ctx->bottom_row -= ctx->row_leap_increment * ctx->numeric_prefix;
-            ctx->panning_y -= (2.0f * ctx->cell_height *
-                               ctx->row_leap_increment * ctx->numeric_prefix) /
-                              ctx->physical_height;
-        }
-    } else {
-        if (ctx->row <= ctx->row_leap_increment) {
-            ctx->row = 0;
-            ctx->panning_y =
-                -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
-                ctx->physical_height;
-            ctx->bottom_row = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->row -= ctx->row_leap_increment;
-        if (ctx->row < ctx->bottom_row) {
-            ctx->bottom_row -= ctx->row_leap_increment;
-            ctx->panning_y -=
-                (2.0f * ctx->cell_height * ctx->row_leap_increment) /
-                ctx->physical_height;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->row = clamp_subtract_uint32(ctx->row, increment);
+    if (ctx->row < ctx->bottom_row + ctx->scroll_margin_rows) {
+        ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, increment);
+        ctx->top_row = clamp_subtract_uint32(ctx->top_row, increment);
     }
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->col_leap_increment;
     if (ctx->numeric_prefix) {
-        ctx->col += ctx->col_leap_increment * ctx->numeric_prefix;
-        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
-                            ctx->scroll_margin_cols -
-                            ctx->num_cols_for_line_numbers) {
-            ctx->left_col += ctx->col_leap_increment * ctx->numeric_prefix;
-            ctx->panning_x -= (2.0f * ctx->cell_width *
-                               ctx->col_leap_increment * ctx->numeric_prefix) /
-                              ctx->physical_width;
-        }
-    } else {
-        ctx->col += ctx->col_leap_increment;
-        if (ctx->col >= ctx->left_col + ctx->viewport_cols -
-                            ctx->scroll_margin_cols -
-                            ctx->num_cols_for_line_numbers) {
-            ctx->left_col += ctx->col_leap_increment;
-            ctx->panning_x -=
-                (2.0f * ctx->cell_width * ctx->col_leap_increment) /
-                ctx->physical_width;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->col = clamp_add_uint32(ctx->col, increment);
+    if (ctx->col > ctx->right_col - ctx->scroll_margin_cols) {
+        ctx->left_col = clamp_add_uint32(ctx->left_col, increment);
+        ctx->right_col = clamp_add_uint32(ctx->right_col, increment);
     }
     ctx->numeric_prefix = 0;
 }
 
 static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
+    uint32_t increment = ctx->col_leap_increment;
     if (ctx->numeric_prefix) {
-        if (ctx->col <= ctx->col_leap_increment * ctx->numeric_prefix) {
-            ctx->col = 0;
-            ctx->panning_x =
-                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
-                ctx->physical_width;
-            ctx->left_col = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->col -= ctx->col_leap_increment * ctx->numeric_prefix;
-        if (ctx->col < ctx->left_col) {
-            ctx->left_col -= ctx->col_leap_increment * ctx->numeric_prefix;
-            ctx->panning_x += (2.0f * ctx->cell_width *
-                               ctx->col_leap_increment * ctx->numeric_prefix) /
-                              ctx->physical_width;
-        }
-    } else {
-        if (ctx->col <= ctx->col_leap_increment) {
-            ctx->col = 0;
-            ctx->panning_x =
-                (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
-                ctx->physical_width;
-            ctx->left_col = 0;
-            ctx->numeric_prefix = 0;
-            return;
-        }
-        ctx->col -= ctx->col_leap_increment;
-        if (ctx->col < ctx->left_col) {
-            ctx->left_col -= ctx->col_leap_increment;
-            ctx->panning_x +=
-                (2.0f * ctx->cell_width * ctx->col_leap_increment) /
-                ctx->physical_width;
-        }
+        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
+    }
+    ctx->col = clamp_subtract_uint32(ctx->col, increment);
+    if (ctx->col < ctx->left_col + ctx->scroll_margin_cols) {
+        ctx->left_col = clamp_subtract_uint32(ctx->left_col, increment);
+        ctx->right_col = clamp_subtract_uint32(ctx->right_col, increment);
     }
     ctx->numeric_prefix = 0;
 }
@@ -379,8 +251,7 @@ static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = 0;
         return;
     }
-    ctx->row = ctx->bottom_row + ctx->viewport_rows -
-               ctx->num_rows_for_status_bars - 1;
+    ctx->row = ctx->top_row;
     ctx->numeric_prefix = 0;
 }
 
@@ -390,8 +261,7 @@ static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
         ctx->numeric_prefix = 0;
         return;
     }
-    ctx->col =
-        ctx->left_col + ctx->viewport_cols - ctx->num_cols_for_line_numbers - 1;
+    ctx->col = ctx->right_col;
     ctx->numeric_prefix = 0;
 }
 
@@ -432,31 +302,31 @@ static inline void cmd_append_9_to_numeric_prefix(war_input_cmd_context* ctx) {
 }
 
 static inline void cmd_zoom_in(war_input_cmd_context* ctx) {
-    ctx->zoom_scale += ctx->zoom_increment;
-    if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
-    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+    // ctx->zoom_scale += ctx->zoom_increment;
+    // if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
+    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
 }
 
 static inline void cmd_zoom_out(war_input_cmd_context* ctx) {
-    ctx->zoom_scale -= ctx->zoom_increment;
-    if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
-    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+    // ctx->zoom_scale -= ctx->zoom_increment;
+    // if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
+    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
 }
 
 static inline void cmd_zoom_in_leap(war_input_cmd_context* ctx) {
-    ctx->zoom_scale += ctx->zoom_leap_increment;
-    if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
-    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+    // ctx->zoom_scale += ctx->zoom_leap_increment;
+    // if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
+    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
 }
 
 static inline void cmd_zoom_out_leap(war_input_cmd_context* ctx) {
-    ctx->zoom_scale -= ctx->zoom_leap_increment;
-    if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
-    ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
+    // ctx->zoom_scale -= ctx->zoom_leap_increment;
+    // if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
+    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
+    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
 }
 
 static inline void cmd_reset_zoom(war_input_cmd_context* ctx) {
@@ -468,6 +338,16 @@ static inline void cmd_reset_zoom(war_input_cmd_context* ctx) {
         ctx->physical_height;
     ctx->left_col = 0;
     ctx->bottom_row = 0;
+    ctx->right_col =
+        (uint32_t)((ctx->physical_width -
+                    ((float)ctx->num_cols_for_line_numbers * ctx->cell_width)) /
+                   ctx->cell_width) -
+        1;
+    ctx->top_row =
+        (uint32_t)((ctx->physical_height -
+                    ((float)ctx->num_rows_for_status_bars * ctx->cell_height)) /
+                   ctx->cell_height) -
+        1;
 }
 
 static inline void cmd_escape(war_input_cmd_context* ctx) {

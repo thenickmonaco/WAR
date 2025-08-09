@@ -108,8 +108,8 @@ void* war_window_render(void* args) {
     const uint32_t logical_height =
         (uint32_t)floor(physical_height / scale_factor);
 
-    uint8_t num_rows_for_status_bars = 3;
-    uint8_t num_cols_for_line_numbers = 3;
+    uint32_t num_rows_for_status_bars = 3;
+    uint32_t num_cols_for_line_numbers = 3;
     war_input_cmd_context input_cmd_context = {
         .col = 0,
         .row = 0,
@@ -121,6 +121,16 @@ void* war_window_render(void* args) {
         .fourth_gridline_split = UNSET,
         .left_col = 0,
         .bottom_row = 0,
+        .right_col =
+            (uint32_t)((physical_width - ((float)num_cols_for_line_numbers *
+                                          vulkan_context.cell_width)) /
+                       vulkan_context.cell_width) -
+            1,
+        .top_row =
+            (uint32_t)((physical_height - ((float)num_rows_for_status_bars *
+                                           vulkan_context.cell_height)) /
+                       vulkan_context.cell_height) -
+            1,
         .col_increment = 1,
         .row_increment = 1,
         .col_leap_increment = 13,
@@ -139,8 +149,9 @@ void* war_window_render(void* args) {
         .anchor_y = 0.0f,
         .anchor_ndc_x = 0.0f,
         .anchor_ndc_y = 0.0f,
-        .viewport_cols = (int)(physical_width / vulkan_context.cell_width),
-        .viewport_rows = (int)(physical_height / vulkan_context.cell_height),
+        .viewport_cols = (uint32_t)(physical_width / vulkan_context.cell_width),
+        .viewport_rows =
+            (uint32_t)(physical_height / vulkan_context.cell_height),
         .scroll_margin_cols = 0, // cols from visible min/max col
         .scroll_margin_rows = 0, // rows from visible min/max row
         .cell_width = vulkan_context.cell_width,
@@ -149,6 +160,8 @@ void* war_window_render(void* args) {
         .physical_height = physical_height,
         .logical_width = logical_width,
         .logical_height = logical_height,
+        .max_cols = UINT32_MAX,
+        .max_rows = UINT32_MAX,
     };
 
     war_key_event input_sequence_ring_buffer[ring_buffer_size];
@@ -1041,10 +1054,13 @@ void* war_window_render(void* args) {
                     //     vulkan_context.cmd_buffer, 0, 1, &gridline_scissor);
                     // quad_push_constants gridline_pc = {
                     //     .zoom = input_cmd_context.zoom_scale,
-                    //     .pan = {input_cmd_context.panning_x,
-                    //             input_cmd_context.panning_y},
-                    //     .viewport_size = {physical_width, physical_height},
+                    //     .bottom_left = {0,
+                    //             0},
+                    //     .physical_size = {physical_width, physical_height},
                     //     .padding = 0.0f,
+                    //     .scroll_margin =
+                    //     {input_cmd_context.scroll_margin_cols,
+                    //     input_cmd_context.scroll_margin_rows},
                     // };
                     // vkCmdPushConstants(vulkan_context.cmd_buffer,
                     //                    vulkan_context.pipeline_layout,
@@ -1068,13 +1084,17 @@ void* war_window_render(void* args) {
                     //---------------------------------------------------------
                     quad_vertex cursor_quad_verts[4] = {
                         {{input_cmd_context.col, input_cmd_context.row},
-                         red_hex},
+                         red_hex,
+                         0},
                         {{input_cmd_context.col + 1, input_cmd_context.row},
-                         red_hex},
+                         red_hex,
+                         0},
                         {{input_cmd_context.col + 1, input_cmd_context.row + 1},
-                         red_hex},
+                         red_hex,
+                         0},
                         {{input_cmd_context.col, input_cmd_context.row + 1},
-                         red_hex},
+                         red_hex,
+                         0},
                     };
                     uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
                     void* cursor_vertex_data;
@@ -1122,22 +1142,27 @@ void* war_window_render(void* args) {
                     vkCmdSetViewport(
                         vulkan_context.cmd_buffer, 0, 1, &cursor_viewport);
                     VkRect2D cursor_scissor = {
-                        .offset = {input_cmd_context.panning_x,
-                                   input_cmd_context.panning_y},
+                        .offset = {0, 0},
                         .extent = {physical_width, physical_height},
                     };
                     vkCmdSetScissor(
                         vulkan_context.cmd_buffer, 0, 1, &cursor_scissor);
                     quad_push_constants cursor_pc = {
-                        .pan = {input_cmd_context.panning_x,
-                                input_cmd_context.panning_y},
-                        .viewport_size = {physical_width, physical_height},
+                        .bottom_left = {input_cmd_context.left_col,
+                                        input_cmd_context.bottom_row},
+                        .physical_size = {physical_width, physical_height},
                         .cell_size = {input_cmd_context.cell_width,
                                       input_cmd_context.cell_height},
                         .zoom = input_cmd_context.zoom_scale,
                         .cell_offsets =
                             {input_cmd_context.num_cols_for_line_numbers,
                              input_cmd_context.num_rows_for_status_bars},
+                        .scroll_margin = {input_cmd_context.scroll_margin_cols,
+                                          input_cmd_context.scroll_margin_rows},
+                        .anchor_cell = {input_cmd_context.col,
+                                        input_cmd_context.row},
+                        .top_right = {input_cmd_context.top_row,
+                                      input_cmd_context.right_col},
                     };
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.pipeline_layout,
@@ -1149,122 +1174,124 @@ void* war_window_render(void* args) {
                     //---------------------------------------------------------
                     // STATUS BARS
                     //---------------------------------------------------------
-                    quad_vertex tmux_status_bar_verts[4] = {
-                        {{0, 0}, red_hex},
-                        {{input_cmd_context.viewport_cols, 0}, red_hex},
-                        {{input_cmd_context.viewport_cols, 1}, red_hex},
-                        {{0, 1}, red_hex},
-                    };
-                    quad_vertex vim_mode_status_bar_verts[4] = {
-                        {{0, 1}, red_hex},
-                        {{input_cmd_context.viewport_cols, 1}, red_hex},
-                        {{input_cmd_context.viewport_cols, 2}, red_hex},
-                        {{0, 2}, red_hex},
-                    };
-                    quad_vertex vim_status_bar_verts[4] = {
-                        {{0, 2}, red_hex},
-                        {{input_cmd_context.viewport_cols, 2}, red_hex},
-                        {{input_cmd_context.viewport_cols, 3}, red_hex},
-                        {{0, 3}, red_hex},
-                    };
-                    uint16_t status_bar_quads_indices[18] = {0,
-                                                             1,
-                                                             2,
-                                                             2,
-                                                             3,
-                                                             0,
-                                                             4,
-                                                             5,
-                                                             6,
-                                                             6,
-                                                             7,
-                                                             4,
-                                                             8,
-                                                             9,
-                                                             10,
-                                                             10,
-                                                             11,
-                                                             8};
-                    void* status_bar_vertex_data;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.quads_vertex_buffer_memory,
-                                sizeof(cursor_quad_verts) +
-                                    sizeof(quad_vertex) * 4 *
-                                        num_gridline_quads,
-                                sizeof(tmux_status_bar_verts) +
-                                    sizeof(vim_mode_status_bar_verts) +
-                                    sizeof(vim_status_bar_verts),
-                                0,
-                                &status_bar_vertex_data);
-                    memcpy(status_bar_vertex_data,
-                           tmux_status_bar_verts,
-                           sizeof(tmux_status_bar_verts));
-                    memcpy(status_bar_vertex_data +
-                               sizeof(tmux_status_bar_verts),
-                           vim_mode_status_bar_verts,
-                           sizeof(vim_mode_status_bar_verts));
-                    memcpy(status_bar_vertex_data +
-                               sizeof(tmux_status_bar_verts) +
-                               sizeof(vim_mode_status_bar_verts),
-                           vim_status_bar_verts,
-                           sizeof(vim_status_bar_verts));
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.quads_vertex_buffer_memory);
-                    void* status_bar_index_data;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.quads_index_buffer_memory,
-                                sizeof(cursor_quad_indices) +
-                                    sizeof(uint16_t) * 6 * num_gridline_quads,
-                                sizeof(status_bar_quads_indices),
-                                0,
-                                &status_bar_index_data);
-                    memcpy(status_bar_index_data,
-                           status_bar_quads_indices,
-                           sizeof(status_bar_quads_indices));
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.quads_index_buffer_memory);
-                    VkDeviceSize status_bar_vert_offsets[] = {
-                        sizeof(cursor_quad_verts) +
-                        4 * sizeof(quad_vertex) * num_gridline_quads};
-                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                                           0,
-                                           1,
-                                           &vulkan_context.quads_vertex_buffer,
-                                           status_bar_vert_offsets);
-                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                                         vulkan_context.quads_index_buffer,
-                                         sizeof(cursor_quad_indices) +
-                                             6 * sizeof(uint16_t) *
-                                                 num_gridline_quads,
-                                         VK_INDEX_TYPE_UINT16);
-                    VkViewport status_bar_viewport = {
-                        .x = 0.0f,
-                        .y = 0.0f,
-                        .width = (float)physical_width,
-                        .height = (float)physical_height,
-                        .minDepth = 0.0f,
-                        .maxDepth = 1.0f,
-                    };
-                    vkCmdSetViewport(
-                        vulkan_context.cmd_buffer, 0, 1, &status_bar_viewport);
-                    VkRect2D status_bar_scissor = {
-                        .offset = {0, 0},
-                        .extent = {physical_width, physical_height},
-                    };
-                    vkCmdSetScissor(
-                        vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
-                    quad_push_constants status_bar_pc = {
-                        .pan = {0.0f, 0.0f},
-                        .viewport_size = {physical_width, physical_height},
-                        .zoom = input_cmd_context.zoom_scale,
-                    };
-                    vkCmdPushConstants(vulkan_context.cmd_buffer,
-                                       vulkan_context.pipeline_layout,
-                                       VK_SHADER_STAGE_VERTEX_BIT,
-                                       0,
-                                       sizeof(quad_push_constants),
-                                       &status_bar_pc);
-                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
+                    // quad_vertex tmux_status_bar_verts[4] = {
+                    //    {{0, 0}, red_hex},
+                    //    {{input_cmd_context.viewport_cols, 0}, red_hex},
+                    //    {{input_cmd_context.viewport_cols, 1}, red_hex},
+                    //    {{0, 1}, red_hex},
+                    //};
+                    // quad_vertex vim_mode_status_bar_verts[4] = {
+                    //    {{0, 1}, red_hex},
+                    //    {{input_cmd_context.viewport_cols, 1}, red_hex},
+                    //    {{input_cmd_context.viewport_cols, 2}, red_hex},
+                    //    {{0, 2}, red_hex},
+                    //};
+                    // quad_vertex vim_status_bar_verts[4] = {
+                    //    {{0, 2}, red_hex},
+                    //    {{input_cmd_context.viewport_cols, 2}, red_hex},
+                    //    {{input_cmd_context.viewport_cols, 3}, red_hex},
+                    //    {{0, 3}, red_hex},
+                    //};
+                    // uint16_t status_bar_quads_indices[18] = {0,
+                    //                                         1,
+                    //                                         2,
+                    //                                         2,
+                    //                                         3,
+                    //                                         0,
+                    //                                         4,
+                    //                                         5,
+                    //                                         6,
+                    //                                         6,
+                    //                                         7,
+                    //                                         4,
+                    //                                         8,
+                    //                                         9,
+                    //                                         10,
+                    //                                         10,
+                    //                                         11,
+                    //                                         8};
+                    // void* status_bar_vertex_data;
+                    // vkMapMemory(vulkan_context.device,
+                    //            vulkan_context.quads_vertex_buffer_memory,
+                    //            sizeof(cursor_quad_verts) +
+                    //                sizeof(quad_vertex) * 4 *
+                    //                    num_gridline_quads,
+                    //            sizeof(tmux_status_bar_verts) +
+                    //                sizeof(vim_mode_status_bar_verts) +
+                    //                sizeof(vim_status_bar_verts),
+                    //            0,
+                    //            &status_bar_vertex_data);
+                    // memcpy(status_bar_vertex_data,
+                    //       tmux_status_bar_verts,
+                    //       sizeof(tmux_status_bar_verts));
+                    // memcpy(status_bar_vertex_data +
+                    //           sizeof(tmux_status_bar_verts),
+                    //       vim_mode_status_bar_verts,
+                    //       sizeof(vim_mode_status_bar_verts));
+                    // memcpy(status_bar_vertex_data +
+                    //           sizeof(tmux_status_bar_verts) +
+                    //           sizeof(vim_mode_status_bar_verts),
+                    //       vim_status_bar_verts,
+                    //       sizeof(vim_status_bar_verts));
+                    // vkUnmapMemory(vulkan_context.device,
+                    //              vulkan_context.quads_vertex_buffer_memory);
+                    // void* status_bar_index_data;
+                    // vkMapMemory(vulkan_context.device,
+                    //            vulkan_context.quads_index_buffer_memory,
+                    //            sizeof(cursor_quad_indices) +
+                    //                sizeof(uint16_t) * 6 * num_gridline_quads,
+                    //            sizeof(status_bar_quads_indices),
+                    //            0,
+                    //            &status_bar_index_data);
+                    // memcpy(status_bar_index_data,
+                    //       status_bar_quads_indices,
+                    //       sizeof(status_bar_quads_indices));
+                    // vkUnmapMemory(vulkan_context.device,
+                    //              vulkan_context.quads_index_buffer_memory);
+                    // VkDeviceSize status_bar_vert_offsets[] = {
+                    //    sizeof(cursor_quad_verts) +
+                    //    4 * sizeof(quad_vertex) * num_gridline_quads};
+                    // vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                    //                       0,
+                    //                       1,
+                    //                       &vulkan_context.quads_vertex_buffer,
+                    //                       status_bar_vert_offsets);
+                    // vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                    //                     vulkan_context.quads_index_buffer,
+                    //                     sizeof(cursor_quad_indices) +
+                    //                         6 * sizeof(uint16_t) *
+                    //                             num_gridline_quads,
+                    //                     VK_INDEX_TYPE_UINT16);
+                    // VkViewport status_bar_viewport = {
+                    //    .x = 0.0f,
+                    //    .y = 0.0f,
+                    //    .width = (float)physical_width,
+                    //    .height = (float)physical_height,
+                    //    .minDepth = 0.0f,
+                    //    .maxDepth = 1.0f,
+                    //};
+                    // vkCmdSetViewport(
+                    //    vulkan_context.cmd_buffer, 0, 1,
+                    //    &status_bar_viewport);
+                    // VkRect2D status_bar_scissor = {
+                    //    .offset = {0, 0},
+                    //    .extent = {physical_width, physical_height},
+                    //};
+                    // vkCmdSetScissor(
+                    //    vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
+                    // quad_push_constants status_bar_pc = {
+                    //    .bottom_left = {0, 0},
+                    //    .physical_size = {physical_width, physical_height},
+                    //    .zoom = input_cmd_context.zoom_scale,
+                    //};
+                    // vkCmdPushConstants(vulkan_context.cmd_buffer,
+                    //                   vulkan_context.pipeline_layout,
+                    //                   VK_SHADER_STAGE_VERTEX_BIT,
+                    //                   0,
+                    //                   sizeof(quad_push_constants),
+                    //                   &status_bar_pc);
+                    // vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0,
+                    // 0);
                     //---------------------------------------------------------
                     // STATUS BARS TEXT
                     //---------------------------------------------------------

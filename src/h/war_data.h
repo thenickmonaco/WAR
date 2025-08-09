@@ -131,6 +131,8 @@ typedef struct war_input_cmd_context {
     float fourth_gridline_split;
     uint32_t left_col;
     uint32_t bottom_row;
+    uint32_t right_col;
+    uint32_t top_row;
     uint32_t col_increment;
     uint32_t row_increment;
     uint32_t col_leap_increment;
@@ -159,8 +161,8 @@ typedef struct war_input_cmd_context {
     float physical_height;
     float logical_width;
     float logical_height;
-    uint8_t num_rows_for_status_bars;
-    uint8_t num_cols_for_line_numbers;
+    uint32_t num_rows_for_status_bars;
+    uint32_t num_cols_for_line_numbers;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -197,8 +199,9 @@ typedef struct sdf_vertex {
 } sdf_vertex_t;
 
 typedef struct quad_vertex {
-    float pos[2];
+    int pos[2];
     uint32_t color;
+    int _pad1;
 } quad_vertex;
 
 typedef struct push_constants {
@@ -209,12 +212,15 @@ typedef struct push_constants {
 } push_constants;
 
 typedef struct quad_push_constants {
-    float pan[2];
-    float viewport_size[2];
+    uint32_t bottom_left[2];
+    float physical_size[2];
     float cell_size[2];
     float zoom;
-    int _pad1; // 40 bytes total
-    int cell_offsets[2];
+    uint32_t _pad1;
+    uint32_t cell_offsets[2];
+    uint32_t scroll_margin[2];
+    uint32_t anchor_cell[2];
+    uint32_t top_right[2];
 } quad_push_constants;
 
 typedef struct war_vulkan_context {

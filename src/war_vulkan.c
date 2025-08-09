@@ -431,7 +431,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkPushConstantRange push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = 40,
+        .size = sizeof(quad_push_constants),
     };
     VkPipelineLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -448,19 +448,19 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     VkVertexInputBindingDescription binding = {
         .binding = 0,
-        .stride = 12,
+        .stride = sizeof(quad_vertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
     VkVertexInputAttributeDescription attrs[] = {
         {.location = 0,
          .binding = 0,
-         .format = VK_FORMAT_R32G32_SFLOAT,
-         .offset = 0},
+         .format = VK_FORMAT_R32G32_SINT,
+         .offset = offsetof(quad_vertex, pos)},
         {
             .location = 1,
             .binding = 0,
             .format = VK_FORMAT_R8G8B8A8_UNORM,
-            .offset = sizeof(float) * 2,
+            .offset = offsetof(quad_vertex, color),
         },
     };
     VkPipelineVertexInputStateCreateInfo vertex_input = {
@@ -597,7 +597,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkCreateFence(device, &fence_info, NULL, &in_flight_fence);
     VkBufferCreateInfo quads_vertex_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = max_quads * 4 * (sizeof(float) * 4 + sizeof(uint32_t)),
+        .size = max_quads * sizeof(quad_vertex) * 4,
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };

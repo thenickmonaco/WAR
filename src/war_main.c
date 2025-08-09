@@ -162,6 +162,8 @@ void* war_window_render(void* args) {
         .logical_height = logical_height,
         .max_cols = UINT32_MAX,
         .max_rows = UINT32_MAX,
+        .min_cols = 0,
+        .min_rows = 0,
     };
 
     war_key_event input_sequence_ring_buffer[ring_buffer_size];
@@ -1174,124 +1176,138 @@ void* war_window_render(void* args) {
                     //---------------------------------------------------------
                     // STATUS BARS
                     //---------------------------------------------------------
-                    // quad_vertex tmux_status_bar_verts[4] = {
-                    //    {{0, 0}, red_hex},
-                    //    {{input_cmd_context.viewport_cols, 0}, red_hex},
-                    //    {{input_cmd_context.viewport_cols, 1}, red_hex},
-                    //    {{0, 1}, red_hex},
-                    //};
-                    // quad_vertex vim_mode_status_bar_verts[4] = {
-                    //    {{0, 1}, red_hex},
-                    //    {{input_cmd_context.viewport_cols, 1}, red_hex},
-                    //    {{input_cmd_context.viewport_cols, 2}, red_hex},
-                    //    {{0, 2}, red_hex},
-                    //};
-                    // quad_vertex vim_status_bar_verts[4] = {
-                    //    {{0, 2}, red_hex},
-                    //    {{input_cmd_context.viewport_cols, 2}, red_hex},
-                    //    {{input_cmd_context.viewport_cols, 3}, red_hex},
-                    //    {{0, 3}, red_hex},
-                    //};
-                    // uint16_t status_bar_quads_indices[18] = {0,
-                    //                                         1,
-                    //                                         2,
-                    //                                         2,
-                    //                                         3,
-                    //                                         0,
-                    //                                         4,
-                    //                                         5,
-                    //                                         6,
-                    //                                         6,
-                    //                                         7,
-                    //                                         4,
-                    //                                         8,
-                    //                                         9,
-                    //                                         10,
-                    //                                         10,
-                    //                                         11,
-                    //                                         8};
-                    // void* status_bar_vertex_data;
-                    // vkMapMemory(vulkan_context.device,
-                    //            vulkan_context.quads_vertex_buffer_memory,
-                    //            sizeof(cursor_quad_verts) +
-                    //                sizeof(quad_vertex) * 4 *
-                    //                    num_gridline_quads,
-                    //            sizeof(tmux_status_bar_verts) +
-                    //                sizeof(vim_mode_status_bar_verts) +
-                    //                sizeof(vim_status_bar_verts),
-                    //            0,
-                    //            &status_bar_vertex_data);
-                    // memcpy(status_bar_vertex_data,
-                    //       tmux_status_bar_verts,
-                    //       sizeof(tmux_status_bar_verts));
-                    // memcpy(status_bar_vertex_data +
-                    //           sizeof(tmux_status_bar_verts),
-                    //       vim_mode_status_bar_verts,
-                    //       sizeof(vim_mode_status_bar_verts));
-                    // memcpy(status_bar_vertex_data +
-                    //           sizeof(tmux_status_bar_verts) +
-                    //           sizeof(vim_mode_status_bar_verts),
-                    //       vim_status_bar_verts,
-                    //       sizeof(vim_status_bar_verts));
-                    // vkUnmapMemory(vulkan_context.device,
-                    //              vulkan_context.quads_vertex_buffer_memory);
-                    // void* status_bar_index_data;
-                    // vkMapMemory(vulkan_context.device,
-                    //            vulkan_context.quads_index_buffer_memory,
-                    //            sizeof(cursor_quad_indices) +
-                    //                sizeof(uint16_t) * 6 * num_gridline_quads,
-                    //            sizeof(status_bar_quads_indices),
-                    //            0,
-                    //            &status_bar_index_data);
-                    // memcpy(status_bar_index_data,
-                    //       status_bar_quads_indices,
-                    //       sizeof(status_bar_quads_indices));
-                    // vkUnmapMemory(vulkan_context.device,
-                    //              vulkan_context.quads_index_buffer_memory);
-                    // VkDeviceSize status_bar_vert_offsets[] = {
-                    //    sizeof(cursor_quad_verts) +
-                    //    4 * sizeof(quad_vertex) * num_gridline_quads};
-                    // vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                    //                       0,
-                    //                       1,
-                    //                       &vulkan_context.quads_vertex_buffer,
-                    //                       status_bar_vert_offsets);
-                    // vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                    //                     vulkan_context.quads_index_buffer,
-                    //                     sizeof(cursor_quad_indices) +
-                    //                         6 * sizeof(uint16_t) *
-                    //                             num_gridline_quads,
-                    //                     VK_INDEX_TYPE_UINT16);
-                    // VkViewport status_bar_viewport = {
-                    //    .x = 0.0f,
-                    //    .y = 0.0f,
-                    //    .width = (float)physical_width,
-                    //    .height = (float)physical_height,
-                    //    .minDepth = 0.0f,
-                    //    .maxDepth = 1.0f,
-                    //};
-                    // vkCmdSetViewport(
-                    //    vulkan_context.cmd_buffer, 0, 1,
-                    //    &status_bar_viewport);
-                    // VkRect2D status_bar_scissor = {
-                    //    .offset = {0, 0},
-                    //    .extent = {physical_width, physical_height},
-                    //};
-                    // vkCmdSetScissor(
-                    //    vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
-                    // quad_push_constants status_bar_pc = {
-                    //    .bottom_left = {0, 0},
-                    //    .physical_size = {physical_width, physical_height},
-                    //    .zoom = input_cmd_context.zoom_scale,
-                    //};
-                    // vkCmdPushConstants(vulkan_context.cmd_buffer,
-                    //                   vulkan_context.pipeline_layout,
-                    //                   VK_SHADER_STAGE_VERTEX_BIT,
-                    //                   0,
-                    //                   sizeof(quad_push_constants),
-                    //                   &status_bar_pc);
-                    // vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0,
-                    // 0);
+                    quad_vertex tmux_status_bar_verts[4] = {
+                        {{0, 0}, red_hex, 0},
+                        {{input_cmd_context.viewport_cols, 0}, red_hex, 0},
+                        {{input_cmd_context.viewport_cols, 1}, red_hex, 0},
+                        {{0, 1}, red_hex, 0},
+                    };
+                    quad_vertex vim_mode_status_bar_verts[4] = {
+                        {{0, 1}, dark_gray_hex, 0},
+                        {{input_cmd_context.viewport_cols, 1},
+                         dark_gray_hex,
+                         0},
+                        {{input_cmd_context.viewport_cols, 2},
+                         dark_gray_hex,
+                         0},
+                        {{0, 2}, dark_gray_hex, 0},
+                    };
+                    quad_vertex vim_status_bar_verts[4] = {
+                        {{0, 2}, light_gray_hex, 0},
+                        {{input_cmd_context.viewport_cols, 2},
+                         light_gray_hex,
+                         0},
+                        {{input_cmd_context.viewport_cols, 3},
+                         light_gray_hex,
+                         0},
+                        {{0, 3}, light_gray_hex, 0},
+                    };
+                    uint16_t status_bar_quads_indices[18] = {0,
+                                                             1,
+                                                             2,
+                                                             2,
+                                                             3,
+                                                             0,
+                                                             4,
+                                                             5,
+                                                             6,
+                                                             6,
+                                                             7,
+                                                             4,
+                                                             8,
+                                                             9,
+                                                             10,
+                                                             10,
+                                                             11,
+                                                             8};
+                    void* status_bar_vertex_data;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_vertex_buffer_memory,
+                                sizeof(cursor_quad_verts) +
+                                    sizeof(quad_vertex) * 4 *
+                                        num_gridline_quads,
+                                sizeof(tmux_status_bar_verts) +
+                                    sizeof(vim_mode_status_bar_verts) +
+                                    sizeof(vim_status_bar_verts),
+                                0,
+                                &status_bar_vertex_data);
+                    memcpy(status_bar_vertex_data,
+                           tmux_status_bar_verts,
+                           sizeof(tmux_status_bar_verts));
+                    memcpy(status_bar_vertex_data +
+                               sizeof(tmux_status_bar_verts),
+                           vim_mode_status_bar_verts,
+                           sizeof(vim_mode_status_bar_verts));
+                    memcpy(status_bar_vertex_data +
+                               sizeof(tmux_status_bar_verts) +
+                               sizeof(vim_mode_status_bar_verts),
+                           vim_status_bar_verts,
+                           sizeof(vim_status_bar_verts));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_vertex_buffer_memory);
+                    void* status_bar_index_data;
+                    vkMapMemory(vulkan_context.device,
+                                vulkan_context.quads_index_buffer_memory,
+                                sizeof(cursor_quad_indices) +
+                                    sizeof(uint16_t) * 6 * num_gridline_quads,
+                                sizeof(status_bar_quads_indices),
+                                0,
+                                &status_bar_index_data);
+                    memcpy(status_bar_index_data,
+                           status_bar_quads_indices,
+                           sizeof(status_bar_quads_indices));
+                    vkUnmapMemory(vulkan_context.device,
+                                  vulkan_context.quads_index_buffer_memory);
+                    VkDeviceSize status_bar_vert_offsets[] = {
+                        sizeof(cursor_quad_verts) +
+                        4 * sizeof(quad_vertex) * num_gridline_quads};
+                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                           0,
+                                           1,
+                                           &vulkan_context.quads_vertex_buffer,
+                                           status_bar_vert_offsets);
+                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                         vulkan_context.quads_index_buffer,
+                                         sizeof(cursor_quad_indices) +
+                                             6 * sizeof(uint16_t) *
+                                                 num_gridline_quads,
+                                         VK_INDEX_TYPE_UINT16);
+                    VkViewport status_bar_viewport = {
+                        .x = 0.0f,
+                        .y = 0.0f,
+                        .width = (float)physical_width,
+                        .height = (float)physical_height,
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    };
+                    vkCmdSetViewport(
+                        vulkan_context.cmd_buffer, 0, 1, &status_bar_viewport);
+                    VkRect2D status_bar_scissor = {
+                        .offset = {0, 0},
+                        .extent = {physical_width, physical_height},
+                    };
+                    vkCmdSetScissor(
+                        vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
+                    quad_push_constants status_bar_pc = {
+                        .bottom_left = {0, 0},
+                        .physical_size = {physical_width, physical_height},
+                        .cell_size = {input_cmd_context.cell_width,
+                                      input_cmd_context.cell_height},
+                        .zoom = input_cmd_context.zoom_scale,
+                        .cell_offsets = {0, 0},
+                        .scroll_margin = {input_cmd_context.scroll_margin_cols,
+                                          input_cmd_context.scroll_margin_rows},
+                        .anchor_cell = {0, 0},
+                        .top_right = {input_cmd_context.viewport_cols,
+                                      input_cmd_context.viewport_rows},
+                    };
+                    vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                       vulkan_context.pipeline_layout,
+                                       VK_SHADER_STAGE_VERTEX_BIT,
+                                       0,
+                                       sizeof(quad_push_constants),
+                                       &status_bar_pc);
+                    vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
                     //---------------------------------------------------------
                     // STATUS BARS TEXT
                     //---------------------------------------------------------

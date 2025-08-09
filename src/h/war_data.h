@@ -140,6 +140,8 @@ typedef struct war_input_cmd_context {
     uint32_t numeric_prefix;
     uint32_t max_cols;
     uint32_t max_rows;
+    uint32_t min_cols;
+    uint32_t min_rows;
     float cursor_x;
     float cursor_y;
     float zoom_scale;

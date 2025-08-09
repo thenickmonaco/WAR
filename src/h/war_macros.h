@@ -122,6 +122,14 @@ static inline uint32_t clamp_multiply_uint32(uint32_t a, uint32_t b) {
     return (prod > UINT32_MAX) ? UINT32_MAX : (uint32_t)prod;
 }
 
+static inline uint32_t clamp_to_uint32_max(uint64_t val) {
+    return (val > UINT32_MAX) ? UINT32_MAX : (uint32_t)val;
+}
+
+static inline uint32_t abs_diff_uint32(uint32_t a, uint32_t b) {
+    return (a > b) ? (a - b) : (b - a);
+}
+
 static inline void cmd_increment_row(war_input_cmd_context* ctx) {
     uint32_t increment = ctx->row_increment;
     if (ctx->numeric_prefix) {
@@ -129,8 +137,14 @@ static inline void cmd_increment_row(war_input_cmd_context* ctx) {
     }
     ctx->row = clamp_add_uint32(ctx->row, increment);
     if (ctx->row > ctx->top_row - ctx->scroll_margin_rows) {
+        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
         ctx->bottom_row = clamp_add_uint32(ctx->bottom_row, increment);
         ctx->top_row = clamp_add_uint32(ctx->top_row, increment);
+        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
+        if (new_viewport_height < viewport_height) {
+            uint32_t diff = viewport_height - new_viewport_height;
+            ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -142,8 +156,14 @@ static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
     }
     ctx->row = clamp_subtract_uint32(ctx->row, increment);
     if (ctx->row < ctx->bottom_row + ctx->scroll_margin_rows) {
+        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
         ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, increment);
         ctx->top_row = clamp_subtract_uint32(ctx->top_row, increment);
+        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
+        if (new_viewport_height < viewport_height) {
+            uint32_t diff = viewport_height - new_viewport_height;
+            ctx->top_row = clamp_add_uint32(ctx->top_row, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -155,8 +175,14 @@ static inline void cmd_increment_col(war_input_cmd_context* ctx) {
     }
     ctx->col = clamp_add_uint32(ctx->col, increment);
     if (ctx->col > ctx->right_col - ctx->scroll_margin_cols) {
+        uint32_t viewport_width = ctx->right_col - ctx->left_col;
         ctx->left_col = clamp_add_uint32(ctx->left_col, increment);
         ctx->right_col = clamp_add_uint32(ctx->right_col, increment);
+        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
+        if (new_viewport_width < viewport_width) {
+            uint32_t diff = viewport_width - new_viewport_width;
+            ctx->left_col = clamp_subtract_uint32(ctx->left_col, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -168,8 +194,14 @@ static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
     }
     ctx->col = clamp_subtract_uint32(ctx->col, increment);
     if (ctx->col < ctx->left_col + ctx->scroll_margin_cols) {
+        uint32_t viewport_width = ctx->right_col - ctx->left_col;
         ctx->left_col = clamp_subtract_uint32(ctx->left_col, increment);
         ctx->right_col = clamp_subtract_uint32(ctx->right_col, increment);
+        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
+        if (new_viewport_width < viewport_width) {
+            uint32_t diff = viewport_width - new_viewport_width;
+            ctx->right_col = clamp_add_uint32(ctx->right_col, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -181,8 +213,14 @@ static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
     }
     ctx->row = clamp_add_uint32(ctx->row, increment);
     if (ctx->row > ctx->top_row - ctx->scroll_margin_rows) {
+        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
         ctx->bottom_row = clamp_add_uint32(ctx->bottom_row, increment);
         ctx->top_row = clamp_add_uint32(ctx->top_row, increment);
+        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
+        if (new_viewport_height < viewport_height) {
+            uint32_t diff = viewport_height - new_viewport_height;
+            ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -194,8 +232,14 @@ static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
     }
     ctx->row = clamp_subtract_uint32(ctx->row, increment);
     if (ctx->row < ctx->bottom_row + ctx->scroll_margin_rows) {
+        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
         ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, increment);
         ctx->top_row = clamp_subtract_uint32(ctx->top_row, increment);
+        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
+        if (new_viewport_height < viewport_height) {
+            uint32_t diff = viewport_height - new_viewport_height;
+            ctx->top_row = clamp_add_uint32(ctx->top_row, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -207,8 +251,14 @@ static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
     }
     ctx->col = clamp_add_uint32(ctx->col, increment);
     if (ctx->col > ctx->right_col - ctx->scroll_margin_cols) {
+        uint32_t viewport_width = ctx->right_col - ctx->left_col;
         ctx->left_col = clamp_add_uint32(ctx->left_col, increment);
         ctx->right_col = clamp_add_uint32(ctx->right_col, increment);
+        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
+        if (new_viewport_width < viewport_width) {
+            uint32_t diff = viewport_width - new_viewport_width;
+            ctx->left_col = clamp_subtract_uint32(ctx->left_col, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -220,8 +270,14 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
     }
     ctx->col = clamp_subtract_uint32(ctx->col, increment);
     if (ctx->col < ctx->left_col + ctx->scroll_margin_cols) {
+        uint32_t viewport_width = ctx->right_col - ctx->left_col;
         ctx->left_col = clamp_subtract_uint32(ctx->left_col, increment);
         ctx->right_col = clamp_subtract_uint32(ctx->right_col, increment);
+        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
+        if (new_viewport_width < viewport_width) {
+            uint32_t diff = viewport_width - new_viewport_width;
+            ctx->right_col = clamp_add_uint32(ctx->right_col, diff);
+        }
     }
     ctx->numeric_prefix = 0;
 }
@@ -229,6 +285,22 @@ static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
 static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->row = ctx->numeric_prefix;
+        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
+        uint32_t distance = viewport_height / 2;
+        ctx->bottom_row = clamp_subtract_uint32(ctx->row, distance);
+        ctx->top_row = clamp_add_uint32(ctx->row, distance);
+        uint32_t new_viewport_height =
+            clamp_subtract_uint32(ctx->top_row, ctx->bottom_row);
+        if (new_viewport_height < viewport_height) {
+            uint32_t diff =
+                clamp_subtract_uint32(viewport_height, new_viewport_height);
+            uint32_t sum = clamp_add_uint32(ctx->top_row, diff);
+            if (sum < UINT32_MAX) {
+                ctx->top_row = sum;
+            } else {
+                ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
+            }
+        }
         ctx->numeric_prefix = 0;
         return;
     }
@@ -248,6 +320,22 @@ static inline void cmd_goto_left_col(war_input_cmd_context* ctx) {
 static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->row = ctx->numeric_prefix;
+        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
+        uint32_t distance = viewport_height / 2;
+        ctx->bottom_row = clamp_subtract_uint32(ctx->row, distance);
+        ctx->top_row = clamp_add_uint32(ctx->row, distance);
+        uint32_t new_viewport_height =
+            clamp_subtract_uint32(ctx->top_row, ctx->bottom_row);
+        if (new_viewport_height < viewport_height) {
+            uint32_t diff =
+                clamp_subtract_uint32(viewport_height, new_viewport_height);
+            uint32_t sum = clamp_add_uint32(ctx->top_row, diff);
+            if (sum < UINT32_MAX) {
+                ctx->top_row = sum;
+            } else {
+                ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
+            }
+        }
         ctx->numeric_prefix = 0;
         return;
     }
@@ -258,6 +346,22 @@ static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
 static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
     if (ctx->numeric_prefix) {
         ctx->col = ctx->numeric_prefix;
+        uint32_t viewport_width = ctx->right_col - ctx->left_col;
+        uint32_t distance = viewport_width / 2;
+        ctx->left_col = clamp_subtract_uint32(ctx->col, distance);
+        ctx->right_col = clamp_add_uint32(ctx->col, distance);
+        uint32_t new_viewport_width =
+            clamp_subtract_uint32(ctx->right_col, ctx->left_col);
+        if (new_viewport_width < viewport_width) {
+            uint32_t diff =
+                clamp_subtract_uint32(viewport_width, new_viewport_width);
+            uint32_t sum = clamp_add_uint32(ctx->right_col, diff);
+            if (sum < UINT32_MAX) {
+                ctx->right_col = sum;
+            } else {
+                ctx->left_col = clamp_subtract_uint32(ctx->left_col, diff);
+            }
+        }
         ctx->numeric_prefix = 0;
         return;
     }
@@ -266,39 +370,48 @@ static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
 }
 
 static inline void cmd_append_1_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 1;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 1);
 }
 
 static inline void cmd_append_2_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 2;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 2);
 }
 
 static inline void cmd_append_3_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 3;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 3);
 }
 
 static inline void cmd_append_4_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 4;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 4);
 }
 
 static inline void cmd_append_5_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 5;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 5);
 }
 
 static inline void cmd_append_6_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 6;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 6);
 }
 
 static inline void cmd_append_7_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 7;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 7);
 }
 
 static inline void cmd_append_8_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 8;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 8);
 }
 
 static inline void cmd_append_9_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = ctx->numeric_prefix * 10 + 9;
+    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
+    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 9);
 }
 
 static inline void cmd_zoom_in(war_input_cmd_context* ctx) {

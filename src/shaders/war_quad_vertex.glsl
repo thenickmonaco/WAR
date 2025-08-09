@@ -45,18 +45,13 @@ layout(push_constant) uniform PushConstants {
 
 void main() {
     uvec2 local_cell = (in_pos - pc.bottom_left) + pc.cell_offsets;
-
     vec2 pixel_pos = vec2(float(local_cell.x), float(local_cell.y)) * pc.cell_size;
-
-    vec2 anchor_pixel = vec2(float(pc.anchor_cell.x - pc.bottom_left.x), float(pc.anchor_cell.y - pc.bottom_left.y)) * pc.cell_size;
-
+    vec2 anchor_pixel = vec2(float(pc.anchor_cell.x - pc.bottom_left.x + pc.cell_offsets.x), float(pc.anchor_cell.y - pc.bottom_left.y + pc.cell_offsets.y)) * pc.cell_size;
     vec2 zoomed = ((pixel_pos - anchor_pixel) * pc.zoom) + anchor_pixel;
-
     vec2 ndc = vec2(
         (zoomed.x / pc.physical_size.x) * 2.0 - 1.0,
         1.0 - (zoomed.y / pc.physical_size.y) * 2.0
     );
-
     gl_Position = vec4(ndc, 0.0, 1.0);
     color = in_color;
 }

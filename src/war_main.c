@@ -1310,7 +1310,7 @@ void* war_window_render(void* args) {
                     char cursor_text[64];
                     snprintf(cursor_text,
                              sizeof(cursor_text),
-                             "R: %d  C: %d",
+                             "R: %u  C: %u",
                              input_cmd_context.row,
                              input_cmd_context.col);
                     struct {

@@ -203,12 +203,12 @@ typedef struct war_glyph_info {
 } war_glyph_info;
 
 typedef struct sdf_vertex {
-    float pos[2];    // NDC position
-    float uv[2];     // UVs (0-1)
-    float thickness; // SDF edge width
-    float feather;   // SDF soft edge amount
-    float padding[4];
+    uint32_t pos[2];
+    float uv[2];
+    float thickness;
+    float feather;
     uint32_t color;
+    uint32_t _pad1;
 } sdf_vertex_t;
 
 typedef struct quad_vertex {

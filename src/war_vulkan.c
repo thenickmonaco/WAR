@@ -1182,7 +1182,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkPushConstantRange sdf_push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = 20,
+        .size = sizeof(quad_push_constants),
     };
     VkPipelineLayoutCreateInfo sdf_pipeline_layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1308,12 +1308,12 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
     VkVertexInputAttributeDescription sdf_vertex_attribute_descs[] = {
-        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, pos)},    // 0
-        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},     // 8
-        {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)}, // 16
-        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},   // 20
+        {0, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex_t, pos)},
+        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},
+        {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)},
+        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},
         {4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex_t, color)},
-    }; // 40;
+    };
     VkPipelineVertexInputStateCreateInfo sdf_vertex_input_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 1,

@@ -211,15 +211,11 @@ void* war_window_render(void* args) {
         ARGB8888 = 0,
     };
 
-    uint8_t quads_buffer[sizeof(float) * max_quads * 4 +
-                         sizeof(float) * max_quads * 4 +
-                         sizeof(uint32_t) * max_quads * 4 +
-                         sizeof(uint16_t) * max_quads * 6];
-    float* quads_x = (float*)quads_buffer;
-    float* quads_y = (float*)(quads_x + max_quads * 4);
-    uint32_t* quads_colors = (uint32_t*)(quads_y + max_quads * 4);
-    uint16_t* quads_indices = (uint16_t*)(quads_colors + max_quads * 4);
-    uint16_t quads_count = 0;
+    uint32_t quads_x[max_quads * 4];
+    uint32_t quads_y[max_quads * 4];
+    uint32_t quads_color[max_quads * 4];
+    uint32_t quads_index[max_quads * 6];
+    size_t quads_count = 0;
 
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
@@ -1415,28 +1411,6 @@ void* war_window_render(void* args) {
                                msg_buffer + msg_buffer_offset,
                                size);
 #if DMABUF
-                    float cursor_center_x_px = (input_cmd_context.col + 0.5f) *
-                                               vulkan_context.cell_width;
-                    float cursor_center_y_px = (input_cmd_context.row + 0.5f) *
-                                               vulkan_context.cell_height;
-                    input_cmd_context.anchor_ndc_x =
-                        (cursor_center_x_px / physical_width) * 2.0f - 1.0f;
-                    input_cmd_context.anchor_ndc_y =
-                        1.0f - (cursor_center_y_px / physical_height) * 2.0f;
-                    input_cmd_context.anchor_x =
-                        (input_cmd_context.anchor_ndc_x -
-                         input_cmd_context.panning_x) /
-                        input_cmd_context.zoom_scale;
-                    input_cmd_context.anchor_y =
-                        (input_cmd_context.anchor_ndc_y -
-                         input_cmd_context.panning_y) /
-                        input_cmd_context.zoom_scale;
-                    input_cmd_context.viewport_cols =
-                        (int)(physical_width / (vulkan_context.cell_width *
-                                                input_cmd_context.zoom_scale));
-                    input_cmd_context.viewport_rows =
-                        (int)(physical_height / (vulkan_context.cell_height *
-                                                 input_cmd_context.zoom_scale));
                     const uint32_t light_gray_hex = 0xFF454950;
                     const uint32_t darker_light_gray_hex =
                         0xFF36383C; // gutter / line numbers
@@ -1479,7 +1453,7 @@ void* war_window_render(void* args) {
                                          &render_pass_info,
                                          VK_SUBPASS_CONTENTS_INLINE);
                     //----------------------------------------------------------
-                    // GRIDLINES
+                    // TODO: GRIDLINES
                     //----------------------------------------------------------
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1782,22 +1756,6 @@ void* war_window_render(void* args) {
                                              6 * sizeof(uint16_t) *
                                                  num_gridline_quads,
                                          VK_INDEX_TYPE_UINT16);
-                    VkViewport status_bar_viewport = {
-                        .x = 0.0f,
-                        .y = 0.0f,
-                        .width = (float)physical_width,
-                        .height = (float)physical_height,
-                        .minDepth = 0.0f,
-                        .maxDepth = 1.0f,
-                    };
-                    vkCmdSetViewport(
-                        vulkan_context.cmd_buffer, 0, 1, &status_bar_viewport);
-                    VkRect2D status_bar_scissor = {
-                        .offset = {0, 0},
-                        .extent = {physical_width, physical_height},
-                    };
-                    vkCmdSetScissor(
-                        vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
                     quad_push_constants status_bar_pc = {
                         .bottom_left = {0, 0},
                         .physical_size = {physical_width, physical_height},
@@ -1819,233 +1777,9 @@ void* war_window_render(void* args) {
                                        &status_bar_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
                     //---------------------------------------------------------
-                    // STATUS BARS TEXT
+                    // TODO: STATUS BARS TEXT
                     //---------------------------------------------------------
-                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      vulkan_context.sdf_pipeline);
-                    vkCmdBindDescriptorSets(vulkan_context.cmd_buffer,
-                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                            vulkan_context.sdf_pipeline_layout,
-                                            0,
-                                            1,
-                                            &vulkan_context.font_descriptor_set,
-                                            0,
-                                            NULL);
-                    const char* war_text = "WAR";
-                    char cursor_text[64];
-                    snprintf(cursor_text,
-                             sizeof(cursor_text),
-                             "R: %u  C: %u",
-                             input_cmd_context.row,
-                             input_cmd_context.col);
-                    struct {
-                        const char* text;
-                        uint32_t row;
-                    } ui_labels[] = {
-                        {cursor_text, 2},
-                        {war_text, 0},
-                    };
-                    const float ndc_cell_width =
-                        2.0f / input_cmd_context.viewport_cols;
-                    const float ndc_cell_height =
-                        2.0f / input_cmd_context.viewport_rows;
-                    size_t sdf_status_text_max_chars = 0;
-                    for (int i = 0; i < 2; ++i)
-                        sdf_status_text_max_chars += strlen(ui_labels[i].text);
-                    sdf_vertex_t* status_text_quads = malloc(
-                        sizeof(sdf_vertex_t) * 4 * sdf_status_text_max_chars);
-                    uint16_t* status_text_indices = malloc(
-                        sizeof(uint16_t) * 6 * sdf_status_text_max_chars);
-                    uint32_t vertex_index = 0, index_index = 0;
-                    for (int label_i = 0; label_i < 2; ++label_i) {
-                        const char* text = ui_labels[label_i].text;
-                        uint32_t row = ui_labels[label_i].row;
-                        float ndc_x = -1.0f; // col = 0
-                        float ndc_y = 1.0f - row * ndc_cell_height;
-                        float cursor_x_local = ndc_x;
-                        for (size_t i = 0; i < strlen(text); ++i) {
-                            char c = text[i];
-                            war_glyph_info glyph =
-                                vulkan_context.glyphs[(uint8_t)c];
-                            float glyph_ndc_width =
-                                (glyph.width / input_cmd_context.cell_width) *
-                                ndc_cell_width;
-                            float glyph_ndc_height =
-                                (glyph.height / input_cmd_context.cell_height) *
-                                ndc_cell_height;
-                            float bearing_x_ndc =
-                                (glyph.bearing_x /
-                                 input_cmd_context.cell_width) *
-                                ndc_cell_width;
-                            bool is_lowercase = (c >= 'a' && c <= 'z');
-                            float vertical_offset =
-                                is_lowercase ? ndc_cell_height * 0.1f : 0.0f;
-                            float quad_left = cursor_x_local + bearing_x_ndc;
-                            float quad_right = quad_left + glyph_ndc_width;
-                            float center_y = (ndc_y - ndc_cell_height / 2.0f) +
-                                             vertical_offset;
-                            float quad_top = center_y + glyph_ndc_height / 2.0f;
-                            float quad_bottom =
-                                center_y - glyph_ndc_height / 2.0f;
-                            if (row == 0) {
-                                status_text_quads[vertex_index + 0] =
-                                    (sdf_vertex_t){{quad_left, quad_top},
-                                                   {glyph.uv_x0, glyph.uv_y1},
-                                                   0.0f,
-                                                   0.0f,
-                                                   bright_white_hex,
-                                                   0};
-                                status_text_quads[vertex_index + 1] =
-                                    (sdf_vertex_t){{quad_right, quad_top},
-                                                   {glyph.uv_x1, glyph.uv_y1},
-                                                   0.0f,
-                                                   0.0f,
-                                                   bright_white_hex,
-                                                   0};
-                                status_text_quads[vertex_index + 2] =
-                                    (sdf_vertex_t){{quad_right, quad_bottom},
-                                                   {glyph.uv_x1, glyph.uv_y0},
-                                                   0.0f,
-                                                   0.0f,
-                                                   bright_white_hex,
-                                                   0};
-                                status_text_quads[vertex_index + 3] =
-                                    (sdf_vertex_t){{quad_left, quad_bottom},
-                                                   {glyph.uv_x0, glyph.uv_y0},
-                                                   0.0f,
-                                                   0.0f,
-                                                   bright_white_hex,
-                                                   0};
-                            } else {
-                                status_text_quads[vertex_index + 0] =
-                                    (sdf_vertex_t){{quad_left, quad_top},
-                                                   {glyph.uv_x0, glyph.uv_y1},
-                                                   0.0f,
-                                                   0.0f,
-                                                   white_hex,
-                                                   0};
-                                status_text_quads[vertex_index + 1] =
-                                    (sdf_vertex_t){{quad_right, quad_top},
-                                                   {glyph.uv_x1, glyph.uv_y1},
-                                                   0.0f,
-                                                   0.0f,
-                                                   white_hex,
-                                                   0};
-                                status_text_quads[vertex_index + 2] =
-                                    (sdf_vertex_t){{quad_right, quad_bottom},
-                                                   {glyph.uv_x1, glyph.uv_y0},
-                                                   0.0f,
-                                                   0.0f,
-                                                   white_hex,
-                                                   0};
-                                status_text_quads[vertex_index + 3] =
-                                    (sdf_vertex_t){{quad_left, quad_bottom},
-                                                   {glyph.uv_x0, glyph.uv_y0},
-                                                   0.0f,
-                                                   0.0f,
-                                                   white_hex,
-                                                   0};
-                            }
-                            status_text_indices[index_index + 0] =
-                                vertex_index + 0;
-                            status_text_indices[index_index + 1] =
-                                vertex_index + 1;
-                            status_text_indices[index_index + 2] =
-                                vertex_index + 2;
-                            status_text_indices[index_index + 3] =
-                                vertex_index + 2;
-                            status_text_indices[index_index + 4] =
-                                vertex_index + 3;
-                            status_text_indices[index_index + 5] =
-                                vertex_index + 0;
-                            vertex_index += 4;
-                            index_index += 6;
-                            cursor_x_local += (glyph.advance_x /
-                                               input_cmd_context.cell_width) *
-                                              ndc_cell_width;
-                        }
-                    }
-                    void* sdf_status_text_vertex_ptr;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.sdf_vertex_buffer_memory,
-                                0,
-                                sizeof(sdf_vertex_t) * 4 *
-                                    sdf_status_text_max_chars,
-                                0,
-                                &sdf_status_text_vertex_ptr);
-                    memcpy(sdf_status_text_vertex_ptr,
-                           status_text_quads,
-                           sizeof(sdf_vertex_t) * 4 *
-                               sdf_status_text_max_chars);
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.sdf_vertex_buffer_memory);
-                    VkDeviceSize sdf_status_text_vertex_offsets[] = {0};
-                    vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                                           0,
-                                           1,
-                                           &vulkan_context.sdf_vertex_buffer,
-                                           sdf_status_text_vertex_offsets);
-                    void* sdf_status_text_index_ptr;
-                    vkMapMemory(vulkan_context.device,
-                                vulkan_context.sdf_index_buffer_memory,
-                                0,
-                                sizeof(uint16_t) * 6 *
-                                    sdf_status_text_max_chars,
-                                0,
-                                &sdf_status_text_index_ptr);
-                    memcpy(sdf_status_text_index_ptr,
-                           status_text_indices,
-                           sizeof(uint16_t) * 6 * sdf_status_text_max_chars);
-                    vkUnmapMemory(vulkan_context.device,
-                                  vulkan_context.sdf_index_buffer_memory);
-                    vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                                         vulkan_context.sdf_index_buffer,
-                                         0,
-                                         VK_INDEX_TYPE_UINT16);
-                    VkViewport status_text_viewport = {
-                        .x = 0.0f,
-                        .y = 0.0f,
-                        .width = (float)physical_width,
-                        .height = (float)physical_height,
-                        .minDepth = 0.0f,
-                        .maxDepth = 1.0f,
-                    };
-                    vkCmdSetViewport(
-                        vulkan_context.cmd_buffer, 0, 1, &status_text_viewport);
-                    VkRect2D status_text_scissor = {
-                        .offset = {0, 0},
-                        .extent = {physical_width, physical_height},
-                    };
-                    vkCmdSetScissor(
-                        vulkan_context.cmd_buffer, 0, 1, &status_text_scissor);
-                    quad_push_constants status_text_pc = {
-                        .bottom_left = {0, 0},
-                        .physical_size = {physical_width, physical_height},
-                        .cell_size = {input_cmd_context.cell_width,
-                                      input_cmd_context.cell_height},
-                        .zoom = input_cmd_context.zoom_scale,
-                        .cell_offsets = {0, 0},
-                        .scroll_margin = {input_cmd_context.scroll_margin_cols,
-                                          input_cmd_context.scroll_margin_rows},
-                        .anchor_cell = {0, 0},
-                        .top_right = {input_cmd_context.viewport_cols,
-                                      input_cmd_context.viewport_rows},
-                    };
-                    vkCmdPushConstants(vulkan_context.cmd_buffer,
-                                       vulkan_context.sdf_pipeline_layout,
-                                       VK_SHADER_STAGE_VERTEX_BIT,
-                                       0,
-                                       sizeof(quad_push_constants),
-                                       &status_text_pc);
-                    vkCmdDrawIndexed(vulkan_context.cmd_buffer,
-                                     6 * sdf_status_text_max_chars,
-                                     1,
-                                     0,
-                                     0,
-                                     0);
-                    free(status_text_quads);
-                    free(status_text_indices);
+
                     //---------------------------------------------------------
                     // TODO: LINE NUMBERS
                     //---------------------------------------------------------

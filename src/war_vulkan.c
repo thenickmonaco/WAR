@@ -250,7 +250,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     VkPhysicalDeviceMemoryProperties mem_properties;
     vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_properties);
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     uint32_t memory_type = 0;
     uint8_t found_memory_type = 0;
     call_carmack("Looking for memory type with properties: 0x%x", properties);
@@ -792,6 +793,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pImageInfo = &descriptor_image_info,
     };
     vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, NULL);
+    void* quads_vertex_buffer_mapped;
+    vkMapMemory(device,
+                quads_vertex_buffer_memory,
+                0,
+                sizeof(quad_vertex) * max_quads * 4,
+                0,
+                &quads_vertex_buffer_mapped);
 
     //-------------------------------------------------------------------------
     // SDF FONT RENDERING PIPELINE
@@ -1468,6 +1476,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .texture_sampler = texture_sampler,
         .texture_descriptor_set = descriptor_set,
         .texture_descriptor_pool = descriptor_pool,
+        .quads_vertex_buffer_mapped = quads_vertex_buffer_mapped,
         //---------------------------------------------------------------------
         // SDF PIPELINE
         //---------------------------------------------------------------------

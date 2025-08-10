@@ -104,377 +104,37 @@ static inline void write_le16(uint8_t* p, uint16_t v) {
     p[1] = (uint8_t)(v >> 8);
 }
 
-static inline uint32_t clamp_add_uint32(uint32_t a, uint32_t b) {
+static inline uint32_t
+clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t sum = (uint64_t)a + b;
-    // create mask: 0 if no overflow, all 1s if overflow
-    uint64_t mask = -(sum > UINT32_MAX);
-    return (uint32_t)((sum & ~mask) | (UINT32_MAX & mask));
+    uint64_t mask = -(sum > max_value);
+    return (uint32_t)((sum & ~mask) | ((uint64_t)max_value & mask));
 }
 
-static inline uint32_t clamp_subtract_uint32(uint32_t a, uint32_t b) {
+static inline uint32_t
+clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
     uint32_t diff = a - b;
-    uint32_t mask = -(a >= b);
-    return diff & mask;
+    uint32_t underflow_mask = -(a < b);
+    uint32_t below_min_mask = -(diff < min_value);
+    uint32_t clamped_diff =
+        (diff & ~below_min_mask) | (min_value & below_min_mask);
+    return (clamped_diff & ~underflow_mask) | (min_value & underflow_mask);
 }
 
-static inline uint32_t clamp_multiply_uint32(uint32_t a, uint32_t b) {
+static inline uint32_t
+clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t prod = (uint64_t)a * (uint64_t)b;
-    return (prod > UINT32_MAX) ? UINT32_MAX : (uint32_t)prod;
+    uint64_t mask = -(prod > max_value);
+    return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
 }
 
-static inline uint32_t clamp_to_uint32_max(uint64_t val) {
-    return (val > UINT32_MAX) ? UINT32_MAX : (uint32_t)val;
-}
-
-static inline uint32_t abs_diff_uint32(uint32_t a, uint32_t b) {
-    return (a > b) ? (a - b) : (b - a);
-}
-
-static inline void cmd_increment_row(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->row_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->row = clamp_add_uint32(ctx->row, increment);
-    if (ctx->row > ctx->top_row - ctx->scroll_margin_rows) {
-        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
-        ctx->bottom_row = clamp_add_uint32(ctx->bottom_row, increment);
-        ctx->top_row = clamp_add_uint32(ctx->top_row, increment);
-        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_decrement_row(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->row_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->row = clamp_subtract_uint32(ctx->row, increment);
-    if (ctx->row < ctx->bottom_row + ctx->scroll_margin_rows) {
-        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
-        ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, increment);
-        ctx->top_row = clamp_subtract_uint32(ctx->top_row, increment);
-        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx->top_row = clamp_add_uint32(ctx->top_row, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_increment_col(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->col_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->col = clamp_add_uint32(ctx->col, increment);
-    if (ctx->col > ctx->right_col - ctx->scroll_margin_cols) {
-        uint32_t viewport_width = ctx->right_col - ctx->left_col;
-        ctx->left_col = clamp_add_uint32(ctx->left_col, increment);
-        ctx->right_col = clamp_add_uint32(ctx->right_col, increment);
-        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx->left_col = clamp_subtract_uint32(ctx->left_col, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_decrement_col(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->col_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->col = clamp_subtract_uint32(ctx->col, increment);
-    if (ctx->col < ctx->left_col + ctx->scroll_margin_cols) {
-        uint32_t viewport_width = ctx->right_col - ctx->left_col;
-        ctx->left_col = clamp_subtract_uint32(ctx->left_col, increment);
-        ctx->right_col = clamp_subtract_uint32(ctx->right_col, increment);
-        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx->right_col = clamp_add_uint32(ctx->right_col, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_leap_increment_row(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->row_leap_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->row = clamp_add_uint32(ctx->row, increment);
-    if (ctx->row > ctx->top_row - ctx->scroll_margin_rows) {
-        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
-        ctx->bottom_row = clamp_add_uint32(ctx->bottom_row, increment);
-        ctx->top_row = clamp_add_uint32(ctx->top_row, increment);
-        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_leap_decrement_row(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->row_leap_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->row = clamp_subtract_uint32(ctx->row, increment);
-    if (ctx->row < ctx->bottom_row + ctx->scroll_margin_rows) {
-        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
-        ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, increment);
-        ctx->top_row = clamp_subtract_uint32(ctx->top_row, increment);
-        uint32_t new_viewport_height = ctx->top_row - ctx->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx->top_row = clamp_add_uint32(ctx->top_row, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_leap_increment_col(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->col_leap_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->col = clamp_add_uint32(ctx->col, increment);
-    if (ctx->col > ctx->right_col - ctx->scroll_margin_cols) {
-        uint32_t viewport_width = ctx->right_col - ctx->left_col;
-        ctx->left_col = clamp_add_uint32(ctx->left_col, increment);
-        ctx->right_col = clamp_add_uint32(ctx->right_col, increment);
-        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx->left_col = clamp_subtract_uint32(ctx->left_col, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_leap_decrement_col(war_input_cmd_context* ctx) {
-    uint32_t increment = ctx->col_leap_increment;
-    if (ctx->numeric_prefix) {
-        increment = clamp_multiply_uint32(increment, ctx->numeric_prefix);
-    }
-    ctx->col = clamp_subtract_uint32(ctx->col, increment);
-    if (ctx->col < ctx->left_col + ctx->scroll_margin_cols) {
-        uint32_t viewport_width = ctx->right_col - ctx->left_col;
-        ctx->left_col = clamp_subtract_uint32(ctx->left_col, increment);
-        ctx->right_col = clamp_subtract_uint32(ctx->right_col, increment);
-        uint32_t new_viewport_width = ctx->right_col - ctx->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx->right_col = clamp_add_uint32(ctx->right_col, diff);
-        }
-    }
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_goto_bottom_row(war_input_cmd_context* ctx) {
-    if (ctx->numeric_prefix) {
-        ctx->row = ctx->numeric_prefix;
-        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
-        uint32_t distance = viewport_height / 2;
-        ctx->bottom_row = clamp_subtract_uint32(ctx->row, distance);
-        ctx->top_row = clamp_add_uint32(ctx->row, distance);
-        uint32_t new_viewport_height =
-            clamp_subtract_uint32(ctx->top_row, ctx->bottom_row);
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff =
-                clamp_subtract_uint32(viewport_height, new_viewport_height);
-            uint32_t sum = clamp_add_uint32(ctx->top_row, diff);
-            if (sum < UINT32_MAX) {
-                ctx->top_row = sum;
-            } else {
-                ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
-            }
-        }
-        ctx->numeric_prefix = 0;
-        return;
-    }
-    ctx->row = ctx->bottom_row;
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_goto_left_col(war_input_cmd_context* ctx) {
-    if (ctx->numeric_prefix) {
-        ctx->numeric_prefix = ctx->numeric_prefix * 10;
-        return;
-    }
-    ctx->col = ctx->left_col;
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_goto_top_row(war_input_cmd_context* ctx) {
-    if (ctx->numeric_prefix) {
-        ctx->row = ctx->numeric_prefix;
-        uint32_t viewport_height = ctx->top_row - ctx->bottom_row;
-        uint32_t distance = viewport_height / 2;
-        ctx->bottom_row = clamp_subtract_uint32(ctx->row, distance);
-        ctx->top_row = clamp_add_uint32(ctx->row, distance);
-        uint32_t new_viewport_height =
-            clamp_subtract_uint32(ctx->top_row, ctx->bottom_row);
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff =
-                clamp_subtract_uint32(viewport_height, new_viewport_height);
-            uint32_t sum = clamp_add_uint32(ctx->top_row, diff);
-            if (sum < UINT32_MAX) {
-                ctx->top_row = sum;
-            } else {
-                ctx->bottom_row = clamp_subtract_uint32(ctx->bottom_row, diff);
-            }
-        }
-        ctx->numeric_prefix = 0;
-        return;
-    }
-    ctx->row = ctx->top_row;
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_goto_right_col(war_input_cmd_context* ctx) {
-    if (ctx->numeric_prefix) {
-        ctx->col = ctx->numeric_prefix;
-        uint32_t viewport_width = ctx->right_col - ctx->left_col;
-        uint32_t distance = viewport_width / 2;
-        ctx->left_col = clamp_subtract_uint32(ctx->col, distance);
-        ctx->right_col = clamp_add_uint32(ctx->col, distance);
-        uint32_t new_viewport_width =
-            clamp_subtract_uint32(ctx->right_col, ctx->left_col);
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff =
-                clamp_subtract_uint32(viewport_width, new_viewport_width);
-            uint32_t sum = clamp_add_uint32(ctx->right_col, diff);
-            if (sum < UINT32_MAX) {
-                ctx->right_col = sum;
-            } else {
-                ctx->left_col = clamp_subtract_uint32(ctx->left_col, diff);
-            }
-        }
-        ctx->numeric_prefix = 0;
-        return;
-    }
-    ctx->col = ctx->right_col;
-    ctx->numeric_prefix = 0;
-}
-
-static inline void cmd_append_1_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 1);
-}
-
-static inline void cmd_append_2_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 2);
-}
-
-static inline void cmd_append_3_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 3);
-}
-
-static inline void cmd_append_4_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 4);
-}
-
-static inline void cmd_append_5_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 5);
-}
-
-static inline void cmd_append_6_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 6);
-}
-
-static inline void cmd_append_7_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 7);
-}
-
-static inline void cmd_append_8_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 8);
-}
-
-static inline void cmd_append_9_to_numeric_prefix(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = clamp_multiply_uint32(ctx->numeric_prefix, 10);
-    ctx->numeric_prefix = clamp_add_uint32(ctx->numeric_prefix, 9);
-}
-
-static inline void cmd_zoom_in(war_input_cmd_context* ctx) {
-    // ctx->zoom_scale += ctx->zoom_increment;
-    // if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
-    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
-}
-
-static inline void cmd_zoom_out(war_input_cmd_context* ctx) {
-    // ctx->zoom_scale -= ctx->zoom_increment;
-    // if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
-    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
-}
-
-static inline void cmd_zoom_in_leap(war_input_cmd_context* ctx) {
-    // ctx->zoom_scale += ctx->zoom_leap_increment;
-    // if (ctx->zoom_scale > 5.0f) { ctx->zoom_scale = 5.0f; }
-    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
-}
-
-static inline void cmd_zoom_out_leap(war_input_cmd_context* ctx) {
-    // ctx->zoom_scale -= ctx->zoom_leap_increment;
-    // if (ctx->zoom_scale < 0.1f) { ctx->zoom_scale = 0.1f; }
-    // ctx->panning_x = ctx->anchor_ndc_x - ctx->anchor_x * ctx->zoom_scale;
-    // ctx->panning_y = ctx->anchor_ndc_y - ctx->anchor_y * ctx->zoom_scale;
-}
-
-static inline void cmd_reset_zoom(war_input_cmd_context* ctx) {
-    ctx->zoom_scale = 1.0f;
-    ctx->panning_x = (2.0f * ctx->num_cols_for_line_numbers * ctx->cell_width) /
-                     ctx->physical_width;
-    ctx->panning_y =
-        -(2.0f * ctx->num_rows_for_status_bars * ctx->cell_height) /
-        ctx->physical_height;
-    ctx->left_col = 0;
-    ctx->bottom_row = 0;
-    ctx->right_col =
-        (uint32_t)((ctx->physical_width -
-                    ((float)ctx->num_cols_for_line_numbers * ctx->cell_width)) /
-                   ctx->cell_width) -
-        1;
-    ctx->top_row =
-        (uint32_t)((ctx->physical_height -
-                    ((float)ctx->num_rows_for_status_bars * ctx->cell_height)) /
-                   ctx->cell_height) -
-        1;
-}
-
-static inline void cmd_escape(war_input_cmd_context* ctx) {
-    ctx->numeric_prefix = 0;
-}
-
-// Returns matched command, and sets *out_matched_length
-static inline void (*war_match_sequence_in_trie(war_key_trie_pool* pool,
-                                                war_key_event* input_seq,
-                                                size_t input_len,
-                                                size_t* out_matched_length))(
-    war_input_cmd_context*) {
+static inline void* war_match_sequence_in_trie(war_key_trie_pool* pool,
+                                               war_key_event* input_seq,
+                                               size_t input_len,
+                                               size_t* out_matched_length,
+                                               size_t mode) {
     war_key_trie_node* node = &pool->nodes[0];
-    void (*matched_command)(war_input_cmd_context*) = NULL;
+    void* matched_command = NULL;
     size_t matched_len = 0;
 
     for (size_t len = 0; len < input_len; len++) {
@@ -497,7 +157,7 @@ static inline void (*war_match_sequence_in_trie(war_key_trie_pool* pool,
         node = child;
 
         if (node->is_terminal) {
-            matched_command = (void (*)(war_input_cmd_context*))node->command;
+            matched_command = node->command[mode];
             matched_len = len + 1;
         }
     }

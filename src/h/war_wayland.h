@@ -56,7 +56,7 @@ void war_wayland_wl_surface_frame(int fd,
 war_key_trie_node* war_insert_trie_node(war_key_trie_pool* pool,
                                         war_key_event* key_seq,
                                         size_t key_seq_size,
-                                        void* cmd);
+                                        void* command[MODE_COUNT]);
 
 void war_wayland_holy_trinity(int fd,
                               uint32_t wl_surface_id,

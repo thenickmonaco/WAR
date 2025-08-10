@@ -111,6 +111,7 @@ void* war_window_render(void* args) {
     uint32_t num_rows_for_status_bars = 3;
     uint32_t num_cols_for_line_numbers = 3;
     war_input_cmd_context input_cmd_context = {
+        .mode = MODE_NORMAL,
         .col = 0,
         .row = 0,
         .cursor_size = CURSOR_1_CELL_MULTIPLE,
@@ -177,24 +178,8 @@ void* war_window_render(void* args) {
     uint32_t mod_num;
     uint32_t mod_fn;
 
-    uint32_t numeric_prefix = 0;
-
     char command_buffer[256];
     size_t command_buffer_size;
-
-    enum war_mode {
-        MODE_NORMAL = 0,
-        MODE_VISUAL = 1,
-        MODE_VISUAL_LINE = 2,
-        MODE_VISUAL_BLOCK = 3,
-        MODE_INSERT = 4,
-        MODE_COMMAND = 5,
-        MODE_TERMINAL = 6,
-        MODE_MIDI = 7,
-        MODE_SAMPLE = 8,
-        MODE_RECORD = 9,
-    };
-    uint8_t mode = MODE_NORMAL;
 
     uint8_t oled_toggle = false;
 
@@ -208,15 +193,6 @@ void* war_window_render(void* args) {
     uint8_t write_recording_index;
     uint8_t read_recording_index;
 
-    enum war_input_jump_table {
-        max_keysyms = 128,
-        max_modes = 10,
-        max_keystates = 3,
-        max_modifiers = 8,
-    };
-    void* keysym_mode_modifier_state[max_keysyms * max_modes * max_keystates *
-                                     max_modifiers];
-
     enum war_input_repeat {
         REPEAT_OFF_GRID = 1,
         REPEAT_OFF_GRID_BPM = 2,
@@ -228,7 +204,7 @@ void* war_window_render(void* args) {
     uint64_t next_repeat_time_us = 0;
     const uint64_t repeat_delay_us = 150000;
     const uint64_t repeat_rate_us = 40000;
-    void (*repeat_command)(war_input_cmd_context*) = NULL;
+    void* repeat_command = NULL;
     war_key_event repeat_event;
 
     enum war_pixel_format {
@@ -378,6 +354,10 @@ void* war_window_render(void* args) {
             //        break;
             //    }
             //}
+
+            //-----------------------------------------------------------------
+            //  INPUT HANDLING
+            //-----------------------------------------------------------------
             enum {
                 TRINITY_NOT_CALLED = 0,
                 TRINITY_CALLED = 1,
@@ -428,11 +408,13 @@ void* war_window_render(void* args) {
                     temp_sequence[i] = input_sequence_ring_buffer
                         [(read_input_sequence_index + i) & 0xFF];
                 }
-                void (*matched_command)(war_input_cmd_context*) =
-                    war_match_sequence_in_trie(
-                        &pool, temp_sequence, available, &matched_length);
+                void* matched_command =
+                    war_match_sequence_in_trie(&pool,
+                                               temp_sequence,
+                                               available,
+                                               &matched_length,
+                                               input_cmd_context.mode);
                 if (matched_length > 0 && matched_command) {
-                    matched_command(&input_cmd_context);
                     read_input_sequence_index =
                         (read_input_sequence_index + matched_length) & 0xFF;
                     if (matched_command != repeat_command) {
@@ -453,6 +435,7 @@ void* war_window_render(void* args) {
                                                  physical_height);
                         trinity = TRINITY_CALLED;
                     }
+                    goto* matched_command;
                 } else {
                     // check if current sequence is a **prefix** of any known
                     // command
@@ -490,10 +473,6 @@ void* war_window_render(void* args) {
                     }
                 }
             }
-            trinity = TRINITY_NOT_CALLED;
-
-            // COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
-            // alt+k
             if (repeat_command != NULL) {
                 if (repeat_start_time_us == 0) {
                     repeat_start_time_us = now;
@@ -502,8 +481,6 @@ void* war_window_render(void* args) {
 
                 if (repeat_start_time_us && now >= next_repeat_time_us) {
                     call_carmack("repeat");
-
-                    repeat_command(&input_cmd_context);
 
                     input_sequence_ring_buffer[write_input_sequence_index] =
                         repeat_event;
@@ -522,13 +499,546 @@ void* war_window_render(void* args) {
                                              0,
                                              physical_width,
                                              physical_height);
+                    goto* repeat_command;
                 }
             } else {
                 repeat_command = NULL;
                 repeat_start_time_us = 0;
                 next_repeat_time_us = 0;
             }
+            goto cmd_done;
+        cmd_normal_k:
+            call_carmack("cmd_normal_k");
+            uint32_t increment = input_cmd_context.row_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.row = clamp_add_uint32(
+                input_cmd_context.row, increment, input_cmd_context.max_rows);
+            if (input_cmd_context.row >
+                input_cmd_context.top_row -
+                    input_cmd_context.scroll_margin_rows) {
+                uint32_t viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                input_cmd_context.bottom_row =
+                    clamp_add_uint32(input_cmd_context.bottom_row,
+                                     increment,
+                                     input_cmd_context.max_rows);
+                input_cmd_context.top_row =
+                    clamp_add_uint32(input_cmd_context.top_row,
+                                     increment,
+                                     input_cmd_context.max_rows);
+                uint32_t new_viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff = viewport_height - new_viewport_height;
+                    input_cmd_context.bottom_row =
+                        clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                              diff,
+                                              input_cmd_context.min_rows);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_j:
+            call_carmack("cmd_normal_j");
+            increment = input_cmd_context.row_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.row = clamp_subtract_uint32(
+                input_cmd_context.row, increment, input_cmd_context.min_rows);
+            if (input_cmd_context.row <
+                input_cmd_context.bottom_row +
+                    input_cmd_context.scroll_margin_rows) {
+                uint32_t viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                input_cmd_context.bottom_row =
+                    clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                          increment,
+                                          input_cmd_context.min_rows);
+                input_cmd_context.top_row =
+                    clamp_subtract_uint32(input_cmd_context.top_row,
+                                          increment,
+                                          input_cmd_context.min_rows);
+                uint32_t new_viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff = viewport_height - new_viewport_height;
+                    input_cmd_context.top_row =
+                        clamp_add_uint32(input_cmd_context.top_row,
+                                         diff,
+                                         input_cmd_context.max_rows);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_l:
+            call_carmack("cmd_normal_l");
+            increment = input_cmd_context.col_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.col = clamp_add_uint32(
+                input_cmd_context.col, increment, input_cmd_context.max_cols);
+            if (input_cmd_context.col >
+                input_cmd_context.right_col -
+                    input_cmd_context.scroll_margin_cols) {
+                uint32_t viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                input_cmd_context.left_col =
+                    clamp_add_uint32(input_cmd_context.left_col,
+                                     increment,
+                                     input_cmd_context.max_cols);
+                input_cmd_context.right_col =
+                    clamp_add_uint32(input_cmd_context.right_col,
+                                     increment,
+                                     input_cmd_context.max_cols);
+                uint32_t new_viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                if (new_viewport_width < viewport_width) {
+                    uint32_t diff = viewport_width - new_viewport_width;
+                    input_cmd_context.left_col =
+                        clamp_subtract_uint32(input_cmd_context.left_col,
+                                              diff,
+                                              input_cmd_context.min_cols);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_h:
+            call_carmack("cmd_normal_h");
+            increment = input_cmd_context.col_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.col = clamp_subtract_uint32(
+                input_cmd_context.col, increment, input_cmd_context.min_cols);
+            if (input_cmd_context.col <
+                input_cmd_context.left_col +
+                    input_cmd_context.scroll_margin_cols) {
+                uint32_t viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                input_cmd_context.left_col =
+                    clamp_subtract_uint32(input_cmd_context.left_col,
+                                          increment,
+                                          input_cmd_context.min_cols);
+                input_cmd_context.right_col =
+                    clamp_subtract_uint32(input_cmd_context.right_col,
+                                          increment,
+                                          input_cmd_context.min_cols);
+                uint32_t new_viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                if (new_viewport_width < viewport_width) {
+                    uint32_t diff = viewport_width - new_viewport_width;
+                    input_cmd_context.right_col =
+                        clamp_add_uint32(input_cmd_context.right_col,
+                                         diff,
+                                         input_cmd_context.max_cols);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_alt_k:
+            call_carmack("cmd_normal_alt_k");
+            increment = input_cmd_context.row_leap_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.row = clamp_add_uint32(
+                input_cmd_context.row, increment, input_cmd_context.max_rows);
+            if (input_cmd_context.row >
+                input_cmd_context.top_row -
+                    input_cmd_context.scroll_margin_rows) {
+                uint32_t viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                input_cmd_context.bottom_row =
+                    clamp_add_uint32(input_cmd_context.bottom_row,
+                                     increment,
+                                     input_cmd_context.max_rows);
+                input_cmd_context.top_row =
+                    clamp_add_uint32(input_cmd_context.top_row,
+                                     increment,
+                                     input_cmd_context.max_rows);
+                uint32_t new_viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff = viewport_height - new_viewport_height;
+                    input_cmd_context.bottom_row =
+                        clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                              diff,
+                                              input_cmd_context.min_rows);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_alt_j:
+            call_carmack("cmd_normal_alt_j");
+            increment = input_cmd_context.row_leap_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.row = clamp_subtract_uint32(
+                input_cmd_context.row, increment, input_cmd_context.min_rows);
+            if (input_cmd_context.row <
+                input_cmd_context.bottom_row +
+                    input_cmd_context.scroll_margin_rows) {
+                uint32_t viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                input_cmd_context.bottom_row =
+                    clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                          increment,
+                                          input_cmd_context.min_rows);
+                input_cmd_context.top_row =
+                    clamp_subtract_uint32(input_cmd_context.top_row,
+                                          increment,
+                                          input_cmd_context.min_rows);
+                uint32_t new_viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff = viewport_height - new_viewport_height;
+                    input_cmd_context.top_row =
+                        clamp_add_uint32(input_cmd_context.top_row,
+                                         diff,
+                                         input_cmd_context.max_rows);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_alt_l:
+            call_carmack("cmd_normal_alt_l");
+            increment = input_cmd_context.col_leap_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.col = clamp_add_uint32(
+                input_cmd_context.col, increment, input_cmd_context.max_cols);
+            if (input_cmd_context.col >
+                input_cmd_context.right_col -
+                    input_cmd_context.scroll_margin_cols) {
+                uint32_t viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                input_cmd_context.left_col =
+                    clamp_add_uint32(input_cmd_context.left_col,
+                                     increment,
+                                     input_cmd_context.max_cols);
+                input_cmd_context.right_col =
+                    clamp_add_uint32(input_cmd_context.right_col,
+                                     increment,
+                                     input_cmd_context.max_cols);
+                uint32_t new_viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                if (new_viewport_width < viewport_width) {
+                    uint32_t diff = viewport_width - new_viewport_width;
+                    input_cmd_context.left_col =
+                        clamp_subtract_uint32(input_cmd_context.left_col,
+                                              diff,
+                                              input_cmd_context.min_cols);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_alt_h:
+            call_carmack("cmd_normal_alt_h");
+            increment = input_cmd_context.col_leap_increment;
+            if (input_cmd_context.numeric_prefix) {
+                increment = clamp_multiply_uint32(
+                    increment, input_cmd_context.numeric_prefix, UINT32_MAX);
+            }
+            input_cmd_context.col = clamp_subtract_uint32(
+                input_cmd_context.col, increment, input_cmd_context.min_cols);
+            if (input_cmd_context.col <
+                input_cmd_context.left_col +
+                    input_cmd_context.scroll_margin_cols) {
+                uint32_t viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                input_cmd_context.left_col =
+                    clamp_subtract_uint32(input_cmd_context.left_col,
+                                          increment,
+                                          input_cmd_context.min_cols);
+                input_cmd_context.right_col =
+                    clamp_subtract_uint32(input_cmd_context.right_col,
+                                          increment,
+                                          input_cmd_context.min_cols);
+                uint32_t new_viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                if (new_viewport_width < viewport_width) {
+                    uint32_t diff = viewport_width - new_viewport_width;
+                    input_cmd_context.right_col =
+                        clamp_add_uint32(input_cmd_context.right_col,
+                                         diff,
+                                         input_cmd_context.max_cols);
+                }
+            }
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_0:
+            call_carmack("cmd_normal_0");
+            if (input_cmd_context.numeric_prefix) {
+                input_cmd_context.numeric_prefix =
+                    input_cmd_context.numeric_prefix * 10;
+                goto cmd_done;
+            }
+            input_cmd_context.col = input_cmd_context.left_col;
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_$:
+            call_carmack("cmd_normal_$");
+            if (input_cmd_context.numeric_prefix) {
+                input_cmd_context.col = input_cmd_context.numeric_prefix;
+                uint32_t viewport_width =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                uint32_t distance = viewport_width / 2;
+                input_cmd_context.left_col =
+                    clamp_subtract_uint32(input_cmd_context.col,
+                                          distance,
+                                          input_cmd_context.min_cols);
+                input_cmd_context.right_col =
+                    clamp_add_uint32(input_cmd_context.col,
+                                     distance,
+                                     input_cmd_context.max_cols);
+                uint32_t new_viewport_width = clamp_subtract_uint32(
+                    input_cmd_context.right_col, input_cmd_context.left_col, 0);
+                if (new_viewport_width < viewport_width) {
+                    uint32_t diff = clamp_subtract_uint32(
+                        viewport_width, new_viewport_width, 0);
+                    uint32_t sum = clamp_add_uint32(input_cmd_context.right_col,
+                                                    diff,
+                                                    input_cmd_context.max_cols);
+                    if (sum < UINT32_MAX) {
+                        input_cmd_context.right_col = sum;
+                    } else {
+                        input_cmd_context.left_col =
+                            clamp_subtract_uint32(input_cmd_context.left_col,
+                                                  diff,
+                                                  input_cmd_context.min_cols);
+                    }
+                }
+                input_cmd_context.numeric_prefix = 0;
+                goto cmd_done;
+            }
+            input_cmd_context.col = input_cmd_context.right_col;
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_G:
+            call_carmack("cmd_normal_G");
+            if (input_cmd_context.numeric_prefix) {
+                input_cmd_context.row = input_cmd_context.numeric_prefix;
+                uint32_t viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                uint32_t distance = viewport_height / 2;
+                input_cmd_context.bottom_row =
+                    clamp_subtract_uint32(input_cmd_context.row,
+                                          distance,
+                                          input_cmd_context.min_rows);
+                input_cmd_context.top_row =
+                    clamp_add_uint32(input_cmd_context.row,
+                                     distance,
+                                     input_cmd_context.max_rows);
+                uint32_t new_viewport_height = clamp_subtract_uint32(
+                    input_cmd_context.top_row, input_cmd_context.bottom_row, 0);
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff = clamp_subtract_uint32(
+                        viewport_height, new_viewport_height, 0);
+                    uint32_t sum = clamp_add_uint32(input_cmd_context.top_row,
+                                                    diff,
+                                                    input_cmd_context.max_rows);
+                    if (sum < UINT32_MAX) {
+                        input_cmd_context.top_row = sum;
+                    } else {
+                        input_cmd_context.bottom_row =
+                            clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                                  diff,
+                                                  input_cmd_context.min_rows);
+                    }
+                }
+                input_cmd_context.numeric_prefix = 0;
+                goto cmd_done;
+            }
+            input_cmd_context.row = input_cmd_context.bottom_row;
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_gg:
+            call_carmack("cmd_normal_gg");
+            if (input_cmd_context.numeric_prefix) {
+                input_cmd_context.row = input_cmd_context.numeric_prefix;
+                uint32_t viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                uint32_t distance = viewport_height / 2;
+                input_cmd_context.bottom_row =
+                    clamp_subtract_uint32(input_cmd_context.row,
+                                          distance,
+                                          input_cmd_context.min_rows);
+                input_cmd_context.top_row =
+                    clamp_add_uint32(input_cmd_context.row,
+                                     distance,
+                                     input_cmd_context.max_rows);
+                uint32_t new_viewport_height = clamp_subtract_uint32(
+                    input_cmd_context.top_row, input_cmd_context.bottom_row, 0);
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff = clamp_subtract_uint32(
+                        viewport_height, new_viewport_height, 0);
+                    uint32_t sum = clamp_add_uint32(input_cmd_context.top_row,
+                                                    diff,
+                                                    input_cmd_context.max_rows);
+                    if (sum < UINT32_MAX) {
+                        input_cmd_context.top_row = sum;
+                    } else {
+                        input_cmd_context.bottom_row =
+                            clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                                  diff,
+                                                  input_cmd_context.min_rows);
+                    }
+                }
+                input_cmd_context.numeric_prefix = 0;
+                goto cmd_done;
+            }
+            input_cmd_context.row = input_cmd_context.top_row;
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_1:
+            call_carmack("cmd_normal_1");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 1, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_2:
+            call_carmack("cmd_normal_2");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 2, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_3:
+            call_carmack("cmd_normal_3");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 3, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_4:
+            call_carmack("cmd_normal_4");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 4, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_5:
+            call_carmack("cmd_normal_5");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 5, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_6:
+            call_carmack("cmd_normal_6");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 6, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_7:
+            call_carmack("cmd_normal_7");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 7, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_8:
+            call_carmack("cmd_normal_8");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 8, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_9:
+            call_carmack("cmd_normal_9");
+            input_cmd_context.numeric_prefix = clamp_multiply_uint32(
+                input_cmd_context.numeric_prefix, 10, UINT32_MAX);
+            input_cmd_context.numeric_prefix = clamp_add_uint32(
+                input_cmd_context.numeric_prefix, 9, UINT32_MAX);
+            goto cmd_done;
+        cmd_normal_ctrl_equal:
+            call_carmack("cmd_normal_ctrl_equal");
+            // input_cmd_context.zoom_scale +=
+            // input_cmd_context.zoom_increment; if
+            // (input_cmd_context.zoom_scale > 5.0f) {
+            // input_cmd_context.zoom_scale = 5.0f; }
+            // input_cmd_context.panning_x = input_cmd_context.anchor_ndc_x -
+            // input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
+            // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y -
+            // input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+            goto cmd_done;
+        cmd_normal_ctrl_minus:
+            call_carmack("cmd_normal_ctrl_minus");
+            // input_cmd_context.zoom_scale -=
+            // input_cmd_context.zoom_increment; if
+            // (input_cmd_context.zoom_scale < 0.1f) {
+            // input_cmd_context.zoom_scale = 0.1f; }
+            // input_cmd_context.panning_x = input_cmd_context.anchor_ndc_x -
+            // input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
+            // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y -
+            // input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+            goto cmd_done;
+        cmd_normal_ctrl_alt_equal:
+            call_carmack("cmd_normal_ctrl_alt_equal");
+            // input_cmd_context.zoom_scale +=
+            // input_cmd_context.zoom_leap_increment; if
+            // (input_cmd_context.zoom_scale > 5.0f) {
+            // input_cmd_context.zoom_scale = 5.0f; }
+            // input_cmd_context.panning_x = input_cmd_context.anchor_ndc_x -
+            // input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
+            // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y -
+            // input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+            goto cmd_done;
+        cmd_normal_ctrl_alt_minus:
+            call_carmack("cmd_normal_ctrl_alt_minus");
+            // input_cmd_context.zoom_scale -=
+            // input_cmd_context.zoom_leap_increment; if
+            // (input_cmd_context.zoom_scale < 0.1f) {
+            // input_cmd_context.zoom_scale = 0.1f; }
+            // input_cmd_context.panning_x = input_cmd_context.anchor_ndc_x -
+            // input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
+            // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y -
+            // input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+            goto cmd_done;
+        cmd_normal_ctrl_0:
+            call_carmack("cmd_normal_ctrl_0");
+            input_cmd_context.zoom_scale = 1.0f;
+            input_cmd_context.left_col = 0;
+            input_cmd_context.bottom_row = 0;
+            input_cmd_context.right_col =
+                (uint32_t)((input_cmd_context.physical_width -
+                            ((float)
+                                 input_cmd_context.num_cols_for_line_numbers *
+                             input_cmd_context.cell_width)) /
+                           input_cmd_context.cell_width) -
+                1;
+            input_cmd_context.top_row =
+                (uint32_t)((input_cmd_context.physical_height -
+                            ((float)input_cmd_context.num_rows_for_status_bars *
+                             input_cmd_context.cell_height)) /
+                           input_cmd_context.cell_height) -
+                1;
+            goto cmd_done;
+        cmd_normal_esc:
+            call_carmack("cmd_normal_esc");
+            input_cmd_context.numeric_prefix = 0;
+            input_cmd_context.mode = MODE_NORMAL;
+            goto cmd_done;
+        cmd_done:
+            trinity = TRINITY_NOT_CALLED;
 
+            // COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
+            // alt+k
             int ret = poll(&pfd, 1, 0);
             assert(ret >= 0);
             // if (ret == 0) { call_carmack("timeout"); }
@@ -2629,41 +3139,81 @@ void* war_window_render(void* args) {
                                 {0},
                             },
                         };
-                    void (*key_commands[NUM_SEQUENCES])(
-                        war_input_cmd_context*) = {
-                        cmd_increment_row,
-                        cmd_decrement_row,
-                        cmd_decrement_col,
-                        cmd_increment_col,
-
-                        cmd_leap_increment_row,
-                        cmd_leap_decrement_row,
-                        cmd_leap_decrement_col,
-                        cmd_leap_increment_col,
-
-                        cmd_goto_left_col,
-                        cmd_goto_right_col,
-
-                        cmd_goto_bottom_row,
-                        cmd_goto_top_row,
-
-                        cmd_append_1_to_numeric_prefix,
-                        cmd_append_2_to_numeric_prefix,
-                        cmd_append_3_to_numeric_prefix,
-                        cmd_append_4_to_numeric_prefix,
-                        cmd_append_5_to_numeric_prefix,
-                        cmd_append_6_to_numeric_prefix,
-                        cmd_append_7_to_numeric_prefix,
-                        cmd_append_8_to_numeric_prefix,
-                        cmd_append_9_to_numeric_prefix,
-
-                        cmd_zoom_in,
-                        cmd_zoom_out,
-                        cmd_zoom_in_leap,
-                        cmd_zoom_out_leap,
-                        cmd_reset_zoom,
-
-                        cmd_escape,
+                    void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
+                        // normal, visual, visual_line, visual_block, insert,
+                        // command
+                        {&&cmd_normal_k, NULL, NULL, NULL, NULL, NULL}, // k
+                        {&&cmd_normal_j, NULL, NULL, NULL, NULL, NULL}, // j
+                        {&&cmd_normal_h, NULL, NULL, NULL, NULL, NULL}, // h
+                        {&&cmd_normal_l, NULL, NULL, NULL, NULL, NULL}, // l
+                        {&&cmd_normal_alt_k,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // alt_k
+                        {&&cmd_normal_alt_j,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // alt_j
+                        {&&cmd_normal_alt_h,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // alt_h
+                        {&&cmd_normal_alt_l,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL},                                         // alt_l
+                        {&&cmd_normal_0, NULL, NULL, NULL, NULL, NULL}, // 0
+                        {&&cmd_normal_$, NULL, NULL, NULL, NULL, NULL}, // $
+                        {&&cmd_normal_G, NULL, NULL, NULL, NULL, NULL}, // G
+                        {&&cmd_normal_gg, NULL, NULL, NULL, NULL, NULL}, // gg
+                        {&&cmd_normal_1, NULL, NULL, NULL, NULL, NULL},  // 1
+                        {&&cmd_normal_2, NULL, NULL, NULL, NULL, NULL},  // 2
+                        {&&cmd_normal_3, NULL, NULL, NULL, NULL, NULL},  // 3
+                        {&&cmd_normal_4, NULL, NULL, NULL, NULL, NULL},  // 4
+                        {&&cmd_normal_5, NULL, NULL, NULL, NULL, NULL},  // 5
+                        {&&cmd_normal_6, NULL, NULL, NULL, NULL, NULL},  // 6
+                        {&&cmd_normal_7, NULL, NULL, NULL, NULL, NULL},  // 7
+                        {&&cmd_normal_8, NULL, NULL, NULL, NULL, NULL},  // 8
+                        {&&cmd_normal_9, NULL, NULL, NULL, NULL, NULL},  // 9
+                        {&&cmd_normal_ctrl_equal,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // ctrl_equal
+                        {&&cmd_normal_ctrl_minus,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // ctrl_minus
+                        {&&cmd_normal_ctrl_alt_equal,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // ctrl_alt_equal
+                        {&&cmd_normal_ctrl_alt_minus,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // ctrl_alt_minus
+                        {&&cmd_normal_ctrl_0,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL,
+                         NULL}, // ctrl_0
+                        {&&cmd_normal_esc, NULL, NULL, NULL, NULL, NULL}, // esc
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;
@@ -2679,7 +3229,7 @@ void* war_window_render(void* args) {
                         war_insert_trie_node(&pool,
                                              key_sequences[i],
                                              key_sequence_lengths[i],
-                                             key_commands[i]);
+                                             key_labels[i]);
                     }
 
                     munmap(keymap_map, keymap_size);
@@ -3000,7 +3550,7 @@ void* war_window_render(void* args) {
 war_key_trie_node* war_insert_trie_node(war_key_trie_pool* pool,
                                         war_key_event* key_seq,
                                         size_t key_seq_size,
-                                        void* cmd) {
+                                        void* command[MODE_COUNT]) {
     war_key_trie_node* node = &pool->nodes[0];
 
     for (size_t i = 0; i < key_seq_size; i++) {
@@ -3028,7 +3578,9 @@ war_key_trie_node* war_insert_trie_node(war_key_trie_pool* pool,
             new_node->keysym = keysym;
             new_node->mod = mod;
             new_node->is_terminal = 0;
-            new_node->command = NULL;
+            for (size_t i = 0; i < MODE_COUNT; i++) {
+                new_node->command[i] = NULL;
+            }
             new_node->child_count = 0;
             for (size_t j = 0; j < MAX_CHILDREN; j++) {
                 new_node->children[j] = NULL;
@@ -3049,7 +3601,7 @@ war_key_trie_node* war_insert_trie_node(war_key_trie_pool* pool,
     }
 
     node->is_terminal = 1;
-    node->command = cmd;
+    for (size_t i = 0; i < MODE_COUNT; i++) { node->command[i] = command[i]; }
 
     return node;
 }

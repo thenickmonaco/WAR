@@ -73,6 +73,16 @@ enum war_misc {
     UNSET = 0,
 };
 
+enum war_modes {
+    MODE_COUNT = 6,
+    MODE_NORMAL = 0,
+    MODE_VISUAL = 1,
+    MODE_VISUAL_LINE = 2,
+    MODE_VISUAL_BLOCK = 3,
+    MODE_INSERT = 4,
+    MODE_COMMAND = 5,
+};
+
 enum war_cursor_sizes {
     CURSOR_128_CELLS_PER_BEAT_FACTOR = 32,
     CURSOR_64_CELLS_PER_BEAT_FACTOR = 16,
@@ -107,7 +117,7 @@ typedef struct war_key_trie_node {
     uint32_t keysym;
     uint8_t mod;
     uint8_t is_terminal;
-    void* command;
+    void* command[MODE_COUNT];
     struct war_key_trie_node* children[32];
     size_t child_count;
 } war_key_trie_node;
@@ -165,6 +175,7 @@ typedef struct war_input_cmd_context {
     float logical_height;
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
+    uint32_t mode;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {

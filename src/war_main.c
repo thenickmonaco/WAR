@@ -1420,14 +1420,20 @@ void* war_window_render(void* args) {
                     const uint32_t bright_white_hex =
                         0xFFEEEEEE; // tmux status text
                     const uint32_t black_hex = 0xFF000000;
-                    vkWaitForFences(vulkan_context.device,
-                                    1,
-                                    &vulkan_context.in_flight_fence,
-                                    VK_TRUE,
-                                    UINT64_MAX);
-                    vkResetFences(vulkan_context.device,
-                                  1,
-                                  &vulkan_context.in_flight_fence);
+                    vulkan_context.current_frame =
+                        (vulkan_context.current_frame + 1) % max_frames;
+                    vkWaitForFences(
+                        vulkan_context.device,
+                        1,
+                        &vulkan_context
+                             .in_flight_fences[vulkan_context.current_frame],
+                        VK_TRUE,
+                        UINT64_MAX);
+                    vkResetFences(
+                        vulkan_context.device,
+                        1,
+                        &vulkan_context
+                             .in_flight_fences[vulkan_context.current_frame]);
                     VkCommandBufferBeginInfo begin_info = {
                         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -2139,6 +2145,10 @@ void* war_window_render(void* args) {
                     dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
                                msg_buffer + msg_buffer_offset,
                                size);
+                    //---------------------------------------------------------
+                    // TODO: 3 frame buffers, 3 command buffers, 3
+                    // wl_buffer_ids...
+                    //---------------------------------------------------------
                     uint8_t create_params[12]; // REFACTOR: zero initialize
                     write_le32(create_params, zwp_linux_dmabuf_v1_id);
                     write_le16(create_params + 4, 1);

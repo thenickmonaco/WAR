@@ -2145,10 +2145,6 @@ void* war_window_render(void* args) {
                     dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
                                msg_buffer + msg_buffer_offset,
                                size);
-                    //---------------------------------------------------------
-                    // TODO: 3 frame buffers, 3 command buffers, 3
-                    // wl_buffer_ids...
-                    //---------------------------------------------------------
                     uint8_t create_params[12]; // REFACTOR: zero initialize
                     write_le32(create_params, zwp_linux_dmabuf_v1_id);
                     write_le16(create_params + 4, 1);

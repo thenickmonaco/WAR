@@ -66,7 +66,7 @@ enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
     max_quads = 900,
-    max_frames = 3,
+    max_frames = 1, // no need for double/triple yet
     max_instances_per_quad = 1,
     max_fds = 50,
     ring_buffer_size = 256,

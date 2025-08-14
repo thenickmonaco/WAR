@@ -250,8 +250,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     VkPhysicalDeviceMemoryProperties mem_properties;
     vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_properties);
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
     uint32_t memory_type = 0;
     uint8_t found_memory_type = 0;
     call_carmack("Looking for memory type with properties: 0x%x", properties);
@@ -594,11 +593,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
     };
-    VkFence in_flight_fence;
-    vkCreateFence(device, &fence_info, NULL, &in_flight_fence);
+    VkFence in_flight_fences[max_frames];
+    for (size_t i = 0; i < max_frames; i++) {
+        result = vkCreateFence(device, &fence_info, NULL, &in_flight_fences[i]);
+        assert(result == VK_SUCCESS);
+    }
     VkBufferCreateInfo quads_vertex_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = max_quads * sizeof(quad_vertex) * 4,
+        .size = max_quads * sizeof(quad_vertex) * 4 * max_frames,
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
@@ -608,13 +610,24 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     VkBufferCreateInfo quads_index_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = max_quads * 6 * sizeof(uint16_t),
+        .size = max_quads * 6 * sizeof(uint16_t) * max_frames,
         .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     VkBuffer quads_index_buffer;
     result = vkCreateBuffer(
         device, &quads_index_buffer_info, NULL, &quads_index_buffer);
+    assert(result == VK_SUCCESS);
+    VkBufferCreateInfo quads_instance_buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = max_quads * max_instances_per_quad * sizeof(quad_instance) *
+                max_frames,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    VkBuffer quads_instance_buffer;
+    result = vkCreateBuffer(
+        device, &quads_instance_buffer_info, NULL, &quads_instance_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements quads_vertex_mem_reqs;
     vkGetBufferMemoryRequirements(
@@ -626,10 +639,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     for (uint32_t i = 0; i < quads_vertex_mem_properties.memoryTypeCount; i++) {
         if ((quads_vertex_mem_reqs.memoryTypeBits & (1 << i)) &&
             (quads_vertex_mem_properties.memoryTypes[i].propertyFlags &
-             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
-                (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             quads_vertex_memory_type_index = i;
             break;
         }
@@ -657,10 +667,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     for (uint32_t i = 0; i < quads_index_mem_properties.memoryTypeCount; i++) {
         if ((quads_index_mem_reqs.memoryTypeBits & (1 << i)) &&
             (quads_index_mem_properties.memoryTypes[i].propertyFlags &
-             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) ==
-                (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             quads_index_memory_type_index = i;
             break;
         }
@@ -677,6 +684,37 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     result = vkBindBufferMemory(
         device, quads_index_buffer, quads_index_buffer_memory, 0);
+    assert(result == VK_SUCCESS);
+    VkMemoryRequirements quads_instance_mem_reqs;
+    vkGetBufferMemoryRequirements(
+        device, quads_instance_buffer, &quads_instance_mem_reqs);
+    uint32_t quads_instance_memory_type_index = UINT32_MAX;
+    VkPhysicalDeviceMemoryProperties quads_instance_mem_properties;
+    vkGetPhysicalDeviceMemoryProperties(physical_device,
+                                        &quads_instance_mem_properties);
+    for (uint32_t i = 0; i < quads_instance_mem_properties.memoryTypeCount;
+         i++) {
+        if ((quads_instance_mem_reqs.memoryTypeBits & (1 << i)) &&
+            (quads_instance_mem_properties.memoryTypes[i].propertyFlags &
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            quads_instance_memory_type_index = i;
+            break;
+        }
+    }
+    assert(quads_instance_memory_type_index != UINT32_MAX);
+    VkMemoryAllocateInfo quads_instance_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = quads_instance_mem_reqs.size,
+        .memoryTypeIndex = quads_instance_memory_type_index,
+    };
+    VkDeviceMemory quads_instance_buffer_memory;
+    result = vkAllocateMemory(device,
+                              &quads_instance_alloc_info,
+                              NULL,
+                              &quads_instance_buffer_memory);
+    assert(result == VK_SUCCESS);
+    result = vkBindBufferMemory(
+        device, quads_instance_buffer, quads_instance_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkImageCreateInfo texture_image_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -797,9 +835,24 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkMapMemory(device,
                 quads_vertex_buffer_memory,
                 0,
-                sizeof(quad_vertex) * max_quads * 4,
+                sizeof(quad_vertex) * max_quads * 4 * max_frames,
                 0,
                 &quads_vertex_buffer_mapped);
+    void* quads_index_buffer_mapped;
+    vkMapMemory(device,
+                quads_index_buffer_memory,
+                0,
+                sizeof(uint16_t) * max_quads * 6 * max_frames,
+                0,
+                &quads_index_buffer_mapped);
+    void* quads_instance_buffer_mapped;
+    vkMapMemory(device,
+                quads_instance_buffer_memory,
+                0,
+                sizeof(quad_instance) * max_quads * max_instances_per_quad *
+                    max_frames,
+                0,
+                &quads_instance_buffer_mapped);
 
     //-------------------------------------------------------------------------
     // SDF FONT RENDERING PIPELINE
@@ -957,8 +1010,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
          i++) {
         if ((sdf_buffer_memory_requirements.memoryTypeBits & (1 << i)) &&
             (sdf_buffer_memory_properties.memoryTypes[i].propertyFlags &
-             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))) {
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             sdf_buffer_memory_type = i;
             break;
         }
@@ -1245,8 +1297,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
          i++) {
         if ((sdf_vertex_buffer_memory_requirements.memoryTypeBits & (1 << i)) &&
             (sdf_vertex_buffer_memory_properties.memoryTypes[i].propertyFlags &
-             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))) {
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             sdf_vertex_buffer_memory_type = i;
             break;
         }
@@ -1289,8 +1340,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
          i++) {
         if ((sdf_index_buffer_memory_requirements.memoryTypeBits & (1 << i)) &&
             (sdf_index_buffer_memory_properties.memoryTypes[i].propertyFlags &
-             (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))) {
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             sdf_index_buffer_memory_type = i;
             break;
         }
@@ -1465,7 +1515,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .image_view = image_view,
         .image_available_semaphore = image_available_semaphore,
         .render_finished_semaphore = render_finished_semaphore,
-        .in_flight_fence = in_flight_fence,
         .quads_index_buffer = quads_index_buffer,
         .quads_index_buffer_memory = quads_index_buffer_memory,
         .quads_vertex_buffer = quads_vertex_buffer,
@@ -1476,7 +1525,12 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .texture_sampler = texture_sampler,
         .texture_descriptor_set = descriptor_set,
         .texture_descriptor_pool = descriptor_pool,
+        .in_flight_fences = in_flight_fences,
         .quads_vertex_buffer_mapped = quads_vertex_buffer_mapped,
+        .quads_index_buffer_mapped = quads_index_buffer_mapped,
+        .quads_instance_buffer_mapped = quads_instance_buffer_mapped,
+        .current_frame = 0,
+
         //---------------------------------------------------------------------
         // SDF PIPELINE
         //---------------------------------------------------------------------

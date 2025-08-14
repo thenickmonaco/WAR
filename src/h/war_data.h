@@ -65,7 +65,9 @@ enum war_audio_functions {
 enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
-    max_quads = 500,
+    max_quads = 900,
+    max_frames = 3,
+    max_instances_per_quad = 1,
     max_fds = 50,
     ring_buffer_size = 256,
     OLED_MODE = 0,
@@ -217,6 +219,13 @@ typedef struct quad_vertex {
     uint32_t _pad1;
 } quad_vertex;
 
+typedef struct quad_instance {
+    uint32_t x;
+    uint32_t y;
+    uint32_t color;
+    uint32_t flags;
+} quad_instance;
+
 typedef struct push_constants {
     float zoom;
     float _pad1;
@@ -255,7 +264,6 @@ typedef struct war_vulkan_context {
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
     VkImageView image_view;
-    VkFence in_flight_fence;
     VkSemaphore image_available_semaphore;
     VkSemaphore render_finished_semaphore;
     VkBuffer quads_vertex_buffer;
@@ -268,7 +276,11 @@ typedef struct war_vulkan_context {
     VkSampler texture_sampler;
     VkDescriptorSet texture_descriptor_set;
     VkDescriptorPool texture_descriptor_pool;
+    VkFence* in_flight_fences;
     void* quads_vertex_buffer_mapped;
+    void* quads_index_buffer_mapped;
+    void* quads_instance_buffer_mapped;
+    uint32_t current_frame;
 
     //-------------------------------------------------------------------------
     // QUAD NDC PIPELINE

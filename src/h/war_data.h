@@ -180,6 +180,8 @@ typedef struct war_input_cmd_context {
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
     uint32_t mode;
+    bool dirty_zoom;
+    bool dirty_notes;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -294,10 +296,13 @@ typedef struct war_vulkan_context {
     VkFence* in_flight_fences;
     void* quads_vertex_buffer_mapped;
     uint16_t quads_vertex_buffer_mapped_write_index;
+    uint16_t static_quads_vertex_count;
     void* quads_index_buffer_mapped;
     uint16_t quads_index_buffer_mapped_write_index;
+    uint16_t static_quads_index_count;
     void* quads_instance_buffer_mapped;
     uint16_t quads_instance_buffer_mapped_write_index;
+    uint16_t static_quads_instance_count;
     uint32_t current_frame;
 
     //-------------------------------------------------------------------------
@@ -332,10 +337,13 @@ typedef struct war_vulkan_context {
     float cell_width;
     void* sdf_vertex_buffer_mapped;
     uint16_t sdf_vertex_buffer_mapped_write_index;
+    uint16_t static_sdf_vertex_count;
     void* sdf_instance_buffer_mapped;
     uint16_t sdf_instance_buffer_mapped_write_index;
+    uint16_t static_sdf_instance_count;
     void* sdf_index_buffer_mapped;
     uint16_t sdf_index_buffer_mapped_write_index;
+    uint16_t static_sdf_index_count;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

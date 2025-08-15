@@ -459,7 +459,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkVertexInputAttributeDescription quad_vertex_attrs[] = {
         {.location = 0,
          .binding = 0,
-         .format = VK_FORMAT_R32G32_SINT,
+         .format = VK_FORMAT_R32G32_UINT,
          .offset = offsetof(quad_vertex, pos)},
         {
             .location = 1,

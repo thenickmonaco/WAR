@@ -110,6 +110,12 @@ enum war_key_trie {
     NUM_SEQUENCES = 27,
 };
 
+enum war_pipelines {
+    PIPELINE_NONE = 0,
+    PIPELINE_QUAD = 1,
+    PIPELINE_SDF = 2,
+};
+
 typedef struct war_key_event {
     uint32_t keysym;
     uint8_t mod;
@@ -182,6 +188,7 @@ typedef struct war_input_cmd_context {
     uint32_t mode;
     bool dirty_zoom;
     bool dirty_notes;
+    bool dirty_text;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -304,6 +311,7 @@ typedef struct war_vulkan_context {
     uint16_t quads_instance_buffer_mapped_write_index;
     uint16_t static_quads_instance_count;
     uint32_t current_frame;
+    uint8_t current_pipeline;
 
     //-------------------------------------------------------------------------
     // SDF PIPELINE

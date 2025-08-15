@@ -1722,5 +1722,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_instance_buffer_mapped = sdf_instance_buffer_mapped,
         .sdf_instance_buffer_mapped_write_index =
             sdf_instance_buffer_mapped_write_index,
+        .current_pipeline = PIPELINE_NONE,
     };
 }

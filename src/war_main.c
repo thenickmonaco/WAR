@@ -167,6 +167,7 @@ void* war_window_render(void* args) {
         .min_rows = 0,
         .dirty_zoom = 1,
         .dirty_notes = 1,
+        .dirty_text = 1,
     };
 
     war_key_event input_sequence_ring_buffer[ring_buffer_size];
@@ -1466,122 +1467,54 @@ void* war_window_render(void* args) {
                     vulkan_context.sdf_vertex_buffer_mapped_write_index = 0;
                     vulkan_context.sdf_index_buffer_mapped_write_index = 0;
                     vulkan_context.sdf_instance_buffer_mapped_write_index = 0;
-                    //----------------------------------------------------------
-                    // TODO: GRIDLINES
-                    //----------------------------------------------------------
-                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      vulkan_context.pipeline);
-                    uint32_t num_gridline_quads = 0;
-                    // quad_vertex* gridline_quad_verts =
-                    //     malloc(num_gridline_quads * sizeof(quad_vertex) * 4);
-                    // uint16_t* gridline_quad_indices =
-                    //     malloc(num_gridline_quads * sizeof(uint16_t) * 6);
-                    // float half_thickness_in_cells =
-                    //     (1.0f / input_cmd_context.cell_width) * 0.5f;
-                    // for (uint32_t i = 0; i < num_gridline_quads; ++i) {
-                    //     size_t vi = i * 4;
-                    //     size_t ii = i * 6;
-                    //     float x_cell = (float)i + 0.5f;
-                    //     float x_left = x_cell - half_thickness_in_cells;
-                    //     float x_right = x_cell + half_thickness_in_cells;
-                    //     float y_bottom = 0.0f;
-                    //     float y_top = (float)input_cmd_context.viewport_rows;
-                    //     gridline_quad_verts[vi + 0] =
-                    //         (quad_vertex){{x_left, y_bottom}, white_hex};
-                    //     gridline_quad_verts[vi + 1] =
-                    //         (quad_vertex){{x_right, y_bottom}, white_hex};
-                    //     gridline_quad_verts[vi + 2] =
-                    //         (quad_vertex){{x_right, y_top}, white_hex};
-                    //     gridline_quad_verts[vi + 3] =
-                    //         (quad_vertex){{x_left, y_top}, white_hex};
-                    //     gridline_quad_indices[ii + 0] = vi + 0;
-                    //     gridline_quad_indices[ii + 1] = vi + 1;
-                    //     gridline_quad_indices[ii + 2] = vi + 2;
-                    //     gridline_quad_indices[ii + 3] = vi + 2;
-                    //     gridline_quad_indices[ii + 4] = vi + 3;
-                    //     gridline_quad_indices[ii + 5] = vi + 0;
-                    // }
-                    // void* gridline_quad_verts_data = NULL;
-                    // vkMapMemory(vulkan_context.device,
-                    //             vulkan_context.quads_vertex_buffer_memory,
-                    //             0,
-                    //             sizeof(quad_vertex) * 4 * num_gridline_quads,
-                    //             0,
-                    //             &gridline_quad_verts_data);
-                    // memcpy(gridline_quad_verts_data,
-                    //        gridline_quad_verts,
-                    //        sizeof(quad_vertex) * 4 * num_gridline_quads);
-                    // vkUnmapMemory(vulkan_context.device,
-                    //               vulkan_context.quads_vertex_buffer_memory);
-                    // void* gridline_quad_index_data;
-                    // vkMapMemory(vulkan_context.device,
-                    //             vulkan_context.quads_index_buffer_memory,
-                    //             0,
-                    //             sizeof(uint16_t) * 6 * num_gridline_quads,
-                    //             0,
-                    //             &gridline_quad_index_data);
-                    // memcpy(gridline_quad_index_data,
-                    //        gridline_quad_indices,
-                    //        sizeof(uint16_t) * 6 * num_gridline_quads);
-                    // vkUnmapMemory(vulkan_context.device,
-                    //               vulkan_context.quads_index_buffer_memory);
-                    // VkDeviceSize gridline_vertex_offsets[] = {0};
-                    // vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                    //                        0,
-                    //                        1,
-                    //                        &vulkan_context.quads_vertex_buffer,
-                    //                        gridline_vertex_offsets);
-                    // vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                    //                      vulkan_context.quads_index_buffer,
-                    //                      0,
-                    //                      VK_INDEX_TYPE_UINT16);
-                    // VkViewport gridline_viewport = {
-                    //     .x = 0.0f,
-                    //     .y = 0.0f,
-                    //     .width = (float)physical_width,
-                    //     .height = (float)physical_height,
-                    //     .minDepth = 0.0f,
-                    //     .maxDepth = 1.0f,
-                    // };
-                    // vkCmdSetViewport(
-                    //     vulkan_context.cmd_buffer, 0, 1, &gridline_viewport);
-                    // VkRect2D gridline_scissor = {
-                    //     .offset = {0, 0},
-                    //     .extent = {physical_width, physical_height},
-                    // };
-                    // vkCmdSetScissor(
-                    //     vulkan_context.cmd_buffer, 0, 1, &gridline_scissor);
-                    // quad_push_constants gridline_pc = {
-                    //     .zoom = input_cmd_context.zoom_scale,
-                    //     .bottom_left = {0,
-                    //             0},
-                    //     .physical_size = {physical_width, physical_height},
-                    //     .padding = 0.0f,
-                    //     .scroll_margin =
-                    //     {input_cmd_context.scroll_margin_cols,
-                    //     input_cmd_context.scroll_margin_rows},
-                    // };
-                    // vkCmdPushConstants(vulkan_context.cmd_buffer,
-                    //                    vulkan_context.pipeline_layout,
-                    //                    VK_SHADER_STAGE_VERTEX_BIT,
-                    //                    0,
-                    //                    sizeof(quad_push_constants),
-                    //                    &gridline_pc);
-                    // vkCmdDrawIndexed(vulkan_context.cmd_buffer,
-                    //                  num_gridline_quads * 6,
-                    //                  1,
-                    //                  0,
-                    //                  0,
-                    //                  0);
-                    // free(gridline_quad_verts);
-                    // free(gridline_quad_indices);
                     //---------------------------------------------------------
-                    //  TODO: NOTES
+                    // STATIC QUADS
                     //---------------------------------------------------------
+                    if (input_cmd_context.dirty_zoom) {
+                        if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
+                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                              vulkan_context.pipeline);
+                            vulkan_context.current_pipeline = PIPELINE_QUAD;
+                        }
+                    }
                     //---------------------------------------------------------
-                    //  CURSOR
+                    // STATIC SDF
                     //---------------------------------------------------------
+                    if (input_cmd_context.dirty_zoom ||
+                        input_cmd_context.dirty_text) {
+                        if (vulkan_context.current_pipeline != PIPELINE_SDF) {
+                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                              vulkan_context.sdf_pipeline);
+                            vulkan_context.current_pipeline = PIPELINE_SDF;
+                        }
+                    }
+                    //---------------------------------------------------------
+                    // DYNAMIC QUADS
+                    //---------------------------------------------------------
+                    if (input_cmd_context.dirty_zoom ||
+                        input_cmd_context.dirty_notes) {
+                        if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
+                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                              vulkan_context.pipeline);
+                            vulkan_context.current_pipeline = PIPELINE_QUAD;
+                        }
+                    }
+                    //---------------------------------------------------------
+                    // DYNAMIC SDF
+                    //---------------------------------------------------------
+                    if (input_cmd_context.dirty_text ||
+                        input_cmd_context.dirty_zoom) {
+                        if (vulkan_context.current_pipeline != PIPELINE_SDF) {
+                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                              vulkan_context.sdf_pipeline);
+                            vulkan_context.current_pipeline = PIPELINE_SDF;
+                        }
+                    }
+                    // OLD LOGIC
                     quad_vertex cursor_quad_verts[4] = {
                         {{input_cmd_context.col, input_cmd_context.row},
                          white_hex,
@@ -1826,6 +1759,9 @@ void* war_window_render(void* args) {
                         &submit_info,
                         vulkan_context
                             .in_flight_fences[vulkan_context.current_frame]);
+                    input_cmd_context.dirty_zoom = 0;
+                    input_cmd_context.dirty_text = 0;
+                    input_cmd_context.dirty_notes = 0;
                     assert(result == VK_SUCCESS);
 #endif
 #if WL_SHM

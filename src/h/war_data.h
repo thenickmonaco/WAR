@@ -66,8 +66,10 @@ enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
     max_quads = 900,
+    max_sdf_quads = 900,
     max_frames = 1, // no need for double/triple yet
     max_instances_per_quad = 1,
+    max_instances_per_sdf_quad = 1,
     max_fds = 50,
     ring_buffer_size = 256,
     OLED_MODE = 0,
@@ -211,7 +213,18 @@ typedef struct sdf_vertex {
     float feather;
     uint32_t color;
     uint32_t _pad1;
-} sdf_vertex_t;
+} sdf_vertex;
+
+typedef struct sdf_instance {
+    uint32_t x;
+    uint32_t y;
+    uint32_t color;
+    float uv_x;
+    float uv_y;
+    float thickness;
+    float feather;
+    uint32_t flags;
+} sdf_instance;
 
 typedef struct quad_vertex {
     uint32_t pos[2];
@@ -270,6 +283,8 @@ typedef struct war_vulkan_context {
     VkDeviceMemory quads_vertex_buffer_memory;
     VkBuffer quads_index_buffer;
     VkDeviceMemory quads_index_buffer_memory;
+    VkBuffer quads_instance_buffer;
+    VkDeviceMemory quads_instance_buffer_memory;
     VkImage texture_image;
     VkDeviceMemory texture_memory;
     VkImageView texture_image_view;
@@ -278,16 +293,15 @@ typedef struct war_vulkan_context {
     VkDescriptorPool texture_descriptor_pool;
     VkFence* in_flight_fences;
     void* quads_vertex_buffer_mapped;
+    uint16_t quads_vertex_buffer_mapped_write_index;
     void* quads_index_buffer_mapped;
+    uint16_t quads_index_buffer_mapped_write_index;
     void* quads_instance_buffer_mapped;
+    uint16_t quads_instance_buffer_mapped_write_index;
     uint32_t current_frame;
 
     //-------------------------------------------------------------------------
-    // QUAD NDC PIPELINE
-    //-------------------------------------------------------------------------
-
-    //-------------------------------------------------------------------------
-    // SDF FONT PIPELINE
+    // SDF PIPELINE
     //-------------------------------------------------------------------------
     FT_Library ft_library;
     FT_Face ft_regular;
@@ -306,6 +320,8 @@ typedef struct war_vulkan_context {
     VkPushConstantRange sdf_push_constant_range;
     VkBuffer sdf_vertex_buffer;
     VkDeviceMemory sdf_vertex_buffer_memory;
+    VkBuffer sdf_instance_buffer;
+    VkDeviceMemory sdf_instance_buffer_memory;
     VkBuffer sdf_index_buffer;
     VkDeviceMemory sdf_index_buffer_memory;
     VkRenderPass sdf_render_pass;
@@ -314,6 +330,12 @@ typedef struct war_vulkan_context {
     float linegap;
     float cell_height;
     float cell_width;
+    void* sdf_vertex_buffer_mapped;
+    uint16_t sdf_vertex_buffer_mapped_write_index;
+    void* sdf_instance_buffer_mapped;
+    uint16_t sdf_instance_buffer_mapped_write_index;
+    void* sdf_index_buffer_mapped;
+    uint16_t sdf_index_buffer_mapped_write_index;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

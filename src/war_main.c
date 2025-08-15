@@ -1420,8 +1420,8 @@ void* war_window_render(void* args) {
                     const uint32_t bright_white_hex =
                         0xFFEEEEEE; // tmux status text
                     const uint32_t black_hex = 0xFF000000;
-                    vulkan_context.current_frame =
-                        (vulkan_context.current_frame + 1) % max_frames;
+                    // single buffer
+                    assert(vulkan_context.current_frame == 0);
                     vkWaitForFences(
                         vulkan_context.device,
                         1,
@@ -1805,10 +1805,12 @@ void* war_window_render(void* args) {
                         .signalSemaphoreCount = 0,
                         .pSignalSemaphores = NULL,
                     };
-                    result = vkQueueSubmit(vulkan_context.queue,
-                                           1,
-                                           &submit_info,
-                                           vulkan_context.in_flight_fence);
+                    result = vkQueueSubmit(
+                        vulkan_context.queue,
+                        1,
+                        &submit_info,
+                        vulkan_context
+                            .in_flight_fences[vulkan_context.current_frame]);
                     assert(result == VK_SUCCESS);
 #endif
 #if WL_SHM

@@ -446,12 +446,17 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result =
         vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline_layout);
     assert(result == VK_SUCCESS);
-    VkVertexInputBindingDescription binding = {
+    VkVertexInputBindingDescription quad_vertex_binding = {
         .binding = 0,
         .stride = sizeof(quad_vertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
-    VkVertexInputAttributeDescription attrs[] = {
+    VkVertexInputBindingDescription quad_instance_binding = {
+        .binding = 1,
+        .stride = sizeof(quad_instance),
+        .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
+    };
+    VkVertexInputAttributeDescription quad_vertex_attrs[] = {
         {.location = 0,
          .binding = 0,
          .format = VK_FORMAT_R32G32_SINT,
@@ -463,18 +468,49 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             .offset = offsetof(quad_vertex, color),
         },
     };
-    VkPipelineVertexInputStateCreateInfo vertex_input = {
+    uint32_t num_quad_vertex_attrs = 2;
+    VkVertexInputAttributeDescription quad_instance_attrs[] = {
+        {.location = 2,
+         .binding = 1,
+         .format = VK_FORMAT_R32_UINT,
+         .offset = offsetof(quad_instance, x)},
+        {.location = 3,
+         .binding = 1,
+         .format = VK_FORMAT_R32_UINT,
+         .offset = offsetof(quad_instance, y)},
+        {.location = 4,
+         .binding = 1,
+         .format = VK_FORMAT_R32_UINT,
+         .offset = offsetof(quad_instance, color)},
+        {.location = 5,
+         .binding = 1,
+         .format = VK_FORMAT_R32_UINT,
+         .offset = offsetof(quad_instance, flags)},
+    };
+    uint32_t num_quad_instance_attrs = 4;
+    VkVertexInputAttributeDescription all_attrs[] = {
+        quad_vertex_attrs[0],
+        quad_vertex_attrs[1],
+        quad_instance_attrs[0],
+        quad_instance_attrs[1],
+        quad_instance_attrs[2],
+        quad_instance_attrs[3],
+    };
+    VkVertexInputBindingDescription all_bindings[] = {quad_vertex_binding,
+                                                      quad_instance_binding};
+    VkPipelineVertexInputStateCreateInfo quad_vertex_input = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = &binding,
-        .vertexAttributeDescriptionCount = 2,
-        .pVertexAttributeDescriptions = attrs,
+        .vertexBindingDescriptionCount = 2,
+        .pVertexBindingDescriptions = all_bindings,
+        .vertexAttributeDescriptionCount =
+            num_quad_instance_attrs + num_quad_vertex_attrs,
+        .pVertexAttributeDescriptions = all_attrs,
     };
     VkGraphicsPipelineCreateInfo pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .stageCount = 2,
         .pStages = shader_stages,
-        .pVertexInputState = &vertex_input,
+        .pVertexInputState = &quad_vertex_input,
         .pInputAssemblyState =
             &(VkPipelineInputAssemblyStateCreateInfo){
                 .sType =
@@ -578,6 +614,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
     vkQueueWaitIdle(queue);
+    // no need for semaphores becasue wayalnd
     VkSemaphoreCreateInfo semaphore_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = NULL,
@@ -832,6 +869,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, NULL);
     void* quads_vertex_buffer_mapped;
+    uint16_t quads_vertex_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 quads_vertex_buffer_memory,
                 0,
@@ -839,6 +877,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 0,
                 &quads_vertex_buffer_mapped);
     void* quads_index_buffer_mapped;
+    uint16_t quads_index_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 quads_index_buffer_memory,
                 0,
@@ -846,6 +885,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 0,
                 &quads_index_buffer_mapped);
     void* quads_instance_buffer_mapped;
+    uint16_t quads_instance_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 quads_instance_buffer_memory,
                 0,
@@ -1269,11 +1309,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             .pName = "main",
         },
     };
-    enum {
-        max_sdf_quads = 500,
-    };
     VkDeviceSize sdf_vertex_buffer_size =
-        sizeof(sdf_vertex_t) * max_sdf_quads * 4;
+        sizeof(sdf_vertex) * max_sdf_quads * 4 * max_frames;
     VkBufferCreateInfo sdf_vertex_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_vertex_buffer_size,
@@ -1317,7 +1354,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkBindBufferMemory(
         device, sdf_vertex_buffer, sdf_vertex_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-    VkDeviceSize sdf_index_buffer_size = sizeof(uint16_t) * max_sdf_quads * 6;
+    VkDeviceSize sdf_index_buffer_size =
+        sizeof(uint16_t) * max_sdf_quads * 6 * max_frames;
     VkBufferCreateInfo sdf_index_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_index_buffer_size,
@@ -1360,26 +1398,107 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result = vkBindBufferMemory(
         device, sdf_index_buffer, sdf_index_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-    VkVertexInputBindingDescription vertex_binding_desc = {
+    VkDeviceSize sdf_instance_buffer_size =
+        sizeof(sdf_instance) * max_sdf_quads * max_instances_per_sdf_quad *
+        max_frames;
+    VkBufferCreateInfo sdf_instance_buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sdf_instance_buffer_size,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    VkBuffer sdf_instance_buffer;
+    result = vkCreateBuffer(
+        device, &sdf_instance_buffer_info, NULL, &sdf_instance_buffer);
+    assert(result == VK_SUCCESS);
+    VkMemoryRequirements sdf_instance_buffer_memory_requirements;
+    vkGetBufferMemoryRequirements(
+        device, sdf_instance_buffer, &sdf_instance_buffer_memory_requirements);
+    VkPhysicalDeviceMemoryProperties sdf_instance_buffer_memory_properties;
+    vkGetPhysicalDeviceMemoryProperties(physical_device,
+                                        &sdf_instance_buffer_memory_properties);
+    uint32_t sdf_instance_buffer_memory_type = UINT32_MAX;
+    for (uint32_t i = 0;
+         i < sdf_instance_buffer_memory_properties.memoryTypeCount;
+         i++) {
+        if ((sdf_instance_buffer_memory_requirements.memoryTypeBits &
+             (1 << i)) &&
+            (sdf_instance_buffer_memory_properties.memoryTypes[i]
+                 .propertyFlags &
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            sdf_instance_buffer_memory_type = i;
+            break;
+        }
+    }
+    assert(sdf_instance_buffer_memory_type != UINT32_MAX);
+    VkMemoryAllocateInfo sdf_instance_buffer_allocate_info = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = sdf_instance_buffer_memory_requirements.size,
+        .memoryTypeIndex = sdf_instance_buffer_memory_type,
+    };
+    VkDeviceMemory sdf_instance_buffer_memory;
+    result = vkAllocateMemory(device,
+                              &sdf_instance_buffer_allocate_info,
+                              NULL,
+                              &sdf_instance_buffer_memory);
+    assert(result == VK_SUCCESS);
+    result = vkBindBufferMemory(
+        device, sdf_instance_buffer, sdf_instance_buffer_memory, 0);
+    assert(result == VK_SUCCESS);
+    VkVertexInputBindingDescription sdf_vertex_binding_desc = {
         .binding = 0,
-        .stride = sizeof(sdf_vertex_t),
+        .stride = sizeof(sdf_vertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
-    VkVertexInputAttributeDescription sdf_vertex_attribute_descs[] = {
-        {0, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex_t, pos)},
-        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex_t, uv)},
-        {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, thickness)},
-        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex_t, feather)},
-        {4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex_t, color)},
+    VkVertexInputBindingDescription sdf_instance_binding_desc = {
+        .binding = 1,
+        .stride = sizeof(sdf_instance),
+        .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
     };
+    VkVertexInputAttributeDescription sdf_vertex_attribute_descs[] = {
+        {0, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex, pos)},
+        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, uv)},
+        {2, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, thickness)},
+        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, feather)},
+        {4, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex, color)},
+    };
+    uint32_t num_sdf_vertex_attrs = 5;
+    VkVertexInputAttributeDescription sdf_instance_attribute_descs[] = {
+        {5, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, x)},
+        {6, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, y)},
+        {7, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, color)},
+        {8, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_x)},
+        {9, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_y)},
+        {10, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, thickness)},
+        {11, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, feather)},
+        {12, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, flags)},
+    };
+    uint32_t num_sdf_instance_attrs = 8;
+    VkVertexInputAttributeDescription sdf_all_attrs[] = {
+        sdf_vertex_attribute_descs[0],
+        sdf_vertex_attribute_descs[1],
+        sdf_vertex_attribute_descs[2],
+        sdf_vertex_attribute_descs[3],
+        sdf_vertex_attribute_descs[4],
+        sdf_instance_attribute_descs[0],
+        sdf_instance_attribute_descs[1],
+        sdf_instance_attribute_descs[2],
+        sdf_instance_attribute_descs[3],
+        sdf_instance_attribute_descs[4],
+        sdf_instance_attribute_descs[5],
+        sdf_instance_attribute_descs[6],
+        sdf_instance_attribute_descs[7],
+    };
+    VkVertexInputBindingDescription sdf_all_bindings[] = {
+        sdf_vertex_binding_desc, sdf_instance_binding_desc};
     VkPipelineVertexInputStateCreateInfo sdf_vertex_input_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 1,
-        .pVertexBindingDescriptions = &vertex_binding_desc,
+        .vertexBindingDescriptionCount = 2,
+        .pVertexBindingDescriptions = sdf_all_bindings,
         .vertexAttributeDescriptionCount =
-            (uint32_t)(sizeof(sdf_vertex_attribute_descs) /
-                       sizeof(sdf_vertex_attribute_descs[0])),
-        .pVertexAttributeDescriptions = sdf_vertex_attribute_descs,
+            num_sdf_vertex_attrs + num_sdf_instance_attrs,
+        .pVertexAttributeDescriptions = sdf_all_attrs,
     };
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -1493,6 +1612,31 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     war_glyph_info* heap_glyphs = malloc(sizeof(war_glyph_info) * 128);
     memcpy(heap_glyphs, glyphs, sizeof(war_glyph_info) * 128);
+    void* sdf_vertex_buffer_mapped;
+    uint16_t sdf_vertex_buffer_mapped_write_index = 0;
+    vkMapMemory(device,
+                sdf_vertex_buffer_memory,
+                0,
+                sizeof(sdf_vertex) * max_sdf_quads * 4 * max_frames,
+                0,
+                &sdf_vertex_buffer_mapped);
+    void* sdf_index_buffer_mapped;
+    uint16_t sdf_index_buffer_mapped_write_index = 0;
+    vkMapMemory(device,
+                sdf_index_buffer_memory,
+                0,
+                sizeof(uint16_t) * max_sdf_quads * 6 * max_frames,
+                0,
+                &sdf_index_buffer_mapped);
+    void* sdf_instance_buffer_mapped;
+    uint16_t sdf_instance_buffer_mapped_write_index = 0;
+    vkMapMemory(device,
+                sdf_instance_buffer_memory,
+                0,
+                sizeof(sdf_instance) * max_sdf_quads *
+                    max_instances_per_sdf_quad * max_frames,
+                0,
+                &sdf_instance_buffer_mapped);
 
     return (war_vulkan_context){
         //----------------------------------------------------------------------
@@ -1519,6 +1663,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .quads_index_buffer_memory = quads_index_buffer_memory,
         .quads_vertex_buffer = quads_vertex_buffer,
         .quads_vertex_buffer_memory = quads_vertex_buffer_memory,
+        .quads_instance_buffer = quads_instance_buffer,
+        .quads_instance_buffer_memory = quads_instance_buffer_memory,
         .texture_image = texture_image,
         .texture_memory = texture_memory,
         .texture_image_view = texture_image_view,
@@ -1527,8 +1673,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .texture_descriptor_pool = descriptor_pool,
         .in_flight_fences = in_flight_fences,
         .quads_vertex_buffer_mapped = quads_vertex_buffer_mapped,
+        .quads_vertex_buffer_mapped_write_index =
+            quads_vertex_buffer_mapped_write_index,
         .quads_index_buffer_mapped = quads_index_buffer_mapped,
+        .quads_index_buffer_mapped_write_index =
+            quads_index_buffer_mapped_write_index,
         .quads_instance_buffer_mapped = quads_instance_buffer_mapped,
+        .quads_instance_buffer_mapped_write_index =
+            quads_instance_buffer_mapped_write_index,
         .current_frame = 0,
 
         //---------------------------------------------------------------------
@@ -1551,6 +1703,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_vertex_buffer_memory = sdf_vertex_buffer_memory,
         .sdf_index_buffer = sdf_index_buffer,
         .sdf_index_buffer_memory = sdf_index_buffer_memory,
+        .sdf_instance_buffer = sdf_instance_buffer,
+        .sdf_instance_buffer_memory = sdf_instance_buffer_memory,
         .sdf_fragment_shader = sdf_fragment_shader,
         .sdf_push_constant_range = sdf_push_constant_range,
         .sdf_render_pass = sdf_render_pass,
@@ -1559,5 +1713,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .linegap = linegap,
         .cell_height = cell_height,
         .cell_width = cell_width,
+        .sdf_vertex_buffer_mapped = sdf_vertex_buffer_mapped,
+        .sdf_vertex_buffer_mapped_write_index =
+            sdf_vertex_buffer_mapped_write_index,
+        .sdf_index_buffer_mapped = sdf_index_buffer_mapped,
+        .sdf_index_buffer_mapped_write_index =
+            sdf_index_buffer_mapped_write_index,
+        .sdf_instance_buffer_mapped = sdf_instance_buffer_mapped,
+        .sdf_instance_buffer_mapped_write_index =
+            sdf_instance_buffer_mapped_write_index,
     };
 }

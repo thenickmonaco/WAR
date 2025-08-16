@@ -869,7 +869,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, NULL);
     void* quads_vertex_buffer_mapped;
-    uint16_t quads_vertex_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 quads_vertex_buffer_memory,
                 0,
@@ -877,7 +876,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 0,
                 &quads_vertex_buffer_mapped);
     void* quads_index_buffer_mapped;
-    uint16_t quads_index_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 quads_index_buffer_memory,
                 0,
@@ -885,7 +883,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 0,
                 &quads_index_buffer_mapped);
     void* quads_instance_buffer_mapped;
-    uint16_t quads_instance_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 quads_instance_buffer_memory,
                 0,
@@ -1613,7 +1610,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     war_glyph_info* heap_glyphs = malloc(sizeof(war_glyph_info) * 128);
     memcpy(heap_glyphs, glyphs, sizeof(war_glyph_info) * 128);
     void* sdf_vertex_buffer_mapped;
-    uint16_t sdf_vertex_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 sdf_vertex_buffer_memory,
                 0,
@@ -1621,7 +1617,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 0,
                 &sdf_vertex_buffer_mapped);
     void* sdf_index_buffer_mapped;
-    uint16_t sdf_index_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 sdf_index_buffer_memory,
                 0,
@@ -1629,7 +1624,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 0,
                 &sdf_index_buffer_mapped);
     void* sdf_instance_buffer_mapped;
-    uint16_t sdf_instance_buffer_mapped_write_index = 0;
     vkMapMemory(device,
                 sdf_instance_buffer_memory,
                 0,
@@ -1673,15 +1667,16 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .texture_descriptor_pool = descriptor_pool,
         .in_flight_fences = in_flight_fences,
         .quads_vertex_buffer_mapped = quads_vertex_buffer_mapped,
-        .quads_vertex_buffer_mapped_write_index =
-            quads_vertex_buffer_mapped_write_index,
         .quads_index_buffer_mapped = quads_index_buffer_mapped,
-        .quads_index_buffer_mapped_write_index =
-            quads_index_buffer_mapped_write_index,
         .quads_instance_buffer_mapped = quads_instance_buffer_mapped,
-        .quads_instance_buffer_mapped_write_index =
-            quads_instance_buffer_mapped_write_index,
         .current_frame = 0,
+        .quads_vertex_buffer_mapped_write_index = 0,
+        .quads_instance_buffer_mapped_write_index = 0,
+        .quads_index_buffer_mapped_write_index = 0,
+        .static_quads_vertex_count = 0,
+        .static_quads_instance_count = 0,
+        .static_quads_index_count = 0,
+        .current_pipeline = PIPELINE_NONE,
 
         //---------------------------------------------------------------------
         // SDF PIPELINE
@@ -1714,14 +1709,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .cell_height = cell_height,
         .cell_width = cell_width,
         .sdf_vertex_buffer_mapped = sdf_vertex_buffer_mapped,
-        .sdf_vertex_buffer_mapped_write_index =
-            sdf_vertex_buffer_mapped_write_index,
         .sdf_index_buffer_mapped = sdf_index_buffer_mapped,
-        .sdf_index_buffer_mapped_write_index =
-            sdf_index_buffer_mapped_write_index,
         .sdf_instance_buffer_mapped = sdf_instance_buffer_mapped,
-        .sdf_instance_buffer_mapped_write_index =
-            sdf_instance_buffer_mapped_write_index,
-        .current_pipeline = PIPELINE_NONE,
+        .sdf_vertex_buffer_mapped_write_index = 0,
+        .sdf_instance_buffer_mapped_write_index = 0,
+        .sdf_index_buffer_mapped_write_index = 0,
+        .static_sdf_vertex_count = 0,
+        .static_sdf_instance_count = 0,
+        .static_sdf_index_count = 0,
     };
 }

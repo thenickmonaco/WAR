@@ -78,36 +78,22 @@ enum war_misc {
 };
 
 enum war_modes {
-    MODE_COUNT = 6,
+    MODE_COUNT = 8,
     MODE_NORMAL = 0,
     MODE_VISUAL = 1,
     MODE_VISUAL_LINE = 2,
     MODE_VISUAL_BLOCK = 3,
     MODE_INSERT = 4,
     MODE_COMMAND = 5,
-};
-
-enum war_cursor_sizes {
-    CURSOR_128_CELLS_PER_BEAT_FACTOR = 32,
-    CURSOR_64_CELLS_PER_BEAT_FACTOR = 16,
-    CURSOR_32_CELLS_PER_BEAT_FACTOR = 8,
-    CURSOR_16_CELLS_PER_BEAT_FACTOR = 4,
-    CURSOR_8_CELLS_PER_BEAT_FACTOR = 2,
-    CURSOR_1_CELL_MULTIPLE = 1, // default
-    CURSOR_2_CELLS_MULTIPLE = 2,
-    CURSOR_4_CELLS_MULTIPLE = 4,
-    CURSOR_8_CELLS_MULTIPLE = 8,
-    CURSOR_16_CELLS_MULTIPLE = 16,
-    CURSOR_32_CELLS_MULTIPLE = 32,
-    CURSOR_64_CELLS_MULTIPLE = 64,
-    CURSOR_128_CELLS_MULTIPLE = 128,
+    MODE_M = 6,
+    MODE_O = 7,
 };
 
 enum war_key_trie {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 27,
+    NUM_SEQUENCES = 29,
 };
 
 enum war_pipelines {
@@ -142,8 +128,9 @@ typedef struct rgba_t {
 typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;
-    float cursor_size;
-    float cell_navigation;
+    uint32_t cursor_width_scale;
+    bool cursor_width_scale_factor;
+    float cell_navigation_scale;
     float gridline_split;
     float first_gridline_split;
     float second_gridline_split;
@@ -186,9 +173,10 @@ typedef struct war_input_cmd_context {
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
     uint32_t mode;
-    bool dirty_zoom;
-    bool dirty_notes;
-    bool dirty_text;
+    bool dirty_static;
+    bool dirty_dynamic;
+    uint32_t f_cursor_width_scale;
+    uint32_t t_cursor_width_scale;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -265,6 +253,7 @@ typedef struct quad_push_constants {
     uint32_t scroll_margin[2];
     uint32_t anchor_cell[2];
     uint32_t top_right[2];
+    float scale[2];
 } quad_push_constants;
 
 typedef struct war_vulkan_context {
@@ -302,14 +291,14 @@ typedef struct war_vulkan_context {
     VkDescriptorPool texture_descriptor_pool;
     VkFence* in_flight_fences;
     void* quads_vertex_buffer_mapped;
-    uint16_t quads_vertex_buffer_mapped_write_index;
-    uint16_t static_quads_vertex_count;
+    VkDeviceSize quads_vertex_buffer_mapped_write_index;
+    VkDeviceSize static_quads_vertex_count;
     void* quads_index_buffer_mapped;
-    uint16_t quads_index_buffer_mapped_write_index;
-    uint16_t static_quads_index_count;
+    VkDeviceSize quads_index_buffer_mapped_write_index;
+    VkDeviceSize static_quads_index_count;
     void* quads_instance_buffer_mapped;
-    uint16_t quads_instance_buffer_mapped_write_index;
-    uint16_t static_quads_instance_count;
+    VkDeviceSize quads_instance_buffer_mapped_write_index;
+    VkDeviceSize static_quads_instance_count;
     uint32_t current_frame;
     uint8_t current_pipeline;
 
@@ -344,14 +333,14 @@ typedef struct war_vulkan_context {
     float cell_height;
     float cell_width;
     void* sdf_vertex_buffer_mapped;
-    uint16_t sdf_vertex_buffer_mapped_write_index;
-    uint16_t static_sdf_vertex_count;
+    VkDeviceSize sdf_vertex_buffer_mapped_write_index;
+    VkDeviceSize static_sdf_vertex_count;
     void* sdf_instance_buffer_mapped;
-    uint16_t sdf_instance_buffer_mapped_write_index;
-    uint16_t static_sdf_instance_count;
+    VkDeviceSize sdf_instance_buffer_mapped_write_index;
+    VkDeviceSize static_sdf_instance_count;
     void* sdf_index_buffer_mapped;
-    uint16_t sdf_index_buffer_mapped_write_index;
-    uint16_t static_sdf_index_count;
+    VkDeviceSize sdf_index_buffer_mapped_write_index;
+    VkDeviceSize static_sdf_index_count;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

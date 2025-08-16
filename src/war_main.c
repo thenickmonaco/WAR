@@ -114,10 +114,13 @@ void* war_window_render(void* args) {
         .mode = MODE_NORMAL,
         .col = 0,
         .row = 0,
-        .cursor_size = CURSOR_1_CELL_MULTIPLE,
-        .cell_navigation = CURSOR_1_CELL_MULTIPLE,
-        .first_gridline_split = CURSOR_4_CELLS_MULTIPLE, // strongest
-        .second_gridline_split = CURSOR_1_CELL_MULTIPLE,
+        .f_cursor_width_scale = 1,
+        .t_cursor_width_scale = 1,
+        .cursor_width_scale = 1,
+        .cursor_width_scale_factor = 0,
+        .cell_navigation_scale = 1,
+        .first_gridline_split = 4, // strongest
+        .second_gridline_split = 1,
         .third_gridline_split = UNSET,
         .fourth_gridline_split = UNSET,
         .left_col = 0,
@@ -165,9 +168,8 @@ void* war_window_render(void* args) {
         .max_rows = UINT32_MAX,
         .min_cols = 0,
         .min_rows = 0,
-        .dirty_zoom = 1,
-        .dirty_notes = 1,
-        .dirty_text = 1,
+        .dirty_static = 1,
+        .dirty_dynamic = 1,
     };
 
     war_key_event input_sequence_ring_buffer[ring_buffer_size];
@@ -1033,6 +1035,36 @@ void* war_window_render(void* args) {
             input_cmd_context.numeric_prefix = 0;
             input_cmd_context.mode = MODE_NORMAL;
             goto cmd_done;
+        cmd_normal_t:
+            call_carmack("cmd_normal_t");
+            if (!input_cmd_context.numeric_prefix) {
+                input_cmd_context.cursor_width_scale =
+                    input_cmd_context.t_cursor_width_scale;
+                input_cmd_context.cursor_width_scale_factor = true;
+                goto cmd_done;
+            }
+            input_cmd_context.cursor_width_scale =
+                input_cmd_context.numeric_prefix;
+            input_cmd_context.t_cursor_width_scale =
+                input_cmd_context.cursor_width_scale;
+            input_cmd_context.cursor_width_scale_factor = true;
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_f:
+            call_carmack("cmd_normal_f");
+            if (!input_cmd_context.numeric_prefix) {
+                input_cmd_context.cursor_width_scale =
+                    input_cmd_context.f_cursor_width_scale;
+                input_cmd_context.cursor_width_scale_factor = false;
+                goto cmd_done;
+            }
+            input_cmd_context.cursor_width_scale =
+                input_cmd_context.numeric_prefix;
+            input_cmd_context.f_cursor_width_scale =
+                input_cmd_context.cursor_width_scale;
+            input_cmd_context.cursor_width_scale_factor = false;
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
         cmd_done:
             trinity = TRINITY_NOT_CALLED;
 
@@ -1461,60 +1493,46 @@ void* war_window_render(void* args) {
                     vkCmdBeginRenderPass(vulkan_context.cmd_buffer,
                                          &render_pass_info,
                                          VK_SUBPASS_CONTENTS_INLINE);
-                    vulkan_context.quads_vertex_buffer_mapped_write_index = 0;
-                    vulkan_context.quads_index_buffer_mapped_write_index = 0;
-                    vulkan_context.quads_instance_buffer_mapped_write_index = 0;
-                    vulkan_context.sdf_vertex_buffer_mapped_write_index = 0;
-                    vulkan_context.sdf_index_buffer_mapped_write_index = 0;
-                    vulkan_context.sdf_instance_buffer_mapped_write_index = 0;
                     //---------------------------------------------------------
-                    // STATIC QUADS
+                    // STATIC QUADS AND STATIC SDF TEXT (STATUS/HUD)
                     //---------------------------------------------------------
-                    if (input_cmd_context.dirty_zoom) {
-                        if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
-                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                              vulkan_context.pipeline);
-                            vulkan_context.current_pipeline = PIPELINE_QUAD;
-                        }
+                    vulkan_context.static_quads_vertex_count = 0;
+                    vulkan_context.static_quads_instance_count = 0;
+                    vulkan_context.static_quads_index_count = 0;
+                    if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
+                        vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                          VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                          vulkan_context.pipeline);
+                        vulkan_context.current_pipeline = PIPELINE_QUAD;
                     }
-                    //---------------------------------------------------------
-                    // STATIC SDF
-                    //---------------------------------------------------------
-                    if (input_cmd_context.dirty_zoom ||
-                        input_cmd_context.dirty_text) {
-                        if (vulkan_context.current_pipeline != PIPELINE_SDF) {
-                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                              vulkan_context.sdf_pipeline);
-                            vulkan_context.current_pipeline = PIPELINE_SDF;
-                        }
+                    // static quad logic
+                    vulkan_context.static_sdf_vertex_count = 0;
+                    vulkan_context.static_sdf_instance_count = 0;
+                    vulkan_context.static_sdf_index_count = 0;
+                    if (vulkan_context.current_pipeline != PIPELINE_SDF) {
+                        vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                          VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                          vulkan_context.sdf_pipeline);
+                        vulkan_context.current_pipeline = PIPELINE_SDF;
                     }
+                    // static sdf logic
                     //---------------------------------------------------------
-                    // DYNAMIC QUADS
+                    // DYNAMIC QUADS AND DYNAMIC SDF TEXT (VISIBLE GRID)
                     //---------------------------------------------------------
-                    if (input_cmd_context.dirty_zoom ||
-                        input_cmd_context.dirty_notes) {
-                        if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
-                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                              vulkan_context.pipeline);
-                            vulkan_context.current_pipeline = PIPELINE_QUAD;
-                        }
+                    vulkan_context.quads_vertex_buffer_mapped_write_index =
+                        vulkan_context.static_quads_vertex_count;
+                    vulkan_context.quads_instance_buffer_mapped_write_index =
+                        vulkan_context.static_quads_instance_count;
+                    vulkan_context.quads_index_buffer_mapped_write_index =
+                        vulkan_context.static_quads_index_count;
+                    if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
+                        vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                          VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                          vulkan_context.pipeline);
+                        vulkan_context.current_pipeline = PIPELINE_QUAD;
                     }
-                    //---------------------------------------------------------
-                    // DYNAMIC SDF
-                    //---------------------------------------------------------
-                    if (input_cmd_context.dirty_text ||
-                        input_cmd_context.dirty_zoom) {
-                        if (vulkan_context.current_pipeline != PIPELINE_SDF) {
-                            vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                              vulkan_context.sdf_pipeline);
-                            vulkan_context.current_pipeline = PIPELINE_SDF;
-                        }
-                    }
-                    // OLD LOGIC
+                    // cursor
+                    VkDeviceSize num_cursor_verts = 4;
                     quad_vertex cursor_quad_verts[4] = {
                         {{input_cmd_context.col, input_cmd_context.row},
                          white_hex,
@@ -1529,45 +1547,78 @@ void* war_window_render(void* args) {
                          white_hex,
                          0},
                     };
+                    VkDeviceSize num_cursor_indices = 6;
                     uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
-                    memcpy(vulkan_context.quads_vertex_buffer_mapped,
+                    memcpy(vulkan_context.quads_vertex_buffer_mapped +
+                               vulkan_context
+                                   .quads_vertex_buffer_mapped_write_index,
                            cursor_quad_verts,
                            sizeof(cursor_quad_verts));
-                    memcpy(vulkan_context.quads_index_buffer_mapped,
+                    memcpy(vulkan_context.quads_instance_buffer_mapped +
+                               vulkan_context
+                                   .quads_instance_buffer_mapped_write_index,
+                           VK_NULL_HANDLE,
+                           0);
+                    VkDeviceSize num_cursor_instances = 0;
+                    memcpy(vulkan_context.quads_index_buffer_mapped +
+                               vulkan_context
+                                   .quads_index_buffer_mapped_write_index,
                            cursor_quad_indices,
                            sizeof(cursor_quad_indices));
-                    VkMappedMemoryRange flush_ranges[2] = {
+                    VkMappedMemoryRange cursor_flush_ranges[3] = {
                         {
                             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                             .memory = vulkan_context.quads_vertex_buffer_memory,
-                            .offset = 0,
+                            .offset =
+                                vulkan_context
+                                    .quads_vertex_buffer_mapped_write_index,
                             .size = (sizeof(cursor_quad_verts) + 63) &
                                     ~63ULL, // needs to be multiple of 64
                         },
                         {
                             .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                            .memory =
+                                vulkan_context.quads_instance_buffer_memory,
+                            .offset =
+                                vulkan_context
+                                    .quads_instance_buffer_mapped_write_index,
+                            .size = 64,
+                        },
+                        {
+                            .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                             .memory = vulkan_context.quads_index_buffer_memory,
-                            .offset = 0,
+                            .offset =
+                                vulkan_context
+                                    .quads_index_buffer_mapped_write_index,
                             .size = (sizeof(cursor_quad_indices) + 63) &
                                     ~63ULL, // needs to be multiple of 64
                         }};
                     vkFlushMappedMemoryRanges(
-                        vulkan_context.device, 2, flush_ranges);
-                    VkDeviceSize cursor_vertex_offsets[] = {0, 0};
+                        vulkan_context.device, 3, cursor_flush_ranges);
+                    VkDeviceSize cursor_vertex_offset =
+                        vulkan_context.quads_vertex_buffer_mapped_write_index *
+                        sizeof(quad_vertex);
+                    VkDeviceSize cursor_instance_offset =
+                        vulkan_context
+                            .quads_instance_buffer_mapped_write_index *
+                        sizeof(quad_instance);
+                    VkDeviceSize cursor_index_offset =
+                        vulkan_context.quads_index_buffer_mapped_write_index *
+                        sizeof(uint16_t);
                     vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                            0,
                                            1,
                                            &vulkan_context.quads_vertex_buffer,
-                                           cursor_vertex_offsets);
+                                           &cursor_vertex_offset);
                     vkCmdBindVertexBuffers(
                         vulkan_context.cmd_buffer,
                         1,
                         1,
                         &vulkan_context.quads_instance_buffer,
-                        cursor_vertex_offsets);
+                        &cursor_instance_offset);
                     vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
                                          vulkan_context.quads_index_buffer,
-                                         0,
+                                         cursor_index_offset,
                                          VK_INDEX_TYPE_UINT16);
                     VkViewport cursor_viewport = {
                         .x = 0.0f,
@@ -1585,6 +1636,11 @@ void* war_window_render(void* args) {
                     };
                     vkCmdSetScissor(
                         vulkan_context.cmd_buffer, 0, 1, &cursor_scissor);
+                    float cursor_width_scale =
+                        input_cmd_context.cursor_width_scale;
+                    if (input_cmd_context.cursor_width_scale_factor) {
+                        cursor_width_scale = 1.0f / cursor_width_scale;
+                    }
                     quad_push_constants cursor_pc = {
                         .bottom_left = {input_cmd_context.left_col,
                                         input_cmd_context.bottom_row},
@@ -1601,6 +1657,7 @@ void* war_window_render(void* args) {
                                         input_cmd_context.row},
                         .top_right = {input_cmd_context.top_row,
                                       input_cmd_context.right_col},
+                        .scale = {cursor_width_scale, 1.0f},
                     };
                     vkCmdPushConstants(vulkan_context.cmd_buffer,
                                        vulkan_context.pipeline_layout,
@@ -1609,135 +1666,25 @@ void* war_window_render(void* args) {
                                        sizeof(quad_push_constants),
                                        &cursor_pc);
                     vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
-                    //---------------------------------------------------------
-                    // STATUS BARS
-                    //---------------------------------------------------------
-                    // quad_vertex tmux_status_bar_verts[4] = {
-                    //    {{0, 0}, red_hex, 0},
-                    //    {{input_cmd_context.viewport_cols, 0}, red_hex, 0},
-                    //    {{input_cmd_context.viewport_cols, 1}, red_hex, 0},
-                    //    {{0, 1}, red_hex, 0},
-                    //};
-                    // quad_vertex vim_mode_status_bar_verts[4] = {
-                    //    {{0, 1}, dark_gray_hex, 0},
-                    //    {{input_cmd_context.viewport_cols, 1},
-                    //     dark_gray_hex,
-                    //     0},
-                    //    {{input_cmd_context.viewport_cols, 2},
-                    //     dark_gray_hex,
-                    //     0},
-                    //    {{0, 2}, dark_gray_hex, 0},
-                    //};
-                    // quad_vertex vim_status_bar_verts[4] = {
-                    //    {{0, 2}, light_gray_hex, 0},
-                    //    {{input_cmd_context.viewport_cols, 2},
-                    //     light_gray_hex,
-                    //     0},
-                    //    {{input_cmd_context.viewport_cols, 3},
-                    //     light_gray_hex,
-                    //     0},
-                    //    {{0, 3}, light_gray_hex, 0},
-                    //};
-                    // uint16_t status_bar_quads_indices[18] = {0,
-                    //                                         1,
-                    //                                         2,
-                    //                                         2,
-                    //                                         3,
-                    //                                         0,
-                    //                                         4,
-                    //                                         5,
-                    //                                         6,
-                    //                                         6,
-                    //                                         7,
-                    //                                         4,
-                    //                                         8,
-                    //                                         9,
-                    //                                         10,
-                    //                                         10,
-                    //                                         11,
-                    //                                         8};
-                    // void* status_bar_vertex_data;
-                    // vkMapMemory(vulkan_context.device,
-                    //            vulkan_context.quads_vertex_buffer_memory,
-                    //            sizeof(cursor_quad_verts) +
-                    //                sizeof(quad_vertex) * 4 *
-                    //                    num_gridline_quads,
-                    //            sizeof(tmux_status_bar_verts) +
-                    //                sizeof(vim_mode_status_bar_verts) +
-                    //                sizeof(vim_status_bar_verts),
-                    //            0,
-                    //            &status_bar_vertex_data);
-                    // memcpy(status_bar_vertex_data,
-                    //       tmux_status_bar_verts,
-                    //       sizeof(tmux_status_bar_verts));
-                    // memcpy(status_bar_vertex_data +
-                    //           sizeof(tmux_status_bar_verts),
-                    //       vim_mode_status_bar_verts,
-                    //       sizeof(vim_mode_status_bar_verts));
-                    // memcpy(status_bar_vertex_data +
-                    //           sizeof(tmux_status_bar_verts) +
-                    //           sizeof(vim_mode_status_bar_verts),
-                    //       vim_status_bar_verts,
-                    //       sizeof(vim_status_bar_verts));
-                    // vkUnmapMemory(vulkan_context.device,
-                    //              vulkan_context.quads_vertex_buffer_memory);
-                    // void* status_bar_index_data;
-                    // vkMapMemory(vulkan_context.device,
-                    //            vulkan_context.quads_index_buffer_memory,
-                    //            sizeof(cursor_quad_indices) +
-                    //                sizeof(uint16_t) * 6 * num_gridline_quads,
-                    //            sizeof(status_bar_quads_indices),
-                    //            0,
-                    //            &status_bar_index_data);
-                    // memcpy(status_bar_index_data,
-                    //       status_bar_quads_indices,
-                    //       sizeof(status_bar_quads_indices));
-                    // vkUnmapMemory(vulkan_context.device,
-                    //              vulkan_context.quads_index_buffer_memory);
-                    // VkDeviceSize status_bar_vert_offsets[] = {
-                    //    sizeof(cursor_quad_verts) +
-                    //    4 * sizeof(quad_vertex) * num_gridline_quads};
-                    // vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
-                    //                       0,
-                    //                       1,
-                    //                       &vulkan_context.quads_vertex_buffer,
-                    //                       status_bar_vert_offsets);
-                    // vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
-                    //                     vulkan_context.quads_index_buffer,
-                    //                     sizeof(cursor_quad_indices) +
-                    //                         6 * sizeof(uint16_t) *
-                    //                             num_gridline_quads,
-                    //                     VK_INDEX_TYPE_UINT16);
-                    // quad_push_constants status_bar_pc = {
-                    //    .bottom_left = {0, 0},
-                    //    .physical_size = {physical_width, physical_height},
-                    //    .cell_size = {input_cmd_context.cell_width,
-                    //                  input_cmd_context.cell_height},
-                    //    .zoom = input_cmd_context.zoom_scale,
-                    //    .cell_offsets = {0, 0},
-                    //    .scroll_margin =
-                    //    {input_cmd_context.scroll_margin_cols,
-                    //                      input_cmd_context.scroll_margin_rows},
-                    //    .anchor_cell = {0, 0},
-                    //    .top_right = {input_cmd_context.viewport_cols,
-                    //                  input_cmd_context.viewport_rows},
-                    //};
-                    // vkCmdPushConstants(vulkan_context.cmd_buffer,
-                    //                   vulkan_context.pipeline_layout,
-                    //                   VK_SHADER_STAGE_VERTEX_BIT,
-                    //                   0,
-                    //                   sizeof(quad_push_constants),
-                    //                   &status_bar_pc);
-                    // vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0,
-                    // 0);
-                    //---------------------------------------------------------
-                    // TODO: STATUS BARS TEXT
-                    //---------------------------------------------------------
-
-                    //---------------------------------------------------------
-                    // TODO: LINE NUMBERS
-                    //---------------------------------------------------------
-
+                    vulkan_context.sdf_vertex_buffer_mapped_write_index =
+                        vulkan_context.static_sdf_vertex_count;
+                    vulkan_context.sdf_instance_buffer_mapped_write_index =
+                        vulkan_context.static_sdf_instance_count;
+                    vulkan_context.sdf_index_buffer_mapped_write_index =
+                        vulkan_context.static_sdf_index_count;
+                    vulkan_context.quads_vertex_buffer_mapped_write_index +=
+                        num_cursor_verts;
+                    vulkan_context.quads_instance_buffer_mapped_write_index +=
+                        num_cursor_instances;
+                    vulkan_context.quads_index_buffer_mapped_write_index +=
+                        num_cursor_indices;
+                    if (vulkan_context.current_pipeline != PIPELINE_SDF) {
+                        vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                          VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                          vulkan_context.sdf_pipeline);
+                        vulkan_context.current_pipeline = PIPELINE_SDF;
+                    }
+                    // dynamic sdf logic
                     //---------------------------------------------------------
                     // END RENDER PASS
                     //---------------------------------------------------------
@@ -1759,9 +1706,6 @@ void* war_window_render(void* args) {
                         &submit_info,
                         vulkan_context
                             .in_flight_fences[vulkan_context.current_frame]);
-                    input_cmd_context.dirty_zoom = 0;
-                    input_cmd_context.dirty_text = 0;
-                    input_cmd_context.dirty_notes = 0;
                     assert(result == VK_SUCCESS);
 #endif
 #if WL_SHM
@@ -2498,8 +2442,7 @@ void* war_window_render(void* args) {
                                size);
                     call_carmack("seat: %s",
                                  (const char*)msg_buffer + msg_buffer_offset +
-                                     12,
-                                 size);
+                                     12);
                     goto done;
                 wl_keyboard_keymap:
                     dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
@@ -2673,82 +2616,47 @@ void* war_window_render(void* args) {
                                 {.keysym = XKB_KEY_Escape, .mod = 0},
                                 {0},
                             },
+                            {
+                                {.keysym = XKB_KEY_f, .mod = 0},
+                                {0},
+                            },
+                            {
+                                {.keysym = XKB_KEY_t, .mod = 0},
+                                {0},
+                            },
                         };
                     void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
                         // normal, visual, visual_line, visual_block, insert,
-                        // command
-                        {&&cmd_normal_k, NULL, NULL, NULL, NULL, NULL}, // k
-                        {&&cmd_normal_j, NULL, NULL, NULL, NULL, NULL}, // j
-                        {&&cmd_normal_h, NULL, NULL, NULL, NULL, NULL}, // h
-                        {&&cmd_normal_l, NULL, NULL, NULL, NULL, NULL}, // l
-                        {&&cmd_normal_alt_k,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // alt_k
-                        {&&cmd_normal_alt_j,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // alt_j
-                        {&&cmd_normal_alt_h,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // alt_h
-                        {&&cmd_normal_alt_l,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL},                                         // alt_l
-                        {&&cmd_normal_0, NULL, NULL, NULL, NULL, NULL}, // 0
-                        {&&cmd_normal_$, NULL, NULL, NULL, NULL, NULL}, // $
-                        {&&cmd_normal_G, NULL, NULL, NULL, NULL, NULL}, // G
-                        {&&cmd_normal_gg, NULL, NULL, NULL, NULL, NULL}, // gg
-                        {&&cmd_normal_1, NULL, NULL, NULL, NULL, NULL},  // 1
-                        {&&cmd_normal_2, NULL, NULL, NULL, NULL, NULL},  // 2
-                        {&&cmd_normal_3, NULL, NULL, NULL, NULL, NULL},  // 3
-                        {&&cmd_normal_4, NULL, NULL, NULL, NULL, NULL},  // 4
-                        {&&cmd_normal_5, NULL, NULL, NULL, NULL, NULL},  // 5
-                        {&&cmd_normal_6, NULL, NULL, NULL, NULL, NULL},  // 6
-                        {&&cmd_normal_7, NULL, NULL, NULL, NULL, NULL},  // 7
-                        {&&cmd_normal_8, NULL, NULL, NULL, NULL, NULL},  // 8
-                        {&&cmd_normal_9, NULL, NULL, NULL, NULL, NULL},  // 9
-                        {&&cmd_normal_ctrl_equal,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // ctrl_equal
-                        {&&cmd_normal_ctrl_minus,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // ctrl_minus
-                        {&&cmd_normal_ctrl_alt_equal,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // ctrl_alt_equal
-                        {&&cmd_normal_ctrl_alt_minus,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // ctrl_alt_minus
-                        {&&cmd_normal_ctrl_0,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL,
-                         NULL}, // ctrl_0
-                        {&&cmd_normal_esc, NULL, NULL, NULL, NULL, NULL}, // esc
+                        // command, mode_m, mode_o
+                        {&&cmd_normal_k, NULL},
+                        {&&cmd_normal_j},
+                        {&&cmd_normal_h},
+                        {&&cmd_normal_l},
+                        {&&cmd_normal_alt_k},
+                        {&&cmd_normal_alt_j},
+                        {&&cmd_normal_alt_h},
+                        {&&cmd_normal_alt_l},
+                        {&&cmd_normal_0},
+                        {&&cmd_normal_$},
+                        {&&cmd_normal_G},
+                        {&&cmd_normal_gg},
+                        {&&cmd_normal_1},
+                        {&&cmd_normal_2},
+                        {&&cmd_normal_3},
+                        {&&cmd_normal_4},
+                        {&&cmd_normal_5},
+                        {&&cmd_normal_6},
+                        {&&cmd_normal_7},
+                        {&&cmd_normal_8},
+                        {&&cmd_normal_9},
+                        {&&cmd_normal_ctrl_equal},
+                        {&&cmd_normal_ctrl_minus},
+                        {&&cmd_normal_ctrl_alt_equal},
+                        {&&cmd_normal_ctrl_alt_minus},
+                        {&&cmd_normal_ctrl_0},
+                        {&&cmd_normal_esc},
+                        {&&cmd_normal_f},
+                        {&&cmd_normal_t},
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;

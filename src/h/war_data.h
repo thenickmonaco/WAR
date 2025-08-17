@@ -112,7 +112,8 @@ typedef struct war_key_event {
 typedef struct war_key_trie_node {
     uint32_t keysym;
     uint8_t mod;
-    uint8_t is_terminal;
+    bool is_terminal;
+    bool needs_timeout;
     void* command[MODE_COUNT];
     struct war_key_trie_node* children[32];
     size_t child_count;

@@ -2680,6 +2680,8 @@ void* war_window_render(void* args) {
                                              key_labels[i]);
                     }
 
+                    war_trie_needs_timeout_init(&pool.nodes[0]);
+
                     munmap(keymap_map, keymap_size);
                     close(keymap_fd);
                     xkb_keymap_unref(xkb_keymap);
@@ -2993,6 +2995,22 @@ void* war_window_render(void* args) {
 
     end("war_window_render");
     return 0;
+}
+
+bool war_trie_needs_timeout_init(war_key_trie_node* node) {
+    if (!node) { return false; }
+
+    uint8_t subtree_has_terminal = false;
+
+    for (size_t i = 0; i < node->child_count; i++) {
+        if (war_trie_needs_timeout_init(node->children[i])) {
+            subtree_has_terminal = true;
+        }
+    }
+
+    node->needs_timeout = node->is_terminal && subtree_has_terminal;
+
+    return node->is_terminal || subtree_has_terminal;
 }
 
 war_key_trie_node* war_insert_trie_node(war_key_trie_pool* pool,

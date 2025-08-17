@@ -68,4 +68,6 @@ void war_wayland_holy_trinity(int fd,
                               uint32_t width,
                               uint32_t height);
 
+bool war_trie_needs_timeout_init(war_key_trie_node* node);
+
 #endif // WAR_WAYLAND_H

@@ -93,7 +93,7 @@ enum war_key_trie {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 29,
+    NUM_SEQUENCES = 30,
 };
 
 enum war_pipelines {

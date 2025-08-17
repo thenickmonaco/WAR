@@ -319,11 +319,9 @@ void* war_window_render(void* args) {
                     },
             },
     };
-
     const uint64_t frame_duration_us = 16666; // 60 fps
     uint64_t last_frame_time = get_monotonic_time_us();
     int end_window_render = 0;
-
     //-------------------------------------------------------------------------
     // window_render loop
     //-------------------------------------------------------------------------
@@ -349,13 +347,11 @@ void* war_window_render(void* args) {
             //            read_le64(audio_to_window_render_ring_buffer +
             //                      *read_from_audio_index + 8);
             //        call_carmack("current_repeat_us: %lu", current_repeat_us);
-
             //        *read_from_audio_index =
             //            (*read_from_audio_index + 16) & 0xFF;
             //        break;
             //    }
             //}
-
             //-----------------------------------------------------------------
             //  INPUT HANDLING
             //-----------------------------------------------------------------
@@ -1063,6 +1059,10 @@ void* war_window_render(void* args) {
             input_cmd_context.f_cursor_width_scale =
                 input_cmd_context.cursor_width_scale;
             input_cmd_context.cursor_width_scale_factor = false;
+            input_cmd_context.numeric_prefix = 0;
+            goto cmd_done;
+        cmd_normal_g:
+            call_carmack("cmd_normal_g");
             input_cmd_context.numeric_prefix = 0;
             goto cmd_done;
         cmd_done:
@@ -2624,6 +2624,10 @@ void* war_window_render(void* args) {
                                 {.keysym = XKB_KEY_t, .mod = 0},
                                 {0},
                             },
+                            {
+                                {.keysym = XKB_KEY_g, .mod = 0},
+                                {0},
+                            },
                         };
                     void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
                         // normal, visual, visual_line, visual_block, insert,
@@ -2657,6 +2661,7 @@ void* war_window_render(void* args) {
                         {&&cmd_normal_esc},
                         {&&cmd_normal_f},
                         {&&cmd_normal_t},
+                        {&&cmd_normal_g},
                     };
                     size_t key_sequence_lengths[NUM_SEQUENCES];
                     for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES;

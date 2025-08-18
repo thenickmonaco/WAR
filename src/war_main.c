@@ -209,6 +209,15 @@ void* war_window_render(void* args) {
     war_key_trie_node* repeat_node = NULL;
     war_key_event repeat_event;
 
+    war_fsm_state fsm[MAX_STATES];
+    uint16_t current_state_index = 0;
+    for (int i = 0; i < MAX_STATES; i++) {
+        fsm[i].is_terminal = false;
+        memset(fsm[i].command, 0, sizeof(fsm[i].command));
+        memset(fsm[i].next_state, 0, sizeof(fsm[i].next_state));
+        fsm[i].last_event_us = 0;
+    }
+
     enum war_pixel_format {
         ARGB8888 = 0,
     };
@@ -1813,6 +1822,8 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_0, .mod = MOD_CTRL},
                             {0},
                         },
+                        // COMMENT CONCERN: XKB_KEY_Escape out of bounds access
+                        // on Esc = 65307
                         {
                             {.keysym = XKB_KEY_Escape, .mod = 0},
                             {0},
@@ -1859,57 +1870,37 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_f},
                     {&&cmd_normal_t},
                 };
-                size_t key_sequence_lengths[NUM_SEQUENCES];
-                for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
-                    size_t len = 0;
-                    while (len < MAX_SEQUENCE_LENGTH &&
-                           key_sequences[seq_idx][len].keysym != 0) {
-                        len++;
-                    }
-                    key_sequence_lengths[seq_idx] = len;
-                }
+                size_t state_counter = 1; // 0 = root
                 for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
                     size_t parent = 0; // start at root
-                    for (size_t key_idx = 0;
-                         key_idx < key_sequence_lengths[seq_idx];
-                         key_idx++) {
+                    size_t len = 0;
+                    while (len < MAX_SEQUENCE_LENGTH &&
+                           key_sequences[seq_idx][len].keysym != 0)
+                        len++;
+                    for (size_t key_idx = 0; key_idx < len; key_idx++) {
                         war_key_event* ev = &key_sequences[seq_idx][key_idx];
-                        war_key_trie_node* parent_node =
-                            &trie_pool.nodes[parent];
-                        size_t child_idx = SIZE_MAX;
-                        for (size_t c = 0; c < parent_node->child_count; c++) {
-                            if (parent_node->children[c]->keysym ==
-                                    ev->keysym &&
-                                parent_node->children[c]->mod == ev->mod) {
-                                child_idx = c;
-                                break;
-                            }
+                        uint16_t next =
+                            fsm[parent].next_state[ev->keysym][ev->mod];
+                        if (next == 0) {
+                            next = state_counter++;
+                            fsm[parent].next_state[ev->keysym][ev->mod] = next;
+                            fsm[next].is_terminal = false;
+                            memset(fsm[next].command,
+                                   0,
+                                   sizeof(fsm[next].command));
+                            memset(fsm[next].next_state,
+                                   0,
+                                   sizeof(fsm[next].next_state));
+                            fsm[next].last_event_us = 0;
                         }
-                        if (child_idx != SIZE_MAX) {
-                            parent = parent_node->children[child_idx] -
-                                     trie_pool.nodes;
-                            continue;
-                        }
-                        size_t new_node_idx = trie_pool.node_count++;
-                        trie_pool.nodes[new_node_idx] = (war_key_trie_node){
-                            .keysym = ev->keysym,
-                            .mod = ev->mod,
-                            .pressed = false,
-                            .is_terminal =
-                                (key_idx == key_sequence_lengths[seq_idx] - 1),
-                            .child_count = 0,
-                            .last_event_us = 0,
-                        };
-                        if (trie_pool.nodes[new_node_idx].is_terminal) {
-                            memcpy(trie_pool.nodes[new_node_idx].command,
-                                   key_labels[seq_idx],
-                                   sizeof(void*) * MODE_COUNT);
-                        }
-                        parent_node->children[parent_node->child_count++] =
-                            &trie_pool.nodes[new_node_idx];
-                        parent = new_node_idx;
+                        parent = next;
                     }
+                    fsm[parent].is_terminal = true;
+                    memcpy(fsm[parent].command,
+                           key_labels[seq_idx],
+                           sizeof(void*) * MODE_COUNT);
                 }
+                assert(state_counter < MAX_STATES);
                 munmap(keymap_map, keymap_size);
                 close(keymap_fd);
                 xkb_keymap_unref(xkb_keymap);
@@ -1948,26 +1939,18 @@ void* war_window_render(void* args) {
                 if (mods & (1 << mod_num)) mod |= MOD_NUM;
                 // if (mods & (1 << mod_fn)) mod |= MOD_FN;
                 bool pressed = (wl_key_state == 1);
-                for (size_t node_idx = 0; node_idx < trie_pool.node_count;
-                     node_idx++) {
-                    war_key_trie_node* node = &trie_pool.nodes[node_idx];
-                    if (node->keysym == keysym && node->mod == mod) {
-                        node->pressed = pressed;
-                        node->last_event_us = get_monotonic_time_us();
-                    }
-                    if (pressed && node->is_terminal) {
-                        bool all_pressed = true;
-                        for (size_t c = 0; c < node->child_count; c++) {
-                            if (!node->children[c]->pressed) {
-                                all_pressed = false;
-                                break;
-                            }
-                        }
-                        if (all_pressed) {
-                            void* cmd = node->command[input_cmd_context.mode];
-                            if (cmd != NULL) { goto* cmd; }
-                        }
-                    }
+                if (!pressed) { goto cmd_done; }
+                uint16_t next_state_index =
+                    fsm[current_state_index].next_state[keysym][mod];
+                if (next_state_index == 0) {
+                    current_state_index = 0;
+                    goto cmd_done;
+                }
+                current_state_index = next_state_index;
+                if (fsm[current_state_index].is_terminal) {
+                    uint16_t temp = current_state_index;
+                    current_state_index = 0;
+                    goto* fsm[temp].command[input_cmd_context.mode];
                 }
                 goto cmd_done;
             cmd_normal_k:
@@ -2577,6 +2560,15 @@ void* war_window_render(void* args) {
             cmd_done:
                 call_carmack("keysym pressed: %u", keysym);
                 call_carmack("mod pressed: %u", mod);
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
                 goto done;
             wl_keyboard_modifiers:
                 dump_bytes("wl_keyboard_modifiers event",

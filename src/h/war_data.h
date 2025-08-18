@@ -38,6 +38,7 @@
 #include FT_FREETYPE_H
 
 enum war_mods {
+    MOD_NONE = 0,
     MOD_SHIFT = (1 << 0),
     MOD_CTRL = (1 << 1),
     MOD_ALT = (1 << 2),
@@ -89,11 +90,12 @@ enum war_modes {
     MODE_O = 7,
 };
 
-enum war_key_trie {
+enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
     NUM_SEQUENCES = 29,
+    MAX_STATES = 256,
 };
 
 enum war_pipelines {
@@ -101,6 +103,13 @@ enum war_pipelines {
     PIPELINE_QUAD = 1,
     PIPELINE_SDF = 2,
 };
+
+typedef struct war_fsm_state {
+    bool is_terminal;
+    void* command[MODE_COUNT];
+    uint16_t next_state[256][16];
+    uint64_t last_event_us;
+} war_fsm_state;
 
 typedef struct war_key_event {
     uint32_t keysym;

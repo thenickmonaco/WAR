@@ -128,42 +128,4 @@ clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
 }
 
-static inline void* war_match_sequence_in_trie(war_key_trie_pool* pool,
-                                               war_key_event* input_seq,
-                                               size_t input_len,
-                                               size_t* out_matched_length,
-                                               size_t mode) {
-    war_key_trie_node* node = &pool->nodes[0];
-    void* matched_command = NULL;
-    size_t matched_len = 0;
-
-    for (size_t len = 0; len < input_len; len++) {
-        uint32_t keysym = input_seq[len].keysym;
-        uint8_t mod = input_seq[len].mod;
-
-        war_key_trie_node* child = NULL;
-        for (size_t c = 0; c < node->child_count; c++) {
-            war_key_trie_node* candidate = node->children[c];
-            if (candidate->keysym == keysym && candidate->mod == mod) {
-                child = candidate;
-                break;
-            }
-        }
-
-        if (!child) {
-            break; // no further match
-        }
-
-        node = child;
-
-        if (node->is_terminal) {
-            matched_command = node->command[mode];
-            matched_len = len + 1;
-        }
-    }
-
-    if (out_matched_length) { *out_matched_length = matched_len; }
-    return matched_command;
-}
-
 #endif // WAR_MACROS_H

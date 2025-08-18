@@ -93,7 +93,7 @@ enum war_key_trie {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 30,
+    NUM_SEQUENCES = 29,
 };
 
 enum war_pipelines {
@@ -105,18 +105,17 @@ enum war_pipelines {
 typedef struct war_key_event {
     uint32_t keysym;
     uint8_t mod;
-    uint8_t state;
-    uint64_t timestamp_us;
 } war_key_event;
 
 typedef struct war_key_trie_node {
     uint32_t keysym;
     uint8_t mod;
+    bool pressed;
     bool is_terminal;
-    bool needs_timeout;
     void* command[MODE_COUNT];
     struct war_key_trie_node* children[32];
     size_t child_count;
+    uint64_t last_event_us;
 } war_key_trie_node;
 
 typedef struct rgba_t {

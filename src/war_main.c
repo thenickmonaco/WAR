@@ -824,12 +824,18 @@ void* war_window_render(void* args) {
                     {{input_cmd_context.viewport_cols, 3}, light_gray_hex, 0},
                     {{0, 3}, light_gray_hex, 0},
                 };
+                quad_instance status_bar_instances[0];
                 uint16_t status_bar_indices[18] = {
                     0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8};
+                uint16_t num_status_bar_indices = 18;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
                        status_bar_verts,
                        sizeof(status_bar_verts));
+                memcpy(vulkan_context.quads_instance_buffer_mapped +
+                           quads_instance_offset,
+                       status_bar_instances,
+                       sizeof(status_bar_instances));
                 memcpy(vulkan_context.quads_index_buffer_mapped +
                            quads_index_offset,
                        status_bar_indices,
@@ -845,7 +851,7 @@ void* war_window_render(void* args) {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_instance_buffer_memory,
                         .offset = align64(quads_instance_offset),
-                        .size = align64(0),
+                        .size = align64(sizeof(status_bar_instances)),
                     },
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -906,8 +912,14 @@ void* war_window_render(void* args) {
                                    0,
                                    sizeof(quad_push_constants),
                                    &status_bar_pc);
-                vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
+                vkCmdDrawIndexed(vulkan_context.cmd_buffer,
+                                 num_status_bar_indices,
+                                 1,
+                                 0,
+                                 0,
+                                 0);
                 quads_vertex_offset += sizeof(status_bar_verts);
+                quads_instance_offset += sizeof(status_bar_instances);
                 quads_index_offset += sizeof(status_bar_indices);
                 //---------------------------------------------------------
                 // DYNAMIC QUADS AND DYNAMIC SDF TEXT (VISIBLE GRID)
@@ -933,11 +945,17 @@ void* war_window_render(void* args) {
                      white_hex,
                      0},
                 };
+                quad_instance cursor_quad_instances[0];
                 uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
+                uint16_t num_cursor_quad_indices = 6;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
                        cursor_quad_verts,
                        sizeof(cursor_quad_verts));
+                memcpy(vulkan_context.quads_instance_buffer_mapped +
+                           quads_instance_offset,
+                       cursor_quad_instances,
+                       sizeof(cursor_quad_instances));
                 memcpy(vulkan_context.quads_index_buffer_mapped +
                            quads_index_offset,
                        cursor_quad_indices,
@@ -951,7 +969,7 @@ void* war_window_render(void* args) {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_instance_buffer_memory,
                         .offset = align64(quads_instance_offset),
-                        .size = align64(0),
+                        .size = align64(sizeof(cursor_quad_indices)),
                     },
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                      .memory = vulkan_context.quads_index_buffer_memory,
@@ -1017,7 +1035,12 @@ void* war_window_render(void* args) {
                                    0,
                                    sizeof(quad_push_constants),
                                    &cursor_pc);
-                vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
+                vkCmdDrawIndexed(vulkan_context.cmd_buffer,
+                                 num_cursor_quad_indices,
+                                 1,
+                                 0,
+                                 0,
+                                 0);
                 //---------------------------------------------------------
                 // END RENDER PASS
                 //---------------------------------------------------------

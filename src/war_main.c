@@ -798,6 +798,113 @@ void* war_window_render(void* args) {
                 //---------------------------------------------------------
                 // STATIC QUADS AND STATIC SDF TEXT (STATUS/HUD)
                 //---------------------------------------------------------
+                vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  vulkan_context.pipeline);
+                quad_vertex status_bar_verts[12] = {
+                    // bottom bar
+                    {{0, 0}, red_hex, 0},
+                    {{input_cmd_context.viewport_cols, 0}, red_hex, 0},
+                    {{input_cmd_context.viewport_cols, 1}, red_hex, 0},
+                    {{0, 1}, red_hex, 0},
+                    // middle bar
+                    {{0, 1}, dark_gray_hex, 0},
+                    {{input_cmd_context.viewport_cols, 1}, dark_gray_hex, 0},
+                    {{input_cmd_context.viewport_cols, 2}, dark_gray_hex, 0},
+                    {{0, 2}, dark_gray_hex, 0},
+                    // top bar
+                    {{0, 2}, light_gray_hex, 0},
+                    {{input_cmd_context.viewport_cols, 2}, light_gray_hex, 0},
+                    {{input_cmd_context.viewport_cols, 3}, light_gray_hex, 0},
+                    {{0, 3}, light_gray_hex, 0},
+                };
+                uint16_t status_bar_indices[18] = {
+                    0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8};
+                memcpy(vulkan_context.quads_vertex_buffer_mapped + 0,
+                       status_bar_verts,
+                       sizeof(status_bar_verts));
+                memcpy(vulkan_context.quads_index_buffer_mapped + 0,
+                       status_bar_indices,
+                       sizeof(status_bar_indices));
+                VkMappedMemoryRange status_bar_flush_ranges[3] = {
+                    {
+                        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                        .memory = vulkan_context.quads_vertex_buffer_memory,
+                        .offset = 0,
+                        .size = (sizeof(status_bar_verts) + 63) &
+                                ~63ULL, // needs to be multiple of 64
+                    },
+                    {
+                        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                        .memory = vulkan_context.quads_instance_buffer_memory,
+                        .offset = 0,
+                        .size = 64,
+                    },
+                    {
+                        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                        .memory = vulkan_context.quads_index_buffer_memory,
+                        .offset = 0,
+                        .size = (sizeof(status_bar_indices) + 63) &
+                                ~63ULL, // needs to be multiple of 64
+                    }};
+                vkFlushMappedMemoryRanges(
+                    vulkan_context.device, 3, status_bar_flush_ranges);
+                VkDeviceSize status_bar_vertex_offset = 0 * sizeof(quad_vertex);
+                VkDeviceSize status_bar_instance_offset =
+                    0 * sizeof(quad_instance);
+                VkDeviceSize status_bar_index_offset = 0 * sizeof(uint16_t);
+                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                       0,
+                                       1,
+                                       &vulkan_context.quads_vertex_buffer,
+                                       &status_bar_vertex_offset);
+                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                       1,
+                                       1,
+                                       &vulkan_context.quads_instance_buffer,
+                                       &status_bar_instance_offset);
+                vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                     vulkan_context.quads_index_buffer,
+                                     status_bar_index_offset,
+                                     VK_INDEX_TYPE_UINT16);
+                VkViewport status_bar_viewport = {
+                    .x = 0.0f,
+                    .y = 0.0f,
+                    .width = (float)physical_width,
+                    .height = (float)physical_height,
+                    .minDepth = 0.0f,
+                    .maxDepth = 1.0f,
+                };
+                vkCmdSetViewport(
+                    vulkan_context.cmd_buffer, 0, 1, &status_bar_viewport);
+                VkRect2D status_bar_scissor = {
+                    .offset = {0, 0},
+                    .extent = {physical_width, physical_height},
+                };
+                vkCmdSetScissor(
+                    vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
+                quad_push_constants status_bar_pc = {
+                    .bottom_left = {0, 0},
+                    .physical_size = {physical_width, physical_height},
+                    .cell_size = {input_cmd_context.cell_width,
+                                  input_cmd_context.cell_height},
+                    .zoom = input_cmd_context.zoom_scale,
+                    .cell_offsets = {0, 0},
+                    .scroll_margin = {input_cmd_context.scroll_margin_cols,
+                                      input_cmd_context.scroll_margin_rows},
+                    .anchor_cell = {input_cmd_context.col,
+                                    input_cmd_context.row},
+                    .top_right = {input_cmd_context.viewport_rows,
+                                  input_cmd_context.viewport_cols},
+                    .scale = {1.0f, 1.0f},
+                };
+                vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                   vulkan_context.pipeline_layout,
+                                   VK_SHADER_STAGE_VERTEX_BIT,
+                                   0,
+                                   sizeof(quad_push_constants),
+                                   &status_bar_pc);
+                vkCmdDrawIndexed(vulkan_context.cmd_buffer, 18, 1, 0, 0, 0);
                 //---------------------------------------------------------
                 // DYNAMIC QUADS AND DYNAMIC SDF TEXT (VISIBLE GRID)
                 //---------------------------------------------------------
@@ -822,21 +929,19 @@ void* war_window_render(void* args) {
                 };
                 VkDeviceSize num_cursor_indices = 6;
                 uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
-                memcpy(vulkan_context.quads_vertex_buffer_mapped + 0,
+                memcpy(vulkan_context.quads_vertex_buffer_mapped +
+                           sizeof(status_bar_verts),
                        cursor_quad_verts,
                        sizeof(cursor_quad_verts));
-                memcpy(vulkan_context.quads_instance_buffer_mapped + 0,
-                       VK_NULL_HANDLE,
-                       0);
-                VkDeviceSize num_cursor_instances = 0;
-                memcpy(vulkan_context.quads_index_buffer_mapped + 0,
+                memcpy(vulkan_context.quads_index_buffer_mapped +
+                           sizeof(status_bar_indices),
                        cursor_quad_indices,
                        sizeof(cursor_quad_indices));
                 VkMappedMemoryRange cursor_flush_ranges[3] = {
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_vertex_buffer_memory,
-                        .offset = 0,
+                        .offset = sizeof(status_bar_verts),
                         .size = (sizeof(cursor_quad_verts) + 63) &
                                 ~63ULL, // needs to be multiple of 64
                     },
@@ -849,15 +954,15 @@ void* war_window_render(void* args) {
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_index_buffer_memory,
-                        .offset = 0,
+                        .offset = sizeof(status_bar_indices),
                         .size = (sizeof(cursor_quad_indices) + 63) &
                                 ~63ULL, // needs to be multiple of 64
                     }};
                 vkFlushMappedMemoryRanges(
                     vulkan_context.device, 3, cursor_flush_ranges);
-                VkDeviceSize cursor_vertex_offset = 0 * sizeof(quad_vertex);
-                VkDeviceSize cursor_instance_offset = 0 * sizeof(quad_instance);
-                VkDeviceSize cursor_index_offset = 0 * sizeof(uint16_t);
+                VkDeviceSize cursor_vertex_offset = sizeof(status_bar_verts);
+                VkDeviceSize cursor_instance_offset = 0;
+                VkDeviceSize cursor_index_offset = sizeof(status_bar_indices);
                 vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                        0,
                                        1,
@@ -917,12 +1022,8 @@ void* war_window_render(void* args) {
                                    sizeof(quad_push_constants),
                                    &cursor_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
-                vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  vulkan_context.sdf_pipeline);
-                // dynamic sdf logic
                 //---------------------------------------------------------
-                // END RENDER PASS
+                //  END RENDER PASS
                 //---------------------------------------------------------
                 vkCmdEndRenderPass(vulkan_context.cmd_buffer);
                 result = vkEndCommandBuffer(vulkan_context.cmd_buffer);

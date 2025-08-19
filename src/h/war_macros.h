@@ -227,7 +227,6 @@ static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     case XKB_KEY_parenright:
         return XKB_KEY_0;
     default:
-        call_carmack("ks: %u", ks);
         return 511; // fallback / unknown
     }
 }

@@ -204,11 +204,14 @@ void* war_window_render(void* args) {
     };
     const uint64_t repeat_delay_us = 150000;
     const uint64_t repeat_rate_us = 40000;
-    const uint64_t timeout_duration_us = 300000;
     uint32_t repeat_keysym = 0;
     uint8_t repeat_mod = 0;
     bool repeating = false;
     bool goto_cmd_repeat_done = false;
+    const uint64_t timeout_duration_us = 500000;
+    uint16_t timeout_state_index = 0;
+    uint64_t timeout_start_us = 0;
+    bool timeout = false;
     bool goto_cmd_timeout_done = false;
     war_fsm_state fsm[MAX_STATES];
     uint16_t current_state_index = 0;
@@ -364,6 +367,21 @@ void* war_window_render(void* args) {
             repeating = false;
         }
     cmd_repeat_done:
+        //--------------------------------------------------------------------
+        // KEY TIMEOUTS
+        //--------------------------------------------------------------------
+        if (timeout && now >= timeout_start_us + timeout_duration_us) {
+            uint16_t temp = timeout_state_index;
+            timeout = false;
+            timeout_state_index = 0;
+            timeout_start_us = 0;
+            goto_cmd_timeout_done = true;
+            // clear current
+            current_state_index = 0;
+            fsm_state_last_event_us = now;
+            goto* fsm[temp].command[input_cmd_context.mode];
+        }
+    cmd_timeout_done:
         // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
         // if (*read_from_audio_index != *write_to_window_render_index) {
         //     switch (audio_to_window_render_ring_buffer
@@ -1856,6 +1874,10 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_t, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_g, .mod = 0},
+                            {0},
+                        },
                     };
                 void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -1889,6 +1911,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_esc},
                     {&&cmd_normal_f},
                     {&&cmd_normal_t},
+                    {&&cmd_normal_g},
                 };
                 size_t state_counter = 1; // 0 = root
                 for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
@@ -1947,6 +1970,8 @@ void* war_window_render(void* args) {
                     8; // + 8 cuz wayland
                 xkb_keysym_t keysym =
                     xkb_state_key_get_one_sym(xkb_state, keycode);
+                // TODO: Normalize the other things like '<' (regarding
+                // MOD_SHIFT and XKB)
                 keysym = normalize_keysym(
                     keysym); // normalize to lowercase and prevent out of bounds
                 xkb_mod_mask_t mods = xkb_state_serialize_mods(
@@ -1960,8 +1985,6 @@ void* war_window_render(void* args) {
                 if (mods & (1 << mod_num)) mod |= MOD_NUM;
                 // if (mods & (1 << mod_fn)) mod |= MOD_FN;
                 bool pressed = (wl_key_state == 1);
-                call_carmack("keysym: %u", keysym);
-                call_carmack("mod: %u", mod);
                 if (!pressed) {
                     key_down[keysym][mod] = false;
                     key_last_event_us[keysym][mod] = 0;
@@ -1970,6 +1993,10 @@ void* war_window_render(void* args) {
                         repeat_keysym = 0;
                         repeat_mod = 0;
                         repeating = false;
+                        // timeouts
+                        timeout = false;
+                        timeout_state_index = 0;
+                        timeout_start_us = 0;
                     }
                     goto cmd_done;
                 }
@@ -1979,8 +2006,17 @@ void* war_window_render(void* args) {
                 }
                 uint16_t next_state_index =
                     fsm[current_state_index].next_state[keysym][mod];
+                if (timeout &&
+                    fsm[timeout_state_index].next_state[keysym][mod]) {
+                    next_state_index =
+                        fsm[timeout_state_index].next_state[keysym][mod];
+                }
                 if (next_state_index == 0) {
                     current_state_index = 0;
+                    // timeouts
+                    timeout = false;
+                    timeout_state_index = 0;
+                    timeout_start_us = 0;
                     goto cmd_done;
                 }
                 current_state_index = next_state_index;
@@ -1993,7 +2029,22 @@ void* war_window_render(void* args) {
                     repeat_keysym = keysym;
                     repeat_mod = mod;
                     repeating = false;
+                    // timeouts
+                    timeout_state_index = 0;
+                    timeout_start_us = 0;
+                    timeout = false;
                     goto* fsm[temp].command[input_cmd_context.mode];
+                } else if (fsm[current_state_index].is_terminal &&
+                           state_is_prefix(current_state_index, fsm)) {
+                    // repeats
+                    repeat_keysym = 0;
+                    repeat_mod = 0;
+                    repeating = false;
+                    // timeouts
+                    timeout_state_index = current_state_index;
+                    timeout_start_us = now;
+                    timeout = true;
+                    current_state_index = 0;
                 }
                 goto cmd_done;
             cmd_normal_k:
@@ -2613,6 +2664,10 @@ void* war_window_render(void* args) {
                 if (goto_cmd_repeat_done) {
                     goto_cmd_repeat_done = false;
                     goto cmd_repeat_done;
+                }
+                if (goto_cmd_timeout_done) {
+                    goto_cmd_timeout_done = false;
+                    goto cmd_timeout_done;
                 }
                 goto done;
             wl_keyboard_modifiers:

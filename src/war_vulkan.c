@@ -1648,7 +1648,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .cmd_buffer = cmd_buffer,
         .render_pass = render_pass,
         .frame_buffer = frame_buffer,
-        .pipeline = pipeline,
+        .quad_pipeline = pipeline,
         .pipeline_layout = pipeline_layout,
         .image_view = image_view,
         .image_available_semaphore = image_available_semaphore,

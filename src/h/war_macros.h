@@ -138,6 +138,10 @@ static inline bool state_is_prefix(uint16_t state_index, war_fsm_state* fsm) {
     return false;
 }
 
+static inline uint64_t align64(uint64_t value) {
+    return (value + 63) & ~63ULL;
+}
+
 static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
         (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) {

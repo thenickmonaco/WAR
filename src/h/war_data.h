@@ -105,6 +105,12 @@ enum war_fsm {
     MAX_STATES = 256,
 };
 
+enum war_pipelines {
+    PIPELINE_NONE = 0,
+    PIPELINE_QUAD = 1,
+    PIPELINE_SDF = 2,
+};
+
 typedef struct war_fsm_state {
     bool is_terminal;
     void* command[MODE_COUNT];
@@ -281,7 +287,7 @@ typedef struct war_vulkan_context {
     VkCommandBuffer cmd_buffer;
     VkRenderPass render_pass;
     VkFramebuffer frame_buffer;
-    VkPipeline pipeline;
+    VkPipeline quad_pipeline;
     VkPipelineLayout pipeline_layout;
     VkImageView image_view;
     VkSemaphore image_available_semaphore;

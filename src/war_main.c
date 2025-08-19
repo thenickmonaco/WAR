@@ -808,6 +808,7 @@ void* war_window_render(void* args) {
                     vulkan_context.current_pipeline = PIPELINE_QUAD;
                 }
                 // static quad logic
+
                 vulkan_context.static_sdf_vertex_count = 0;
                 vulkan_context.static_sdf_instance_count = 0;
                 vulkan_context.static_sdf_index_count = 0;

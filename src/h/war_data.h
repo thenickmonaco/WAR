@@ -105,12 +105,6 @@ enum war_fsm {
     MAX_STATES = 256,
 };
 
-enum war_pipelines {
-    PIPELINE_NONE = 0,
-    PIPELINE_QUAD = 1,
-    PIPELINE_SDF = 2,
-};
-
 typedef struct war_fsm_state {
     bool is_terminal;
     void* command[MODE_COUNT];
@@ -306,16 +300,9 @@ typedef struct war_vulkan_context {
     VkDescriptorPool texture_descriptor_pool;
     VkFence* in_flight_fences;
     void* quads_vertex_buffer_mapped;
-    VkDeviceSize quads_vertex_buffer_mapped_write_index;
-    VkDeviceSize static_quads_vertex_count;
     void* quads_index_buffer_mapped;
-    VkDeviceSize quads_index_buffer_mapped_write_index;
-    VkDeviceSize static_quads_index_count;
     void* quads_instance_buffer_mapped;
-    VkDeviceSize quads_instance_buffer_mapped_write_index;
-    VkDeviceSize static_quads_instance_count;
     uint32_t current_frame;
-    uint8_t current_pipeline;
 
     //-------------------------------------------------------------------------
     // SDF PIPELINE
@@ -348,14 +335,8 @@ typedef struct war_vulkan_context {
     float cell_height;
     float cell_width;
     void* sdf_vertex_buffer_mapped;
-    VkDeviceSize sdf_vertex_buffer_mapped_write_index;
-    VkDeviceSize static_sdf_vertex_count;
     void* sdf_instance_buffer_mapped;
-    VkDeviceSize sdf_instance_buffer_mapped_write_index;
-    VkDeviceSize static_sdf_instance_count;
     void* sdf_index_buffer_mapped;
-    VkDeviceSize sdf_index_buffer_mapped_write_index;
-    VkDeviceSize static_sdf_index_count;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

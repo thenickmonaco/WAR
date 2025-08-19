@@ -798,42 +798,12 @@ void* war_window_render(void* args) {
                 //---------------------------------------------------------
                 // STATIC QUADS AND STATIC SDF TEXT (STATUS/HUD)
                 //---------------------------------------------------------
-                vulkan_context.static_quads_vertex_count = 0;
-                vulkan_context.static_quads_instance_count = 0;
-                vulkan_context.static_quads_index_count = 0;
-                if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
-                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      vulkan_context.pipeline);
-                    vulkan_context.current_pipeline = PIPELINE_QUAD;
-                }
-                // static quad logic
-
-                vulkan_context.static_sdf_vertex_count = 0;
-                vulkan_context.static_sdf_instance_count = 0;
-                vulkan_context.static_sdf_index_count = 0;
-                if (vulkan_context.current_pipeline != PIPELINE_SDF) {
-                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      vulkan_context.sdf_pipeline);
-                    vulkan_context.current_pipeline = PIPELINE_SDF;
-                }
-                // static sdf logic
                 //---------------------------------------------------------
                 // DYNAMIC QUADS AND DYNAMIC SDF TEXT (VISIBLE GRID)
                 //---------------------------------------------------------
-                vulkan_context.quads_vertex_buffer_mapped_write_index =
-                    vulkan_context.static_quads_vertex_count;
-                vulkan_context.quads_instance_buffer_mapped_write_index =
-                    vulkan_context.static_quads_instance_count;
-                vulkan_context.quads_index_buffer_mapped_write_index =
-                    vulkan_context.static_quads_index_count;
-                if (vulkan_context.current_pipeline != PIPELINE_QUAD) {
-                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      vulkan_context.pipeline);
-                    vulkan_context.current_pipeline = PIPELINE_QUAD;
-                }
+                vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  vulkan_context.pipeline);
                 // cursor
                 VkDeviceSize num_cursor_verts = 4;
                 quad_vertex cursor_quad_verts[4] = {
@@ -852,56 +822,42 @@ void* war_window_render(void* args) {
                 };
                 VkDeviceSize num_cursor_indices = 6;
                 uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
-                memcpy(
-                    vulkan_context.quads_vertex_buffer_mapped +
-                        vulkan_context.quads_vertex_buffer_mapped_write_index,
-                    cursor_quad_verts,
-                    sizeof(cursor_quad_verts));
-                memcpy(
-                    vulkan_context.quads_instance_buffer_mapped +
-                        vulkan_context.quads_instance_buffer_mapped_write_index,
-                    VK_NULL_HANDLE,
-                    0);
+                memcpy(vulkan_context.quads_vertex_buffer_mapped + 0,
+                       cursor_quad_verts,
+                       sizeof(cursor_quad_verts));
+                memcpy(vulkan_context.quads_instance_buffer_mapped + 0,
+                       VK_NULL_HANDLE,
+                       0);
                 VkDeviceSize num_cursor_instances = 0;
-                memcpy(vulkan_context.quads_index_buffer_mapped +
-                           vulkan_context.quads_index_buffer_mapped_write_index,
+                memcpy(vulkan_context.quads_index_buffer_mapped + 0,
                        cursor_quad_indices,
                        sizeof(cursor_quad_indices));
                 VkMappedMemoryRange cursor_flush_ranges[3] = {
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_vertex_buffer_memory,
-                        .offset = vulkan_context
-                                      .quads_vertex_buffer_mapped_write_index,
+                        .offset = 0,
                         .size = (sizeof(cursor_quad_verts) + 63) &
                                 ~63ULL, // needs to be multiple of 64
                     },
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_instance_buffer_memory,
-                        .offset = vulkan_context
-                                      .quads_instance_buffer_mapped_write_index,
+                        .offset = 0,
                         .size = 64,
                     },
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_index_buffer_memory,
-                        .offset = vulkan_context
-                                      .quads_index_buffer_mapped_write_index,
+                        .offset = 0,
                         .size = (sizeof(cursor_quad_indices) + 63) &
                                 ~63ULL, // needs to be multiple of 64
                     }};
                 vkFlushMappedMemoryRanges(
                     vulkan_context.device, 3, cursor_flush_ranges);
-                VkDeviceSize cursor_vertex_offset =
-                    vulkan_context.quads_vertex_buffer_mapped_write_index *
-                    sizeof(quad_vertex);
-                VkDeviceSize cursor_instance_offset =
-                    vulkan_context.quads_instance_buffer_mapped_write_index *
-                    sizeof(quad_instance);
-                VkDeviceSize cursor_index_offset =
-                    vulkan_context.quads_index_buffer_mapped_write_index *
-                    sizeof(uint16_t);
+                VkDeviceSize cursor_vertex_offset = 0 * sizeof(quad_vertex);
+                VkDeviceSize cursor_instance_offset = 0 * sizeof(quad_instance);
+                VkDeviceSize cursor_index_offset = 0 * sizeof(uint16_t);
                 vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
                                        0,
                                        1,
@@ -961,24 +917,9 @@ void* war_window_render(void* args) {
                                    sizeof(quad_push_constants),
                                    &cursor_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
-                vulkan_context.sdf_vertex_buffer_mapped_write_index =
-                    vulkan_context.static_sdf_vertex_count;
-                vulkan_context.sdf_instance_buffer_mapped_write_index =
-                    vulkan_context.static_sdf_instance_count;
-                vulkan_context.sdf_index_buffer_mapped_write_index =
-                    vulkan_context.static_sdf_index_count;
-                vulkan_context.quads_vertex_buffer_mapped_write_index +=
-                    num_cursor_verts;
-                vulkan_context.quads_instance_buffer_mapped_write_index +=
-                    num_cursor_instances;
-                vulkan_context.quads_index_buffer_mapped_write_index +=
-                    num_cursor_indices;
-                if (vulkan_context.current_pipeline != PIPELINE_SDF) {
-                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
-                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      vulkan_context.sdf_pipeline);
-                    vulkan_context.current_pipeline = PIPELINE_SDF;
-                }
+                vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  vulkan_context.sdf_pipeline);
                 // dynamic sdf logic
                 //---------------------------------------------------------
                 // END RENDER PASS

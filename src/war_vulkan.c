@@ -1670,13 +1670,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .quads_index_buffer_mapped = quads_index_buffer_mapped,
         .quads_instance_buffer_mapped = quads_instance_buffer_mapped,
         .current_frame = 0,
-        .quads_vertex_buffer_mapped_write_index = 0,
-        .quads_instance_buffer_mapped_write_index = 0,
-        .quads_index_buffer_mapped_write_index = 0,
-        .static_quads_vertex_count = 0,
-        .static_quads_instance_count = 0,
-        .static_quads_index_count = 0,
-        .current_pipeline = PIPELINE_NONE,
 
         //---------------------------------------------------------------------
         // SDF PIPELINE
@@ -1711,11 +1704,5 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_vertex_buffer_mapped = sdf_vertex_buffer_mapped,
         .sdf_index_buffer_mapped = sdf_index_buffer_mapped,
         .sdf_instance_buffer_mapped = sdf_instance_buffer_mapped,
-        .sdf_vertex_buffer_mapped_write_index = 0,
-        .sdf_instance_buffer_mapped_write_index = 0,
-        .sdf_index_buffer_mapped_write_index = 0,
-        .static_sdf_vertex_count = 0,
-        .static_sdf_instance_count = 0,
-        .static_sdf_index_count = 0,
     };
 }

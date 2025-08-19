@@ -141,7 +141,7 @@ static inline bool state_is_prefix(uint16_t state_index, war_fsm_state* fsm) {
 static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
         (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) {
-        return (uint16_t)ks; // ASCII printable
+        return (uint16_t)ks;
     }
     switch (ks) {
     case XKB_KEY_Escape:

@@ -327,6 +327,30 @@ void* war_window_render(void* args) {
         if (now - last_frame_time >= frame_duration_us) {
             last_frame_time += frame_duration_us;
         }
+        // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
+        // if (*read_from_audio_index != *write_to_window_render_index) {
+        //     switch (audio_to_window_render_ring_buffer
+        //                 [*read_from_audio_index]) {
+        //     case AUDIO_GET_TIMESTAMP:
+        //         *read_from_audio_index =
+        //             (*read_from_audio_index + 1) & 0xFF;
+        //        size_t space_till_end =
+        //            ring_buffer_size - *read_from_audio_index;
+        //        if (space_till_end < 16) { *read_from_audio_index = 0; }
+        //        current_repeat_us =
+        //            read_le64(audio_to_window_render_ring_buffer +
+        //                      *read_from_audio_index) *
+        //                1000000 +
+        //            read_le64(audio_to_window_render_ring_buffer +
+        //                      *read_from_audio_index + 8);
+        //        call_carmack("current_repeat_us: %lu", current_repeat_us);
+        //        *read_from_audio_index =
+        //            (*read_from_audio_index + 16) & 0xFF;
+        //        break;
+        //    }
+        //}
+        // COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
+        // alt+k
         //---------------------------------------------------------------------
         // KEY REPEATS
         //---------------------------------------------------------------------
@@ -382,39 +406,16 @@ void* war_window_render(void* args) {
             goto* fsm[temp].command[input_cmd_context.mode];
         }
     cmd_timeout_done:
-        // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
-        // if (*read_from_audio_index != *write_to_window_render_index) {
-        //     switch (audio_to_window_render_ring_buffer
-        //                 [*read_from_audio_index]) {
-        //     case AUDIO_GET_TIMESTAMP:
-        //         *read_from_audio_index =
-        //             (*read_from_audio_index + 1) & 0xFF;
-        //        size_t space_till_end =
-        //            ring_buffer_size - *read_from_audio_index;
-        //        if (space_till_end < 16) { *read_from_audio_index = 0; }
-        //        current_repeat_us =
-        //            read_le64(audio_to_window_render_ring_buffer +
-        //                      *read_from_audio_index) *
-        //                1000000 +
-        //            read_le64(audio_to_window_render_ring_buffer +
-        //                      *read_from_audio_index + 8);
-        //        call_carmack("current_repeat_us: %lu", current_repeat_us);
-        //        *read_from_audio_index =
-        //            (*read_from_audio_index + 16) & 0xFF;
-        //        break;
-        //    }
-        //}
-        // COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
-        // alt+k
+        //---------------------------------------------------------------------
+        // WAYLAND MESSAGE PARSING
+        //---------------------------------------------------------------------
         int ret = poll(&pfd, 1, 0);
         assert(ret >= 0);
         // if (ret == 0) { call_carmack("timeout"); }
-
         if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
             call_carmack("wayland socket error or hangup: %s", strerror(errno));
             break;
         }
-
         if (pfd.revents & POLLIN) {
             struct msghdr poll_msg_hdr = {0};
             struct iovec poll_iov;
@@ -428,19 +429,15 @@ void* war_window_render(void* args) {
             ssize_t size_read = recvmsg(fd, &poll_msg_hdr, 0);
             assert(size_read > 0);
             msg_buffer_size += size_read;
-
             size_t msg_buffer_offset = 0;
             while (msg_buffer_size - msg_buffer_offset >= 8) {
                 uint16_t size = read_le16(msg_buffer + msg_buffer_offset + 6);
-
                 if ((size < 8) ||
                     (size > (msg_buffer_size - msg_buffer_offset))) {
                     break;
                 };
-
                 uint32_t object_id = read_le32(msg_buffer + msg_buffer_offset);
                 uint16_t opcode = read_le16(msg_buffer + msg_buffer_offset + 4);
-
                 if (object_id >= max_objects || opcode >= max_opcodes) {
                     // COMMENT CONCERN: INVALID OBJECT/OP 27 TIMES!
                     // call_carmack(
@@ -448,14 +445,12 @@ void* war_window_render(void* args) {
                     //    opcode);
                     goto done;
                 }
-
                 size_t idx = obj_op_index(object_id, opcode);
                 if (obj_op[idx]) {
                     goto* obj_op[idx];
                 } else {
                     goto wayland_default;
                 }
-
             wl_registry_global:
                 dump_bytes(
                     "global event", msg_buffer + msg_buffer_offset, size);
@@ -712,7 +707,6 @@ void* war_window_render(void* args) {
                     obj_op[obj_op_index(xdg_surface_id, 0)] =
                         &&xdg_surface_configure;
                     new_id++;
-
                     uint8_t get_toplevel[12];
                     write_le32(get_toplevel, xdg_surface_id);
                     write_le16(get_toplevel + 4, 1);
@@ -732,7 +726,6 @@ void* war_window_render(void* args) {
                     obj_op[obj_op_index(xdg_toplevel_id, 3)] =
                         &&xdg_toplevel_wm_capabilities;
                     new_id++;
-
                     //---------------------------------------------------------
                     // initial commit
                     //---------------------------------------------------------
@@ -744,6 +737,9 @@ void* war_window_render(void* args) {
                     "global_rm event", msg_buffer + msg_buffer_offset, size);
                 goto done;
             wl_callback_done:
+                //-------------------------------------------------------------
+                // RENDERING WITH VULKAN
+                //-------------------------------------------------------------
                 dump_bytes("wl_callback::done event",
                            msg_buffer + msg_buffer_offset,
                            size);
@@ -1023,7 +1019,7 @@ void* war_window_render(void* args) {
                                    &cursor_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer, 6, 1, 0, 0, 0);
                 //---------------------------------------------------------
-                //  END RENDER PASS
+                // END RENDER PASS
                 //---------------------------------------------------------
                 vkCmdEndRenderPass(vulkan_context.cmd_buffer);
                 result = vkEndCommandBuffer(vulkan_context.cmd_buffer);
@@ -1094,7 +1090,6 @@ void* war_window_render(void* args) {
                                          0,
                                          physical_width,
                                          physical_height);
-                call_carmack("SOMETHING RENDERED");
                 call_carmack("COL: %u", input_cmd_context.col);
                 call_carmack("ROW: %u", input_cmd_context.row);
                 goto done;

@@ -202,21 +202,24 @@ void* war_window_render(void* args) {
         REPEAT_BPM = 4,
         REPEAT_DIFFERENT_BPM = 5,
     };
-    uint64_t repeat_start_time_us = 0;
-    uint64_t repeat_next_time_us = 0;
     const uint64_t repeat_delay_us = 150000;
     const uint64_t repeat_rate_us = 40000;
-    war_key_trie_node* repeat_node = NULL;
-    war_key_event repeat_event;
-
+    const uint64_t timeout_duration_us = 300000;
+    uint32_t repeat_keysym = 0;
+    uint8_t repeat_mod = 0;
+    bool repeating = false;
+    bool goto_cmd_repeat_done = false;
+    bool goto_cmd_timeout_done = false;
     war_fsm_state fsm[MAX_STATES];
     uint16_t current_state_index = 0;
     for (int i = 0; i < MAX_STATES; i++) {
         fsm[i].is_terminal = false;
         memset(fsm[i].command, 0, sizeof(fsm[i].command));
         memset(fsm[i].next_state, 0, sizeof(fsm[i].next_state));
-        fsm[i].last_event_us = 0;
     }
+    bool key_down[MAX_KEYSYM][MAX_MOD];
+    uint64_t key_last_event_us[MAX_KEYSYM][MAX_MOD];
+    uint64_t fsm_state_last_event_us = 0;
 
     enum war_pixel_format {
         ARGB8888 = 0,
@@ -310,23 +313,6 @@ void* war_window_render(void* args) {
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
 
-    war_key_trie_pool trie_pool = {
-        .node_count = 1,
-        .nodes =
-            {
-                [0] =
-                    {
-                        .keysym = 0,
-                        .mod = 0,
-                        .is_terminal = 0,
-                        .command = NULL,
-                        .child_count = 0,
-                        .children = {NULL},
-                        .last_event_us = 0,
-                        .pressed = 0,
-                    },
-            },
-    };
     const uint64_t frame_duration_us = 16666; // 60 fps
     uint64_t last_frame_time = get_monotonic_time_us();
     int end_window_render = 0;
@@ -338,6 +324,46 @@ void* war_window_render(void* args) {
         if (now - last_frame_time >= frame_duration_us) {
             last_frame_time += frame_duration_us;
         }
+        //---------------------------------------------------------------------
+        // KEY REPEATS
+        //---------------------------------------------------------------------
+        if (repeat_keysym) {
+            uint32_t k = repeat_keysym;
+            uint8_t m = repeat_mod;
+            if (key_down[k][m]) {
+                uint64_t elapsed = now - key_last_event_us[k][m];
+                if (!repeating) {
+                    // still waiting for initial delay
+                    if (elapsed >= repeat_delay_us) {
+                        repeating = true;
+                        key_last_event_us[k][m] = now; // reset timer
+                    }
+                } else {
+                    // normal repeating
+                    if (elapsed >= repeat_rate_us) {
+                        key_last_event_us[k][m] = now;
+                        uint16_t next_state_index =
+                            fsm[current_state_index].next_state[k][m];
+                        if (next_state_index != 0) {
+                            current_state_index = next_state_index;
+                            fsm_state_last_event_us = now;
+                            if (fsm[current_state_index].is_terminal &&
+                                !state_is_prefix(current_state_index, fsm)) {
+                                uint16_t temp = current_state_index;
+                                current_state_index = 0;
+                                goto_cmd_repeat_done = true;
+                                goto* fsm[temp].command[input_cmd_context.mode];
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            repeat_keysym = 0;
+            repeat_mod = 0;
+            repeating = false;
+        }
+    cmd_repeat_done:
         // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
         // if (*read_from_audio_index != *write_to_window_render_index) {
         //     switch (audio_to_window_render_ring_buffer
@@ -345,7 +371,6 @@ void* war_window_render(void* args) {
         //     case AUDIO_GET_TIMESTAMP:
         //         *read_from_audio_index =
         //             (*read_from_audio_index + 1) & 0xFF;
-
         //        size_t space_till_end =
         //            ring_buffer_size - *read_from_audio_index;
         //        if (space_till_end < 16) { *read_from_audio_index = 0; }
@@ -361,9 +386,6 @@ void* war_window_render(void* args) {
         //        break;
         //    }
         //}
-        //-----------------------------------------------------------------
-        //  INPUT HANDLING
-        //-----------------------------------------------------------------
         // COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
         // alt+k
         int ret = poll(&pfd, 1, 0);
@@ -1752,11 +1774,11 @@ void* war_window_render(void* args) {
                             {0},
                         },
                         {
-                            {.keysym = XKB_KEY_dollar, .mod = MOD_SHIFT},
+                            {.keysym = XKB_KEY_4, .mod = MOD_SHIFT},
                             {0},
                         },
                         {
-                            {.keysym = XKB_KEY_G, .mod = MOD_SHIFT},
+                            {.keysym = XKB_KEY_g, .mod = MOD_SHIFT},
                             {0},
                         },
                         {
@@ -1822,10 +1844,8 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_0, .mod = MOD_CTRL},
                             {0},
                         },
-                        // COMMENT CONCERN: XKB_KEY_Escape out of bounds access
-                        // on Esc = 65307
                         {
-                            {.keysym = XKB_KEY_Escape, .mod = 0},
+                            {.keysym = KEYSYM_ESCAPE, .mod = 0},
                             {0},
                         },
                         {
@@ -1891,7 +1911,6 @@ void* war_window_render(void* args) {
                             memset(fsm[next].next_state,
                                    0,
                                    sizeof(fsm[next].next_state));
-                            fsm[next].last_event_us = 0;
                         }
                         parent = next;
                     }
@@ -1928,6 +1947,8 @@ void* war_window_render(void* args) {
                     8; // + 8 cuz wayland
                 xkb_keysym_t keysym =
                     xkb_state_key_get_one_sym(xkb_state, keycode);
+                keysym = normalize_keysym(
+                    keysym); // normalize to lowercase and prevent out of bounds
                 xkb_mod_mask_t mods = xkb_state_serialize_mods(
                     xkb_state, XKB_STATE_MODS_DEPRESSED);
                 uint8_t mod = 0;
@@ -1939,7 +1960,23 @@ void* war_window_render(void* args) {
                 if (mods & (1 << mod_num)) mod |= MOD_NUM;
                 // if (mods & (1 << mod_fn)) mod |= MOD_FN;
                 bool pressed = (wl_key_state == 1);
-                if (!pressed) { goto cmd_done; }
+                call_carmack("keysym: %u", keysym);
+                call_carmack("mod: %u", mod);
+                if (!pressed) {
+                    key_down[keysym][mod] = false;
+                    key_last_event_us[keysym][mod] = 0;
+                    // repeats
+                    if (repeat_keysym == keysym) {
+                        repeat_keysym = 0;
+                        repeat_mod = 0;
+                        repeating = false;
+                    }
+                    goto cmd_done;
+                }
+                if (!key_down[keysym][mod]) {
+                    key_down[keysym][mod] = true;
+                    key_last_event_us[keysym][mod] = now;
+                }
                 uint16_t next_state_index =
                     fsm[current_state_index].next_state[keysym][mod];
                 if (next_state_index == 0) {
@@ -1947,9 +1984,15 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 current_state_index = next_state_index;
-                if (fsm[current_state_index].is_terminal) {
+                fsm_state_last_event_us = now;
+                if (fsm[current_state_index].is_terminal &&
+                    !state_is_prefix(current_state_index, fsm)) {
                     uint16_t temp = current_state_index;
                     current_state_index = 0;
+                    // repeats
+                    repeat_keysym = keysym;
+                    repeat_mod = mod;
+                    repeating = false;
                     goto* fsm[temp].command[input_cmd_context.mode];
                 }
                 goto cmd_done;
@@ -2558,8 +2601,6 @@ void* war_window_render(void* args) {
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_done:
-                call_carmack("keysym pressed: %u", keysym);
-                call_carmack("mod pressed: %u", mod);
                 war_wayland_holy_trinity(fd,
                                          wl_surface_id,
                                          wl_buffer_id,
@@ -2569,6 +2610,10 @@ void* war_window_render(void* args) {
                                          0,
                                          physical_width,
                                          physical_height);
+                if (goto_cmd_repeat_done) {
+                    goto_cmd_repeat_done = false;
+                    goto cmd_repeat_done;
+                }
                 goto done;
             wl_keyboard_modifiers:
                 dump_bytes("wl_keyboard_modifiers event",

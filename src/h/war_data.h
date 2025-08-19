@@ -48,6 +48,13 @@ enum war_mods {
     MOD_FN = (1 << 6),
 };
 
+enum war_keysyms {
+    KEYSYM_ESCAPE = 256,
+    KEYSYM_DEFAULT = 511,
+    MAX_KEYSYM = 512,
+    MAX_MOD = 16,
+};
+
 enum war_audio {
     SAMPLE_RATE = 48000,
     PERIOD_SIZE = 512,
@@ -107,8 +114,7 @@ enum war_pipelines {
 typedef struct war_fsm_state {
     bool is_terminal;
     void* command[MODE_COUNT];
-    uint16_t next_state[256][16];
-    uint64_t last_event_us;
+    uint16_t next_state[512][16];
 } war_fsm_state;
 
 typedef struct war_key_event {

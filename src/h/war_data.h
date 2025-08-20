@@ -221,6 +221,8 @@ typedef struct war_glyph_info {
 typedef struct sdf_vertex {
     uint32_t pos[2];
     float uv[2];
+    float glyph_bearing[2];
+    float glyph_size[2];
     float thickness;
     float feather;
     uint32_t color;
@@ -250,13 +252,6 @@ typedef struct quad_instance {
     uint32_t color;
     uint32_t flags;
 } quad_instance;
-
-typedef struct push_constants {
-    float zoom;
-    float _pad1;
-    float pan[2];
-    float padding;
-} push_constants;
 
 typedef struct quad_push_constants {
     uint32_t bottom_left[2];

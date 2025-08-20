@@ -168,8 +168,6 @@ void* war_window_render(void* args) {
         .max_rows = UINT32_MAX,
         .min_cols = 0,
         .min_rows = 0,
-        .dirty_static = 1,
-        .dirty_dynamic = 1,
     };
 
     uint32_t mod_shift;
@@ -753,6 +751,7 @@ void* war_window_render(void* args) {
                 const uint32_t bright_white_hex =
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
+                const uint32_t test_white_hex = 0xFFFFFFFF;
                 // single buffer
                 assert(vulkan_context.current_frame == 0);
                 vkWaitForFences(
@@ -801,6 +800,7 @@ void* war_window_render(void* args) {
                 //---------------------------------------------------------
                 // STATIC QUADS AND STATIC SDF TEXT (STATUS/HUD)
                 //---------------------------------------------------------
+                // status bars
                 if (current_pipeline != PIPELINE_QUAD) {
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -825,6 +825,7 @@ void* war_window_render(void* args) {
                     {{0, 3}, light_gray_hex, 0},
                 };
                 quad_instance status_bar_instances[0];
+                uint16_t num_status_bar_instances = 1;
                 uint16_t status_bar_indices[18] = {
                     0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8};
                 uint16_t num_status_bar_indices = 18;
@@ -914,13 +915,195 @@ void* war_window_render(void* args) {
                                    &status_bar_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                  num_status_bar_indices,
-                                 1,
+                                 num_status_bar_instances,
                                  0,
                                  0,
                                  0);
                 quads_vertex_offset += sizeof(status_bar_verts);
                 quads_instance_offset += sizeof(status_bar_instances);
                 quads_index_offset += sizeof(status_bar_indices);
+                // status bar text
+                if (current_pipeline != PIPELINE_SDF) {
+                    vkCmdBindPipeline(vulkan_context.cmd_buffer,
+                                      VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                      vulkan_context.sdf_pipeline);
+                    vkCmdBindDescriptorSets(vulkan_context.cmd_buffer,
+                                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            vulkan_context.sdf_pipeline_layout,
+                                            0,
+                                            1,
+                                            &vulkan_context.font_descriptor_set,
+                                            0,
+                                            NULL);
+                    current_pipeline = PIPELINE_SDF;
+                }
+                war_glyph_info glyph_W = vulkan_context.glyphs['W'];
+                war_glyph_info glyph_w = vulkan_context.glyphs['w'];
+                sdf_vertex status_bar_text_verts[8] = {
+                    // bottom bar
+                    // 'W'
+                    {{0, 0},
+                     {glyph_W.uv_x0, glyph_W.uv_y1},
+                     {glyph_W.bearing_x, glyph_W.bearing_y},
+                     {glyph_W.width, glyph_W.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{1, 0},
+                     {glyph_W.uv_x1, glyph_W.uv_y1},
+                     {glyph_W.bearing_x, glyph_W.bearing_y},
+                     {glyph_W.width, glyph_W.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{1, 1},
+                     {glyph_W.uv_x1, glyph_W.uv_y0},
+                     {glyph_W.bearing_x, glyph_W.bearing_y},
+                     {glyph_W.width, glyph_W.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{0, 1},
+                     {glyph_W.uv_x0, glyph_W.uv_y0},
+                     {glyph_W.bearing_x, glyph_W.bearing_y},
+                     {glyph_W.width, glyph_W.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    // 'w'
+                    {{1, 0},
+                     {glyph_w.uv_x0, glyph_w.uv_y1},
+                     {glyph_w.bearing_x, glyph_w.bearing_y},
+                     {glyph_w.width, glyph_w.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{2, 0},
+                     {glyph_w.uv_x1, glyph_w.uv_y1},
+                     {glyph_w.bearing_x, glyph_w.bearing_y},
+                     {glyph_w.width, glyph_w.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{2, 1},
+                     {glyph_w.uv_x1, glyph_w.uv_y0},
+                     {glyph_w.bearing_x, glyph_w.bearing_y},
+                     {glyph_w.width, glyph_w.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{1, 1},
+                     {glyph_w.uv_x0, glyph_w.uv_y0},
+                     {glyph_w.bearing_x, glyph_w.bearing_y},
+                     {glyph_w.width, glyph_w.height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    // middle bar
+                    // top bar
+                };
+                sdf_instance status_bar_text_instances[0];
+                uint16_t num_status_bar_text_instances = 1;
+                uint16_t status_bar_text_indices[12] = {
+                    0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
+                uint16_t num_status_bar_text_indices = 12;
+                memcpy(vulkan_context.sdf_vertex_buffer_mapped +
+                           sdf_vertex_offset,
+                       status_bar_text_verts,
+                       sizeof(status_bar_text_verts));
+                memcpy(vulkan_context.sdf_instance_buffer_mapped +
+                           sdf_instance_offset,
+                       status_bar_text_instances,
+                       sizeof(status_bar_text_instances));
+                memcpy(vulkan_context.sdf_index_buffer_mapped +
+                           sdf_index_offset,
+                       status_bar_text_indices,
+                       sizeof(status_bar_text_indices));
+                VkMappedMemoryRange status_bar_text_flush_ranges[3] = {
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = vulkan_context.sdf_vertex_buffer_memory,
+                     .offset = align64(sdf_vertex_offset),
+                     .size = align64(sizeof(status_bar_text_verts))},
+                    {
+                        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                        .memory = vulkan_context.sdf_instance_buffer_memory,
+                        .offset = align64(sdf_instance_offset),
+                        .size = align64(sizeof(status_bar_text_instances)),
+                    },
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = vulkan_context.sdf_index_buffer_memory,
+                     .offset = align64(sdf_index_offset),
+                     .size = align64(sizeof(status_bar_text_indices))}};
+                vkFlushMappedMemoryRanges(
+                    vulkan_context.device, 3, status_bar_text_flush_ranges);
+                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                       0,
+                                       1,
+                                       &vulkan_context.sdf_vertex_buffer,
+                                       &sdf_vertex_offset);
+                vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
+                                       1,
+                                       1,
+                                       &vulkan_context.sdf_instance_buffer,
+                                       &sdf_instance_offset);
+                vkCmdBindIndexBuffer(vulkan_context.cmd_buffer,
+                                     vulkan_context.sdf_index_buffer,
+                                     sdf_index_offset,
+                                     VK_INDEX_TYPE_UINT16);
+                VkViewport status_bar_text_viewport = {
+                    .x = 0.0f,
+                    .y = 0.0f,
+                    .width = (float)physical_width,
+                    .height = (float)physical_height,
+                    .minDepth = 0.0f,
+                    .maxDepth = 1.0f,
+                };
+                vkCmdSetViewport(
+                    vulkan_context.cmd_buffer, 0, 1, &status_bar_text_viewport);
+                VkRect2D status_bar_text_scissor = {
+                    .offset = {0, 0},
+                    .extent = {physical_width, physical_height},
+                };
+                vkCmdSetScissor(
+                    vulkan_context.cmd_buffer, 0, 1, &status_bar_text_scissor);
+                quad_push_constants status_bar_text_pc = {
+                    .bottom_left = {-5, -5},
+                    .physical_size = {physical_width, physical_height},
+                    .cell_size = {input_cmd_context.cell_width,
+                                  input_cmd_context.cell_height},
+                    .zoom = input_cmd_context.zoom_scale,
+                    .cell_offsets = {0, 0},
+                    .scroll_margin = {input_cmd_context.scroll_margin_cols,
+                                      input_cmd_context.scroll_margin_rows},
+                    .anchor_cell = {input_cmd_context.col,
+                                    input_cmd_context.row},
+                    .top_right = {input_cmd_context.viewport_cols,
+                                  input_cmd_context.viewport_rows},
+                    .scale = {1.0f, 1.0f},
+                };
+                vkCmdPushConstants(vulkan_context.cmd_buffer,
+                                   vulkan_context.sdf_pipeline_layout,
+                                   VK_SHADER_STAGE_VERTEX_BIT,
+                                   0,
+                                   sizeof(quad_push_constants),
+                                   &status_bar_text_pc);
+                vkCmdDrawIndexed(vulkan_context.cmd_buffer,
+                                 num_status_bar_text_indices,
+                                 num_status_bar_text_instances,
+                                 0,
+                                 0,
+                                 0);
+                sdf_vertex_offset += sizeof(status_bar_text_verts);
+                sdf_instance_offset += sizeof(status_bar_text_instances);
+                sdf_index_offset += sizeof(status_bar_text_indices);
                 //---------------------------------------------------------
                 // DYNAMIC QUADS AND DYNAMIC SDF TEXT (VISIBLE GRID)
                 //---------------------------------------------------------
@@ -946,6 +1129,7 @@ void* war_window_render(void* args) {
                      0},
                 };
                 quad_instance cursor_quad_instances[0];
+                uint16_t num_cursor_quad_instances = 1;
                 uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
                 uint16_t num_cursor_quad_indices = 6;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
@@ -1025,8 +1209,8 @@ void* war_window_render(void* args) {
                                       input_cmd_context.scroll_margin_rows},
                     .anchor_cell = {input_cmd_context.col,
                                     input_cmd_context.row},
-                    .top_right = {input_cmd_context.top_row,
-                                  input_cmd_context.right_col},
+                    .top_right = {input_cmd_context.right_col,
+                                  input_cmd_context.top_row},
                     .scale = {cursor_width_scale, 1.0f},
                 };
                 vkCmdPushConstants(vulkan_context.cmd_buffer,
@@ -1037,7 +1221,7 @@ void* war_window_render(void* args) {
                                    &cursor_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                  num_cursor_quad_indices,
-                                 1,
+                                 num_cursor_quad_instances,
                                  0,
                                  0,
                                  0);

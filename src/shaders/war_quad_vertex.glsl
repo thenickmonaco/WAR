@@ -24,12 +24,11 @@
 
 #version 450
 
-layout(location = 0) in uvec2 in_pos;   // in pixels or cell units
+layout(location = 0) in uvec2 in_pos;
 layout(location = 1) in vec4 in_color;
 
 layout(location = 0) out vec4 color;
 
-// Push constants for zoom, pan, and viewport size in pixels
 layout(push_constant) uniform PushConstants {
     layout(offset = 0) uvec2 bottom_left;
     layout(offset = 8) vec2 physical_size;

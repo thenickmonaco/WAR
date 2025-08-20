@@ -83,6 +83,7 @@ enum war_misc {
     OLED_MODE = 0,
     MAX_MIDI_NOTES = 128,
     UNSET = 0,
+    MAX_DIGITS = 10,
 };
 
 enum war_modes {

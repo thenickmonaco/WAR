@@ -939,7 +939,27 @@ void* war_window_render(void* args) {
                 }
                 war_glyph_info glyph_W = vulkan_context.glyphs['W'];
                 war_glyph_info glyph_w = vulkan_context.glyphs['w'];
-                sdf_vertex status_bar_text_verts[8] = {
+                war_glyph_info glyphs_col[MAX_DIGITS];
+                uint32_t temp_col = input_cmd_context.col;
+                uint16_t num_col_digits = 0;
+                for (int i = 0; i < MAX_DIGITS; i++) {
+                    uint32_t digit = temp_col % 10;
+                    temp_col /= 10;
+                    glyphs_col[i] = vulkan_context.glyphs['0' + digit];
+                    num_col_digits++;
+                    if (temp_col == 0) { break; }
+                }
+                war_glyph_info glyphs_row[MAX_DIGITS];
+                uint32_t temp_row = input_cmd_context.row;
+                uint16_t num_row_digits = 0;
+                for (int i = 0; i < MAX_DIGITS; i++) {
+                    uint32_t digit = temp_row % 10;
+                    temp_row /= 10;
+                    glyphs_row[i] = vulkan_context.glyphs['0' + digit];
+                    num_row_digits++;
+                    if (temp_row == 0) { break; }
+                }
+                sdf_vertex status_bar_text_verts[16] = {
                     // bottom bar
                     // 'W'
                     {{0, 0},
@@ -1007,14 +1027,105 @@ void* war_window_render(void* args) {
                      0.1f,
                      test_white_hex,
                      0},
+                    // most sig. digit of col
+                    {{3, 0},
+                     {glyphs_col[num_col_digits - 1].uv_x0,
+                      glyphs_col[num_col_digits - 1].uv_y1},
+                     {glyphs_col[num_col_digits - 1].bearing_x,
+                      glyphs_col[num_col_digits - 1].bearing_y},
+                     {glyphs_col[num_col_digits - 1].width,
+                      glyphs_col[num_col_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{4, 0},
+                     {glyphs_col[num_col_digits - 1].uv_x1,
+                      glyphs_col[num_col_digits - 1].uv_y1},
+                     {glyphs_col[num_col_digits - 1].bearing_x,
+                      glyphs_col[num_col_digits - 1].bearing_y},
+                     {glyphs_col[num_col_digits - 1].width,
+                      glyphs_col[num_col_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{4, 1},
+                     {glyphs_col[num_col_digits - 1].uv_x1,
+                      glyphs_col[num_col_digits - 1].uv_y0},
+                     {glyphs_col[num_col_digits - 1].bearing_x,
+                      glyphs_col[num_col_digits - 1].bearing_y},
+                     {glyphs_col[num_col_digits - 1].width,
+                      glyphs_col[num_col_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{3, 1},
+                     {glyphs_col[num_col_digits - 1].uv_x0,
+                      glyphs_col[num_col_digits - 1].uv_y0},
+                     {glyphs_col[num_col_digits - 1].bearing_x,
+                      glyphs_col[num_col_digits - 1].bearing_y},
+                     {glyphs_col[num_col_digits - 1].width,
+                      glyphs_col[num_col_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    // most sig. digit of row
+                    {{4, 0},
+                     {glyphs_row[num_row_digits - 1].uv_x0,
+                      glyphs_row[num_row_digits - 1].uv_y1},
+                     {glyphs_row[num_row_digits - 1].bearing_x,
+                      glyphs_row[num_row_digits - 1].bearing_y},
+                     {glyphs_row[num_row_digits - 1].width,
+                      glyphs_row[num_row_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{5, 0},
+                     {glyphs_row[num_row_digits - 1].uv_x1,
+                      glyphs_row[num_row_digits - 1].uv_y1},
+                     {glyphs_row[num_row_digits - 1].bearing_x,
+                      glyphs_row[num_row_digits - 1].bearing_y},
+                     {glyphs_row[num_row_digits - 1].width,
+                      glyphs_row[num_row_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{5, 1},
+                     {glyphs_row[num_row_digits - 1].uv_x1,
+                      glyphs_row[num_row_digits - 1].uv_y0},
+                     {glyphs_row[num_row_digits - 1].bearing_x,
+                      glyphs_row[num_row_digits - 1].bearing_y},
+                     {glyphs_row[num_row_digits - 1].width,
+                      glyphs_row[num_row_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
+                    {{4, 1},
+                     {glyphs_row[num_row_digits - 1].uv_x0,
+                      glyphs_row[num_row_digits - 1].uv_y0},
+                     {glyphs_row[num_row_digits - 1].bearing_x,
+                      glyphs_row[num_row_digits - 1].bearing_y},
+                     {glyphs_row[num_row_digits - 1].width,
+                      glyphs_row[num_row_digits - 1].height},
+                     0.1f,
+                     0.1f,
+                     test_white_hex,
+                     0},
                     // middle bar
                     // top bar
                 };
                 sdf_instance status_bar_text_instances[0];
                 uint16_t num_status_bar_text_instances = 1;
-                uint16_t status_bar_text_indices[12] = {
-                    0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
-                uint16_t num_status_bar_text_indices = 12;
+                uint16_t status_bar_text_indices[24] = {
+                    0, 1, 2,  2,  3,  0, 4,  5,  6,  6,  7,  4,
+                    8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12};
+                uint16_t num_status_bar_text_indices = 24;
                 memcpy(vulkan_context.sdf_vertex_buffer_mapped +
                            sdf_vertex_offset,
                        status_bar_text_verts,

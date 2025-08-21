@@ -1185,7 +1185,7 @@ void* war_window_render(void* args) {
                 };
                 vkCmdSetScissor(
                     vulkan_context.cmd_buffer, 0, 1, &status_bar_text_scissor);
-                quad_push_constants status_bar_text_pc = {
+                sdf_push_constants status_bar_text_pc = {
                     .bottom_left = {-5, -5},
                     .physical_size = {physical_width, physical_height},
                     .cell_size = {input_cmd_context.cell_width,
@@ -1198,13 +1198,12 @@ void* war_window_render(void* args) {
                                     input_cmd_context.row},
                     .top_right = {input_cmd_context.viewport_cols,
                                   input_cmd_context.viewport_rows},
-                    .scale = {1.0f, 1.0f},
                 };
                 vkCmdPushConstants(vulkan_context.cmd_buffer,
                                    vulkan_context.sdf_pipeline_layout,
                                    VK_SHADER_STAGE_VERTEX_BIT,
                                    0,
-                                   sizeof(quad_push_constants),
+                                   sizeof(sdf_push_constants),
                                    &status_bar_text_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer,
                                  num_status_bar_text_indices,

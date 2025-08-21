@@ -1279,7 +1279,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkPushConstantRange sdf_push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = sizeof(quad_push_constants),
+        .size = sizeof(sdf_push_constants),
     };
     VkPipelineLayoutCreateInfo sdf_pipeline_layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

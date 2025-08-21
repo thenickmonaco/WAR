@@ -241,6 +241,18 @@ typedef struct sdf_instance {
     uint32_t flags;
 } sdf_instance;
 
+typedef struct sdf_push_constants {
+    uint32_t bottom_left[2];
+    float physical_size[2];
+    float cell_size[2];
+    float zoom;
+    uint32_t _pad1;
+    uint32_t cell_offsets[2];
+    uint32_t scroll_margin[2];
+    uint32_t anchor_cell[2];
+    uint32_t top_right[2];
+} sdf_push_constants;
+
 typedef struct quad_vertex {
     uint32_t pos[2];
     uint32_t color;

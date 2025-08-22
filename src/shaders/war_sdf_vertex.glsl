@@ -19,7 +19,7 @@
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// src/shaders/war_quad_vertex.glsl
+// src/shaders/war_sdf_vertex.glsl
 //-----------------------------------------------------------------------------
 
 #version 450
@@ -32,7 +32,10 @@ layout(location = 4) in float in_thickness;
 layout(location = 5) in float in_feather;
 layout(location = 6) in vec4 in_color;
 
-layout(location = 0) out vec4 color;
+layout(location = 0) out vec2 frag_uv;
+layout(location = 1) out vec4 frag_color;
+layout(location = 2) out float frag_thickness;
+layout(location = 3) out float frag_feather;
 
 layout(push_constant) uniform PushConstants {
     layout(offset = 0) uvec2 bottom_left;
@@ -49,7 +52,7 @@ layout(push_constant) uniform PushConstants {
 void main() {
     uvec2 local_cell = (in_pos - pc.bottom_left) + pc.cell_offsets;
     vec2 cell_pixel = vec2(float(local_cell.x), float(local_cell.y)) * pc.cell_size;
-    vec2 glyph_pixel = in_glyph_bearing + in_pos * in_glyph_size;
+    vec2 glyph_pixel = in_pos;
     vec2 pixel_pos = cell_pixel + glyph_pixel;
     vec2 anchor_pixel = vec2(
         float(pc.anchor_cell.x - pc.bottom_left.x + pc.cell_offsets.x),
@@ -62,5 +65,9 @@ void main() {
         1.0 - (zoomed.y / pc.physical_size.y) * 2.0
     );
     gl_Position = vec4(ndc, 0.0, 1.0);
-    color = in_color;
+
+    frag_uv = in_uv;
+    frag_color = in_color;
+    frag_thickness = in_thickness;
+    frag_feather = in_feather;
 }

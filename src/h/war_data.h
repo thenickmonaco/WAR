@@ -251,6 +251,12 @@ typedef struct sdf_push_constants {
     uint32_t scroll_margin[2];
     uint32_t anchor_cell[2];
     uint32_t top_right[2];
+    float ascent;
+    float descent;
+    float line_gap;
+    float baseline;
+    float font_height;
+    uint32_t _pad2;
 } sdf_push_constants;
 
 typedef struct quad_vertex {
@@ -345,7 +351,9 @@ typedef struct war_vulkan_context {
     VkRenderPass sdf_render_pass;
     float ascent;
     float descent;
-    float linegap;
+    float line_gap;
+    float baseline;
+    float font_height;
     float cell_height;
     float cell_width;
     void* sdf_vertex_buffer_mapped;

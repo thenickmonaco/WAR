@@ -904,7 +904,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     float ascent = ft_regular->size->metrics.ascender / 64.0f;
     float descent = ft_regular->size->metrics.descender / 64.0f;
     float cell_height = ft_regular->size->metrics.height / 64.0f;
-    float linegap = cell_height - (ascent - descent);
+    float font_height = ascent - descent;
+    float line_gap = cell_height - font_height;
+    float baseline = ascent + line_gap / 2.0f;
     float cell_width = 0;
     enum {
         atlas_width = 512,
@@ -1702,7 +1704,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sdf_render_pass = sdf_render_pass,
         .ascent = ascent,
         .descent = descent,
-        .linegap = linegap,
+        .line_gap = line_gap,
+        .baseline = baseline,
+        .font_height = font_height,
         .cell_height = cell_height,
         .cell_width = cell_width,
         .sdf_vertex_buffer_mapped = sdf_vertex_buffer_mapped,

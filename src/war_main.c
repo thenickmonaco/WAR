@@ -1200,6 +1200,11 @@ void* war_window_render(void* args) {
                                     input_cmd_context.row},
                     .top_right = {input_cmd_context.viewport_cols,
                                   input_cmd_context.viewport_rows},
+                    .ascent = vulkan_context.ascent,
+                    .descent = vulkan_context.descent,
+                    .line_gap = vulkan_context.line_gap,
+                    .baseline = vulkan_context.baseline,
+                    .font_height = vulkan_context.font_height,
                 };
                 vkCmdPushConstants(vulkan_context.cmd_buffer,
                                    vulkan_context.sdf_pipeline_layout,

@@ -47,6 +47,12 @@ layout(push_constant) uniform PushConstants {
     layout(offset = 40) uvec2 scroll_margin; 
     layout(offset = 48) uvec2 anchor_cell;
     layout(offset = 56) uvec2 top_right;
+    layout(offset = 64) float ascent;
+    layout(offset = 68) float descent;
+    layout(offset = 72) float line_gap;
+    layout(offset = 76) float baseline;
+    layout(offset = 80) float font_height;
+    layout(offset = 84) uint _pad2;
 } pc;
 
 void main() {

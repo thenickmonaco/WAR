@@ -104,6 +104,7 @@ enum war_fsm {
     MAX_CHILDREN = 32,
     NUM_SEQUENCES = 30,
     MAX_STATES = 256,
+    MAX_COMMAND_BUFFER_LENGTH = 128,
 };
 
 enum war_pipelines {
@@ -189,8 +190,6 @@ typedef struct war_input_cmd_context {
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
     uint32_t mode;
-    bool dirty_static;
-    bool dirty_dynamic;
     uint32_t f_cursor_width_scale;
     uint32_t t_cursor_width_scale;
 } war_input_cmd_context;

@@ -110,6 +110,11 @@ void* war_window_render(void* args) {
 
     uint32_t num_rows_for_status_bars = 3;
     uint32_t num_cols_for_line_numbers = 3;
+    char sequence_chars[MAX_COMMAND_BUFFER_LENGTH] = {0};
+    uint32_t viewport_cols =
+        (uint32_t)(physical_width / vulkan_context.cell_width);
+    uint32_t viewport_rows =
+        (uint32_t)(physical_height / vulkan_context.cell_height);
     war_input_cmd_context input_cmd_context = {
         .mode = MODE_NORMAL,
         .col = 0,
@@ -153,9 +158,8 @@ void* war_window_render(void* args) {
         .anchor_y = 0.0f,
         .anchor_ndc_x = 0.0f,
         .anchor_ndc_y = 0.0f,
-        .viewport_cols = (uint32_t)(physical_width / vulkan_context.cell_width),
-        .viewport_rows =
-            (uint32_t)(physical_height / vulkan_context.cell_height),
+        .viewport_cols = viewport_cols,
+        .viewport_rows = viewport_rows,
         .scroll_margin_cols = 0, // cols from visible min/max col
         .scroll_margin_rows = 0, // rows from visible min/max row
         .cell_width = vulkan_context.cell_width,
@@ -177,9 +181,6 @@ void* war_window_render(void* args) {
     uint32_t mod_caps;
     uint32_t mod_num;
     uint32_t mod_fn;
-
-    char command_buffer[256];
-    size_t command_buffer_size;
 
     uint8_t oled_toggle = false;
 
@@ -752,6 +753,17 @@ void* war_window_render(void* args) {
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
                 const uint32_t test_white_hex = 0xFFFFFFFF;
+                enum war_modes {
+                    MODE_COUNT = 8,
+                    MODE_NORMAL = 0,
+                    MODE_VISUAL = 1,
+                    MODE_VISUAL_LINE = 2,
+                    MODE_VISUAL_BLOCK = 3,
+                    MODE_INSERT = 4,
+                    MODE_COMMAND = 5,
+                    MODE_M = 6,
+                    MODE_O = 7,
+                };
                 // single buffer
                 assert(vulkan_context.current_frame == 0);
                 vkWaitForFences(
@@ -939,11 +951,6 @@ void* war_window_render(void* args) {
                 }
                 war_glyph_info glyph_M = vulkan_context.glyphs['M'];
                 war_glyph_info glyph_m = vulkan_context.glyphs['y'];
-                call_carmack("TEST 'm' glyph_height: %f", glyph_m.height);
-                call_carmack("TEST 'M' glyph_height: %f", glyph_M.height);
-                call_carmack("TEST cell_height: %f",
-                             input_cmd_context.cell_height);
-                call_carmack("TEST pc.baseline: %f", vulkan_context.baseline);
                 war_glyph_info glyphs_col[MAX_DIGITS];
                 uint32_t temp_col = input_cmd_context.col;
                 uint16_t num_col_digits = 0;
@@ -964,104 +971,12 @@ void* war_window_render(void* args) {
                     num_row_digits++;
                     if (temp_row == 0) { break; }
                 }
-                call_carmack("TEST col digit glyph_height: %f",
-                             glyphs_col[num_col_digits - 1].height);
-                call_carmack("TEST col digit glyph_width: %f",
-                             glyphs_col[num_col_digits - 1].width);
+                uint16_t row_offset = input_cmd_context.viewport_cols * 1 / 2;
+                uint16_t col_offset = row_offset + MAX_DIGITS + 1;
+                // tbc
                 sdf_vertex status_bar_text_verts[16] = {
-                    // bottom bar
-                    // 'M'
-                    {{0, 0},
-                     {glyph_M.uv_x0, glyph_M.uv_y1},
-                     {glyph_M.bearing_x, glyph_M.bearing_y},
-                     {glyph_M.width, glyph_M.height},
-                     glyph_M.ascent,
-                     glyph_M.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {0, 0},
-                     0},
-                    {{1, 0},
-                     {glyph_M.uv_x1, glyph_M.uv_y1},
-                     {glyph_M.bearing_x, glyph_M.bearing_y},
-                     {glyph_M.width, glyph_M.height},
-                     glyph_M.ascent,
-                     glyph_M.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {1, 0},
-                     0},
-                    {{1, 1},
-                     {glyph_M.uv_x1, glyph_M.uv_y0},
-                     {glyph_M.bearing_x, glyph_M.bearing_y},
-                     {glyph_M.width, glyph_M.height},
-                     glyph_M.ascent,
-                     glyph_M.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {1, 1},
-                     0},
-                    {{0, 1},
-                     {glyph_M.uv_x0, glyph_M.uv_y0},
-                     {glyph_M.bearing_x, glyph_M.bearing_y},
-                     {glyph_M.width, glyph_M.height},
-                     glyph_M.ascent,
-                     glyph_M.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {0, 1},
-                     0},
-                    // 'm'
-                    {{1, 0},
-                     {glyph_m.uv_x0, glyph_m.uv_y1},
-                     {glyph_m.bearing_x, glyph_m.bearing_y},
-                     {glyph_m.width, glyph_m.height},
-                     glyph_m.ascent,
-                     glyph_m.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {0, 0},
-                     0},
-                    {{2, 0},
-                     {glyph_m.uv_x1, glyph_m.uv_y1},
-                     {glyph_m.bearing_x, glyph_m.bearing_y},
-                     {glyph_m.width, glyph_m.height},
-                     glyph_m.ascent,
-                     glyph_m.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {1, 0},
-                     0},
-                    {{2, 1},
-                     {glyph_m.uv_x1, glyph_m.uv_y0},
-                     {glyph_m.bearing_x, glyph_m.bearing_y},
-                     {glyph_m.width, glyph_m.height},
-                     glyph_m.ascent,
-                     glyph_m.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {1, 1},
-                     0},
-                    {{1, 1},
-                     {glyph_m.uv_x0, glyph_m.uv_y0},
-                     {glyph_m.bearing_x, glyph_m.bearing_y},
-                     {glyph_m.width, glyph_m.height},
-                     glyph_m.ascent,
-                     glyph_m.descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
-                     {0, 1},
-                     0},
                     // most sig. digit of col
-                    {{2, 0},
+                    {{col_offset, 2},
                      {glyphs_col[num_col_digits - 1].uv_x0,
                       glyphs_col[num_col_digits - 1].uv_y1},
                      {glyphs_col[num_col_digits - 1].bearing_x,
@@ -1070,12 +985,12 @@ void* war_window_render(void* args) {
                       glyphs_col[num_col_digits - 1].height},
                      glyphs_col[num_col_digits - 1].ascent,
                      glyphs_col[num_col_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {0, 0},
                      0},
-                    {{3, 0},
+                    {{col_offset + 1, 2},
                      {glyphs_col[num_col_digits - 1].uv_x1,
                       glyphs_col[num_col_digits - 1].uv_y1},
                      {glyphs_col[num_col_digits - 1].bearing_x,
@@ -1084,12 +999,12 @@ void* war_window_render(void* args) {
                       glyphs_col[num_col_digits - 1].height},
                      glyphs_col[num_col_digits - 1].ascent,
                      glyphs_col[num_col_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {1, 0},
                      0},
-                    {{3, 1},
+                    {{col_offset + 1, 3},
                      {glyphs_col[num_col_digits - 1].uv_x1,
                       glyphs_col[num_col_digits - 1].uv_y0},
                      {glyphs_col[num_col_digits - 1].bearing_x,
@@ -1098,12 +1013,12 @@ void* war_window_render(void* args) {
                       glyphs_col[num_col_digits - 1].height},
                      glyphs_col[num_col_digits - 1].ascent,
                      glyphs_col[num_col_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {1, 1},
                      0},
-                    {{2, 1},
+                    {{col_offset, 3},
                      {glyphs_col[num_col_digits - 1].uv_x0,
                       glyphs_col[num_col_digits - 1].uv_y0},
                      {glyphs_col[num_col_digits - 1].bearing_x,
@@ -1112,13 +1027,13 @@ void* war_window_render(void* args) {
                       glyphs_col[num_col_digits - 1].height},
                      glyphs_col[num_col_digits - 1].ascent,
                      glyphs_col[num_col_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {0, 1},
                      0},
                     // most sig. digit of row
-                    {{3, 0},
+                    {{row_offset, 2},
                      {glyphs_row[num_row_digits - 1].uv_x0,
                       glyphs_row[num_row_digits - 1].uv_y1},
                      {glyphs_row[num_row_digits - 1].bearing_x,
@@ -1127,12 +1042,12 @@ void* war_window_render(void* args) {
                       glyphs_row[num_row_digits - 1].height},
                      glyphs_row[num_row_digits - 1].ascent,
                      glyphs_row[num_row_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {0, 0},
                      0},
-                    {{4, 0},
+                    {{row_offset + 1, 2},
                      {glyphs_row[num_row_digits - 1].uv_x1,
                       glyphs_row[num_row_digits - 1].uv_y1},
                      {glyphs_row[num_row_digits - 1].bearing_x,
@@ -1141,12 +1056,12 @@ void* war_window_render(void* args) {
                       glyphs_row[num_row_digits - 1].height},
                      glyphs_row[num_row_digits - 1].ascent,
                      glyphs_row[num_row_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {1, 0},
                      0},
-                    {{4, 1},
+                    {{row_offset + 1, 3},
                      {glyphs_row[num_row_digits - 1].uv_x1,
                       glyphs_row[num_row_digits - 1].uv_y0},
                      {glyphs_row[num_row_digits - 1].bearing_x,
@@ -1155,12 +1070,12 @@ void* war_window_render(void* args) {
                       glyphs_row[num_row_digits - 1].height},
                      glyphs_row[num_row_digits - 1].ascent,
                      glyphs_row[num_row_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {1, 1},
                      0},
-                    {{3, 1},
+                    {{row_offset, 3},
                      {glyphs_row[num_row_digits - 1].uv_x0,
                       glyphs_row[num_row_digits - 1].uv_y0},
                      {glyphs_row[num_row_digits - 1].bearing_x,
@@ -1169,13 +1084,11 @@ void* war_window_render(void* args) {
                       glyphs_row[num_row_digits - 1].height},
                      glyphs_row[num_row_digits - 1].ascent,
                      glyphs_row[num_row_digits - 1].descent,
-                     0.1f,
-                     0.1f,
-                     test_white_hex,
+                     0.2f,
+                     0.0f,
+                     bright_white_hex,
                      {0, 1},
                      0},
-                    // middle bar
-                    // top bar
                 };
                 sdf_instance status_bar_text_instances[0];
                 uint16_t num_status_bar_text_instances = 1;
@@ -1248,9 +1161,7 @@ void* war_window_render(void* args) {
                     .cell_size = {input_cmd_context.cell_width,
                                   input_cmd_context.cell_height},
                     .zoom = input_cmd_context.zoom_scale,
-                    .cell_offsets =
-                        {input_cmd_context.num_cols_for_line_numbers,
-                         input_cmd_context.num_rows_for_status_bars},
+                    .cell_offsets = {0, 0},
                     .scroll_margin = {input_cmd_context.scroll_margin_cols,
                                       input_cmd_context.scroll_margin_rows},
                     .anchor_cell = {input_cmd_context.col,

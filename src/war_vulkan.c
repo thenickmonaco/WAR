@@ -899,7 +899,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     FT_Face ft_regular;
     FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
     float font_pixel_height =
-        48.0f; // changing will misalign the vertical line numbers
+        64.0f; // changing will misalign the vertical line numbers
     FT_Set_Pixel_Sizes(ft_regular, 0, (int)font_pixel_height);
     float ascent = ft_regular->size->metrics.ascender / 64.0f;
     float descent = ft_regular->size->metrics.descender / 64.0f;
@@ -945,6 +945,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         glyphs[c].uv_y0 = (float)pen_y / atlas_height;
         glyphs[c].uv_x1 = (float)(pen_x + w) / atlas_width;
         glyphs[c].uv_y1 = (float)(pen_y + h) / atlas_height;
+        glyphs[c].ascent = ft_regular->glyph->metrics.horiBearingY / 64.0f;
+        glyphs[c].descent =
+            (ft_regular->glyph->metrics.height / 64.0f) - glyphs[c].ascent;
         pen_x += w + 1;
         if (h > row_height) { row_height = h; }
     }
@@ -1460,39 +1463,34 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, uv)},
         {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, glyph_bearing)},
         {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, glyph_size)},
-        {4, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, thickness)},
-        {5, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, feather)},
-        {6, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex, color)},
+        {4, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, ascent)},
+        {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, descent)},
+        {6, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, thickness)},
+        {7, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, feather)},
+        {8, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex, corner)},
+        {9, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex, color)},
     };
-    uint32_t num_sdf_vertex_attrs = 7;
+    uint32_t num_sdf_vertex_attrs = 10;
     VkVertexInputAttributeDescription sdf_instance_attribute_descs[] = {
-        {7, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, x)},
-        {8, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, y)},
-        {9, 1, VK_FORMAT_R8G8B8A8_UINT, offsetof(sdf_instance, color)},
-        {10, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_x)},
-        {11, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_y)},
-        {12, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, thickness)},
-        {13, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, feather)},
-        {14, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, flags)},
+        {10, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, x)},
+        {11, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, y)},
+        {12, 1, VK_FORMAT_R8G8B8A8_UINT, offsetof(sdf_instance, color)},
+        {13, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_x)},
+        {14, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_y)},
+        {15, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, thickness)},
+        {16, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, feather)},
+        {17, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, flags)},
     };
     uint32_t num_sdf_instance_attrs = 8;
-    VkVertexInputAttributeDescription sdf_all_attrs[] = {
-        sdf_vertex_attribute_descs[0],
-        sdf_vertex_attribute_descs[1],
-        sdf_vertex_attribute_descs[2],
-        sdf_vertex_attribute_descs[3],
-        sdf_vertex_attribute_descs[4],
-        sdf_vertex_attribute_descs[5],
-        sdf_vertex_attribute_descs[6],
-        sdf_instance_attribute_descs[0],
-        sdf_instance_attribute_descs[1],
-        sdf_instance_attribute_descs[2],
-        sdf_instance_attribute_descs[3],
-        sdf_instance_attribute_descs[4],
-        sdf_instance_attribute_descs[5],
-        sdf_instance_attribute_descs[6],
-        sdf_instance_attribute_descs[7],
-    };
+    VkVertexInputAttributeDescription* sdf_all_attrs =
+        malloc((num_sdf_vertex_attrs + num_sdf_instance_attrs) *
+               sizeof(VkVertexInputAttributeDescription));
+    memcpy(sdf_all_attrs,
+           sdf_vertex_attribute_descs,
+           sizeof(sdf_vertex_attribute_descs));
+    memcpy(sdf_all_attrs + num_sdf_vertex_attrs,
+           sdf_instance_attribute_descs,
+           sizeof(sdf_instance_attribute_descs));
     VkVertexInputBindingDescription sdf_all_bindings[] = {
         sdf_vertex_binding_desc, sdf_instance_binding_desc};
     VkPipelineVertexInputStateCreateInfo sdf_vertex_input_info = {

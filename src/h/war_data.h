@@ -217,6 +217,8 @@ typedef struct war_glyph_info {
     float width;
     float height;
     float uv_x0, uv_y0, uv_x1, uv_y1;
+    float ascent;
+    float descent;
 } war_glyph_info;
 
 typedef struct sdf_vertex {
@@ -224,9 +226,12 @@ typedef struct sdf_vertex {
     float uv[2];
     float glyph_bearing[2];
     float glyph_size[2];
+    float ascent;
+    float descent;
     float thickness;
     float feather;
     uint32_t color;
+    uint32_t corner[2];
     uint32_t _pad1;
 } sdf_vertex;
 

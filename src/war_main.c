@@ -753,17 +753,6 @@ void* war_window_render(void* args) {
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
                 const uint32_t test_white_hex = 0xFFFFFFFF;
-                enum war_modes {
-                    MODE_COUNT = 8,
-                    MODE_NORMAL = 0,
-                    MODE_VISUAL = 1,
-                    MODE_VISUAL_LINE = 2,
-                    MODE_VISUAL_BLOCK = 3,
-                    MODE_INSERT = 4,
-                    MODE_COMMAND = 5,
-                    MODE_M = 6,
-                    MODE_O = 7,
-                };
                 // single buffer
                 assert(vulkan_context.current_frame == 0);
                 vkWaitForFences(
@@ -1001,7 +990,7 @@ void* war_window_render(void* args) {
                                           i_indices,
                                           bottom_left_corner,
                                           glyph_info,
-                                          0.2f,
+                                          0.0f,
                                           0.0f,
                                           white_hex);
                         continue;
@@ -1024,7 +1013,7 @@ void* war_window_render(void* args) {
                                           i_indices,
                                           bottom_left_corner,
                                           glyph_info,
-                                          0.2f,
+                                          0.0f,
                                           0.0f,
                                           white_hex);
                     }
@@ -1043,8 +1032,6 @@ void* war_window_render(void* args) {
                     glyphs_line_numbers[i_line_numbers + 2] =
                         vulkan_context.glyphs['0' + digit_1];
                 }
-                uint16_t line_numbers_offset =
-                    input_cmd_context.num_rows_for_status_bars;
                 uint16_t i_verts_offset_ln = MAX_DIGITS * 2 * 4;
                 uint16_t i_indices_offset_ln = MAX_DIGITS * 2 * 6;
                 for (size_t i = input_cmd_context.bottom_row;
@@ -1078,7 +1065,7 @@ void* war_window_render(void* args) {
                                 i_indices_offset_ln + i_indices + k_indices,
                                 bottom_left_corner,
                                 glyph_info,
-                                0.2f,
+                                0.0f,
                                 0.0f,
                                 light_gray_hex);
                         }

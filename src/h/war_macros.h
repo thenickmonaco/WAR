@@ -358,4 +358,13 @@ static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
     sdf_indices[i_indices + 5] = i_verts;
 }
 
+static inline int war_num_digits(uint32_t n) {
+    int digits = 0;
+    do {
+        digits++;
+        n /= 10;
+    } while (n != 0);
+    return digits;
+}
+
 #endif // WAR_MACROS_H

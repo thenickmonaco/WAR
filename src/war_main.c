@@ -949,6 +949,7 @@ void* war_window_render(void* args) {
                                             NULL);
                     current_pipeline = PIPELINE_SDF;
                 }
+                // row col
                 war_glyph_info glyphs_col[MAX_DIGITS];
                 uint32_t temp_col = input_cmd_context.col;
                 uint16_t num_col_digits = 0;
@@ -971,13 +972,12 @@ void* war_window_render(void* args) {
                 }
                 uint16_t row_offset = input_cmd_context.viewport_cols / 4;
                 uint16_t col_offset = row_offset + 4;
-                uint16_t line_number_offset = 3;
                 sdf_vertex status_bar_text_verts[MAX_DIGITS * 2 * 4 +
                                                  MAX_MIDI_NOTES * 3 * 4];
                 uint16_t status_bar_text_indices[MAX_DIGITS * 2 * 6 +
                                                  MAX_MIDI_NOTES * 3 * 6];
                 uint16_t num_status_bar_text_indices =
-                    MAX_DIGITS * 2 * 6 + MAX_MIDI_NOTES * 6;
+                    MAX_DIGITS * 2 * 6 + MAX_MIDI_NOTES * 3 * 6;
                 for (int i = 0; i < MAX_DIGITS * 2; i++) {
                     size_t i_verts = i * 4;
                     size_t i_indices = i * 6;
@@ -1027,8 +1027,61 @@ void* war_window_render(void* args) {
                                           0.2f,
                                           0.0f,
                                           white_hex);
-                    } else if (i >= MAX_DIGITS * 2) {
-                        // line numbers
+                    }
+                }
+                // line numbers
+                war_glyph_info glyphs_line_numbers[MAX_MIDI_NOTES * 3];
+                for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+                    int i_line_numbers = i * 3;
+                    int digit_3 = (i / 100) % 10;
+                    glyphs_line_numbers[i_line_numbers] =
+                        vulkan_context.glyphs['0' + digit_3];
+                    int digit_2 = (i / 10) % 10;
+                    glyphs_line_numbers[i_line_numbers + 1] =
+                        vulkan_context.glyphs['0' + digit_2];
+                    int digit_1 = i % 10;
+                    glyphs_line_numbers[i_line_numbers + 2] =
+                        vulkan_context.glyphs['0' + digit_1];
+                }
+                uint16_t line_numbers_offset =
+                    input_cmd_context.num_rows_for_status_bars;
+                uint16_t i_verts_offset_ln = MAX_DIGITS * 2 * 4;
+                uint16_t i_indices_offset_ln = MAX_DIGITS * 2 * 6;
+                for (size_t i = input_cmd_context.bottom_row;
+                     i <= input_cmd_context.top_row;
+                     i++) {
+                    int i_normal = i - input_cmd_context.bottom_row;
+                    int i_glyphs = i * 3;
+                    int i_verts = (i - input_cmd_context.bottom_row) * 3 * 4;
+                    int i_indices = (i - input_cmd_context.bottom_row) * 3 * 6;
+                    for (int k = 0; k < 3; k++) {
+                        uint32_t k_verts = k * 4;
+                        uint32_t k_indices = k * 6;
+                        uint32_t bottom_left_corner[2] = {
+                            k,
+                            input_cmd_context.num_rows_for_status_bars +
+                                i_normal};
+                        if (k < 3 - war_num_digits(i)) {
+                            // blank out leading zeros
+                            war_make_blank_sdf_quad(
+                                status_bar_text_verts,
+                                status_bar_text_indices,
+                                i_verts_offset_ln + i_verts + k_verts,
+                                i_indices_offset_ln + i_indices + k_indices);
+                        } else {
+                            war_glyph_info glyph_info =
+                                glyphs_line_numbers[i_glyphs + k];
+                            war_make_sdf_quad(
+                                status_bar_text_verts,
+                                status_bar_text_indices,
+                                i_verts_offset_ln + i_verts + k_verts,
+                                i_indices_offset_ln + i_indices + k_indices,
+                                bottom_left_corner,
+                                glyph_info,
+                                0.2f,
+                                0.0f,
+                                light_gray_hex);
+                        }
                     }
                 }
                 sdf_instance status_bar_text_instances[0];
@@ -1319,8 +1372,6 @@ void* war_window_render(void* args) {
                                          0,
                                          physical_width,
                                          physical_height);
-                call_carmack("COL: %u", input_cmd_context.col);
-                call_carmack("ROW: %u", input_cmd_context.row);
                 goto done;
             wl_display_error:
                 dump_bytes("wl_display::error event",

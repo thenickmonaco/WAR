@@ -26,6 +26,9 @@
 
 layout(location = 0) in uvec2 in_pos;
 layout(location = 1) in vec4 in_color;
+layout(location = 2) in uvec2 in_bottom_left_corner;
+layout(location = 3) in vec2 in_line_thickness;
+layout(location = 4) in vec2 in_cell_size;
 
 layout(location = 0) out vec4 color;
 

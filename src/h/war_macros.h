@@ -370,4 +370,90 @@ static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
     sdf_indices[i_indices + 5] = i_verts;
 }
 
+static inline void war_make_quad(quad_vertex* quad_verts,
+                                 uint16_t* quad_indices,
+                                 size_t i_verts,
+                                 size_t i_indices,
+                                 uint32_t bottom_left_corner[2],
+                                 uint32_t span[2],
+                                 float cell_size[2],
+                                 float line_thickness[2],
+                                 uint32_t color) {
+    quad_verts[i_verts] = (quad_vertex){
+        .corner = {0, 0},
+        .pos = {bottom_left_corner[0], bottom_left_corner[1]},
+        .color = color,
+        .cell_size = {cell_size[0], cell_size[1]},
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+    };
+    quad_verts[i_verts + 1] = (quad_vertex){
+        .corner = {1, 0},
+        .pos = {bottom_left_corner[0] + span[0], bottom_left_corner[1]},
+        .color = color,
+        .cell_size = {cell_size[0], cell_size[1]},
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+    };
+    quad_verts[i_verts + 2] = (quad_vertex){
+        .corner = {1, 1},
+        .pos = {bottom_left_corner[0] + span[0],
+                bottom_left_corner[1] + span[1]},
+        .color = color,
+        .cell_size = {cell_size[0], cell_size[1]},
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+    };
+    quad_verts[i_verts + 3] = (quad_vertex){
+        .corner = {0, 1},
+        .pos = {bottom_left_corner[0], bottom_left_corner[1] + span[1]},
+        .color = color,
+        .cell_size = {cell_size[0], cell_size[1]},
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+    };
+    quad_indices[i_indices] = i_verts;
+    quad_indices[i_indices + 1] = i_verts + 1;
+    quad_indices[i_indices + 2] = i_verts + 2;
+    quad_indices[i_indices + 3] = i_verts + 2;
+    quad_indices[i_indices + 4] = i_verts + 3;
+    quad_indices[i_indices + 5] = i_verts;
+}
+
+static inline void war_make_blank_quad(quad_vertex* quad_verts,
+                                       uint16_t* quad_indices,
+                                       size_t i_verts,
+                                       size_t i_indices) {
+    quad_verts[i_verts] = (quad_vertex){
+        .pos = {0, 0},
+        .color = 0,
+        .corner = {0, 0},
+        .line_thickness = {0, 0},
+        .cell_size = {0, 0},
+    };
+    quad_verts[i_verts + 1] = (quad_vertex){
+        .pos = {0, 0},
+        .color = 0,
+        .corner = {0, 0},
+        .line_thickness = {0, 0},
+        .cell_size = {0, 0},
+    };
+    quad_verts[i_verts + 2] = (quad_vertex){
+        .pos = {0, 0},
+        .color = 0,
+        .corner = {0, 0},
+        .line_thickness = {0, 0},
+        .cell_size = {0, 0},
+    };
+    quad_verts[i_verts + 3] = (quad_vertex){
+        .pos = {0, 0},
+        .color = 0,
+        .corner = {0, 0},
+        .line_thickness = {0, 0},
+        .cell_size = {0, 0},
+    };
+    quad_indices[i_indices] = i_verts;
+    quad_indices[i_indices + 1] = i_verts + 1;
+    quad_indices[i_indices + 2] = i_verts + 2;
+    quad_indices[i_indices + 3] = i_verts + 2;
+    quad_indices[i_indices + 4] = i_verts + 3;
+    quad_indices[i_indices + 5] = i_verts;
+}
+
 #endif // WAR_MACROS_H

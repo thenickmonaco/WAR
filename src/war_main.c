@@ -1048,7 +1048,6 @@ void* war_window_render(void* args) {
                             input_cmd_context.num_rows_for_status_bars +
                                 i_normal};
                         if (k < 3 - war_num_digits(i)) {
-                            // blank out leading zeros
                             war_make_blank_sdf_quad(
                                 status_bar_text_verts,
                                 status_bar_text_indices,
@@ -1176,18 +1175,41 @@ void* war_window_render(void* args) {
                     current_pipeline = PIPELINE_QUAD;
                 }
                 quad_vertex cursor_quad_verts[4] = {
-                    {{input_cmd_context.col, input_cmd_context.row},
-                     white_hex,
-                     0},
-                    {{input_cmd_context.col + 1, input_cmd_context.row},
-                     white_hex,
-                     0},
-                    {{input_cmd_context.col + 1, input_cmd_context.row + 1},
-                     white_hex,
-                     0},
-                    {{input_cmd_context.col, input_cmd_context.row + 1},
-                     white_hex,
-                     0},
+                    (quad_vertex){
+                        .corner = {0, 0},
+                        .pos = {input_cmd_context.col, input_cmd_context.row},
+                        .cell_size = {input_cmd_context.cell_width,
+                                      input_cmd_context.cell_height},
+                        .color = white_hex,
+                        .line_thickness = {0.0f, 0.0f},
+                    },
+                    (quad_vertex){
+                        .corner = {1, 0},
+                        .pos = {input_cmd_context.col + 1,
+                                input_cmd_context.row},
+                        .cell_size = {input_cmd_context.cell_width,
+                                      input_cmd_context.cell_height},
+                        .color = white_hex,
+                        .line_thickness = {0.0f, 0.0f},
+                    },
+                    (quad_vertex){
+                        .corner = {1, 1},
+                        .pos = {input_cmd_context.col + 1,
+                                input_cmd_context.row + 1},
+                        .cell_size = {input_cmd_context.cell_width,
+                                      input_cmd_context.cell_height},
+                        .color = white_hex,
+                        .line_thickness = {0.0f, 0.0f},
+                    },
+                    (quad_vertex){
+                        .corner = {0, 1},
+                        .pos = {input_cmd_context.col,
+                                input_cmd_context.row + 1},
+                        .cell_size = {input_cmd_context.cell_width,
+                                      input_cmd_context.cell_height},
+                        .color = white_hex,
+                        .line_thickness = {0.0f, 0.0f},
+                    },
                 };
                 quad_instance cursor_quad_instances[0];
                 uint16_t num_cursor_quad_instances = 1;

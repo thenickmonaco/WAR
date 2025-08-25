@@ -266,6 +266,9 @@ typedef struct sdf_push_constants {
 typedef struct quad_vertex {
     uint32_t pos[2];
     uint32_t color;
+    uint32_t corner[2];
+    float line_thickness[2];
+    float cell_size[2];
     uint32_t _pad1;
 } quad_vertex;
 

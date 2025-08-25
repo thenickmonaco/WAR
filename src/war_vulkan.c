@@ -1013,8 +1013,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     VkSamplerCreateInfo sdf_sampler_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_NEAREST,
-        .minFilter = VK_FILTER_NEAREST,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
         .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,

@@ -138,9 +138,7 @@ static inline bool state_is_prefix(uint16_t state_index, war_fsm_state* fsm) {
     return false;
 }
 
-static inline uint64_t align64(uint64_t value) {
-    return (value + 63) & ~63ULL;
-}
+static inline uint64_t align64(uint64_t value) { return (value + 63) & ~63ULL; }
 
 static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
@@ -233,6 +231,131 @@ static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     default:
         return 511; // fallback / unknown
     }
+}
+
+static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
+                                     uint16_t* sdf_indices,
+                                     size_t i_verts,
+                                     size_t i_indices,
+                                     uint32_t bottom_left_corner[2],
+                                     war_glyph_info glyph_info,
+                                     float thickness,
+                                     float feather,
+                                     uint32_t color) {
+    sdf_verts[i_verts] = (sdf_vertex){
+        .corner = {0, 0},
+        .pos = {bottom_left_corner[0], bottom_left_corner[1]},
+        .uv = {glyph_info.uv_x0, glyph_info.uv_y1},
+        .glyph_size = {glyph_info.width, glyph_info.height},
+        .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
+        .ascent = glyph_info.ascent,
+        .descent = glyph_info.descent,
+        .thickness = thickness,
+        .feather = feather,
+        .color = color,
+    };
+    sdf_verts[i_verts + 1] = (sdf_vertex){
+        .corner = {1, 0},
+        .pos = {bottom_left_corner[0] + 1, bottom_left_corner[1]},
+        .uv = {glyph_info.uv_x1, glyph_info.uv_y1},
+        .glyph_size = {glyph_info.width, glyph_info.height},
+        .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
+        .ascent = glyph_info.ascent,
+        .descent = glyph_info.descent,
+        .thickness = thickness,
+        .feather = feather,
+        .color = color,
+    };
+    sdf_verts[i_verts + 2] = (sdf_vertex){
+        .corner = {1, 1},
+        .pos = {bottom_left_corner[0] + 1, bottom_left_corner[1] + 1},
+        .uv = {glyph_info.uv_x1, glyph_info.uv_y0},
+        .glyph_size = {glyph_info.width, glyph_info.height},
+        .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
+        .ascent = glyph_info.ascent,
+        .descent = glyph_info.descent,
+        .thickness = thickness,
+        .feather = feather,
+        .color = color,
+    };
+    sdf_verts[i_verts + 3] = (sdf_vertex){
+        .corner = {0, 1},
+        .pos = {bottom_left_corner[0], bottom_left_corner[1] + 1},
+        .uv = {glyph_info.uv_x0, glyph_info.uv_y0},
+        .glyph_size = {glyph_info.width, glyph_info.height},
+        .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
+        .ascent = glyph_info.ascent,
+        .descent = glyph_info.descent,
+        .thickness = thickness,
+        .feather = feather,
+        .color = color,
+    };
+    sdf_indices[i_indices] = i_verts;
+    sdf_indices[i_indices + 1] = i_verts + 1;
+    sdf_indices[i_indices + 2] = i_verts + 2;
+    sdf_indices[i_indices + 3] = i_verts + 2;
+    sdf_indices[i_indices + 4] = i_verts + 3;
+    sdf_indices[i_indices + 5] = i_verts;
+}
+
+static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
+                                           uint16_t* sdf_indices,
+                                           size_t i_verts,
+                                           size_t i_indices) {
+    sdf_verts[i_verts] = (sdf_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+    };
+    sdf_verts[i_verts + 1] = (sdf_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+    };
+    sdf_verts[i_verts + 2] = (sdf_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+    };
+    sdf_verts[i_verts + 3] = (sdf_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+    };
+    sdf_indices[i_indices] = i_verts;
+    sdf_indices[i_indices + 1] = i_verts + 1;
+    sdf_indices[i_indices + 2] = i_verts + 2;
+    sdf_indices[i_indices + 3] = i_verts + 2;
+    sdf_indices[i_indices + 4] = i_verts + 3;
+    sdf_indices[i_indices + 5] = i_verts;
 }
 
 #endif // WAR_MACROS_H

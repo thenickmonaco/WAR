@@ -949,8 +949,6 @@ void* war_window_render(void* args) {
                                             NULL);
                     current_pipeline = PIPELINE_SDF;
                 }
-                war_glyph_info glyph_M = vulkan_context.glyphs['M'];
-                war_glyph_info glyph_m = vulkan_context.glyphs['y'];
                 war_glyph_info glyphs_col[MAX_DIGITS];
                 uint32_t temp_col = input_cmd_context.col;
                 uint16_t num_col_digits = 0;
@@ -971,131 +969,70 @@ void* war_window_render(void* args) {
                     num_row_digits++;
                     if (temp_row == 0) { break; }
                 }
-                uint16_t row_offset = input_cmd_context.viewport_cols * 1 / 2;
-                uint16_t col_offset = row_offset + MAX_DIGITS + 1;
-                // tbc
-                sdf_vertex status_bar_text_verts[16] = {
-                    // most sig. digit of col
-                    {{col_offset, 2},
-                     {glyphs_col[num_col_digits - 1].uv_x0,
-                      glyphs_col[num_col_digits - 1].uv_y1},
-                     {glyphs_col[num_col_digits - 1].bearing_x,
-                      glyphs_col[num_col_digits - 1].bearing_y},
-                     {glyphs_col[num_col_digits - 1].width,
-                      glyphs_col[num_col_digits - 1].height},
-                     glyphs_col[num_col_digits - 1].ascent,
-                     glyphs_col[num_col_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {0, 0},
-                     0},
-                    {{col_offset + 1, 2},
-                     {glyphs_col[num_col_digits - 1].uv_x1,
-                      glyphs_col[num_col_digits - 1].uv_y1},
-                     {glyphs_col[num_col_digits - 1].bearing_x,
-                      glyphs_col[num_col_digits - 1].bearing_y},
-                     {glyphs_col[num_col_digits - 1].width,
-                      glyphs_col[num_col_digits - 1].height},
-                     glyphs_col[num_col_digits - 1].ascent,
-                     glyphs_col[num_col_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {1, 0},
-                     0},
-                    {{col_offset + 1, 3},
-                     {glyphs_col[num_col_digits - 1].uv_x1,
-                      glyphs_col[num_col_digits - 1].uv_y0},
-                     {glyphs_col[num_col_digits - 1].bearing_x,
-                      glyphs_col[num_col_digits - 1].bearing_y},
-                     {glyphs_col[num_col_digits - 1].width,
-                      glyphs_col[num_col_digits - 1].height},
-                     glyphs_col[num_col_digits - 1].ascent,
-                     glyphs_col[num_col_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {1, 1},
-                     0},
-                    {{col_offset, 3},
-                     {glyphs_col[num_col_digits - 1].uv_x0,
-                      glyphs_col[num_col_digits - 1].uv_y0},
-                     {glyphs_col[num_col_digits - 1].bearing_x,
-                      glyphs_col[num_col_digits - 1].bearing_y},
-                     {glyphs_col[num_col_digits - 1].width,
-                      glyphs_col[num_col_digits - 1].height},
-                     glyphs_col[num_col_digits - 1].ascent,
-                     glyphs_col[num_col_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {0, 1},
-                     0},
-                    // most sig. digit of row
-                    {{row_offset, 2},
-                     {glyphs_row[num_row_digits - 1].uv_x0,
-                      glyphs_row[num_row_digits - 1].uv_y1},
-                     {glyphs_row[num_row_digits - 1].bearing_x,
-                      glyphs_row[num_row_digits - 1].bearing_y},
-                     {glyphs_row[num_row_digits - 1].width,
-                      glyphs_row[num_row_digits - 1].height},
-                     glyphs_row[num_row_digits - 1].ascent,
-                     glyphs_row[num_row_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {0, 0},
-                     0},
-                    {{row_offset + 1, 2},
-                     {glyphs_row[num_row_digits - 1].uv_x1,
-                      glyphs_row[num_row_digits - 1].uv_y1},
-                     {glyphs_row[num_row_digits - 1].bearing_x,
-                      glyphs_row[num_row_digits - 1].bearing_y},
-                     {glyphs_row[num_row_digits - 1].width,
-                      glyphs_row[num_row_digits - 1].height},
-                     glyphs_row[num_row_digits - 1].ascent,
-                     glyphs_row[num_row_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {1, 0},
-                     0},
-                    {{row_offset + 1, 3},
-                     {glyphs_row[num_row_digits - 1].uv_x1,
-                      glyphs_row[num_row_digits - 1].uv_y0},
-                     {glyphs_row[num_row_digits - 1].bearing_x,
-                      glyphs_row[num_row_digits - 1].bearing_y},
-                     {glyphs_row[num_row_digits - 1].width,
-                      glyphs_row[num_row_digits - 1].height},
-                     glyphs_row[num_row_digits - 1].ascent,
-                     glyphs_row[num_row_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {1, 1},
-                     0},
-                    {{row_offset, 3},
-                     {glyphs_row[num_row_digits - 1].uv_x0,
-                      glyphs_row[num_row_digits - 1].uv_y0},
-                     {glyphs_row[num_row_digits - 1].bearing_x,
-                      glyphs_row[num_row_digits - 1].bearing_y},
-                     {glyphs_row[num_row_digits - 1].width,
-                      glyphs_row[num_row_digits - 1].height},
-                     glyphs_row[num_row_digits - 1].ascent,
-                     glyphs_row[num_row_digits - 1].descent,
-                     0.2f,
-                     0.0f,
-                     bright_white_hex,
-                     {0, 1},
-                     0},
-                };
+                uint16_t row_offset = input_cmd_context.viewport_cols / 4;
+                uint16_t col_offset = row_offset + 4;
+                uint16_t line_number_offset = 3;
+                sdf_vertex status_bar_text_verts[MAX_DIGITS * 2 * 4 +
+                                                 MAX_MIDI_NOTES * 3 * 4];
+                uint16_t status_bar_text_indices[MAX_DIGITS * 2 * 6 +
+                                                 MAX_MIDI_NOTES * 3 * 6];
+                uint16_t num_status_bar_text_indices =
+                    MAX_DIGITS * 2 * 6 + MAX_MIDI_NOTES * 6;
+                for (int i = 0; i < MAX_DIGITS * 2; i++) {
+                    size_t i_verts = i * 4;
+                    size_t i_indices = i * 6;
+                    size_t i_digit = (i % MAX_DIGITS) + 1;
+                    if (i < MAX_DIGITS) {
+                        // row digits
+                        if (i_digit > num_row_digits) {
+                            war_make_blank_sdf_quad(status_bar_text_verts,
+                                                    status_bar_text_indices,
+                                                    i_verts,
+                                                    i_indices);
+                            continue;
+                        };
+                        uint32_t bottom_left_corner[2] = {row_offset + i_digit,
+                                                          2};
+                        war_glyph_info glyph_info =
+                            glyphs_row[num_row_digits - i_digit];
+                        war_make_sdf_quad(status_bar_text_verts,
+                                          status_bar_text_indices,
+                                          i_verts,
+                                          i_indices,
+                                          bottom_left_corner,
+                                          glyph_info,
+                                          0.2f,
+                                          0.0f,
+                                          white_hex);
+                        continue;
+                    } else if (i >= MAX_DIGITS && i < MAX_DIGITS * 2) {
+                        // col digits
+                        if (i_digit > num_col_digits) {
+                            war_make_blank_sdf_quad(status_bar_text_verts,
+                                                    status_bar_text_indices,
+                                                    i_verts,
+                                                    i_indices);
+                            continue;
+                        }
+                        uint32_t bottom_left_corner[2] = {col_offset + i_digit,
+                                                          2};
+                        war_glyph_info glyph_info =
+                            glyphs_col[num_col_digits - i_digit];
+                        war_make_sdf_quad(status_bar_text_verts,
+                                          status_bar_text_indices,
+                                          i_verts,
+                                          i_indices,
+                                          bottom_left_corner,
+                                          glyph_info,
+                                          0.2f,
+                                          0.0f,
+                                          white_hex);
+                    } else if (i >= MAX_DIGITS * 2) {
+                        // line numbers
+                    }
+                }
                 sdf_instance status_bar_text_instances[0];
                 uint16_t num_status_bar_text_instances = 1;
-                uint16_t status_bar_text_indices[24] = {
-                    0, 1, 2,  2,  3,  0, 4,  5,  6,  6,  7,  4,
-                    8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12};
-                uint16_t num_status_bar_text_indices = 24;
                 memcpy(vulkan_context.sdf_vertex_buffer_mapped +
                            sdf_vertex_offset,
                        status_bar_text_verts,

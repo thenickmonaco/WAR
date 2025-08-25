@@ -41,7 +41,6 @@
 
 int main() {
     CALL_CARMACK("main");
-
     uint8_t war_window_render_to_audio_ring_buffer[ring_buffer_size];
     uint8_t war_audio_to_window_render_ring_buffer[ring_buffer_size];
     uint8_t write_to_audio_index = 0;
@@ -70,7 +69,6 @@ int main() {
 
     pthread_join(war_window_render_thread, NULL);
     pthread_join(war_audio_thread, NULL);
-
     END("main");
     return 0;
 }
@@ -110,7 +108,6 @@ void* war_window_render(void* args) {
 
     uint32_t num_rows_for_status_bars = 3;
     uint32_t num_cols_for_line_numbers = 3;
-    char sequence_chars[MAX_COMMAND_BUFFER_LENGTH] = {0};
     uint32_t viewport_cols =
         (uint32_t)(physical_width / vulkan_context.cell_width);
     uint32_t viewport_rows =
@@ -122,12 +119,9 @@ void* war_window_render(void* args) {
         .f_cursor_width_scale = 1,
         .t_cursor_width_scale = 1,
         .cursor_width_scale = 1,
-        .cursor_width_scale_factor = 0,
+        .cursor_width_scale_is_factor = 0,
         .cell_navigation_scale = 1,
-        .first_gridline_split = 4, // strongest
-        .second_gridline_split = 1,
-        .third_gridline_split = UNSET,
-        .fourth_gridline_split = UNSET,
+        .gridline_splits = {4, 1, 0, 0},
         .left_col = 0,
         .bottom_row = 0,
         .right_col =
@@ -148,6 +142,8 @@ void* war_window_render(void* args) {
         .cursor_y = 0,
         .numeric_prefix = 0,
         .zoom_scale = 1.0f, // 1.0 = normal, <1 = zoom out, >1 = zoom in
+        .max_zoom_scale = 5.0f,
+        .min_zoom_scale = 0.1f,
         .num_rows_for_status_bars = num_rows_for_status_bars,
         .num_cols_for_line_numbers = num_cols_for_line_numbers,
         .panning_x = 0.0f,
@@ -168,10 +164,10 @@ void* war_window_render(void* args) {
         .physical_height = physical_height,
         .logical_width = logical_width,
         .logical_height = logical_height,
-        .max_cols = UINT32_MAX,
-        .max_rows = UINT32_MAX,
-        .min_cols = 0,
-        .min_rows = 0,
+        .max_col = 289290, // artifacts start happening after
+        .max_row = MAX_MIDI_NOTES - 1,
+        .min_col = 0,
+        .min_row = 0,
     };
 
     uint32_t mod_shift;
@@ -311,6 +307,8 @@ void* war_window_render(void* args) {
     obj_op[obj_op_index(wl_display_id, 1)] = &&wl_display_delete_id;
     obj_op[obj_op_index(wl_registry_id, 0)] = &&wl_registry_global;
     obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
+
+    quad_vertex* static_quad_verts = malloc(sizeof(quad_vertex) * (1));
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
@@ -801,13 +799,13 @@ void* war_window_render(void* args) {
                 //---------------------------------------------------------
                 // STATIC QUADS AND STATIC SDF TEXT (STATUS/HUD)
                 //---------------------------------------------------------
-                // status bars
                 if (current_pipeline != PIPELINE_QUAD) {
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       vulkan_context.quad_pipeline);
                     current_pipeline = PIPELINE_QUAD;
                 }
+                // status bars
                 quad_vertex status_bar_verts[12] = {
                     // bottom bar
                     {{0, 0}, red_hex, 0},
@@ -825,11 +823,11 @@ void* war_window_render(void* args) {
                     {{input_cmd_context.viewport_cols, 3}, light_gray_hex, 0},
                     {{0, 3}, light_gray_hex, 0},
                 };
-                quad_instance status_bar_instances[0];
-                uint16_t num_status_bar_instances = 1;
                 uint16_t status_bar_indices[18] = {
                     0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8};
                 uint16_t num_status_bar_indices = 18;
+                quad_instance status_bar_instances[0];
+                uint16_t num_status_bar_instances = 1;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
                        status_bar_verts,
@@ -1035,7 +1033,8 @@ void* war_window_render(void* args) {
                 uint16_t i_verts_offset_ln = MAX_DIGITS * 2 * 4;
                 uint16_t i_indices_offset_ln = MAX_DIGITS * 2 * 6;
                 for (size_t i = input_cmd_context.bottom_row;
-                     i <= input_cmd_context.top_row;
+                     i <= input_cmd_context.top_row &&
+                     i <= input_cmd_context.max_row;
                      i++) {
                     int i_normal = i - input_cmd_context.bottom_row;
                     int i_glyphs = i * 3;
@@ -1254,7 +1253,7 @@ void* war_window_render(void* args) {
                 vkCmdSetScissor(
                     vulkan_context.cmd_buffer, 0, 1, &cursor_scissor);
                 float cursor_width_scale = input_cmd_context.cursor_width_scale;
-                if (input_cmd_context.cursor_width_scale_factor) {
+                if (input_cmd_context.cursor_width_scale_is_factor) {
                     cursor_width_scale = 1.0f / cursor_width_scale;
                 }
                 quad_push_constants cursor_pc = {
@@ -2358,12 +2357,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_row);
                 }
                 input_cmd_context.row =
                     clamp_add_uint32(input_cmd_context.row,
                                      increment,
-                                     input_cmd_context.max_rows);
+                                     input_cmd_context.max_row);
                 if (input_cmd_context.row >
                     input_cmd_context.top_row -
                         input_cmd_context.scroll_margin_rows) {
@@ -2372,11 +2371,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.bottom_row =
                         clamp_add_uint32(input_cmd_context.bottom_row,
                                          increment,
-                                         input_cmd_context.max_rows);
+                                         input_cmd_context.max_row);
                     input_cmd_context.top_row =
                         clamp_add_uint32(input_cmd_context.top_row,
                                          increment,
-                                         input_cmd_context.max_rows);
+                                         input_cmd_context.max_row);
                     uint32_t new_viewport_height = input_cmd_context.top_row -
                                                    input_cmd_context.bottom_row;
                     if (new_viewport_height < viewport_height) {
@@ -2384,7 +2383,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.bottom_row =
                             clamp_subtract_uint32(input_cmd_context.bottom_row,
                                                   diff,
-                                                  input_cmd_context.min_rows);
+                                                  input_cmd_context.min_row);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2396,12 +2395,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_row);
                 }
                 input_cmd_context.row =
                     clamp_subtract_uint32(input_cmd_context.row,
                                           increment,
-                                          input_cmd_context.min_rows);
+                                          input_cmd_context.min_row);
                 if (input_cmd_context.row <
                     input_cmd_context.bottom_row +
                         input_cmd_context.scroll_margin_rows) {
@@ -2410,11 +2409,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.bottom_row =
                         clamp_subtract_uint32(input_cmd_context.bottom_row,
                                               increment,
-                                              input_cmd_context.min_rows);
+                                              input_cmd_context.min_row);
                     input_cmd_context.top_row =
                         clamp_subtract_uint32(input_cmd_context.top_row,
                                               increment,
-                                              input_cmd_context.min_rows);
+                                              input_cmd_context.min_row);
                     uint32_t new_viewport_height = input_cmd_context.top_row -
                                                    input_cmd_context.bottom_row;
                     if (new_viewport_height < viewport_height) {
@@ -2422,7 +2421,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.top_row =
                             clamp_add_uint32(input_cmd_context.top_row,
                                              diff,
-                                             input_cmd_context.max_rows);
+                                             input_cmd_context.max_row);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2434,12 +2433,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_col);
                 }
                 input_cmd_context.col =
                     clamp_add_uint32(input_cmd_context.col,
                                      increment,
-                                     input_cmd_context.max_cols);
+                                     input_cmd_context.max_col);
                 if (input_cmd_context.col >
                     input_cmd_context.right_col -
                         input_cmd_context.scroll_margin_cols) {
@@ -2448,11 +2447,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.left_col =
                         clamp_add_uint32(input_cmd_context.left_col,
                                          increment,
-                                         input_cmd_context.max_cols);
+                                         input_cmd_context.max_col);
                     input_cmd_context.right_col =
                         clamp_add_uint32(input_cmd_context.right_col,
                                          increment,
-                                         input_cmd_context.max_cols);
+                                         input_cmd_context.max_col);
                     uint32_t new_viewport_width = input_cmd_context.right_col -
                                                   input_cmd_context.left_col;
                     if (new_viewport_width < viewport_width) {
@@ -2460,7 +2459,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.left_col =
                             clamp_subtract_uint32(input_cmd_context.left_col,
                                                   diff,
-                                                  input_cmd_context.min_cols);
+                                                  input_cmd_context.min_col);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2472,12 +2471,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_col);
                 }
                 input_cmd_context.col =
                     clamp_subtract_uint32(input_cmd_context.col,
                                           increment,
-                                          input_cmd_context.min_cols);
+                                          input_cmd_context.min_col);
                 if (input_cmd_context.col <
                     input_cmd_context.left_col +
                         input_cmd_context.scroll_margin_cols) {
@@ -2486,11 +2485,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.left_col =
                         clamp_subtract_uint32(input_cmd_context.left_col,
                                               increment,
-                                              input_cmd_context.min_cols);
+                                              input_cmd_context.min_col);
                     input_cmd_context.right_col =
                         clamp_subtract_uint32(input_cmd_context.right_col,
                                               increment,
-                                              input_cmd_context.min_cols);
+                                              input_cmd_context.min_col);
                     uint32_t new_viewport_width = input_cmd_context.right_col -
                                                   input_cmd_context.left_col;
                     if (new_viewport_width < viewport_width) {
@@ -2498,7 +2497,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.right_col =
                             clamp_add_uint32(input_cmd_context.right_col,
                                              diff,
-                                             input_cmd_context.max_cols);
+                                             input_cmd_context.max_col);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2510,12 +2509,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_row);
                 }
                 input_cmd_context.row =
                     clamp_add_uint32(input_cmd_context.row,
                                      increment,
-                                     input_cmd_context.max_rows);
+                                     input_cmd_context.max_row);
                 if (input_cmd_context.row >
                     input_cmd_context.top_row -
                         input_cmd_context.scroll_margin_rows) {
@@ -2524,11 +2523,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.bottom_row =
                         clamp_add_uint32(input_cmd_context.bottom_row,
                                          increment,
-                                         input_cmd_context.max_rows);
+                                         input_cmd_context.max_row);
                     input_cmd_context.top_row =
                         clamp_add_uint32(input_cmd_context.top_row,
                                          increment,
-                                         input_cmd_context.max_rows);
+                                         input_cmd_context.max_row);
                     uint32_t new_viewport_height = input_cmd_context.top_row -
                                                    input_cmd_context.bottom_row;
                     if (new_viewport_height < viewport_height) {
@@ -2536,7 +2535,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.bottom_row =
                             clamp_subtract_uint32(input_cmd_context.bottom_row,
                                                   diff,
-                                                  input_cmd_context.min_rows);
+                                                  input_cmd_context.min_row);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2548,12 +2547,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_row);
                 }
                 input_cmd_context.row =
                     clamp_subtract_uint32(input_cmd_context.row,
                                           increment,
-                                          input_cmd_context.min_rows);
+                                          input_cmd_context.min_row);
                 if (input_cmd_context.row <
                     input_cmd_context.bottom_row +
                         input_cmd_context.scroll_margin_rows) {
@@ -2562,11 +2561,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.bottom_row =
                         clamp_subtract_uint32(input_cmd_context.bottom_row,
                                               increment,
-                                              input_cmd_context.min_rows);
+                                              input_cmd_context.min_row);
                     input_cmd_context.top_row =
                         clamp_subtract_uint32(input_cmd_context.top_row,
                                               increment,
-                                              input_cmd_context.min_rows);
+                                              input_cmd_context.min_row);
                     uint32_t new_viewport_height = input_cmd_context.top_row -
                                                    input_cmd_context.bottom_row;
                     if (new_viewport_height < viewport_height) {
@@ -2574,7 +2573,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.top_row =
                             clamp_add_uint32(input_cmd_context.top_row,
                                              diff,
-                                             input_cmd_context.max_rows);
+                                             input_cmd_context.max_row);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2586,12 +2585,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_col);
                 }
                 input_cmd_context.col =
                     clamp_add_uint32(input_cmd_context.col,
                                      increment,
-                                     input_cmd_context.max_cols);
+                                     input_cmd_context.max_col);
                 if (input_cmd_context.col >
                     input_cmd_context.right_col -
                         input_cmd_context.scroll_margin_cols) {
@@ -2600,11 +2599,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.left_col =
                         clamp_add_uint32(input_cmd_context.left_col,
                                          increment,
-                                         input_cmd_context.max_cols);
+                                         input_cmd_context.max_col);
                     input_cmd_context.right_col =
                         clamp_add_uint32(input_cmd_context.right_col,
                                          increment,
-                                         input_cmd_context.max_cols);
+                                         input_cmd_context.max_col);
                     uint32_t new_viewport_width = input_cmd_context.right_col -
                                                   input_cmd_context.left_col;
                     if (new_viewport_width < viewport_width) {
@@ -2612,7 +2611,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.left_col =
                             clamp_subtract_uint32(input_cmd_context.left_col,
                                                   diff,
-                                                  input_cmd_context.min_cols);
+                                                  input_cmd_context.min_col);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2624,12 +2623,12 @@ void* war_window_render(void* args) {
                     increment =
                         clamp_multiply_uint32(increment,
                                               input_cmd_context.numeric_prefix,
-                                              UINT32_MAX);
+                                              input_cmd_context.max_col);
                 }
                 input_cmd_context.col =
                     clamp_subtract_uint32(input_cmd_context.col,
                                           increment,
-                                          input_cmd_context.min_cols);
+                                          input_cmd_context.min_col);
                 if (input_cmd_context.col <
                     input_cmd_context.left_col +
                         input_cmd_context.scroll_margin_cols) {
@@ -2638,11 +2637,11 @@ void* war_window_render(void* args) {
                     input_cmd_context.left_col =
                         clamp_subtract_uint32(input_cmd_context.left_col,
                                               increment,
-                                              input_cmd_context.min_cols);
+                                              input_cmd_context.min_col);
                     input_cmd_context.right_col =
                         clamp_subtract_uint32(input_cmd_context.right_col,
                                               increment,
-                                              input_cmd_context.min_cols);
+                                              input_cmd_context.min_col);
                     uint32_t new_viewport_width = input_cmd_context.right_col -
                                                   input_cmd_context.left_col;
                     if (new_viewport_width < viewport_width) {
@@ -2650,7 +2649,7 @@ void* war_window_render(void* args) {
                         input_cmd_context.right_col =
                             clamp_add_uint32(input_cmd_context.right_col,
                                              diff,
-                                             input_cmd_context.max_cols);
+                                             input_cmd_context.max_col);
                     }
                 }
                 input_cmd_context.numeric_prefix = 0;
@@ -2668,36 +2667,41 @@ void* war_window_render(void* args) {
             cmd_normal_$:
                 call_carmack("cmd_normal_$");
                 if (input_cmd_context.numeric_prefix) {
-                    input_cmd_context.col = input_cmd_context.numeric_prefix;
+                    input_cmd_context.col =
+                        clamp_uint32(input_cmd_context.numeric_prefix,
+                                     input_cmd_context.min_col,
+                                     input_cmd_context.max_col);
                     uint32_t viewport_width = input_cmd_context.right_col -
                                               input_cmd_context.left_col;
                     uint32_t distance = viewport_width / 2;
                     input_cmd_context.left_col =
                         clamp_subtract_uint32(input_cmd_context.col,
                                               distance,
-                                              input_cmd_context.min_cols);
+                                              input_cmd_context.min_col);
                     input_cmd_context.right_col =
                         clamp_add_uint32(input_cmd_context.col,
                                          distance,
-                                         input_cmd_context.max_cols);
+                                         input_cmd_context.max_col);
                     uint32_t new_viewport_width =
                         clamp_subtract_uint32(input_cmd_context.right_col,
                                               input_cmd_context.left_col,
-                                              0);
+                                              input_cmd_context.min_col);
                     if (new_viewport_width < viewport_width) {
-                        uint32_t diff = clamp_subtract_uint32(
-                            viewport_width, new_viewport_width, 0);
+                        uint32_t diff =
+                            clamp_subtract_uint32(viewport_width,
+                                                  new_viewport_width,
+                                                  input_cmd_context.min_col);
                         uint32_t sum =
                             clamp_add_uint32(input_cmd_context.right_col,
                                              diff,
-                                             input_cmd_context.max_cols);
-                        if (sum < UINT32_MAX) {
+                                             input_cmd_context.max_col);
+                        if (sum < input_cmd_context.max_col) {
                             input_cmd_context.right_col = sum;
                         } else {
                             input_cmd_context.left_col = clamp_subtract_uint32(
                                 input_cmd_context.left_col,
                                 diff,
-                                input_cmd_context.min_cols);
+                                input_cmd_context.min_col);
                         }
                     }
                     input_cmd_context.numeric_prefix = 0;
@@ -2709,18 +2713,21 @@ void* war_window_render(void* args) {
             cmd_normal_G:
                 call_carmack("cmd_normal_G");
                 if (input_cmd_context.numeric_prefix) {
-                    input_cmd_context.row = input_cmd_context.numeric_prefix;
+                    input_cmd_context.row =
+                        clamp_uint32(input_cmd_context.numeric_prefix,
+                                     input_cmd_context.min_row,
+                                     input_cmd_context.max_row);
                     uint32_t viewport_height = input_cmd_context.top_row -
                                                input_cmd_context.bottom_row;
                     uint32_t distance = viewport_height / 2;
                     input_cmd_context.bottom_row =
                         clamp_subtract_uint32(input_cmd_context.row,
                                               distance,
-                                              input_cmd_context.min_rows);
+                                              input_cmd_context.min_row);
                     input_cmd_context.top_row =
                         clamp_add_uint32(input_cmd_context.row,
                                          distance,
-                                         input_cmd_context.max_rows);
+                                         input_cmd_context.max_row);
                     uint32_t new_viewport_height =
                         clamp_subtract_uint32(input_cmd_context.top_row,
                                               input_cmd_context.bottom_row,
@@ -2731,15 +2738,15 @@ void* war_window_render(void* args) {
                         uint32_t sum =
                             clamp_add_uint32(input_cmd_context.top_row,
                                              diff,
-                                             input_cmd_context.max_rows);
-                        if (sum < UINT32_MAX) {
+                                             input_cmd_context.max_row);
+                        if (sum < input_cmd_context.max_row) {
                             input_cmd_context.top_row = sum;
                         } else {
                             input_cmd_context.bottom_row =
                                 clamp_subtract_uint32(
                                     input_cmd_context.bottom_row,
                                     diff,
-                                    input_cmd_context.min_rows);
+                                    input_cmd_context.min_row);
                         }
                     }
                     input_cmd_context.numeric_prefix = 0;
@@ -2751,37 +2758,42 @@ void* war_window_render(void* args) {
             cmd_normal_gg:
                 call_carmack("cmd_normal_gg");
                 if (input_cmd_context.numeric_prefix) {
-                    input_cmd_context.row = input_cmd_context.numeric_prefix;
+                    input_cmd_context.row =
+                        clamp_uint32(input_cmd_context.numeric_prefix,
+                                     input_cmd_context.min_row,
+                                     input_cmd_context.max_row);
                     uint32_t viewport_height = input_cmd_context.top_row -
                                                input_cmd_context.bottom_row;
                     uint32_t distance = viewport_height / 2;
                     input_cmd_context.bottom_row =
                         clamp_subtract_uint32(input_cmd_context.row,
                                               distance,
-                                              input_cmd_context.min_rows);
+                                              input_cmd_context.min_row);
                     input_cmd_context.top_row =
                         clamp_add_uint32(input_cmd_context.row,
                                          distance,
-                                         input_cmd_context.max_rows);
+                                         input_cmd_context.max_row);
                     uint32_t new_viewport_height =
                         clamp_subtract_uint32(input_cmd_context.top_row,
                                               input_cmd_context.bottom_row,
-                                              0);
+                                              input_cmd_context.min_row);
                     if (new_viewport_height < viewport_height) {
-                        uint32_t diff = clamp_subtract_uint32(
-                            viewport_height, new_viewport_height, 0);
+                        uint32_t diff =
+                            clamp_subtract_uint32(viewport_height,
+                                                  new_viewport_height,
+                                                  input_cmd_context.min_row);
                         uint32_t sum =
                             clamp_add_uint32(input_cmd_context.top_row,
                                              diff,
-                                             input_cmd_context.max_rows);
-                        if (sum < UINT32_MAX) {
+                                             input_cmd_context.max_row);
+                        if (sum < input_cmd_context.max_row) {
                             input_cmd_context.top_row = sum;
                         } else {
                             input_cmd_context.bottom_row =
                                 clamp_subtract_uint32(
                                     input_cmd_context.bottom_row,
                                     diff,
-                                    input_cmd_context.min_rows);
+                                    input_cmd_context.min_row);
                         }
                     }
                     input_cmd_context.numeric_prefix = 0;
@@ -2927,14 +2939,14 @@ void* war_window_render(void* args) {
                 if (!input_cmd_context.numeric_prefix) {
                     input_cmd_context.cursor_width_scale =
                         input_cmd_context.t_cursor_width_scale;
-                    input_cmd_context.cursor_width_scale_factor = true;
+                    input_cmd_context.cursor_width_scale_is_factor = true;
                     goto cmd_done;
                 }
                 input_cmd_context.cursor_width_scale =
                     input_cmd_context.numeric_prefix;
                 input_cmd_context.t_cursor_width_scale =
                     input_cmd_context.cursor_width_scale;
-                input_cmd_context.cursor_width_scale_factor = true;
+                input_cmd_context.cursor_width_scale_is_factor = true;
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_normal_f:
@@ -2942,14 +2954,14 @@ void* war_window_render(void* args) {
                 if (!input_cmd_context.numeric_prefix) {
                     input_cmd_context.cursor_width_scale =
                         input_cmd_context.f_cursor_width_scale;
-                    input_cmd_context.cursor_width_scale_factor = false;
+                    input_cmd_context.cursor_width_scale_is_factor = false;
                     goto cmd_done;
                 }
                 input_cmd_context.cursor_width_scale =
                     input_cmd_context.numeric_prefix;
                 input_cmd_context.f_cursor_width_scale =
                     input_cmd_context.cursor_width_scale;
-                input_cmd_context.cursor_width_scale_factor = false;
+                input_cmd_context.cursor_width_scale_is_factor = false;
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_normal_g:

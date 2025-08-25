@@ -38,10 +38,6 @@
 
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
-#define keysym_mode_modifier_state_index(keysym, mode, keystate, mod)          \
-    ((keysym) + max_keysyms * ((mode) + max_modes * ((keystate) +              \
-                                                     max_keystates * (mod))))
-
 // COMMENT OPTIMIZE: Duff's Device + SIMD (intrinsics)
 
 static inline uint64_t get_monotonic_time_us(void) {
@@ -127,6 +123,13 @@ clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t prod = (uint64_t)a * (uint64_t)b;
     uint64_t mask = -(prod > max_value);
     return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
+}
+
+static inline uint32_t
+clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
+    a = a < min_value ? min_value : a;
+    a = a > max_value ? max_value : a;
+    return a;
 }
 
 static inline bool state_is_prefix(uint16_t state_index, war_fsm_state* fsm) {
@@ -231,6 +234,15 @@ static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     default:
         return 511; // fallback / unknown
     }
+}
+
+static inline int war_num_digits(uint32_t n) {
+    int digits = 0;
+    do {
+        digits++;
+        n /= 10;
+    } while (n != 0);
+    return digits;
 }
 
 static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
@@ -356,15 +368,6 @@ static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
     sdf_indices[i_indices + 3] = i_verts + 2;
     sdf_indices[i_indices + 4] = i_verts + 3;
     sdf_indices[i_indices + 5] = i_verts;
-}
-
-static inline int war_num_digits(uint32_t n) {
-    int digits = 0;
-    do {
-        digits++;
-        n /= 10;
-    } while (n != 0);
-    return digits;
 }
 
 #endif // WAR_MACROS_H

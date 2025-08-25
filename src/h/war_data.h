@@ -84,6 +84,8 @@ enum war_misc {
     MAX_MIDI_NOTES = 128,
     UNSET = 0,
     MAX_DIGITS = 10,
+    NUM_STATUS_BARS = 3,
+    MAX_GRIDLINE_SPLITS = 4,
 };
 
 enum war_modes {
@@ -146,13 +148,9 @@ typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;
     uint32_t cursor_width_scale;
-    bool cursor_width_scale_factor;
+    bool cursor_width_scale_is_factor;
     float cell_navigation_scale;
-    float gridline_split;
-    float first_gridline_split;
-    float second_gridline_split;
-    float third_gridline_split;
-    float fourth_gridline_split;
+    uint32_t gridline_splits[4];
     uint32_t left_col;
     uint32_t bottom_row;
     uint32_t right_col;
@@ -162,13 +160,15 @@ typedef struct war_input_cmd_context {
     uint32_t col_leap_increment;
     uint32_t row_leap_increment;
     uint32_t numeric_prefix;
-    uint32_t max_cols;
-    uint32_t max_rows;
-    uint32_t min_cols;
-    uint32_t min_rows;
+    uint32_t max_col;
+    uint32_t max_row;
+    uint32_t min_col;
+    uint32_t min_row;
     float cursor_x;
     float cursor_y;
     float zoom_scale;
+    float max_zoom_scale;
+    float min_zoom_scale;
     float panning_x;
     float panning_y;
     float zoom_increment;

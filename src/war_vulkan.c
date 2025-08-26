@@ -483,7 +483,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             .location = 4,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = offsetof(quad_vertex, cell_size),
+            .offset = offsetof(quad_vertex, scale),
         },
     };
     uint32_t num_quad_vertex_attrs = 5;

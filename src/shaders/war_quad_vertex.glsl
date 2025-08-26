@@ -26,9 +26,9 @@
 
 layout(location = 0) in uvec2 in_pos;
 layout(location = 1) in vec4 in_color;
-layout(location = 2) in uvec2 in_bottom_left_corner;
+layout(location = 2) in uvec2 in_corner;
 layout(location = 3) in vec2 in_line_thickness;
-layout(location = 4) in vec2 in_cell_size;
+layout(location = 4) in vec2 in_scale;
 
 layout(location = 0) out vec4 color;
 
@@ -47,11 +47,24 @@ layout(push_constant) uniform PushConstants {
 } pc;
 
 void main() {
+    vec2 corner_sign = vec2((in_corner.x == 0u ? -1.0 : 1.0), // left -> -1, right -> +1
+         (in_corner.y == 0u ? -1.0 : 1.0) // bottom -> -1, top -> +1
+    );
+    if (in_line_thickness.x == 0.0 && in_line_thickness.y == 0.0) {
+        corner_sign = vec2((in_corner.x == 0u ? 0.0 : 1.0), // left -> 0, right -> +1
+             (in_corner.y == 0u ? 0.0 : 1.0) // bottom -> 0, top -> +1
+        );
+    }
     uvec2 local_cell = (in_pos - pc.bottom_left) + pc.cell_offsets;
     vec2 pixel_pos = vec2(float(local_cell.x), float(local_cell.y)) * pc.cell_size;
+
+    float offset_x = corner_sign.x * (in_line_thickness.x * pc.cell_size.x + abs(pc.cell_size.x - in_scale.x * pc.cell_size.x));
+    float offset_y = corner_sign.y * (in_line_thickness.y * pc.cell_size.y + abs(pc.cell_size.y - in_scale.y * pc.cell_size.y));
+    vec2 transformed = vec2(pixel_pos.x + offset_x, pixel_pos.y + offset_y);
+    
     vec2 anchor_pixel = vec2(float(pc.anchor_cell.x - pc.bottom_left.x + pc.cell_offsets.x),
                              float(pc.anchor_cell.y - pc.bottom_left.y + pc.cell_offsets.y)) * pc.cell_size;
-    vec2 delta = pixel_pos - anchor_pixel;
+    vec2 delta = transformed - anchor_pixel;
     delta *= pc.scale;
     vec2 zoomed = delta * pc.zoom + anchor_pixel;
     vec2 ndc = vec2(

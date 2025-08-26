@@ -164,7 +164,8 @@ void* war_window_render(void* args) {
         .physical_height = physical_height,
         .logical_width = logical_width,
         .logical_height = logical_height,
-        .max_col = 289290, // artifacts start happening after
+        .max_col = 144635, // shaking start happening after 289290,
+                           // line numbers thinning happens after 144635
         .max_row = MAX_MIDI_NOTES - 1,
         .min_col = 0,
         .min_row = 0,
@@ -308,7 +309,19 @@ void* war_window_render(void* args) {
     obj_op[obj_op_index(wl_registry_id, 0)] = &&wl_registry_global;
     obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
 
-    quad_vertex* static_quad_verts = malloc(sizeof(quad_vertex) * (1));
+    uint32_t max_viewport_cols =
+        (uint32_t)(physical_width / (vulkan_context.cell_width *
+                                     input_cmd_context.min_zoom_scale));
+    uint32_t max_viewport_rows =
+        (uint32_t)(physical_height / (vulkan_context.cell_height *
+                                      input_cmd_context.min_zoom_scale));
+    uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
+    quad_vertex* static_quad_verts = malloc(
+        sizeof(quad_vertex) * 4 *
+        (input_cmd_context.num_rows_for_status_bars + max_gridlines_per_split));
+    uint16_t* static_quad_indices = malloc(
+        sizeof(uint16_t) * 6 *
+        (input_cmd_context.num_rows_for_status_bars + max_gridlines_per_split));
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
@@ -751,6 +764,8 @@ void* war_window_render(void* args) {
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
                 const uint32_t test_white_hex = 0xFFFFFFFF;
+                const float default_horizontal_line_width = 0.013;
+                const float default_vertical_line_width = 0.025;
                 // single buffer
                 assert(vulkan_context.current_frame == 0);
                 vkWaitForFences(
@@ -806,58 +821,139 @@ void* war_window_render(void* args) {
                     current_pipeline = PIPELINE_QUAD;
                 }
                 // status bars
-                quad_vertex status_bar_verts[12] = {
-                    // bottom bar
-                    {{0, 0}, red_hex, 0},
-                    {{input_cmd_context.viewport_cols, 0}, red_hex, 0},
-                    {{input_cmd_context.viewport_cols, 1}, red_hex, 0},
-                    {{0, 1}, red_hex, 0},
-                    // middle bar
-                    {{0, 1}, dark_gray_hex, 0},
-                    {{input_cmd_context.viewport_cols, 1}, dark_gray_hex, 0},
-                    {{input_cmd_context.viewport_cols, 2}, dark_gray_hex, 0},
-                    {{0, 2}, dark_gray_hex, 0},
-                    // top bar
-                    {{0, 2}, light_gray_hex, 0},
-                    {{input_cmd_context.viewport_cols, 2}, light_gray_hex, 0},
-                    {{input_cmd_context.viewport_cols, 3}, light_gray_hex, 0},
-                    {{0, 3}, light_gray_hex, 0},
-                };
-                uint16_t status_bar_indices[18] = {
-                    0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8};
-                uint16_t num_status_bar_indices = 18;
-                quad_instance status_bar_instances[0];
-                uint16_t num_status_bar_instances = 1;
+                for (size_t i = 0;
+                     i < input_cmd_context.num_rows_for_status_bars;
+                     i++) {
+                    uint32_t i_verts = i * 4;
+                    uint32_t i_indices = i * 6;
+                    uint32_t bottom_left_corner[2] = {0, i};
+                    uint32_t span[2] = {input_cmd_context.viewport_cols, 1};
+                    float scale[2] = {1.0f, 1.0f};
+                    float line_thickness[2] = {0.0f, 0.0f};
+                    uint32_t color = red_hex;
+                    if (i == 1) {
+                        color = dark_gray_hex;
+                    } else if (i == 2) {
+                        color = light_gray_hex;
+                    }
+                    war_make_quad(static_quad_verts,
+                                  static_quad_indices,
+                                  i_verts,
+                                  i_indices,
+                                  bottom_left_corner,
+                                  span,
+                                  scale,
+                                  line_thickness,
+                                  color);
+                }
+                for (size_t i = input_cmd_context.num_rows_for_status_bars;
+                     i < max_viewport_rows +
+                             input_cmd_context.num_rows_for_status_bars;
+                     i++) {
+                    uint32_t i_verts = i * 4;
+                    uint32_t i_indices = i * 6;
+                    if (i == input_cmd_context.num_rows_for_status_bars ||
+                        i >= input_cmd_context.viewport_rows) {
+                        war_make_blank_quad(static_quad_verts,
+                                            static_quad_indices,
+                                            i_verts,
+                                            i_indices);
+                    } else {
+                        war_make_quad(
+                            static_quad_verts,
+                            static_quad_indices,
+                            i_verts,
+                            i_indices,
+                            (uint32_t[2]){
+                                input_cmd_context.num_cols_for_line_numbers + 1,
+                                i},
+                            (uint32_t[2]){input_cmd_context.viewport_cols -
+                                              input_cmd_context
+                                                  .num_cols_for_line_numbers -
+                                              2,
+                                          0},
+                            (float[2]){0.0f, 1.0f},
+                            (float[2]){0.0f, default_horizontal_line_width},
+                            bright_white_hex);
+                    }
+                }
+                for (size_t i = max_viewport_rows +
+                                input_cmd_context.num_rows_for_status_bars;
+                     i < max_gridlines_per_split +
+                             input_cmd_context.num_rows_for_status_bars;
+                     i++) {
+                    uint32_t i_verts = i * 4;
+                    uint32_t i_indices = i * 6;
+                    uint32_t col = i - max_viewport_rows;
+                    if (col < input_cmd_context.num_cols_for_line_numbers + 1 ||
+                        col >= input_cmd_context.viewport_cols) {
+                        war_make_blank_quad(static_quad_verts,
+                                            static_quad_indices,
+                                            i_verts,
+                                            i_indices);
+                    } else {
+                        qsort(input_cmd_context.gridline_splits,
+                              4,
+                              sizeof(uint32_t),
+                              war_compare_desc_uint32);
+                        war_make_quad(
+                            static_quad_verts,
+                            static_quad_indices,
+                            i_verts,
+                            i_indices,
+                            (uint32_t[2]){
+                                col,
+                                input_cmd_context.num_rows_for_status_bars + 1},
+                            (uint32_t[2]){0,
+                                          input_cmd_context.viewport_rows -
+                                              input_cmd_context
+                                                  .num_cols_for_line_numbers -
+                                              2},
+                            (float[2]){1.0f, 0.0f},
+                            (float[2]){default_vertical_line_width, 0.0f},
+                            bright_white_hex);
+                    }
+                }
+                size_t num_static_quad_verts =
+                    4 * (input_cmd_context.num_rows_for_status_bars +
+                         max_gridlines_per_split);
+                size_t num_static_quad_indices =
+                    6 * (input_cmd_context.num_rows_for_status_bars +
+                         max_gridlines_per_split);
+                quad_instance static_quad_instances[0];
+                uint16_t num_static_quad_instances = 1;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
-                       status_bar_verts,
-                       sizeof(status_bar_verts));
+                       static_quad_verts,
+                       num_static_quad_verts * sizeof(quad_vertex));
                 memcpy(vulkan_context.quads_instance_buffer_mapped +
                            quads_instance_offset,
-                       status_bar_instances,
-                       sizeof(status_bar_instances));
+                       static_quad_instances,
+                       sizeof(static_quad_instances));
                 memcpy(vulkan_context.quads_index_buffer_mapped +
                            quads_index_offset,
-                       status_bar_indices,
-                       sizeof(status_bar_indices));
+                       static_quad_indices,
+                       num_static_quad_indices * sizeof(uint16_t));
                 VkMappedMemoryRange status_bar_flush_ranges[3] = {
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_vertex_buffer_memory,
                         .offset = align64(quads_vertex_offset),
-                        .size = align64(sizeof(status_bar_verts)),
+                        .size = align64(num_static_quad_verts *
+                                        sizeof(quad_vertex)),
                     },
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_instance_buffer_memory,
                         .offset = align64(quads_instance_offset),
-                        .size = align64(sizeof(status_bar_instances)),
+                        .size = align64(sizeof(static_quad_instances)),
                     },
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_index_buffer_memory,
                         .offset = align64(quads_index_offset),
-                        .size = align64(sizeof(status_bar_indices)),
+                        .size =
+                            align64(num_static_quad_indices * sizeof(uint16_t)),
                     }};
                 vkFlushMappedMemoryRanges(
                     vulkan_context.device, 3, status_bar_flush_ranges);
@@ -913,14 +1009,16 @@ void* war_window_render(void* args) {
                                    sizeof(quad_push_constants),
                                    &status_bar_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer,
-                                 num_status_bar_indices,
-                                 num_status_bar_instances,
+                                 num_static_quad_indices,
+                                 num_static_quad_instances,
                                  0,
                                  0,
                                  0);
-                quads_vertex_offset += sizeof(status_bar_verts);
-                quads_instance_offset += sizeof(status_bar_instances);
-                quads_index_offset += sizeof(status_bar_indices);
+                quads_vertex_offset +=
+                    num_static_quad_verts * sizeof(quad_vertex);
+                quads_instance_offset += sizeof(static_quad_instances);
+                quads_index_offset +=
+                    num_static_quad_indices * sizeof(uint16_t);
                 // status bar text
                 if (current_pipeline != PIPELINE_SDF) {
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
@@ -1178,8 +1276,7 @@ void* war_window_render(void* args) {
                     (quad_vertex){
                         .corner = {0, 0},
                         .pos = {input_cmd_context.col, input_cmd_context.row},
-                        .cell_size = {input_cmd_context.cell_width,
-                                      input_cmd_context.cell_height},
+                        .scale = {1.0f, 1.0f},
                         .color = white_hex,
                         .line_thickness = {0.0f, 0.0f},
                     },
@@ -1187,8 +1284,7 @@ void* war_window_render(void* args) {
                         .corner = {1, 0},
                         .pos = {input_cmd_context.col + 1,
                                 input_cmd_context.row},
-                        .cell_size = {input_cmd_context.cell_width,
-                                      input_cmd_context.cell_height},
+                        .scale = {1.0f, 1.0f},
                         .color = white_hex,
                         .line_thickness = {0.0f, 0.0f},
                     },
@@ -1196,8 +1292,7 @@ void* war_window_render(void* args) {
                         .corner = {1, 1},
                         .pos = {input_cmd_context.col + 1,
                                 input_cmd_context.row + 1},
-                        .cell_size = {input_cmd_context.cell_width,
-                                      input_cmd_context.cell_height},
+                        .scale = {1.0f, 1.0f},
                         .color = white_hex,
                         .line_thickness = {0.0f, 0.0f},
                     },
@@ -1205,8 +1300,7 @@ void* war_window_render(void* args) {
                         .corner = {0, 1},
                         .pos = {input_cmd_context.col,
                                 input_cmd_context.row + 1},
-                        .cell_size = {input_cmd_context.cell_width,
-                                      input_cmd_context.cell_height},
+                        .scale = {1.0f, 1.0f},
                         .color = white_hex,
                         .line_thickness = {0.0f, 0.0f},
                     },

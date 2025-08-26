@@ -60,17 +60,17 @@ layout(push_constant) uniform PushConstants {
 
 void main() {
     vec2 corner_sign = vec2((in_corner.x == 0u ? 1.0 : -1.0), // left -> +1, right -> -1
-         vec2(in_corner.y == 0u ? 1.0 : -1.0) // bottom -> +1, top -> -1
+         (in_corner.y == 0u ? 1.0 : -1.0) // bottom -> +1, top -> -1
     );
     uvec2 local_cell = (in_pos - pc.bottom_left) + pc.cell_offsets;
     vec2 cell_pixel = vec2(float(local_cell.x), float(local_cell.y)) * pc.cell_size;
 
-    float glyph_padding_x = corner_sign.x * (((pc.cell_size.x - in_glyph_size.x) * 0.5 + in_glyph_bearing.x) * 0.5);
-    float glyph_padding_y_bottom = corner_sign.y * pc.cell_size.y - pc.baseline - in_glyph_descent;
-    float glyph_padding_y_top = corner_sign.y * (pc.baseline - in_glyph_bearing.y);
-    float glyph_padding_y = mix(glyph_padding_y_bottom, glyph_padding_y_top, float(in_corner.y));
+    float glyph_offset_x = corner_sign.x * (((pc.cell_size.x - in_glyph_size.x) * 0.5 + in_glyph_bearing.x) * 0.5);
+    float glyph_offset_y_bottom = corner_sign.y * pc.cell_size.y - pc.baseline - in_glyph_descent;
+    float glyph_offset_y_top = corner_sign.y * (pc.baseline - in_glyph_bearing.y);
+    float glyph_offset_y = mix(glyph_offset_y_bottom, glyph_offset_y_top, float(in_corner.y));
 
-    vec2 glyph_transform = vec2(glyph_padding_x, glyph_padding_y);
+    vec2 glyph_transform = vec2(glyph_offset_x, glyph_offset_y);
     vec2 pixel_pos = cell_pixel + glyph_transform;
     vec2 anchor_pixel = vec2(
         float(pc.anchor_cell.x - pc.bottom_left.x + pc.cell_offsets.x),

@@ -73,8 +73,8 @@ enum war_audio_functions {
 enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
-    max_quads = 900,
-    max_sdf_quads = 900,
+    max_quads = 6000,
+    max_sdf_quads = 6000,
     max_frames = 1, // no need for double/triple yet
     max_instances_per_quad = 1,
     max_instances_per_sdf_quad = 1,
@@ -268,7 +268,7 @@ typedef struct quad_vertex {
     uint32_t color;
     uint32_t corner[2];
     float line_thickness[2];
-    float cell_size[2];
+    float scale[2];
     uint32_t _pad1;
 } quad_vertex;
 

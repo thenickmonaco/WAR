@@ -764,8 +764,8 @@ void* war_window_render(void* args) {
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
                 const uint32_t test_white_hex = 0xFFFFFFFF;
-                const float default_horizontal_line_width = 0.013;
-                const float default_vertical_line_width = 0.025;
+                const float default_horizontal_line_width = 0.018;
+                const float default_vertical_line_width = 0.018;
                 // single buffer
                 assert(vulkan_context.current_frame == 0);
                 vkWaitForFences(

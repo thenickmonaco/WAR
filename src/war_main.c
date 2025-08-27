@@ -864,7 +864,7 @@ void* war_window_render(void* args) {
                                             i_verts,
                                             i_indices);
                     } else {
-                        uint32_t color = light_gray_hex;
+                        uint32_t color = darker_light_gray_hex;
                         uint32_t bottom_left_corner[2] = {
                             input_cmd_context.left_col +
                                 input_cmd_context.num_cols_for_line_numbers + 1,
@@ -887,6 +887,10 @@ void* war_window_render(void* args) {
                                       color);
                     }
                 }
+                qsort(input_cmd_context.gridline_splits,
+                      4,
+                      sizeof(uint32_t),
+                      war_compare_desc_uint32);
                 for (size_t i = max_viewport_rows +
                                 input_cmd_context.num_rows_for_status_bars;
                      i < max_gridlines_per_split +
@@ -902,10 +906,6 @@ void* war_window_render(void* args) {
                                             i_verts,
                                             i_indices);
                     } else {
-                        qsort(input_cmd_context.gridline_splits,
-                              4,
-                              sizeof(uint32_t),
-                              war_compare_desc_uint32);
                         bool first_split = 0;
                         bool second_split = 0;
                         bool third_split = 0;
@@ -961,9 +961,9 @@ void* war_window_render(void* args) {
                             float line_thickness[2] = {
                                 default_vertical_line_width, 0.0f};
                             if (first_split) {
-                                color = red_hex;
+                                color = white_hex;
                             } else if (second_split) {
-                                color = light_gray_hex;
+                                color = darker_light_gray_hex;
                             } else if (third_split) {
                                 color = light_gray_hex;
                             } else if (fourth_split) {

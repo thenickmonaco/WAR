@@ -821,12 +821,15 @@ void* war_window_render(void* args) {
                     current_pipeline = PIPELINE_QUAD;
                 }
                 // status bars
+                size_t static_quad_i_verts = 0;
+                size_t static_quad_i_indices = 0;
                 for (size_t i = 0;
                      i < input_cmd_context.num_rows_for_status_bars;
                      i++) {
-                    uint32_t i_verts = i * 4;
-                    uint32_t i_indices = i * 6;
-                    uint32_t bottom_left_corner[2] = {0, i};
+                    uint32_t bottom_left_corner[2] = {
+                        input_cmd_context.left_col,
+
+                        input_cmd_context.bottom_row + i};
                     uint32_t span[2] = {input_cmd_context.viewport_cols, 1};
                     float scale[2] = {1.0f, 1.0f};
                     float line_thickness[2] = {0.0f, 0.0f};
@@ -838,13 +841,15 @@ void* war_window_render(void* args) {
                     }
                     war_make_quad(static_quad_verts,
                                   static_quad_indices,
-                                  i_verts,
-                                  i_indices,
+                                  static_quad_i_verts,
+                                  static_quad_i_indices,
                                   bottom_left_corner,
                                   span,
                                   scale,
                                   line_thickness,
                                   color);
+                    static_quad_i_verts += 4;
+                    static_quad_i_indices += 6;
                 }
                 for (size_t i = input_cmd_context.num_rows_for_status_bars;
                      i < max_viewport_rows +
@@ -859,22 +864,27 @@ void* war_window_render(void* args) {
                                             i_verts,
                                             i_indices);
                     } else {
-                        war_make_quad(
-                            static_quad_verts,
-                            static_quad_indices,
-                            i_verts,
-                            i_indices,
-                            (uint32_t[2]){
+                        uint32_t color = light_gray_hex;
+                        uint32_t bottom_left_corner[2] = {
+                            input_cmd_context.left_col +
                                 input_cmd_context.num_cols_for_line_numbers + 1,
-                                i},
-                            (uint32_t[2]){input_cmd_context.viewport_cols -
-                                              input_cmd_context
-                                                  .num_cols_for_line_numbers -
-                                              2,
-                                          0},
-                            (float[2]){0.0f, 1.0f},
-                            (float[2]){0.0f, default_horizontal_line_width},
-                            bright_white_hex);
+                            input_cmd_context.bottom_row + i};
+                        uint32_t span[2] = {
+                            input_cmd_context.viewport_cols -
+                                input_cmd_context.num_cols_for_line_numbers - 2,
+                            0};
+                        float scale[2] = {0.0f, 1.0f};
+                        float line_thickness[2] = {
+                            0.0f, default_horizontal_line_width};
+                        war_make_quad(static_quad_verts,
+                                      static_quad_indices,
+                                      i_verts,
+                                      i_indices,
+                                      bottom_left_corner,
+                                      span,
+                                      scale,
+                                      line_thickness,
+                                      color);
                     }
                 }
                 for (size_t i = max_viewport_rows +
@@ -896,22 +906,84 @@ void* war_window_render(void* args) {
                               4,
                               sizeof(uint32_t),
                               war_compare_desc_uint32);
-                        war_make_quad(
-                            static_quad_verts,
-                            static_quad_indices,
-                            i_verts,
-                            i_indices,
-                            (uint32_t[2]){
-                                col,
-                                input_cmd_context.num_rows_for_status_bars + 1},
-                            (uint32_t[2]){0,
-                                          input_cmd_context.viewport_rows -
-                                              input_cmd_context
-                                                  .num_cols_for_line_numbers -
-                                              2},
-                            (float[2]){1.0f, 0.0f},
-                            (float[2]){default_vertical_line_width, 0.0f},
-                            bright_white_hex);
+                        bool first_split = 0;
+                        bool second_split = 0;
+                        bool third_split = 0;
+                        bool fourth_split = 0;
+                        if (input_cmd_context.gridline_splits[0] != 0) {
+                            first_split =
+                                (input_cmd_context.left_col +
+                                 input_cmd_context.num_cols_for_line_numbers -
+                                 2 + col) %
+                                    input_cmd_context.gridline_splits[0] ==
+                                0;
+                        }
+                        if (input_cmd_context.gridline_splits[1] != 0) {
+                            second_split =
+                                (input_cmd_context.left_col +
+                                 input_cmd_context.num_cols_for_line_numbers -
+                                 2 + col) %
+                                    input_cmd_context.gridline_splits[1] ==
+                                0;
+                        }
+                        if (input_cmd_context.gridline_splits[2] != 0) {
+                            third_split =
+                                (input_cmd_context.left_col +
+                                 input_cmd_context.num_cols_for_line_numbers -
+                                 2 + col) %
+                                    input_cmd_context.gridline_splits[2] ==
+                                0;
+                        }
+                        if (input_cmd_context.gridline_splits[3] != 0) {
+                            fourth_split =
+                                (input_cmd_context.left_col +
+                                 input_cmd_context.num_cols_for_line_numbers -
+                                 2 + col) %
+                                    input_cmd_context.gridline_splits[3] ==
+                                0;
+                        }
+                        bool draw_line = first_split || second_split ||
+                                         third_split || fourth_split;
+                        if (draw_line) {
+                            uint32_t color = bright_white_hex;
+                            uint32_t bottom_left_corner[2] = {
+                                input_cmd_context.left_col + col,
+                                input_cmd_context.bottom_row +
+                                    input_cmd_context.num_rows_for_status_bars +
+                                    1};
+                            uint32_t span[2] = {
+                                0,
+                                input_cmd_context.viewport_rows -
+                                    input_cmd_context.num_rows_for_status_bars -
+                                    2,
+                            };
+                            float scale[2] = {1.0f, 0.0f};
+                            float line_thickness[2] = {
+                                default_vertical_line_width, 0.0f};
+                            if (first_split) {
+                                color = red_hex;
+                            } else if (second_split) {
+                                color = light_gray_hex;
+                            } else if (third_split) {
+                                color = light_gray_hex;
+                            } else if (fourth_split) {
+                                color = light_gray_hex;
+                            }
+                            war_make_quad(static_quad_verts,
+                                          static_quad_indices,
+                                          i_verts,
+                                          i_indices,
+                                          bottom_left_corner,
+                                          span,
+                                          scale,
+                                          line_thickness,
+                                          color);
+                        } else {
+                            war_make_blank_quad(static_quad_verts,
+                                                static_quad_indices,
+                                                i_verts,
+                                                i_indices);
+                        }
                     }
                 }
                 size_t num_static_quad_verts =
@@ -988,7 +1060,8 @@ void* war_window_render(void* args) {
                 vkCmdSetScissor(
                     vulkan_context.cmd_buffer, 0, 1, &status_bar_scissor);
                 quad_push_constants status_bar_pc = {
-                    .bottom_left = {0, 0},
+                    .bottom_left = {input_cmd_context.left_col,
+                                    input_cmd_context.bottom_row},
                     .physical_size = {physical_width, physical_height},
                     .cell_size = {input_cmd_context.cell_width,
                                   input_cmd_context.cell_height},

@@ -88,6 +88,12 @@ enum war_misc {
     MAX_GRIDLINE_SPLITS = 4,
 };
 
+enum war_hud {
+    SHOW_PIANO = 0,
+    SHOW_LINE_NUMBERS = 1,
+    SHOW_PIANO_AND_LINE_NUMBERS = 3,
+};
+
 enum war_modes {
     MODE_COUNT = 8,
     MODE_NORMAL = 0,
@@ -149,6 +155,7 @@ typedef struct war_input_cmd_context {
     uint32_t row;
     uint32_t cursor_width_scale;
     bool cursor_width_scale_is_factor;
+    uint8_t hud_state;
     float cell_navigation_scale;
     uint32_t gridline_splits[4];
     uint32_t left_col;

@@ -169,6 +169,7 @@ void* war_window_render(void* args) {
         .max_row = MAX_MIDI_NOTES - 1,
         .min_col = 0,
         .min_row = 0,
+        .hud_state = SHOW_PIANO,
     };
 
     uint32_t mod_shift;
@@ -224,11 +225,11 @@ void* war_window_render(void* args) {
         ARGB8888 = 0,
     };
 
-    uint32_t quads_x[max_quads * 4];
-    uint32_t quads_y[max_quads * 4];
-    uint32_t quads_color[max_quads * 4];
-    uint32_t quads_index[max_quads * 6];
-    size_t quads_count = 0;
+    // uint32_t quads_x[max_quads * 4];
+    // uint32_t quads_y[max_quads * 4];
+    // uint32_t quads_color[max_quads * 4];
+    // uint32_t quads_index[max_quads * 6];
+    // size_t quads_count = 0;
 
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
@@ -316,12 +317,14 @@ void* war_window_render(void* args) {
         (uint32_t)(physical_height / (vulkan_context.cell_height *
                                       input_cmd_context.min_zoom_scale));
     uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
-    quad_vertex* static_quad_verts = malloc(
-        sizeof(quad_vertex) * 4 *
-        (input_cmd_context.num_rows_for_status_bars + max_gridlines_per_split));
-    uint16_t* static_quad_indices = malloc(
-        sizeof(uint16_t) * 6 *
-        (input_cmd_context.num_rows_for_status_bars + max_gridlines_per_split));
+    quad_vertex* static_quad_verts =
+        malloc(sizeof(quad_vertex) * 4 *
+               (input_cmd_context.num_rows_for_status_bars +
+                max_gridlines_per_split + MAX_MIDI_NOTES * 6));
+    uint16_t* static_quad_indices =
+        malloc(sizeof(uint16_t) * 6 *
+               (input_cmd_context.num_rows_for_status_bars +
+                max_gridlines_per_split + MAX_MIDI_NOTES * 6));
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
@@ -763,7 +766,7 @@ void* war_window_render(void* args) {
                 const uint32_t bright_white_hex =
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
-                const uint32_t test_white_hex = 0xFFFFFFFF;
+                const uint32_t full_white_hex = 0xFFFFFFFF;
                 const float default_horizontal_line_width = 0.018;
                 const float default_vertical_line_width = 0.018;
                 // single buffer
@@ -912,33 +915,29 @@ void* war_window_render(void* args) {
                         bool fourth_split = 0;
                         if (input_cmd_context.gridline_splits[0] != 0) {
                             first_split =
-                                (input_cmd_context.left_col +
-                                 input_cmd_context.num_cols_for_line_numbers -
-                                 2 + col) %
+                                (input_cmd_context.left_col + col -
+                                 input_cmd_context.num_cols_for_line_numbers) %
                                     input_cmd_context.gridline_splits[0] ==
                                 0;
                         }
                         if (input_cmd_context.gridline_splits[1] != 0) {
                             second_split =
-                                (input_cmd_context.left_col +
-                                 input_cmd_context.num_cols_for_line_numbers -
-                                 2 + col) %
+                                (input_cmd_context.left_col + col -
+                                 input_cmd_context.num_cols_for_line_numbers) %
                                     input_cmd_context.gridline_splits[1] ==
                                 0;
                         }
                         if (input_cmd_context.gridline_splits[2] != 0) {
                             third_split =
-                                (input_cmd_context.left_col +
-                                 input_cmd_context.num_cols_for_line_numbers -
-                                 2 + col) %
+                                (input_cmd_context.left_col + col -
+                                 input_cmd_context.num_cols_for_line_numbers) %
                                     input_cmd_context.gridline_splits[2] ==
                                 0;
                         }
                         if (input_cmd_context.gridline_splits[3] != 0) {
                             fourth_split =
-                                (input_cmd_context.left_col +
-                                 input_cmd_context.num_cols_for_line_numbers -
-                                 2 + col) %
+                                (input_cmd_context.left_col + col -
+                                 input_cmd_context.num_cols_for_line_numbers) %
                                     input_cmd_context.gridline_splits[3] ==
                                 0;
                         }
@@ -986,12 +985,102 @@ void* war_window_render(void* args) {
                         }
                     }
                 }
+                // draw piano with quads
+                size_t i_verts_piano =
+                    (max_gridlines_per_split +
+                     input_cmd_context.num_rows_for_status_bars) *
+                    4;
+                size_t i_indices_piano =
+                    (max_gridlines_per_split +
+                     input_cmd_context.num_rows_for_status_bars) *
+                    6;
+                for (size_t i = max_gridlines_per_split +
+                                input_cmd_context.num_rows_for_status_bars;
+                     i < input_cmd_context.num_rows_for_status_bars +
+                             max_gridlines_per_split + MAX_MIDI_NOTES * 4;
+                     i++) {
+                    size_t row = i -
+                                 (max_gridlines_per_split +
+                                  input_cmd_context.num_rows_for_status_bars) +
+                                 input_cmd_context.bottom_row;
+                    if (input_cmd_context.hud_state == SHOW_LINE_NUMBERS ||
+                        row > input_cmd_context.top_row) {
+                        war_make_blank_quad(static_quad_verts,
+                                            static_quad_indices,
+                                            i_verts_piano,
+                                            i_indices_piano);
+                        i_verts_piano += 4;
+                        i_indices_piano += 6;
+                        continue;
+                    }
+                    int step = row % 12;
+                    int octave = row / 12 - 1;
+                    bool is_black = (step == 1 || step == 3 || step == 6 ||
+                                     step == 8 || step == 10);
+                    if (is_black) {
+                        uint32_t black_color = black_hex;
+                        uint32_t black_bottom_left_corner[2] = {
+                            input_cmd_context.left_col,
+                            row + input_cmd_context.num_rows_for_status_bars};
+                        uint32_t black_span[2] = {2, 1};
+                        float black_scale[2] = {1.0f, 1.0f};
+                        float black_line_thickness[2] = {0.0f, 0.0f};
+                        war_make_quad(static_quad_verts,
+                                      static_quad_indices,
+                                      i_verts_piano,
+                                      i_indices_piano,
+                                      black_bottom_left_corner,
+                                      black_span,
+                                      black_scale,
+                                      black_line_thickness,
+                                      black_color);
+                        i_verts_piano += 4;
+                        i_indices_piano += 6;
+                        uint32_t white_color = full_white_hex;
+                        uint32_t white_bottom_left_corner[2] = {
+                            input_cmd_context.left_col + 2,
+                            row + input_cmd_context.num_rows_for_status_bars};
+                        uint32_t white_span[2] = {1, 1};
+                        float white_scale[2] = {1.0f, 1.0f};
+                        float white_line_thickness[2] = {0.0f, 0.0f};
+                        war_make_quad(static_quad_verts,
+                                      static_quad_indices,
+                                      i_verts_piano,
+                                      i_indices_piano,
+                                      white_bottom_left_corner,
+                                      white_span,
+                                      white_scale,
+                                      white_line_thickness,
+                                      white_color);
+                        i_verts_piano += 4;
+                        i_indices_piano += 6;
+                    } else {
+                        uint32_t white_color = full_white_hex;
+                        uint32_t white_bottom_left_corner[2] = {
+                            input_cmd_context.left_col,
+                            row + input_cmd_context.num_rows_for_status_bars};
+                        uint32_t white_span[2] = {3, 1};
+                        float white_scale[2] = {1.0f, 1.0f};
+                        float white_line_thickness[2] = {0.0f, 0.0f};
+                        war_make_quad(static_quad_verts,
+                                      static_quad_indices,
+                                      i_verts_piano,
+                                      i_indices_piano,
+                                      white_bottom_left_corner,
+                                      white_span,
+                                      white_scale,
+                                      white_line_thickness,
+                                      white_color);
+                        i_verts_piano += 4;
+                        i_indices_piano += 6;
+                    }
+                }
                 size_t num_static_quad_verts =
                     4 * (input_cmd_context.num_rows_for_status_bars +
-                         max_gridlines_per_split);
+                         max_gridlines_per_split + MAX_MIDI_NOTES * 4);
                 size_t num_static_quad_indices =
                     6 * (input_cmd_context.num_rows_for_status_bars +
-                         max_gridlines_per_split);
+                         max_gridlines_per_split + MAX_MIDI_NOTES * 4);
                 quad_instance static_quad_instances[0];
                 uint16_t num_static_quad_instances = 1;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
@@ -1131,11 +1220,11 @@ void* war_window_render(void* args) {
                 uint16_t row_offset = input_cmd_context.viewport_cols / 4;
                 uint16_t col_offset = row_offset + 4;
                 sdf_vertex status_bar_text_verts[MAX_DIGITS * 2 * 4 +
-                                                 MAX_MIDI_NOTES * 3 * 4];
+                                                 (MAX_MIDI_NOTES * 3 * 4 * 2)];
                 uint16_t status_bar_text_indices[MAX_DIGITS * 2 * 6 +
-                                                 MAX_MIDI_NOTES * 3 * 6];
+                                                 (MAX_MIDI_NOTES * 3 * 6 * 2)];
                 uint16_t num_status_bar_text_indices =
-                    MAX_DIGITS * 2 * 6 + MAX_MIDI_NOTES * 3 * 6;
+                    MAX_DIGITS * 2 * 6 + (MAX_MIDI_NOTES * 3 * 6 * 2);
                 for (int i = 0; i < MAX_DIGITS * 2; i++) {
                     size_t i_verts = i * 4;
                     size_t i_indices = i * 6;
@@ -1207,6 +1296,22 @@ void* war_window_render(void* args) {
                      i <= input_cmd_context.top_row &&
                      i <= input_cmd_context.max_row;
                      i++) {
+                    if (input_cmd_context.hud_state == SHOW_PIANO) {
+                        for (int k = 0; k < 3; k++) {
+                            int i_verts =
+                                (i - input_cmd_context.bottom_row) * 3 * 4;
+                            int i_indices =
+                                (i - input_cmd_context.bottom_row) * 3 * 6;
+                            uint32_t k_verts = k * 4;
+                            uint32_t k_indices = k * 6;
+                            war_make_blank_sdf_quad(
+                                status_bar_text_verts,
+                                status_bar_text_indices,
+                                i_verts_offset_ln + i_verts + k_verts,
+                                i_indices_offset_ln + i_indices + k_indices);
+                        }
+                        continue;
+                    }
                     int i_normal = i - input_cmd_context.bottom_row;
                     int i_glyphs = i * 3;
                     int i_verts = (i - input_cmd_context.bottom_row) * 3 * 4;
@@ -1215,7 +1320,7 @@ void* war_window_render(void* args) {
                         uint32_t k_verts = k * 4;
                         uint32_t k_indices = k * 6;
                         uint32_t bottom_left_corner[2] = {
-                            k,
+                            k + input_cmd_context.num_cols_for_line_numbers - 3,
                             input_cmd_context.num_rows_for_status_bars +
                                 i_normal};
                         if (k < 3 - war_num_digits(i)) {
@@ -1238,6 +1343,112 @@ void* war_window_render(void* args) {
                                 0.0f,
                                 light_gray_hex);
                         }
+                    }
+                }
+                uint16_t i_verts_offset_nn = MAX_DIGITS * 2 * 4 +
+                                             MAX_MIDI_NOTES * 3 * 4;
+                uint16_t i_indices_offset_nn = MAX_DIGITS * 2 * 6 +
+                                               MAX_MIDI_NOTES * 3 * 6;
+                war_glyph_info glyphs_piano_note_names[MAX_MIDI_NOTES * 3];
+                char* note_names[12] = {"C",
+                                        "C#",
+                                        "D",
+                                        "D#",
+                                        "E",
+                                        "F",
+                                        "F#",
+                                        "G",
+                                        "G#",
+                                        "A",
+                                        "A#",
+                                        "B"};
+                for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+                    int step = i % 12;
+                    bool is_black = (step == 1 || step == 3 || step == 6 ||
+                                     step == 8 || step == 10);
+
+                    int i_glyphs = i * 3;
+
+                    if (is_black) {
+                        // Black keys: leave first 2 glyphs empty, third slot
+                        // optional
+                        glyphs_piano_note_names[i_glyphs] = (war_glyph_info){0};
+                        glyphs_piano_note_names[i_glyphs + 1] =
+                            (war_glyph_info){0};
+                        glyphs_piano_note_names[i_glyphs + 2] =
+                            (war_glyph_info){0};
+                        continue;
+                    }
+
+                    int octave = i / 12 - 1;
+                    char octave_char = (octave < 0) ? '-' : '0' + octave;
+
+                    // Store first 2 slots: note letter + octave
+                    glyphs_piano_note_names[i_glyphs] =
+                        vulkan_context.glyphs[note_names[step][0]];
+                    glyphs_piano_note_names[i_glyphs + 1] =
+                        vulkan_context.glyphs[octave_char];
+
+                    // Optional: third slot unused
+                    glyphs_piano_note_names[i_glyphs + 2] = (war_glyph_info){0};
+                }
+                for (size_t i = input_cmd_context.bottom_row;
+                     i <= input_cmd_context.top_row &&
+                     i <= input_cmd_context.max_row;
+                     i++) {
+                    if (input_cmd_context.hud_state == SHOW_LINE_NUMBERS) {
+                        for (int k = 0; k < 3; k++) {
+                            int i_verts =
+                                (i - input_cmd_context.bottom_row) * 3 * 4;
+                            int i_indices =
+                                (i - input_cmd_context.bottom_row) * 3 * 6;
+                            uint32_t k_verts = k * 4;
+                            uint32_t k_indices = k * 6;
+                            war_make_blank_sdf_quad(
+                                status_bar_text_verts,
+                                status_bar_text_indices,
+                                i_verts_offset_nn + i_verts + k_verts,
+                                i_indices_offset_nn + i_indices + k_indices);
+                        }
+                        continue;
+                    }
+                    int i_normal = i - input_cmd_context.bottom_row;
+                    int i_glyphs = i * 3;
+                    int i_verts = (i - input_cmd_context.bottom_row) * 3 * 4;
+                    int i_indices = (i - input_cmd_context.bottom_row) * 3 * 6;
+                    int step = i % 12;
+                    bool is_black = (step == 1 || step == 3 || step == 6 ||
+                                     step == 8 || step == 10);
+                    if (!is_black) {
+                        for (int k = 0; k < 2; k++) {
+                            uint32_t k_verts = k * 4;
+                            uint32_t k_indices = k * 6;
+                            war_make_blank_sdf_quad(
+                                status_bar_text_verts,
+                                status_bar_text_indices,
+                                i_verts_offset_nn + i_verts + k_verts,
+                                i_indices_offset_nn + i_indices + k_indices);
+                        }
+                    }
+                    for (int k = 0; k < 2; k++) {
+                        uint32_t k_verts = k * 4;
+                        uint32_t k_indices = k * 6;
+                        uint32_t bottom_left_corner[2] = {
+                            k + 1,
+                            input_cmd_context.num_rows_for_status_bars +
+                                i_normal};
+                        war_glyph_info glyph_info =
+                            glyphs_piano_note_names[i_glyphs + k];
+                        war_make_sdf_quad(status_bar_text_verts,
+                                          status_bar_text_indices,
+                                          i_verts_offset_nn + i_verts + k_verts,
+                                          i_indices_offset_nn + i_indices +
+                                              k_indices,
+                                          bottom_left_corner,
+                                          glyph_info,
+                                          0.0f,
+                                          0.0f,
+                                          black_hex);
                     }
                 }
                 sdf_instance status_bar_text_instances[0];

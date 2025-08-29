@@ -110,7 +110,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 30,
+    NUM_SEQUENCES = 31,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -153,7 +153,7 @@ typedef struct rgba_t {
 typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;
-    uint32_t cursor_width_scale;
+    float cursor_width_scale;
     bool cursor_width_scale_is_factor;
     uint8_t hud_state;
     float cell_navigation_scale;
@@ -269,6 +269,24 @@ typedef struct sdf_push_constants {
     float font_height;
     uint32_t _pad2;
 } sdf_push_constants;
+
+typedef struct war_note_quad {
+    uint32_t bottom_left_corner[2];
+    uint32_t span[2];
+    float scale[2];
+    float line_thickness[2];
+    uint32_t color;
+} war_note_quad;
+
+// static inline void war_make_quad(quad_vertex* quad_verts,
+//                                  uint16_t* quad_indices,
+//                                  size_t i_verts,
+//                                  size_t i_indices,
+//                                  uint32_t bottom_left_corner[2],
+//                                  uint32_t span[2],
+//                                  float scale[2],
+//                                  float line_thickness[2],
+//                                  uint32_t color) {
 
 typedef struct quad_vertex {
     uint32_t pos[2];

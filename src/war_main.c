@@ -112,27 +112,28 @@ void* war_window_render(void* args) {
         (uint32_t)(physical_width / vulkan_context.cell_width);
     uint32_t viewport_rows =
         (uint32_t)(physical_height / vulkan_context.cell_height);
+    uint32_t visible_rows =
+        (uint32_t)((physical_height - ((float)num_rows_for_status_bars *
+                                       vulkan_context.cell_height)) /
+                   vulkan_context.cell_height);
     war_input_cmd_context input_cmd_context = {
         .mode = MODE_NORMAL,
+        .hud_state = SHOW_PIANO,
         .col = 0,
-        .row = 0,
+        .row = 60,
         .f_cursor_width_scale = 1,
         .t_cursor_width_scale = 1,
         .cursor_width_scale = 1,
         .cursor_width_scale_is_factor = 0,
         .cell_navigation_scale = 1,
         .gridline_splits = {4, 1, 0, 0},
+        .bottom_row = 60 - visible_rows / 2 + 1,
+        .top_row = 60 + visible_rows / 2,
         .left_col = 0,
-        .bottom_row = 0,
         .right_col =
             (uint32_t)((physical_width - ((float)num_cols_for_line_numbers *
                                           vulkan_context.cell_width)) /
                        vulkan_context.cell_width) -
-            1,
-        .top_row =
-            (uint32_t)((physical_height - ((float)num_rows_for_status_bars *
-                                           vulkan_context.cell_height)) /
-                       vulkan_context.cell_height) -
             1,
         .col_increment = 1,
         .row_increment = 1,
@@ -169,7 +170,6 @@ void* war_window_render(void* args) {
         .max_row = MAX_MIDI_NOTES - 1,
         .min_col = 0,
         .min_row = 0,
-        .hud_state = SHOW_PIANO,
     };
 
     uint32_t mod_shift;
@@ -1345,10 +1345,10 @@ void* war_window_render(void* args) {
                         }
                     }
                 }
-                uint16_t i_verts_offset_nn = MAX_DIGITS * 2 * 4 +
-                                             MAX_MIDI_NOTES * 3 * 4;
-                uint16_t i_indices_offset_nn = MAX_DIGITS * 2 * 6 +
-                                               MAX_MIDI_NOTES * 3 * 6;
+                uint16_t i_verts_offset_nn =
+                    MAX_DIGITS * 2 * 4 + MAX_MIDI_NOTES * 3 * 4;
+                uint16_t i_indices_offset_nn =
+                    MAX_DIGITS * 2 * 6 + MAX_MIDI_NOTES * 3 * 6;
                 war_glyph_info glyphs_piano_note_names[MAX_MIDI_NOTES * 3];
                 char* note_names[12] = {"C",
                                         "C#",
@@ -2582,6 +2582,10 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_g, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_x, .mod = 0},
+                            {0},
+                        },
                     };
                 void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2616,6 +2620,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_f},
                     {&&cmd_normal_t},
                     {&&cmd_normal_g},
+                    {&&cmd_normal_x},
                 };
                 size_t state_counter = 1; // 0 = root
                 for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
@@ -3366,6 +3371,11 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_g:
                 call_carmack("cmd_normal_g");
+                input_cmd_context.numeric_prefix = 0;
+                goto cmd_done;
+            cmd_normal_x:
+                call_carmack("cmd_normal_x");
+
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_done:

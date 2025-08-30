@@ -121,11 +121,12 @@ void* war_window_render(void* args) {
         .hud_state = SHOW_PIANO,
         .col = 0,
         .row = 60,
-        .f_cursor_width_scale = 1,
-        .t_cursor_width_scale = 1,
-        .cursor_width_scale = 1,
-        .cursor_width_scale_is_factor = 0,
-        .cell_navigation_scale = 1,
+        .cursor_width_scale = 1.0f,
+        .t_cursor_width_scale = 1.0f,
+        .f_cursor_width_scale = 1.0f,
+        .cell_navigation_scale = 1.0f,
+        .t_cell_navigation_scale = 1.0f,
+        .f_cell_navigation_scale = 1.0f,
         .gridline_splits = {4, 1, 0, 0},
         .bottom_row = 60 - visible_rows / 2 + 1,
         .top_row = 60 + visible_rows / 2,
@@ -225,11 +226,17 @@ void* war_window_render(void* args) {
         ARGB8888 = 0,
     };
 
-    // uint32_t quads_x[max_quads * 4];
-    // uint32_t quads_y[max_quads * 4];
-    // uint32_t quads_color[max_quads * 4];
-    // uint32_t quads_index[max_quads * 6];
-    // size_t quads_count = 0;
+    war_note_quad* note_quads = malloc(sizeof(war_note_quad) * max_note_quads);
+    uint16_t num_note_quads = 0;
+    for (size_t i = 0; i < max_note_quads; i++) {
+        note_quads[i] = (war_note_quad){
+            .color = 0,
+            .line_thickness = {0.0f, 0.0f},
+            .span = {0, 0},
+            .bottom_left_corner = {0, 0},
+            .scale = {0.0f, 0.0f},
+        };
+    }
 
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
@@ -325,6 +332,11 @@ void* war_window_render(void* args) {
         malloc(sizeof(uint16_t) * 6 *
                (input_cmd_context.num_rows_for_status_bars +
                 max_gridlines_per_split + MAX_MIDI_NOTES * 6));
+
+    quad_vertex* dynamic_quad_verts = malloc(
+        sizeof(quad_vertex) * 4 * (max_note_quads + 1)); // + 4 for cursor
+    uint16_t* dynamic_quad_indices =
+        malloc(sizeof(uint16_t) * 6 * (max_note_quads + 1)); // + 4 for cursor
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
@@ -1162,7 +1174,6 @@ void* war_window_render(void* args) {
                                     input_cmd_context.row},
                     .top_right = {input_cmd_context.viewport_rows,
                                   input_cmd_context.viewport_cols},
-                    .scale = {1.0f, 1.0f},
                 };
                 vkCmdPushConstants(vulkan_context.cmd_buffer,
                                    vulkan_context.pipeline_layout,
@@ -1549,77 +1560,76 @@ void* war_window_render(void* args) {
                 //---------------------------------------------------------
                 // DYNAMIC QUADS AND DYNAMIC SDF TEXT (VISIBLE GRID)
                 //---------------------------------------------------------
-                // cursor
                 if (current_pipeline != PIPELINE_QUAD) {
                     vkCmdBindPipeline(vulkan_context.cmd_buffer,
                                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       vulkan_context.quad_pipeline);
                     current_pipeline = PIPELINE_QUAD;
                 }
-                quad_vertex cursor_quad_verts[4] = {
-                    (quad_vertex){
-                        .corner = {0, 0},
-                        .pos = {input_cmd_context.col, input_cmd_context.row},
-                        .scale = {1.0f, 1.0f},
-                        .color = white_hex,
-                        .line_thickness = {0.0f, 0.0f},
-                    },
-                    (quad_vertex){
-                        .corner = {1, 0},
-                        .pos = {input_cmd_context.col + 1,
-                                input_cmd_context.row},
-                        .scale = {1.0f, 1.0f},
-                        .color = white_hex,
-                        .line_thickness = {0.0f, 0.0f},
-                    },
-                    (quad_vertex){
-                        .corner = {1, 1},
-                        .pos = {input_cmd_context.col + 1,
-                                input_cmd_context.row + 1},
-                        .scale = {1.0f, 1.0f},
-                        .color = white_hex,
-                        .line_thickness = {0.0f, 0.0f},
-                    },
-                    (quad_vertex){
-                        .corner = {0, 1},
-                        .pos = {input_cmd_context.col,
-                                input_cmd_context.row + 1},
-                        .scale = {1.0f, 1.0f},
-                        .color = white_hex,
-                        .line_thickness = {0.0f, 0.0f},
-                    },
-                };
+                // draw notes
+                uint16_t num_notes_in_view = 0;
+                uint16_t* notes_in_view = war_notes_in_view(&input_cmd_context,
+                                                            note_quads,
+                                                            num_note_quads,
+                                                            &num_notes_in_view);
+                for (size_t i = 0; i < num_notes_in_view; i++) {
+                    size_t i_verts = i * 4;
+                    size_t i_indices = i * 6;
+                    war_make_quad(
+                        dynamic_quad_verts,
+                        dynamic_quad_indices,
+                        i_verts,
+                        i_indices,
+                        note_quads[notes_in_view[i]].bottom_left_corner,
+                        note_quads[notes_in_view[i]].span,
+                        note_quads[notes_in_view[i]].scale,
+                        note_quads[notes_in_view[i]].line_thickness,
+                        note_quads[notes_in_view[i]].color);
+                }
+                // cursor
                 quad_instance cursor_quad_instances[0];
                 uint16_t num_cursor_quad_instances = 1;
-                uint16_t cursor_quad_indices[6] = {0, 1, 2, 2, 3, 0};
-                uint16_t num_cursor_quad_indices = 6;
+                war_make_quad(
+                    dynamic_quad_verts,
+                    dynamic_quad_indices,
+                    num_notes_in_view * 4,
+                    num_notes_in_view * 6,
+                    (uint32_t[2]){input_cmd_context.col, input_cmd_context.row},
+                    (uint32_t[2]){1, 1},
+                    (float[2]){input_cmd_context.cursor_width_scale, 1.0f},
+                    (float[2]){0.0f, 0.0f},
+                    white_hex);
+                size_t num_dynamic_quad_verts = 4 * (1 + num_notes_in_view);
+                size_t num_dynamic_quad_indices = 6 * (1 + num_notes_in_view);
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
-                       cursor_quad_verts,
-                       sizeof(cursor_quad_verts));
+                       dynamic_quad_verts,
+                       sizeof(quad_vertex) * num_dynamic_quad_verts);
                 memcpy(vulkan_context.quads_instance_buffer_mapped +
                            quads_instance_offset,
                        cursor_quad_instances,
                        sizeof(cursor_quad_instances));
                 memcpy(vulkan_context.quads_index_buffer_mapped +
                            quads_index_offset,
-                       cursor_quad_indices,
-                       sizeof(cursor_quad_indices));
+                       dynamic_quad_indices,
+                       sizeof(uint16_t) * num_dynamic_quad_indices);
                 VkMappedMemoryRange cursor_flush_ranges[3] = {
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                      .memory = vulkan_context.quads_vertex_buffer_memory,
                      .offset = align64(quads_vertex_offset),
-                     .size = align64(sizeof(cursor_quad_verts))},
+                     .size =
+                         align64(sizeof(quad_vertex) * num_dynamic_quad_verts)},
                     {
                         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                         .memory = vulkan_context.quads_instance_buffer_memory,
                         .offset = align64(quads_instance_offset),
-                        .size = align64(sizeof(cursor_quad_indices)),
+                        .size = align64(sizeof(cursor_quad_instances)),
                     },
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                      .memory = vulkan_context.quads_index_buffer_memory,
                      .offset = align64(quads_index_offset),
-                     .size = align64(sizeof(cursor_quad_indices))}};
+                     .size =
+                         align64(sizeof(uint16_t) * num_dynamic_quad_indices)}};
                 vkFlushMappedMemoryRanges(
                     vulkan_context.device, 3, cursor_flush_ranges);
                 vkCmdBindVertexBuffers(vulkan_context.cmd_buffer,
@@ -1652,10 +1662,6 @@ void* war_window_render(void* args) {
                 };
                 vkCmdSetScissor(
                     vulkan_context.cmd_buffer, 0, 1, &cursor_scissor);
-                float cursor_width_scale = input_cmd_context.cursor_width_scale;
-                if (input_cmd_context.cursor_width_scale_is_factor) {
-                    cursor_width_scale = 1.0f / cursor_width_scale;
-                }
                 quad_push_constants cursor_pc = {
                     .bottom_left = {input_cmd_context.left_col,
                                     input_cmd_context.bottom_row},
@@ -1672,7 +1678,6 @@ void* war_window_render(void* args) {
                                     input_cmd_context.row},
                     .top_right = {input_cmd_context.right_col,
                                   input_cmd_context.top_row},
-                    .scale = {cursor_width_scale, 1.0f},
                 };
                 vkCmdPushConstants(vulkan_context.cmd_buffer,
                                    vulkan_context.pipeline_layout,
@@ -1681,7 +1686,7 @@ void* war_window_render(void* args) {
                                    sizeof(quad_push_constants),
                                    &cursor_pc);
                 vkCmdDrawIndexed(vulkan_context.cmd_buffer,
-                                 num_cursor_quad_indices,
+                                 num_dynamic_quad_indices,
                                  num_cursor_quad_instances,
                                  0,
                                  0,
@@ -2586,6 +2591,16 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_x, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_m, .mod = 0},
+                            {.keysym = XKB_KEY_t, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_m, .mod = 0},
+                            {.keysym = XKB_KEY_f, .mod = 0},
+                            {0},
+                        },
                     };
                 void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2621,6 +2636,8 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_t},
                     {&&cmd_normal_g},
                     {&&cmd_normal_x},
+                    {&&cmd_normal_mt},
+                    {&&cmd_normal_mf},
                 };
                 size_t state_counter = 1; // 0 = root
                 for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
@@ -3344,14 +3361,12 @@ void* war_window_render(void* args) {
                 if (!input_cmd_context.numeric_prefix) {
                     input_cmd_context.cursor_width_scale =
                         input_cmd_context.t_cursor_width_scale;
-                    input_cmd_context.cursor_width_scale_is_factor = true;
                     goto cmd_done;
                 }
                 input_cmd_context.cursor_width_scale =
-                    input_cmd_context.numeric_prefix;
+                    1.0f / input_cmd_context.numeric_prefix;
                 input_cmd_context.t_cursor_width_scale =
                     input_cmd_context.cursor_width_scale;
-                input_cmd_context.cursor_width_scale_is_factor = true;
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_normal_f:
@@ -3359,14 +3374,36 @@ void* war_window_render(void* args) {
                 if (!input_cmd_context.numeric_prefix) {
                     input_cmd_context.cursor_width_scale =
                         input_cmd_context.f_cursor_width_scale;
-                    input_cmd_context.cursor_width_scale_is_factor = false;
                     goto cmd_done;
                 }
                 input_cmd_context.cursor_width_scale =
                     input_cmd_context.numeric_prefix;
                 input_cmd_context.f_cursor_width_scale =
                     input_cmd_context.cursor_width_scale;
-                input_cmd_context.cursor_width_scale_is_factor = false;
+                input_cmd_context.numeric_prefix = 0;
+                goto cmd_done;
+            cmd_normal_mt:
+                call_carmack("cmd_normal_mt");
+                if (!input_cmd_context.numeric_prefix) {
+                    input_cmd_context.cell_navigation_scale =
+                        input_cmd_context.t_cell_navigation_scale;
+                }
+                input_cmd_context.cell_navigation_scale =
+                    1.0f / input_cmd_context.numeric_prefix;
+                input_cmd_context.t_cell_navigation_scale =
+                    input_cmd_context.cell_navigation_scale;
+                input_cmd_context.numeric_prefix = 0;
+                goto cmd_done;
+            cmd_normal_mf:
+                call_carmack("cmd_normal_mf");
+                if (!input_cmd_context.numeric_prefix) {
+                    input_cmd_context.cell_navigation_scale =
+                        input_cmd_context.f_cell_navigation_scale;
+                }
+                input_cmd_context.cell_navigation_scale =
+                    input_cmd_context.numeric_prefix;
+                input_cmd_context.f_cell_navigation_scale =
+                    input_cmd_context.cell_navigation_scale;
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_normal_g:
@@ -3375,7 +3412,14 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_x:
                 call_carmack("cmd_normal_x");
-
+                war_insert_note_quad(
+                    note_quads,
+                    &num_note_quads,
+                    (uint32_t[2]){input_cmd_context.col, input_cmd_context.row},
+                    (uint32_t[2]){1, 1},
+                    (float[2]){input_cmd_context.cursor_width_scale, 1.0f},
+                    (float[2]){0.0f, 0.0f},
+                    red_hex);
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_done:
@@ -3410,7 +3454,6 @@ void* war_window_render(void* args) {
                               4),
                     0,
                     0);
-
                 goto done;
             wl_keyboard_repeat_info:
                 dump_bytes("wl_keyboard_repeat_info event",

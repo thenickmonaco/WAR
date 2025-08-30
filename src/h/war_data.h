@@ -75,6 +75,7 @@ enum war_misc {
     max_opcodes = 20,
     max_quads = 6000,
     max_sdf_quads = 6000,
+    max_note_quads = 1000,
     max_frames = 1, // no need for double/triple yet
     max_instances_per_quad = 1,
     max_instances_per_sdf_quad = 1,
@@ -110,7 +111,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 4,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 31,
+    NUM_SEQUENCES = 33,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -153,10 +154,10 @@ typedef struct rgba_t {
 typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;
-    float cursor_width_scale;
-    bool cursor_width_scale_is_factor;
     uint8_t hud_state;
     float cell_navigation_scale;
+    float t_cell_navigation_scale;
+    float f_cell_navigation_scale;
     uint32_t gridline_splits[4];
     uint32_t left_col;
     uint32_t bottom_row;
@@ -197,8 +198,9 @@ typedef struct war_input_cmd_context {
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
     uint32_t mode;
-    uint32_t f_cursor_width_scale;
-    uint32_t t_cursor_width_scale;
+    float cursor_width_scale;
+    float f_cursor_width_scale;
+    float t_cursor_width_scale;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -278,16 +280,6 @@ typedef struct war_note_quad {
     uint32_t color;
 } war_note_quad;
 
-// static inline void war_make_quad(quad_vertex* quad_verts,
-//                                  uint16_t* quad_indices,
-//                                  size_t i_verts,
-//                                  size_t i_indices,
-//                                  uint32_t bottom_left_corner[2],
-//                                  uint32_t span[2],
-//                                  float scale[2],
-//                                  float line_thickness[2],
-//                                  uint32_t color) {
-
 typedef struct quad_vertex {
     uint32_t pos[2];
     uint32_t color;
@@ -295,6 +287,7 @@ typedef struct quad_vertex {
     float line_thickness[2];
     float scale[2];
     uint32_t _pad1;
+    uint32_t _pad2[2]; // align to 16
 } quad_vertex;
 
 typedef struct quad_instance {
@@ -314,7 +307,6 @@ typedef struct quad_push_constants {
     uint32_t scroll_margin[2];
     uint32_t anchor_cell[2];
     uint32_t top_right[2];
-    float scale[2];
 } quad_push_constants;
 
 typedef struct war_vulkan_context {

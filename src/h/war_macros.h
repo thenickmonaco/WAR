@@ -464,4 +464,54 @@ static inline void war_make_blank_quad(quad_vertex* quad_verts,
     quad_indices[i_indices + 5] = i_verts;
 }
 
+void war_insert_note_quad(war_note_quad* note_quads,
+                          uint16_t* num_note_quads,
+                          uint32_t bottom_left_corner[2],
+                          uint32_t span[2],
+                          float scale[2],
+                          float line_thickness[2],
+                          uint32_t color) {
+    uint16_t index = *num_note_quads;
+    uint16_t increment = 1;
+    for (uint16_t i = 0; i < index; i++) {
+        war_note_quad entry = note_quads[i];
+        if (entry.bottom_left_corner[0] == bottom_left_corner[0] &&
+            entry.bottom_left_corner[1] == bottom_left_corner[1]) {
+            index = i;
+            increment = 0;
+            break;
+        }
+    }
+    note_quads[index] = (war_note_quad){
+        .bottom_left_corner = {bottom_left_corner[0], bottom_left_corner[1]},
+        .span = {span[0], span[1]},
+        .scale = {scale[0], scale[1]},
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .color = color,
+    };
+    *num_note_quads += increment;
+}
+
+uint16_t* war_notes_in_view(war_input_cmd_context* input_cmd_context,
+                            war_note_quad* note_quads,
+                            uint16_t num_note_quads,
+                            uint16_t* out_num_indices) {
+    uint16_t* indices =
+        malloc(sizeof(uint16_t) *
+               ((input_cmd_context->top_row - input_cmd_context->bottom_row) *
+                (input_cmd_context->right_col - input_cmd_context->left_col)));
+    for (size_t i = 0; i < num_note_quads; i++) {
+        uint32_t note_left_col = note_quads[i].bottom_left_corner[0];
+        uint32_t note_bottom_row = note_quads[i].bottom_left_corner[1];
+        if (note_left_col >= input_cmd_context->left_col &&
+            note_left_col <= input_cmd_context->right_col &&
+            note_bottom_row >= input_cmd_context->bottom_row &&
+            note_bottom_row <= input_cmd_context->top_row) {
+            indices[*out_num_indices] = i;
+            (*out_num_indices)++;
+        }
+    }
+    return indices;
+}
+
 #endif // WAR_MACROS_H

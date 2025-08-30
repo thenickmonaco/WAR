@@ -459,7 +459,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkVertexInputAttributeDescription quad_vertex_attrs[] = {
         {.location = 0,
          .binding = 0,
-         .format = VK_FORMAT_R32G32_UINT,
+         .format = VK_FORMAT_R32G32_SFLOAT,
          .offset = offsetof(quad_vertex, pos)},
         {
             .location = 1,
@@ -470,7 +470,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {
             .location = 2,
             .binding = 0,
-            .format = VK_FORMAT_R32G32_UINT,
+            .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(quad_vertex, corner),
         },
         {
@@ -490,15 +490,15 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkVertexInputAttributeDescription quad_instance_attrs[] = {
         {.location = num_quad_vertex_attrs,
          .binding = 1,
-         .format = VK_FORMAT_R32_UINT,
+         .format = VK_FORMAT_R32_SFLOAT,
          .offset = offsetof(quad_instance, x)},
         {.location = num_quad_vertex_attrs + 1,
          .binding = 1,
-         .format = VK_FORMAT_R32_UINT,
+         .format = VK_FORMAT_R32_SFLOAT,
          .offset = offsetof(quad_instance, y)},
         {.location = num_quad_vertex_attrs + 2,
          .binding = 1,
-         .format = VK_FORMAT_R32_UINT,
+         .format = VK_FORMAT_R8G8B8A8_UNORM,
          .offset = offsetof(quad_instance, color)},
         {.location = num_quad_vertex_attrs + 3,
          .binding = 1,
@@ -1479,7 +1479,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
     };
     VkVertexInputAttributeDescription sdf_vertex_attribute_descs[] = {
-        {0, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex, pos)},
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, pos)},
         {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, uv)},
         {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, glyph_bearing)},
         {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, glyph_size)},
@@ -1487,19 +1487,19 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, descent)},
         {6, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, thickness)},
         {7, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, feather)},
-        {8, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex, corner)},
+        {8, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, corner)},
         {9, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex, color)},
     };
     uint32_t num_sdf_vertex_attrs = 10;
     VkVertexInputAttributeDescription sdf_instance_attribute_descs[] = {
-        {10, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, x)},
-        {11, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, y)},
-        {12, 1, VK_FORMAT_R8G8B8A8_UINT, offsetof(sdf_instance, color)},
+        {10, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, x)},
+        {11, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, y)},
+        {12, 1, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_instance, color)},
         {13, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_x)},
         {14, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_y)},
         {15, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, thickness)},
         {16, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, feather)},
-        {17, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, flags)},
+        {17, 1, VK_FORMAT_R32_UINT, offsetof(sdf_instance, flags)},
     };
     uint32_t num_sdf_instance_attrs = 8;
     VkVertexInputAttributeDescription* sdf_all_attrs =

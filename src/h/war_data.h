@@ -152,26 +152,26 @@ typedef struct rgba_t {
 } rgba_t;
 
 typedef struct war_input_cmd_context {
-    uint32_t col;
-    uint32_t row;
-    uint8_t hud_state;
+    float col;
+    float row;
+    uint32_t hud_state;
     float cell_navigation_scale;
     float t_cell_navigation_scale;
     float f_cell_navigation_scale;
-    uint32_t gridline_splits[4];
-    uint32_t left_col;
-    uint32_t bottom_row;
-    uint32_t right_col;
-    uint32_t top_row;
-    uint32_t col_increment;
-    uint32_t row_increment;
-    uint32_t col_leap_increment;
-    uint32_t row_leap_increment;
-    uint32_t numeric_prefix;
-    uint32_t max_col;
-    uint32_t max_row;
-    uint32_t min_col;
-    uint32_t min_row;
+    float gridline_splits[4];
+    float left_col;
+    float bottom_row;
+    float right_col;
+    float top_row;
+    float col_increment;
+    float row_increment;
+    float col_leap_increment;
+    float row_leap_increment;
+    float numeric_prefix;
+    float max_col;
+    float max_row;
+    float min_col;
+    float min_row;
     float cursor_x;
     float cursor_y;
     float zoom_scale;
@@ -185,18 +185,18 @@ typedef struct war_input_cmd_context {
     float anchor_y;
     float anchor_ndc_x;
     float anchor_ndc_y;
-    uint32_t scroll_margin_cols;
-    uint32_t scroll_margin_rows;
-    uint32_t viewport_cols;
-    uint32_t viewport_rows;
+    float scroll_margin_cols;
+    float scroll_margin_rows;
+    float viewport_cols;
+    float viewport_rows;
     float cell_width;  // from vulkan_context
     float cell_height; // from vulkan_context
     float physical_width;
     float physical_height;
     float logical_width;
     float logical_height;
-    uint32_t num_rows_for_status_bars;
-    uint32_t num_cols_for_line_numbers;
+    float num_rows_for_status_bars;
+    float num_cols_for_line_numbers;
     uint32_t mode;
     float cursor_width_scale;
     float f_cursor_width_scale;
@@ -230,7 +230,7 @@ typedef struct war_glyph_info {
 } war_glyph_info;
 
 typedef struct sdf_vertex {
-    uint32_t pos[2];
+    float pos[2];
     float uv[2];
     float glyph_bearing[2];
     float glyph_size[2];
@@ -239,13 +239,13 @@ typedef struct sdf_vertex {
     float thickness;
     float feather;
     uint32_t color;
-    uint32_t corner[2];
-    uint32_t _pad1;
+    float corner[2];
+    float _pad1;
 } sdf_vertex;
 
 typedef struct sdf_instance {
-    uint32_t x;
-    uint32_t y;
+    float x;
+    float y;
     uint32_t color;
     float uv_x;
     float uv_y;
@@ -255,58 +255,58 @@ typedef struct sdf_instance {
 } sdf_instance;
 
 typedef struct sdf_push_constants {
-    uint32_t bottom_left[2];
+    float bottom_left[2];
     float physical_size[2];
     float cell_size[2];
     float zoom;
-    uint32_t _pad1;
-    uint32_t cell_offsets[2];
-    uint32_t scroll_margin[2];
-    uint32_t anchor_cell[2];
-    uint32_t top_right[2];
+    float _pad1;
+    float cell_offsets[2];
+    float scroll_margin[2];
+    float anchor_cell[2];
+    float top_right[2];
     float ascent;
     float descent;
     float line_gap;
     float baseline;
     float font_height;
-    uint32_t _pad2;
+    float _pad2;
 } sdf_push_constants;
 
 typedef struct war_note_quad {
-    uint32_t bottom_left_corner[2];
-    uint32_t span[2];
+    float bottom_left_corner[2];
+    float span[2];
     float scale[2];
     float line_thickness[2];
     uint32_t color;
 } war_note_quad;
 
 typedef struct quad_vertex {
-    uint32_t pos[2];
+    float pos[2];
     uint32_t color;
-    uint32_t corner[2];
+    float corner[2];
     float line_thickness[2];
     float scale[2];
-    uint32_t _pad1;
-    uint32_t _pad2[2]; // align to 16
+    float _pad1;
+    float _pad2[2]; // align to 16
 } quad_vertex;
 
 typedef struct quad_instance {
-    uint32_t x;
-    uint32_t y;
+    float x;
+    float y;
     uint32_t color;
     uint32_t flags;
 } quad_instance;
 
 typedef struct quad_push_constants {
-    uint32_t bottom_left[2];
+    float bottom_left[2];
     float physical_size[2];
     float cell_size[2];
     float zoom;
-    uint32_t _pad1;
-    uint32_t cell_offsets[2];
-    uint32_t scroll_margin[2];
-    uint32_t anchor_cell[2];
-    uint32_t top_right[2];
+    float _pad1;
+    float cell_offsets[2];
+    float scroll_margin[2];
+    float anchor_cell[2];
+    float top_right[2];
 } quad_push_constants;
 
 typedef struct war_vulkan_context {

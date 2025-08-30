@@ -101,34 +101,24 @@ static inline void write_le16(uint8_t* p, uint16_t v) {
     p[1] = (uint8_t)(v >> 8);
 }
 
-static inline uint32_t
-clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
-    uint64_t sum = (uint64_t)a + b;
-    uint64_t mask = -(sum > max_value);
-    return (uint32_t)((sum & ~mask) | ((uint64_t)max_value & mask));
+static inline float clamp_add_float(float a, float b, float max_value) {
+    float sum = a + b;
+    return sum > max_value ? max_value : sum;
 }
 
-static inline uint32_t
-clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
-    uint32_t diff = a - b;
-    uint32_t underflow_mask = -(a < b);
-    uint32_t below_min_mask = -(diff < min_value);
-    uint32_t clamped_diff =
-        (diff & ~below_min_mask) | (min_value & below_min_mask);
-    return (clamped_diff & ~underflow_mask) | (min_value & underflow_mask);
+static inline float clamp_subtract_float(float a, float b, float min_value) {
+    float diff = a - b;
+    return diff < min_value ? min_value : diff;
 }
 
-static inline uint32_t
-clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
-    uint64_t prod = (uint64_t)a * (uint64_t)b;
-    uint64_t mask = -(prod > max_value);
-    return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
+static inline float clamp_multiply_float(float a, float b, float max_value) {
+    float prod = a * b;
+    return prod > max_value ? max_value : prod;
 }
 
-static inline uint32_t
-clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
-    a = a < min_value ? min_value : a;
-    a = a > max_value ? max_value : a;
+static inline float clamp_float(float a, float min_value, float max_value) {
+    if (a < min_value) return min_value;
+    if (a > max_value) return max_value;
     return a;
 }
 
@@ -245,19 +235,20 @@ static inline int war_num_digits(uint32_t n) {
     return digits;
 }
 
-int war_compare_desc_uint32(const void* a, const void* b) {
-    uint32_t f_a = *(const uint32_t*)a;
-    uint32_t f_b = *(const uint32_t*)b;
+int war_compare_desc_float(const void* a, const void* b) {
+    float f_a = *(const float*)a;
+    float f_b = *(const float*)b;
 
     if (f_b > f_a) return 1;
     if (f_b < f_a) return -1;
     return 0;
 }
+
 static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
                                      uint16_t* sdf_indices,
                                      size_t i_verts,
                                      size_t i_indices,
-                                     uint32_t bottom_left_corner[2],
+                                     float bottom_left_corner[2],
                                      war_glyph_info glyph_info,
                                      float thickness,
                                      float feather,
@@ -382,8 +373,8 @@ static inline void war_make_quad(quad_vertex* quad_verts,
                                  uint16_t* quad_indices,
                                  size_t i_verts,
                                  size_t i_indices,
-                                 uint32_t bottom_left_corner[2],
-                                 uint32_t span[2],
+                                 float bottom_left_corner[2],
+                                 float span[2],
                                  float scale[2],
                                  float line_thickness[2],
                                  uint32_t color) {
@@ -466,8 +457,8 @@ static inline void war_make_blank_quad(quad_vertex* quad_verts,
 
 void war_insert_note_quad(war_note_quad* note_quads,
                           uint16_t* num_note_quads,
-                          uint32_t bottom_left_corner[2],
-                          uint32_t span[2],
+                          float bottom_left_corner[2],
+                          float span[2],
                           float scale[2],
                           float line_thickness[2],
                           uint32_t color) {

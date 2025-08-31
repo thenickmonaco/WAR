@@ -20,6 +20,71 @@
 // src/war_main.c
 //-----------------------------------------------------------------------------
 
+// WAR 1.0 License (2025) — Umbrella for Music & Software
+//
+// Version 1.1
+// Purpose: To unify licensing for music and software under one project,
+// providing copyleft protections for both, while waiving attribution to the
+// original author.
+//
+// Scope
+// WAR 1.1 applies to the creative works of the project, including but not
+// limited to:
+//
+// Music (tracks, samples, compositions, remixes)
+//
+// Software (code, scripts, tools, applications)
+//
+// License Terms by Work Type
+//
+// 2.1 Music
+// All music is licensed under CC BY-SA 4.0 with Attribution Waiver.
+//
+// Users may copy, remix, distribute, perform, or commercialize music.
+//
+// Derivative works must remain under the same license (share-alike / copyleft).
+//
+// Attribution to the original author is waived; credit is optional.
+//
+// No additional restrictions may be imposed.
+//
+// 2.2 Software
+// All software is licensed under AGPL-3.0 with Attribution Waiver.
+//
+// Users may copy, modify, distribute, or execute the software, including over a
+// network.
+//
+// Derivatives must remain under WAR 1.1 (share-alike / copyleft).
+//
+// Attribution to the original author is waived; users are not required to
+// credit the original author.
+//
+// No additional restrictions may be imposed beyond those required to maintain
+// open-source status.
+//
+// General Terms
+// Users are legally bound to the license terms applicable to the type of work
+// they are using. This license does not restrict derivative works beyond the
+// copyleft requirements. The author disclaims all warranties; the work is
+// provided “as-is.”
+//
+// Distribution
+// Include this WAR 1.1 umbrella license with every copy of your work. Clearly
+// indicate which portion of the work is music (CC BY-SA + attribution waiver)
+// and which is software (AGPL-3.0 + attribution waiver).
+//
+// Summary for Users
+//
+// Music → Copyleft: must remain open under the same license, credit optional
+// (CC BY-SA + Attribution Waiver).
+//
+// Software → Must remain open-source under WAR 1.1, credit optional (AGPL-3.0 +
+// Attribution Waiver).
+//
+// This document serves as the official WAR 1.1 umbrella license. You can attach
+// it to your music, software, or future projects. It’s immediately effective;
+// no filings or approvals are required.
+
 #include "war_alsa.c"
 #include "war_drm.c"
 #include "war_vulkan.c"

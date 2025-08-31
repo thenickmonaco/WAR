@@ -2,16 +2,24 @@
 
 ![WAR](/assets/images/WAR-over-rose-circle-white.jpg)
 
-# Piano Roll GUI Demo
+## Piano Roll GUI Demo
 
 [![Watch the video](https://img.youtube.com/vi/b7Bf17YH_uQ/0.jpg)](https://youtu.be/b7Bf17YH_uQ)
 
-# NOT FUNCTIONAL YET
+## NOT FUNCTIONAL YET
 
 make music with vim motions
 
-# License
+## License
 
-WAR is licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+WAR is licensed under **WAR 1.0**, an umbrella license:
 
-Use it, remix it, share it — just keep it open source.
+- **Software** (code, scripts, tools): Licensed under [GNU Affero General Public License v3.0](LICENSE-AGPL.txt) **with attribution waived**.
+    - You may copy, modify, distribute, or run the software.
+    - Derivatives must remain under WAR 1.0 (copyleft), but **credit to the original author is optional**.
+
+- **Music** (tracks, samples, compositions, remixes): Licensed under **CC BY-SA 4.0 with Attribution Waiver**.
+    - You may copy, remix, distribute, perform, or commercialize the music.
+    - Derivatives **must remain under the same license** (copyleft), but **credit is optional**.
+
+See the full licenses in `LICENSE` (WAR 1.0 umbrella) and `LICENSE-AGPL.txt` (full AGPL-3.0 text).

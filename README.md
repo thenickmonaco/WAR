@@ -14,12 +14,12 @@ make music with vim motions
 
 WAR is licensed under **WAR 1.0**, an umbrella license:
 
-- **Software** (code, scripts, tools): Licensed under [GNU Affero General Public License v3.0](LICENSE-AGPL.txt) **with attribution waived**.
+- **SOFTWARE** (code, scripts, tools): Licensed under [GNU Affero General Public License v3.0](LICENSE-AGPL) **with attribution waived**.
     - You may copy, modify, distribute, or run the software.
     - Derivatives must remain under WAR 1.0 (copyleft), but **credit to the original author is optional**.
 
-- **Music** (tracks, samples, compositions, remixes): Licensed under **CC BY-SA 4.0 with Attribution Waiver**.
+- **MUSIC** (tracks, samples, compositions, remixes): Licensed under **CC BY-SA 4.0 with Attribution Waiver**.
     - You may copy, remix, distribute, perform, or commercialize the music.
     - Derivatives **must remain under the same license** (copyleft), but **credit is optional**.
 
-See the full licenses in `LICENSE` (WAR 1.0 umbrella) and `LICENSE-AGPL.txt` (full AGPL-3.0 text).
+See the full licenses in `LICENSE` (WAR 1.0 umbrella) and `LICENSE-AGPL` (full AGPL-3.0 text).

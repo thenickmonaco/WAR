@@ -2,17 +2,17 @@
 //
 // WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-// 
+//
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
 // version 3, with the following modification: attribution to the original
 // author is waived.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-// 
-// For the full license text, see LICENSE-AGPL and LICENSE.
+//
+// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 //
 //-----------------------------------------------------------------------------
 
@@ -234,6 +234,20 @@ static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     }
 }
 
+static inline char keysym_to_key(xkb_keysym_t ks, uint8_t mod) {
+    char lowercase = ks;
+    int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
+    // Letters a-z or A-Z -> always lowercase
+    if (ks >= XKB_KEY_a && ks <= XKB_KEY_z)
+        return (char)ks - mod_shift_difference;
+    if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (char)(ks - XKB_KEY_A + 'a');
+
+    // Numbers 0-9
+    if (ks >= XKB_KEY_0 && ks <= XKB_KEY_9) return (char)ks;
+
+    return 0; // non-printable / special keys
+}
+
 static inline int war_num_digits(uint32_t n) {
     int digits = 0;
     do {
@@ -382,37 +396,45 @@ static inline void war_make_quad(quad_vertex* quad_verts,
                                  size_t i_indices,
                                  uint32_t bottom_left_corner[2],
                                  uint32_t span[2],
-                                 float scale[2],
                                  float line_thickness[2],
+                                 float float_offset[2],
                                  uint32_t color) {
     quad_verts[i_verts] = (quad_vertex){
         .corner = {0, 0},
-        .pos = {bottom_left_corner[0], bottom_left_corner[1]},
+        .sub_col = 0,
+        .sub_cells = 0,
+        .col_row = {bottom_left_corner[0], bottom_left_corner[1]},
         .color = color,
-        .scale = {scale[0], scale[1]},
         .line_thickness = {line_thickness[0], line_thickness[1]},
+        .float_offset = {float_offset[0], float_offset[1]},
     };
     quad_verts[i_verts + 1] = (quad_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_corner[0] + span[0], bottom_left_corner[1]},
+        .sub_col = 0,
+        .sub_cells = 0,
+        .col_row = {bottom_left_corner[0] + span[0], bottom_left_corner[1]},
         .color = color,
-        .scale = {scale[0], scale[1]},
         .line_thickness = {line_thickness[0], line_thickness[1]},
+        .float_offset = {float_offset[0], float_offset[1]},
     };
     quad_verts[i_verts + 2] = (quad_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_corner[0] + span[0],
-                bottom_left_corner[1] + span[1]},
+        .sub_col = 0,
+        .sub_cells = 0,
+        .col_row = {bottom_left_corner[0] + span[0],
+                    bottom_left_corner[1] + span[1]},
         .color = color,
-        .scale = {scale[0], scale[1]},
         .line_thickness = {line_thickness[0], line_thickness[1]},
+        .float_offset = {float_offset[0], float_offset[1]},
     };
     quad_verts[i_verts + 3] = (quad_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_corner[0], bottom_left_corner[1] + span[1]},
+        .sub_col = 0,
+        .sub_cells = 0,
+        .col_row = {bottom_left_corner[0], bottom_left_corner[1] + span[1]},
         .color = color,
-        .scale = {scale[0], scale[1]},
         .line_thickness = {line_thickness[0], line_thickness[1]},
+        .float_offset = {float_offset[0], float_offset[1]},
     };
     quad_indices[i_indices] = i_verts;
     quad_indices[i_indices + 1] = i_verts + 1;
@@ -427,32 +449,40 @@ static inline void war_make_blank_quad(quad_vertex* quad_verts,
                                        size_t i_verts,
                                        size_t i_indices) {
     quad_verts[i_verts] = (quad_vertex){
-        .pos = {0, 0},
+        .col_row = {0, 0},
+        .sub_col = 0,
+        .sub_cells = 0,
         .color = 0,
         .corner = {0, 0},
         .line_thickness = {0, 0},
-        .scale = {0, 0},
+        .float_offset = {0, 0},
     };
     quad_verts[i_verts + 1] = (quad_vertex){
-        .pos = {0, 0},
+        .col_row = {0, 0},
+        .sub_col = 0,
+        .sub_cells = 0,
         .color = 0,
         .corner = {0, 0},
         .line_thickness = {0, 0},
-        .scale = {0, 0},
+        .float_offset = {0, 0},
     };
     quad_verts[i_verts + 2] = (quad_vertex){
-        .pos = {0, 0},
+        .col_row = {0, 0},
+        .sub_col = 0,
+        .sub_cells = 0,
         .color = 0,
         .corner = {0, 0},
         .line_thickness = {0, 0},
-        .scale = {0, 0},
+        .float_offset = {0, 0},
     };
     quad_verts[i_verts + 3] = (quad_vertex){
-        .pos = {0, 0},
+        .col_row = {0, 0},
+        .sub_col = 0,
+        .sub_cells = 0,
         .color = 0,
         .corner = {0, 0},
         .line_thickness = {0, 0},
-        .scale = {0, 0},
+        .float_offset = {0, 0},
     };
     quad_indices[i_indices] = i_verts;
     quad_indices[i_indices + 1] = i_verts + 1;
@@ -460,56 +490,6 @@ static inline void war_make_blank_quad(quad_vertex* quad_verts,
     quad_indices[i_indices + 3] = i_verts + 2;
     quad_indices[i_indices + 4] = i_verts + 3;
     quad_indices[i_indices + 5] = i_verts;
-}
-
-void war_insert_note_quad(war_note_quad* note_quads,
-                          uint16_t* num_note_quads,
-                          uint32_t bottom_left_corner[2],
-                          uint32_t span[2],
-                          float scale[2],
-                          float line_thickness[2],
-                          uint32_t color) {
-    uint16_t index = *num_note_quads;
-    uint16_t increment = 1;
-    for (uint16_t i = 0; i < index; i++) {
-        war_note_quad entry = note_quads[i];
-        if (entry.bottom_left_corner[0] == bottom_left_corner[0] &&
-            entry.bottom_left_corner[1] == bottom_left_corner[1]) {
-            index = i;
-            increment = 0;
-            break;
-        }
-    }
-    note_quads[index] = (war_note_quad){
-        .bottom_left_corner = {bottom_left_corner[0], bottom_left_corner[1]},
-        .span = {span[0], span[1]},
-        .scale = {scale[0], scale[1]},
-        .line_thickness = {line_thickness[0], line_thickness[1]},
-        .color = color,
-    };
-    *num_note_quads += increment;
-}
-
-uint16_t* war_notes_in_view(war_input_cmd_context* input_cmd_context,
-                            war_note_quad* note_quads,
-                            uint16_t num_note_quads,
-                            uint16_t* out_num_indices) {
-    uint16_t* indices =
-        malloc(sizeof(uint16_t) *
-               ((input_cmd_context->top_row - input_cmd_context->bottom_row) *
-                (input_cmd_context->right_col - input_cmd_context->left_col)));
-    for (size_t i = 0; i < num_note_quads; i++) {
-        uint32_t note_left_col = note_quads[i].bottom_left_corner[0];
-        uint32_t note_bottom_row = note_quads[i].bottom_left_corner[1];
-        if (note_left_col >= input_cmd_context->left_col &&
-            note_left_col <= input_cmd_context->right_col &&
-            note_bottom_row >= input_cmd_context->bottom_row &&
-            note_bottom_row <= input_cmd_context->top_row) {
-            indices[*out_num_indices] = i;
-            (*out_num_indices)++;
-        }
-    }
-    return indices;
 }
 
 #endif // WAR_MACROS_H

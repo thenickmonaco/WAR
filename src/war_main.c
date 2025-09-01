@@ -12,7 +12,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 //
-// For the full license text, see LICENSE-AGPL and LICENSE.
+// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 //
 //-----------------------------------------------------------------------------
 
@@ -119,12 +119,21 @@ void* war_window_render(void* args) {
         .hud_state = SHOW_PIANO,
         .col = 0,
         .row = 60,
-        .cursor_width_scale = 1.0f,
-        .t_cursor_width_scale = 1.0f,
-        .f_cursor_width_scale = 1.0f,
-        .cell_navigation_scale = 1.0f,
-        .t_cell_navigation_scale = 1.0f,
-        .f_cell_navigation_scale = 1.0f,
+        .sub_col = 0,
+        .sub_row = 0,
+        .navigation_whole_number = 1,
+        .navigation_sub_cells = 1,
+        .f_navigation_whole_number = 1,
+        .t_navigation_sub_cells = 1,
+        .t_navigation_whole_number = 1,
+        .f_navigation_sub_cells = 1,
+        .cursor_width_whole_number = 1,
+        .cursor_width_sub_col = 1,
+        .cursor_width_sub_cells = 1,
+        .f_cursor_width_whole_number = 1,
+        .f_cursor_width_sub_cells = 1,
+        .t_cursor_width_whole_number = 1,
+        .t_cursor_width_sub_cells = 1,
         .gridline_splits = {4, 1, 0, 0},
         .bottom_row = 60 - visible_rows / 2 + 1,
         .top_row = 60 + visible_rows / 2,
@@ -169,6 +178,8 @@ void* war_window_render(void* args) {
         .max_row = MAX_MIDI_NOTES - 1,
         .min_col = 0,
         .min_row = 0,
+        .input_sequence = {0},
+        .num_chars_in_sequence = 0,
     };
 
     uint32_t mod_shift;
@@ -223,18 +234,6 @@ void* war_window_render(void* args) {
     enum war_pixel_format {
         ARGB8888 = 0,
     };
-
-    war_note_quad* note_quads = malloc(sizeof(war_note_quad) * max_note_quads);
-    uint16_t num_note_quads = 0;
-    for (size_t i = 0; i < max_note_quads; i++) {
-        note_quads[i] = (war_note_quad){
-            .color = 0,
-            .line_thickness = {0.0f, 0.0f},
-            .span = {0, 0},
-            .bottom_left_corner = {0, 0},
-            .scale = {0.0f, 0.0f},
-        };
-    }
 
 #if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
@@ -325,16 +324,14 @@ void* war_window_render(void* args) {
     quad_vertex* static_quad_verts =
         malloc(sizeof(quad_vertex) * 4 *
                (input_cmd_context.num_rows_for_status_bars +
-                max_gridlines_per_split + MAX_MIDI_NOTES * 6));
+                max_gridlines_per_split + MAX_MIDI_NOTES * 5));
     uint16_t* static_quad_indices =
         malloc(sizeof(uint16_t) * 6 *
                (input_cmd_context.num_rows_for_status_bars +
-                max_gridlines_per_split + MAX_MIDI_NOTES * 6));
+                max_gridlines_per_split + MAX_MIDI_NOTES * 5));
 
-    quad_vertex* dynamic_quad_verts = malloc(
-        sizeof(quad_vertex) * 4 * (max_note_quads + 1)); // + 4 for cursor
-    uint16_t* dynamic_quad_indices =
-        malloc(sizeof(uint16_t) * 6 * (max_note_quads + 1)); // + 4 for cursor
+    quad_vertex* dynamic_quad_verts = malloc(sizeof(quad_vertex) * 4);
+    uint16_t* dynamic_quad_indices = malloc(sizeof(uint16_t) * 6);
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
@@ -844,7 +841,6 @@ void* war_window_render(void* args) {
 
                         input_cmd_context.bottom_row + i};
                     uint32_t span[2] = {input_cmd_context.viewport_cols, 1};
-                    float scale[2] = {1.0f, 1.0f};
                     float line_thickness[2] = {0.0f, 0.0f};
                     uint32_t color = red_hex;
                     if (i == 1) {
@@ -858,8 +854,8 @@ void* war_window_render(void* args) {
                                   static_quad_i_indices,
                                   bottom_left_corner,
                                   span,
-                                  scale,
                                   line_thickness,
+                                  (float[2]){0.0f, 0.0f},
                                   color);
                     static_quad_i_verts += 4;
                     static_quad_i_indices += 6;
@@ -880,13 +876,12 @@ void* war_window_render(void* args) {
                         uint32_t color = darker_light_gray_hex;
                         uint32_t bottom_left_corner[2] = {
                             input_cmd_context.left_col +
-                                input_cmd_context.num_cols_for_line_numbers + 1,
+                                input_cmd_context.num_cols_for_line_numbers,
                             input_cmd_context.bottom_row + i};
                         uint32_t span[2] = {
                             input_cmd_context.viewport_cols -
-                                input_cmd_context.num_cols_for_line_numbers - 2,
+                                input_cmd_context.num_cols_for_line_numbers,
                             0};
-                        float scale[2] = {0.0f, 1.0f};
                         float line_thickness[2] = {
                             0.0f, default_horizontal_line_width};
                         war_make_quad(static_quad_verts,
@@ -895,8 +890,8 @@ void* war_window_render(void* args) {
                                       i_indices,
                                       bottom_left_corner,
                                       span,
-                                      scale,
                                       line_thickness,
+                                      (float[2]){0.0f, 0.0f},
                                       color);
                     }
                 }
@@ -958,15 +953,12 @@ void* war_window_render(void* args) {
                             uint32_t bottom_left_corner[2] = {
                                 input_cmd_context.left_col + col,
                                 input_cmd_context.bottom_row +
-                                    input_cmd_context.num_rows_for_status_bars +
-                                    1};
+                                    input_cmd_context.num_rows_for_status_bars};
                             uint32_t span[2] = {
                                 0,
                                 input_cmd_context.viewport_rows -
-                                    input_cmd_context.num_rows_for_status_bars -
-                                    2,
+                                    input_cmd_context.num_rows_for_status_bars,
                             };
-                            float scale[2] = {1.0f, 0.0f};
                             float line_thickness[2] = {
                                 default_vertical_line_width, 0.0f};
                             if (first_split) {
@@ -984,8 +976,8 @@ void* war_window_render(void* args) {
                                           i_indices,
                                           bottom_left_corner,
                                           span,
-                                          scale,
                                           line_thickness,
+                                          (float[2]){0.0f, 0.0f},
                                           color);
                         } else {
                             war_make_blank_quad(static_quad_verts,
@@ -1033,7 +1025,6 @@ void* war_window_render(void* args) {
                             input_cmd_context.left_col,
                             row + input_cmd_context.num_rows_for_status_bars};
                         uint32_t black_span[2] = {2, 1};
-                        float black_scale[2] = {1.0f, 1.0f};
                         float black_line_thickness[2] = {0.0f, 0.0f};
                         war_make_quad(static_quad_verts,
                                       static_quad_indices,
@@ -1041,8 +1032,8 @@ void* war_window_render(void* args) {
                                       i_indices_piano,
                                       black_bottom_left_corner,
                                       black_span,
-                                      black_scale,
                                       black_line_thickness,
+                                      (float[2]){0.0f, 0.0f},
                                       black_color);
                         i_verts_piano += 4;
                         i_indices_piano += 6;
@@ -1051,7 +1042,6 @@ void* war_window_render(void* args) {
                             input_cmd_context.left_col + 2,
                             row + input_cmd_context.num_rows_for_status_bars};
                         uint32_t white_span[2] = {1, 1};
-                        float white_scale[2] = {1.0f, 1.0f};
                         float white_line_thickness[2] = {0.0f, 0.0f};
                         war_make_quad(static_quad_verts,
                                       static_quad_indices,
@@ -1059,8 +1049,8 @@ void* war_window_render(void* args) {
                                       i_indices_piano,
                                       white_bottom_left_corner,
                                       white_span,
-                                      white_scale,
                                       white_line_thickness,
+                                      (float[2]){0.0f, 0.0f},
                                       white_color);
                         i_verts_piano += 4;
                         i_indices_piano += 6;
@@ -1070,7 +1060,6 @@ void* war_window_render(void* args) {
                             input_cmd_context.left_col,
                             row + input_cmd_context.num_rows_for_status_bars};
                         uint32_t white_span[2] = {3, 1};
-                        float white_scale[2] = {1.0f, 1.0f};
                         float white_line_thickness[2] = {0.0f, 0.0f};
                         war_make_quad(static_quad_verts,
                                       static_quad_indices,
@@ -1078,8 +1067,8 @@ void* war_window_render(void* args) {
                                       i_indices_piano,
                                       white_bottom_left_corner,
                                       white_span,
-                                      white_scale,
                                       white_line_thickness,
+                                      (float[2]){0.0f, 0.0f},
                                       white_color);
                         i_verts_piano += 4;
                         i_indices_piano += 6;
@@ -1228,12 +1217,16 @@ void* war_window_render(void* args) {
                 }
                 uint16_t row_offset = input_cmd_context.viewport_cols / 4;
                 uint16_t col_offset = row_offset + 4;
+                uint16_t input_sequence_offset = col_offset + 8;
                 sdf_vertex status_bar_text_verts[MAX_DIGITS * 2 * 4 +
-                                                 (MAX_MIDI_NOTES * 3 * 4 * 2)];
+                                                 (MAX_MIDI_NOTES * 3 * 4 * 2) +
+                                                 MAX_SEQUENCE_LENGTH * 4];
                 uint16_t status_bar_text_indices[MAX_DIGITS * 2 * 6 +
-                                                 (MAX_MIDI_NOTES * 3 * 6 * 2)];
+                                                 (MAX_MIDI_NOTES * 3 * 6 * 2) +
+                                                 MAX_SEQUENCE_LENGTH * 6];
                 uint16_t num_status_bar_text_indices =
-                    MAX_DIGITS * 2 * 6 + (MAX_MIDI_NOTES * 3 * 6 * 2);
+                    MAX_DIGITS * 2 * 6 + (MAX_MIDI_NOTES * 3 * 6 * 2) +
+                    MAX_SEQUENCE_LENGTH * 6;
                 for (int i = 0; i < MAX_DIGITS * 2; i++) {
                     size_t i_verts = i * 4;
                     size_t i_indices = i * 6;
@@ -1460,6 +1453,37 @@ void* war_window_render(void* args) {
                                           black_hex);
                     }
                 }
+                uint16_t i_verts_offset_input =
+                    MAX_DIGITS * 2 * 4 + MAX_MIDI_NOTES * 3 * 4 * 2;
+                uint16_t i_indices_offset_input =
+                    MAX_DIGITS * 2 * 6 + MAX_MIDI_NOTES * 3 * 6 * 2;
+                for (size_t i = 0; i < MAX_SEQUENCE_LENGTH; i++) {
+                    size_t i_verts = i * 4;
+                    size_t i_indices = i * 6;
+                    char input_char = input_cmd_context.input_sequence[i];
+                    if (input_char != 0) {
+                        uint32_t bottom_left_corner[2] = {
+                            input_sequence_offset + i,
+                            input_cmd_context.num_rows_for_status_bars - 1};
+                        war_glyph_info input_glyph_info =
+                            vulkan_context.glyphs[input_char];
+                        war_make_sdf_quad(status_bar_text_verts,
+                                          status_bar_text_indices,
+                                          i_verts + i_verts_offset_input,
+                                          i_indices + i_indices_offset_input,
+                                          bottom_left_corner,
+                                          input_glyph_info,
+                                          0.0f,
+                                          0.0f,
+                                          white_hex);
+                    } else {
+                        war_make_blank_sdf_quad(status_bar_text_verts,
+                                                status_bar_text_indices,
+                                                i_verts + i_verts_offset_input,
+                                                i_indices +
+                                                    i_indices_offset_input);
+                    }
+                }
                 sdf_instance status_bar_text_instances[0];
                 uint16_t num_status_bar_text_instances = 1;
                 memcpy(vulkan_context.sdf_vertex_buffer_mapped +
@@ -1564,41 +1588,21 @@ void* war_window_render(void* args) {
                                       vulkan_context.quad_pipeline);
                     current_pipeline = PIPELINE_QUAD;
                 }
-                // draw notes
-                uint16_t num_notes_in_view = 0;
-                uint16_t* notes_in_view = war_notes_in_view(&input_cmd_context,
-                                                            note_quads,
-                                                            num_note_quads,
-                                                            &num_notes_in_view);
-                for (size_t i = 0; i < num_notes_in_view; i++) {
-                    size_t i_verts = i * 4;
-                    size_t i_indices = i * 6;
-                    war_make_quad(
-                        dynamic_quad_verts,
-                        dynamic_quad_indices,
-                        i_verts,
-                        i_indices,
-                        note_quads[notes_in_view[i]].bottom_left_corner,
-                        note_quads[notes_in_view[i]].span,
-                        note_quads[notes_in_view[i]].scale,
-                        note_quads[notes_in_view[i]].line_thickness,
-                        note_quads[notes_in_view[i]].color);
-                }
-                // cursor
+                // draw cursor
                 quad_instance cursor_quad_instances[0];
                 uint16_t num_cursor_quad_instances = 1;
                 war_make_quad(
                     dynamic_quad_verts,
                     dynamic_quad_indices,
-                    num_notes_in_view * 4,
-                    num_notes_in_view * 6,
+                    0,
+                    0,
                     (uint32_t[2]){input_cmd_context.col, input_cmd_context.row},
                     (uint32_t[2]){1, 1},
-                    (float[2]){input_cmd_context.cursor_width_scale, 1.0f},
+                    (float[2]){0.0f, 0.0f},
                     (float[2]){0.0f, 0.0f},
                     white_hex);
-                size_t num_dynamic_quad_verts = 4 * (1 + num_notes_in_view);
-                size_t num_dynamic_quad_indices = 6 * (1 + num_notes_in_view);
+                size_t num_dynamic_quad_verts = 4;
+                size_t num_dynamic_quad_indices = 6;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
                        dynamic_quad_verts,
@@ -2582,10 +2586,6 @@ void* war_window_render(void* args) {
                             {0},
                         },
                         {
-                            {.keysym = XKB_KEY_g, .mod = 0},
-                            {0},
-                        },
-                        {
                             {.keysym = XKB_KEY_x, .mod = 0},
                             {0},
                         },
@@ -2597,6 +2597,21 @@ void* war_window_render(void* args) {
                         {
                             {.keysym = XKB_KEY_m, .mod = 0},
                             {.keysym = XKB_KEY_f, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_g, .mod = 0},
+                            {.keysym = XKB_KEY_b, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_g, .mod = 0},
+                            {.keysym = XKB_KEY_t, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_g, .mod = 0},
+                            {.keysym = XKB_KEY_m, .mod = 0},
                             {0},
                         },
                     };
@@ -2632,10 +2647,12 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_esc},
                     {&&cmd_normal_f},
                     {&&cmd_normal_t},
-                    {&&cmd_normal_g},
                     {&&cmd_normal_x},
                     {&&cmd_normal_mt},
                     {&&cmd_normal_mf},
+                    {&&cmd_normal_gb},
+                    {&&cmd_normal_gt},
+                    {&&cmd_normal_gm},
                 };
                 size_t state_counter = 1; // 0 = root
                 for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
@@ -2724,6 +2741,12 @@ void* war_window_render(void* args) {
                     }
                     goto cmd_done;
                 }
+                if (input_cmd_context.num_chars_in_sequence <
+                    MAX_SEQUENCE_LENGTH) {
+                    input_cmd_context.input_sequence
+                        [input_cmd_context.num_chars_in_sequence] =
+                        keysym_to_key(keysym, mod);
+                }
                 if (!key_down[keysym][mod]) {
                     key_down[keysym][mod] = true;
                     key_last_event_us[keysym][mod] = now;
@@ -2805,8 +2828,16 @@ void* war_window_render(void* args) {
                                                   diff,
                                                   input_cmd_context.min_row);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_j:
                 call_carmack("cmd_normal_j");
@@ -2843,8 +2874,16 @@ void* war_window_render(void* args) {
                                              diff,
                                              input_cmd_context.max_row);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_l:
                 call_carmack("cmd_normal_l");
@@ -2881,8 +2920,16 @@ void* war_window_render(void* args) {
                                                   diff,
                                                   input_cmd_context.min_col);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_h:
                 call_carmack("cmd_normal_h");
@@ -2919,8 +2966,16 @@ void* war_window_render(void* args) {
                                              diff,
                                              input_cmd_context.max_col);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_k:
                 call_carmack("cmd_normal_alt_k");
@@ -2957,8 +3012,16 @@ void* war_window_render(void* args) {
                                                   diff,
                                                   input_cmd_context.min_row);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_j:
                 call_carmack("cmd_normal_alt_j");
@@ -2995,8 +3058,16 @@ void* war_window_render(void* args) {
                                              diff,
                                              input_cmd_context.max_row);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_l:
                 call_carmack("cmd_normal_alt_l");
@@ -3033,8 +3104,16 @@ void* war_window_render(void* args) {
                                                   diff,
                                                   input_cmd_context.min_col);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_h:
                 call_carmack("cmd_normal_alt_h");
@@ -3071,8 +3150,16 @@ void* war_window_render(void* args) {
                                              diff,
                                              input_cmd_context.max_col);
                     }
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_0:
                 call_carmack("cmd_normal_0");
@@ -3080,8 +3167,16 @@ void* war_window_render(void* args) {
                     input_cmd_context.numeric_prefix =
                         input_cmd_context.numeric_prefix * 10;
                     goto cmd_done;
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                 }
                 input_cmd_context.col = input_cmd_context.left_col;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
             cmd_normal_$:
@@ -3125,10 +3220,18 @@ void* war_window_render(void* args) {
                         }
                     }
                     input_cmd_context.numeric_prefix = 0;
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 input_cmd_context.col = input_cmd_context.right_col;
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_G:
                 call_carmack("cmd_normal_G");
@@ -3170,10 +3273,18 @@ void* war_window_render(void* args) {
                         }
                     }
                     input_cmd_context.numeric_prefix = 0;
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 input_cmd_context.row = input_cmd_context.bottom_row;
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_gg:
                 call_carmack("cmd_normal_gg");
@@ -3217,10 +3328,18 @@ void* war_window_render(void* args) {
                         }
                     }
                     input_cmd_context.numeric_prefix = 0;
+                    memset(input_cmd_context.input_sequence,
+                           0,
+                           sizeof(input_cmd_context.input_sequence));
+                    input_cmd_context.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 input_cmd_context.row = input_cmd_context.top_row;
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_1:
                 call_carmack("cmd_normal_1");
@@ -3295,6 +3414,10 @@ void* war_window_render(void* args) {
                 // - input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
                 // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y
                 // - input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_ctrl_minus:
                 call_carmack("cmd_normal_ctrl_minus");
@@ -3306,6 +3429,10 @@ void* war_window_render(void* args) {
                 // - input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
                 // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y
                 // - input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_ctrl_alt_equal:
                 call_carmack("cmd_normal_ctrl_alt_equal");
@@ -3317,6 +3444,10 @@ void* war_window_render(void* args) {
                 // - input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
                 // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y
                 // - input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_ctrl_alt_minus:
                 call_carmack("cmd_normal_ctrl_alt_minus");
@@ -3328,6 +3459,10 @@ void* war_window_render(void* args) {
                 // - input_cmd_context.anchor_x * input_cmd_context.zoom_scale;
                 // input_cmd_context.panning_y = input_cmd_context.anchor_ndc_y
                 // - input_cmd_context.anchor_y * input_cmd_context.zoom_scale;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_ctrl_0:
                 call_carmack("cmd_normal_ctrl_0");
@@ -3348,77 +3483,164 @@ void* war_window_render(void* args) {
                                  input_cmd_context.cell_height)) /
                                input_cmd_context.cell_height) -
                     1;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_esc:
                 call_carmack("cmd_normal_esc");
                 input_cmd_context.numeric_prefix = 0;
                 input_cmd_context.mode = MODE_NORMAL;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_t:
                 call_carmack("cmd_normal_t");
-                if (!input_cmd_context.numeric_prefix) {
-                    input_cmd_context.cursor_width_scale =
-                        input_cmd_context.t_cursor_width_scale;
-                    goto cmd_done;
-                }
-                input_cmd_context.cursor_width_scale =
-                    1.0f / input_cmd_context.numeric_prefix;
-                input_cmd_context.t_cursor_width_scale =
-                    input_cmd_context.cursor_width_scale;
-                input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_f:
                 call_carmack("cmd_normal_f");
-                if (!input_cmd_context.numeric_prefix) {
-                    input_cmd_context.cursor_width_scale =
-                        input_cmd_context.f_cursor_width_scale;
-                    goto cmd_done;
-                }
-                input_cmd_context.cursor_width_scale =
-                    input_cmd_context.numeric_prefix;
-                input_cmd_context.f_cursor_width_scale =
-                    input_cmd_context.cursor_width_scale;
-                input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_mt:
                 call_carmack("cmd_normal_mt");
-                if (!input_cmd_context.numeric_prefix) {
-                    input_cmd_context.cell_navigation_scale =
-                        input_cmd_context.t_cell_navigation_scale;
-                }
-                input_cmd_context.cell_navigation_scale =
-                    1.0f / input_cmd_context.numeric_prefix;
-                input_cmd_context.t_cell_navigation_scale =
-                    input_cmd_context.cell_navigation_scale;
-                input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_mf:
                 call_carmack("cmd_normal_mf");
-                if (!input_cmd_context.numeric_prefix) {
-                    input_cmd_context.cell_navigation_scale =
-                        input_cmd_context.f_cell_navigation_scale;
-                }
-                input_cmd_context.cell_navigation_scale =
-                    input_cmd_context.numeric_prefix;
-                input_cmd_context.f_cell_navigation_scale =
-                    input_cmd_context.cell_navigation_scale;
-                input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_g:
-                call_carmack("cmd_normal_g");
+            cmd_normal_gb:
+                call_carmack("cmd_normal_gb");
+                input_cmd_context.row = input_cmd_context.min_row;
+                uint32_t viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                uint32_t distance = viewport_height / 2;
+                input_cmd_context.bottom_row = clamp_subtract_uint32(
+                    input_cmd_context.row, distance, input_cmd_context.min_row);
+                input_cmd_context.top_row = clamp_add_uint32(
+                    input_cmd_context.row, distance, input_cmd_context.max_row);
+                uint32_t new_viewport_height =
+                    clamp_subtract_uint32(input_cmd_context.top_row,
+                                          input_cmd_context.bottom_row,
+                                          input_cmd_context.min_row);
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff =
+                        clamp_subtract_uint32(viewport_height,
+                                              new_viewport_height,
+                                              input_cmd_context.min_row);
+                    uint32_t sum = clamp_add_uint32(input_cmd_context.top_row,
+                                                    diff,
+                                                    input_cmd_context.max_row);
+                    if (sum < input_cmd_context.max_row) {
+                        input_cmd_context.top_row = sum;
+                    } else {
+                        input_cmd_context.bottom_row =
+                            clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                                  diff,
+                                                  input_cmd_context.min_row);
+                    }
+                }
                 input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_gt:
+                call_carmack("cmd_normal_gt");
+                input_cmd_context.row = input_cmd_context.max_row;
+                viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                distance = viewport_height / 2;
+                input_cmd_context.bottom_row = clamp_subtract_uint32(
+                    input_cmd_context.row, distance, input_cmd_context.min_row);
+                input_cmd_context.top_row = clamp_add_uint32(
+                    input_cmd_context.row, distance, input_cmd_context.max_row);
+                new_viewport_height =
+                    clamp_subtract_uint32(input_cmd_context.top_row,
+                                          input_cmd_context.bottom_row,
+                                          input_cmd_context.min_row);
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff =
+                        clamp_subtract_uint32(viewport_height,
+                                              new_viewport_height,
+                                              input_cmd_context.min_row);
+                    uint32_t sum = clamp_add_uint32(input_cmd_context.top_row,
+                                                    diff,
+                                                    input_cmd_context.max_row);
+                    if (sum < input_cmd_context.max_row) {
+                        input_cmd_context.top_row = sum;
+                    } else {
+                        input_cmd_context.bottom_row =
+                            clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                                  diff,
+                                                  input_cmd_context.min_row);
+                    }
+                }
+                input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_gm:
+                call_carmack("cmd_normal_gm");
+                input_cmd_context.row = 60;
+                viewport_height =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                distance = viewport_height / 2;
+                input_cmd_context.bottom_row = clamp_subtract_uint32(
+                    input_cmd_context.row, distance, input_cmd_context.min_row);
+                input_cmd_context.top_row = clamp_add_uint32(
+                    input_cmd_context.row, distance, input_cmd_context.max_row);
+                new_viewport_height =
+                    clamp_subtract_uint32(input_cmd_context.top_row,
+                                          input_cmd_context.bottom_row,
+                                          input_cmd_context.min_row);
+                if (new_viewport_height < viewport_height) {
+                    uint32_t diff =
+                        clamp_subtract_uint32(viewport_height,
+                                              new_viewport_height,
+                                              input_cmd_context.min_row);
+                    uint32_t sum = clamp_add_uint32(input_cmd_context.top_row,
+                                                    diff,
+                                                    input_cmd_context.max_row);
+                    if (sum < input_cmd_context.max_row) {
+                        input_cmd_context.top_row = sum;
+                    } else {
+                        input_cmd_context.bottom_row =
+                            clamp_subtract_uint32(input_cmd_context.bottom_row,
+                                                  diff,
+                                                  input_cmd_context.min_row);
+                    }
+                }
+                input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
                 goto cmd_done;
             cmd_normal_x:
                 call_carmack("cmd_normal_x");
-                war_insert_note_quad(
-                    note_quads,
-                    &num_note_quads,
-                    (uint32_t[2]){input_cmd_context.col, input_cmd_context.row},
-                    (uint32_t[2]){1, 1},
-                    (float[2]){input_cmd_context.cursor_width_scale, 1.0f},
-                    (float[2]){0.0f, 0.0f},
-                    red_hex);
-                input_cmd_context.numeric_prefix = 0;
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_done:
                 war_wayland_holy_trinity(fd,
@@ -3495,27 +3717,49 @@ void* war_window_render(void* args) {
                                    vulkan_context.cell_width) -
                              (int)input_cmd_context.num_cols_for_line_numbers) <
                             0) {
-                            input_cmd_context.col = 0;
+                            input_cmd_context.col = input_cmd_context.left_col;
                             break;
                         }
                         if ((((physical_height - input_cmd_context.cursor_y) /
                               vulkan_context.cell_height) -
                              input_cmd_context.num_rows_for_status_bars) < 0) {
-                            input_cmd_context.row = 0;
+                            input_cmd_context.row =
+                                input_cmd_context.bottom_row;
                             break;
                         }
                         input_cmd_context.col =
                             (uint32_t)(input_cmd_context.cursor_x /
                                        vulkan_context.cell_width) -
-                            input_cmd_context.num_cols_for_line_numbers;
+                            input_cmd_context.num_cols_for_line_numbers +
+                            input_cmd_context.left_col;
                         input_cmd_context.row =
                             (uint32_t)((physical_height -
                                         input_cmd_context.cursor_y) /
                                        vulkan_context.cell_height) -
-                            input_cmd_context
-                                .num_rows_for_status_bars; // because top
-                                                           // left = 0,0 in
-                                                           // wayland
+                            input_cmd_context.num_rows_for_status_bars +
+                            input_cmd_context.bottom_row;
+                        if (input_cmd_context.row > input_cmd_context.max_row) {
+                            input_cmd_context.row = input_cmd_context.max_row;
+                        }
+                        if (input_cmd_context.row > input_cmd_context.top_row) {
+                            input_cmd_context.row = input_cmd_context.top_row;
+                        }
+                        if (input_cmd_context.row <
+                            input_cmd_context.bottom_row) {
+                            input_cmd_context.row =
+                                input_cmd_context.bottom_row;
+                        }
+                        if (input_cmd_context.col > input_cmd_context.max_col) {
+                            input_cmd_context.col = input_cmd_context.max_col;
+                        }
+                        if (input_cmd_context.col >
+                            input_cmd_context.right_col) {
+                            input_cmd_context.col = input_cmd_context.right_col;
+                        }
+                        if (input_cmd_context.col <
+                            input_cmd_context.left_col) {
+                            input_cmd_context.col = input_cmd_context.left_col;
+                        }
                     }
                 }
                 goto done;

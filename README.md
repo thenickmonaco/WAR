@@ -22,4 +22,4 @@ WAR is licensed under **WAR 1.0**, an umbrella license:
     - You may copy, remix, distribute, perform, or commercialize the music.
     - Derivatives **must remain under the same license** (copyleft), but **credit is optional**.
 
-See the full licenses in `LICENSE` (WAR 1.0 umbrella) and `LICENSE-AGPL` (full AGPL-3.0 text).
+See the full licenses in `LICENSE` (WAR 1.0 umbrella) and `LICENSE-AGPL` (full AGPL-3.0 text) and `LICENSE-CC-BY-SA` (full CC BY-SA 4.0 text).

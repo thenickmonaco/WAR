@@ -2,17 +2,17 @@
 //
 // WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-// 
+//
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
 // version 3, with the following modification: attribution to the original
 // author is waived.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-// 
-// For the full license text, see LICENSE-AGPL and LICENSE.
+//
+// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 //
 //-----------------------------------------------------------------------------
 
@@ -71,8 +71,8 @@ enum war_audio_functions {
 enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
-    max_quads = 6000,
-    max_sdf_quads = 6000,
+    max_quads = 8000,
+    max_sdf_quads = 8000,
     max_note_quads = 1000,
     max_frames = 1, // no need for double/triple yet
     max_instances_per_quad = 1,
@@ -107,9 +107,9 @@ enum war_modes {
 
 enum war_fsm {
     MAX_NODES = 1024,
-    MAX_SEQUENCE_LENGTH = 4,
+    MAX_SEQUENCE_LENGTH = 6,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 33,
+    NUM_SEQUENCES = 35,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -152,10 +152,22 @@ typedef struct rgba_t {
 typedef struct war_input_cmd_context {
     uint32_t col;
     uint32_t row;
+    uint32_t sub_col;
+    uint32_t sub_row;
+    uint32_t navigation_whole_number;
+    uint32_t navigation_sub_cells;
     uint8_t hud_state;
-    float cell_navigation_scale;
-    float t_cell_navigation_scale;
-    float f_cell_navigation_scale;
+    uint32_t f_navigation_whole_number;
+    uint32_t t_navigation_sub_cells;
+    uint32_t t_navigation_whole_number;
+    uint32_t f_navigation_sub_cells;
+    uint32_t cursor_width_whole_number;
+    uint32_t cursor_width_sub_col;
+    uint32_t cursor_width_sub_cells;
+    uint32_t f_cursor_width_whole_number;
+    uint32_t f_cursor_width_sub_cells;
+    uint32_t t_cursor_width_whole_number;
+    uint32_t t_cursor_width_sub_cells;
     uint32_t gridline_splits[4];
     uint32_t left_col;
     uint32_t bottom_row;
@@ -196,9 +208,8 @@ typedef struct war_input_cmd_context {
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
     uint32_t mode;
-    float cursor_width_scale;
-    float f_cursor_width_scale;
-    float t_cursor_width_scale;
+    char input_sequence[MAX_SEQUENCE_LENGTH];
+    uint8_t num_chars_in_sequence;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -279,13 +290,14 @@ typedef struct war_note_quad {
 } war_note_quad;
 
 typedef struct quad_vertex {
-    uint32_t pos[2];
+    uint32_t col_row[2];
+    uint32_t sub_col;
+    uint32_t sub_cells;
     uint32_t color;
     uint32_t corner[2];
     float line_thickness[2];
-    float scale[2];
-    uint32_t _pad1;
-    uint32_t _pad2[2]; // align to 16
+    float float_offset[2];
+    uint32_t _pad1[2];
 } quad_vertex;
 
 typedef struct quad_instance {

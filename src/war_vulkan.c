@@ -2,17 +2,17 @@
 //
 // WAR - make music with vim motions
 // Copyright (C) 2025 Nick Monaco
-// 
+//
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
 // version 3, with the following modification: attribution to the original
 // author is waived.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-// 
-// For the full license text, see LICENSE-AGPL and LICENSE.
+//
+// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 //
 //-----------------------------------------------------------------------------
 
@@ -458,33 +458,45 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {.location = 0,
          .binding = 0,
          .format = VK_FORMAT_R32G32_UINT,
-         .offset = offsetof(quad_vertex, pos)},
+         .offset = offsetof(quad_vertex, col_row)},
         {
             .location = 1,
+            .binding = 0,
+            .format = VK_FORMAT_R32_UINT,
+            .offset = offsetof(quad_vertex, sub_col),
+        },
+        {
+            .location = 2,
+            .binding = 0,
+            .format = VK_FORMAT_R32_UINT,
+            .offset = offsetof(quad_vertex, sub_cells),
+        },
+        {
+            .location = 3,
             .binding = 0,
             .format = VK_FORMAT_R8G8B8A8_UNORM,
             .offset = offsetof(quad_vertex, color),
         },
         {
-            .location = 2,
+            .location = 4,
             .binding = 0,
             .format = VK_FORMAT_R32G32_UINT,
             .offset = offsetof(quad_vertex, corner),
         },
         {
-            .location = 3,
+            .location = 5,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(quad_vertex, line_thickness),
         },
         {
-            .location = 4,
+            .location = 6,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = offsetof(quad_vertex, scale),
+            .offset = offsetof(quad_vertex, float_offset),
         },
     };
-    uint32_t num_quad_vertex_attrs = 5;
+    uint32_t num_quad_vertex_attrs = 7;
     VkVertexInputAttributeDescription quad_instance_attrs[] = {
         {.location = num_quad_vertex_attrs,
          .binding = 1,
@@ -504,17 +516,15 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
          .offset = offsetof(quad_instance, flags)},
     };
     uint32_t num_quad_instance_attrs = 4;
-    VkVertexInputAttributeDescription all_attrs[] = {
-        quad_vertex_attrs[0],
-        quad_vertex_attrs[1],
-        quad_vertex_attrs[2],
-        quad_vertex_attrs[3],
-        quad_vertex_attrs[4],
-        quad_instance_attrs[0],
-        quad_instance_attrs[1],
-        quad_instance_attrs[2],
-        quad_instance_attrs[3],
-    };
+    VkVertexInputAttributeDescription* all_attrs =
+        malloc(sizeof(VkVertexInputAttributeDescription) *
+               (num_quad_vertex_attrs + num_quad_instance_attrs));
+    memcpy(all_attrs,
+           quad_vertex_attrs,
+           sizeof(VkVertexInputAttributeDescription) * num_quad_vertex_attrs);
+    memcpy(all_attrs + num_quad_vertex_attrs,
+           quad_instance_attrs,
+           sizeof(VkVertexInputAttributeDescription) * num_quad_instance_attrs);
     VkVertexInputBindingDescription all_bindings[] = {quad_vertex_binding,
                                                       quad_instance_binding};
     VkPipelineVertexInputStateCreateInfo quad_vertex_input = {

@@ -12,7 +12,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // 
-// For the full license text, see LICENSE-AGPL and LICENSE.
+// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 //
 //-----------------------------------------------------------------------------
 
@@ -22,11 +22,13 @@
 
 #version 450
 
-layout(location = 0) in uvec2 in_pos;
-layout(location = 1) in vec4 in_color;
-layout(location = 2) in uvec2 in_corner;
-layout(location = 3) in vec2 in_line_thickness;
-layout(location = 4) in vec2 in_scale;
+layout(location = 0) in uvec2 in_col_row;
+layout(location = 1) in uint in_sub_col;
+layout(location = 2) in uint in_sub_cells;
+layout(location = 3) in vec4 in_color;
+layout(location = 4) in uvec2 in_corner;
+layout(location = 5) in vec2 in_line_thickness;
+layout(location = 6) in vec2 in_float_offset;
 
 layout(location = 0) out vec4 color;
 
@@ -52,17 +54,16 @@ void main() {
              (in_corner.y == 0u ? 0.0 : 1.0) // bottom -> 0, top -> +1
         );
     }
-    uvec2 local_cell = (in_pos - pc.bottom_left) + pc.cell_offsets;
+    uvec2 local_cell = (in_col_row - pc.bottom_left) + pc.cell_offsets;
     vec2 pixel_pos = vec2(float(local_cell.x), float(local_cell.y)) * pc.cell_size;
 
-    float offset_x = corner_sign.x * (in_line_thickness.x * pc.cell_size.x + abs(pc.cell_size.x - in_scale.x * pc.cell_size.x));
-    float offset_y = corner_sign.y * (in_line_thickness.y * pc.cell_size.y + abs(pc.cell_size.y - in_scale.y * pc.cell_size.y));
+    float offset_x = corner_sign.x * (in_line_thickness.x * pc.cell_size.x + abs(pc.cell_size.x - pc.cell_size.x));
+    float offset_y = corner_sign.y * (in_line_thickness.y * pc.cell_size.y + abs(pc.cell_size.y - pc.cell_size.y));
     vec2 transformed = vec2(pixel_pos.x + offset_x, pixel_pos.y + offset_y);
     
     vec2 anchor_pixel = vec2(float(pc.anchor_cell.x - pc.bottom_left.x + pc.cell_offsets.x),
                              float(pc.anchor_cell.y - pc.bottom_left.y + pc.cell_offsets.y)) * pc.cell_size;
     vec2 delta = transformed - anchor_pixel;
-    //delta *= in_scale;
     vec2 zoomed = delta * pc.zoom + anchor_pixel;
     vec2 ndc = vec2(
         (zoomed.x / pc.physical_size.x) * 2.0 - 1.0,

@@ -12,7 +12,7 @@
 -- but WITHOUT ANY WARRANTY; without even the implied warranty of
 -- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 -- 
--- For the full license text, see LICENSE-AGPL and LICENSE.
+-- For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 --
 -------------------------------------------------------------------------------
 

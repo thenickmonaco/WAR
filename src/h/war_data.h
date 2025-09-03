@@ -293,11 +293,14 @@ typedef struct quad_vertex {
     uint32_t col_row[2];
     uint32_t sub_col_row[2];
     uint32_t sub_cells[2];
+    uint32_t cursor_size_sub_col_row[2];
+    uint32_t cursor_size_whole_number[2];
+    uint32_t cursor_size_sub_cells[2];
     uint32_t color;
     uint32_t corner[2];
     float line_thickness[2];
     float float_offset[2];
-    uint32_t _pad1[3];
+    uint32_t _pad1[1];
 } quad_vertex;
 
 typedef struct quad_instance {

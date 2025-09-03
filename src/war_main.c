@@ -861,6 +861,9 @@ void* war_window_render(void* args) {
                                   bottom_left_corner,
                                   (uint32_t[2]){0, 0},
                                   (uint32_t[2]){1, 1},
+                                  (uint32_t[2]){0, 0},
+                                  (uint32_t[2]){0, 0},
+                                  (uint32_t[2]){1, 0},
                                   span,
                                   line_thickness,
                                   (float[2]){0.0f, 0.0f},
@@ -899,6 +902,9 @@ void* war_window_render(void* args) {
                                       bottom_left_corner,
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 1},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){1, 0},
                                       span,
                                       line_thickness,
                                       (float[2]){0.0f, 0.0f},
@@ -987,6 +993,9 @@ void* war_window_render(void* args) {
                                           bottom_left_corner,
                                           (uint32_t[2]){0, 0},
                                           (uint32_t[2]){1, 1},
+                                          (uint32_t[2]){0, 0},
+                                          (uint32_t[2]){0, 0},
+                                          (uint32_t[2]){1, 0},
                                           span,
                                           line_thickness,
                                           (float[2]){0.0f, 0.0f},
@@ -1045,6 +1054,9 @@ void* war_window_render(void* args) {
                                       black_bottom_left_corner,
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 1},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){1, 0},
                                       black_span,
                                       black_line_thickness,
                                       (float[2]){0.0f, 0.0f},
@@ -1064,6 +1076,9 @@ void* war_window_render(void* args) {
                                       white_bottom_left_corner,
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 1},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){1, 0},
                                       white_span,
                                       white_line_thickness,
                                       (float[2]){0.0f, 0.0f},
@@ -1084,6 +1099,9 @@ void* war_window_render(void* args) {
                                       white_bottom_left_corner,
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 1},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){0, 0},
+                                      (uint32_t[2]){1, 0},
                                       white_span,
                                       white_line_thickness,
                                       (float[2]){0.0f, 0.0f},
@@ -1619,7 +1637,11 @@ void* war_window_render(void* args) {
                                   input_cmd_context.sub_row},
                     (uint32_t[2]){input_cmd_context.navigation_sub_cells_col,
                                   input_cmd_context.navigation_sub_cells_row},
-                    (uint32_t[2]){1, 1},
+                    (uint32_t[2]){input_cmd_context.cursor_width_sub_col, 0},
+                    (uint32_t[2]){input_cmd_context.cursor_width_whole_number,
+                                  0},
+                    (uint32_t[2]){input_cmd_context.cursor_width_sub_cells, 1},
+                    (uint32_t[2]){0, 1},
                     (float[2]){0.0f, 0.0f},
                     (float[2]){0.0f, 0.0f},
                     white_hex);
@@ -3602,8 +3624,8 @@ void* war_window_render(void* args) {
                        sizeof(input_cmd_context.input_sequence));
                 input_cmd_context.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_t:
-                call_carmack("cmd_normal_t");
+            cmd_normal_s:
+                call_carmack("cmd_normal_s");
                 if (input_cmd_context.numeric_prefix) {
                     input_cmd_context.cursor_width_sub_col =
                         input_cmd_context.numeric_prefix;
@@ -3639,15 +3661,15 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 input_cmd_context.cursor_width_whole_number =
-                    input_cmd_context.numeric_prefix;
+                    input_cmd_context.f_cursor_width_whole_number;
                 memset(input_cmd_context.input_sequence,
                        0,
                        sizeof(input_cmd_context.input_sequence));
                 input_cmd_context.num_chars_in_sequence = 0;
                 input_cmd_context.numeric_prefix = 0;
                 goto cmd_done;
-            cmd_normal_s:
-                call_carmack("cmd_normal_s");
+            cmd_normal_t:
+                call_carmack("cmd_normal_t");
                 if (input_cmd_context.numeric_prefix) {
                     input_cmd_context.cursor_width_sub_cells =
                         input_cmd_context.numeric_prefix;

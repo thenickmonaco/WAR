@@ -25,10 +25,13 @@
 layout(location = 0) in uvec2 in_col_row;
 layout(location = 1) in uvec2 in_sub_col_row;
 layout(location = 2) in uvec2 in_sub_cells;
-layout(location = 3) in vec4 in_color;
-layout(location = 4) in uvec2 in_corner;
-layout(location = 5) in vec2 in_line_thickness;
-layout(location = 6) in vec2 in_float_offset;
+layout(location = 3) in uvec2 in_cursor_size_sub_col_row;
+layout(location = 4) in uvec2 in_cursor_size_whole_number;
+layout(location = 5) in uvec2 in_cursor_size_sub_cells;
+layout(location = 6) in vec4 in_color;
+layout(location = 7) in uvec2 in_corner;
+layout(location = 8) in vec2 in_line_thickness;
+layout(location = 9) in vec2 in_float_offset;
 
 layout(location = 0) out vec4 color;
 
@@ -57,7 +60,8 @@ void main() {
     uvec2 local_cell = (in_col_row - pc.bottom_left) + pc.cell_offsets;
     vec2 pixel_pos = vec2(float(local_cell.x) + float(in_sub_col_row.x) / float(in_sub_cells.x), float(local_cell.y) + float(in_sub_col_row.y) / float(in_sub_cells.y)) * pc.cell_size;
 
-    float offset_x = corner_sign.x * (in_line_thickness.x * pc.cell_size.x + abs(pc.cell_size.x - pc.cell_size.x));
+    float cursor_x = (in_cursor_size_sub_col_row.x * in_cursor_size_whole_number.x) / float(in_cursor_size_sub_cells.x) * pc.cell_size.x;
+    float offset_x = corner_sign.x * (in_line_thickness.x * pc.cell_size.x + abs(pc.cell_size.x - pc.cell_size.x) + cursor_x);
     float offset_y = corner_sign.y * (in_line_thickness.y * pc.cell_size.y + abs(pc.cell_size.y - pc.cell_size.y));
     vec2 transformed = vec2(pixel_pos.x + offset_x, pixel_pos.y + offset_y);
     

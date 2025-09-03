@@ -474,29 +474,48 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {
             .location = 3,
             .binding = 0,
-            .format = VK_FORMAT_R8G8B8A8_UNORM,
-            .offset = offsetof(quad_vertex, color),
+            .format = VK_FORMAT_R32G32_UINT,
+            .offset = offsetof(quad_vertex, cursor_size_sub_col_row),
         },
         {
             .location = 4,
             .binding = 0,
             .format = VK_FORMAT_R32G32_UINT,
-            .offset = offsetof(quad_vertex, corner),
+            .offset = offsetof(quad_vertex, cursor_size_whole_number),
         },
         {
             .location = 5,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32_UINT,
+            .offset = offsetof(quad_vertex, cursor_size_sub_cells),
+        },
+
+        {
+            .location = 6,
+            .binding = 0,
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .offset = offsetof(quad_vertex, color),
+        },
+        {
+            .location = 7,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32_UINT,
+            .offset = offsetof(quad_vertex, corner),
+        },
+        {
+            .location = 8,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(quad_vertex, line_thickness),
         },
         {
-            .location = 6,
+            .location = 9,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(quad_vertex, float_offset),
         },
     };
-    uint32_t num_quad_vertex_attrs = 7;
+    uint32_t num_quad_vertex_attrs = 10;
     VkVertexInputAttributeDescription quad_instance_attrs[] = {
         {.location = num_quad_vertex_attrs,
          .binding = 1,

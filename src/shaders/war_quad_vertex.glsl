@@ -23,8 +23,8 @@
 #version 450
 
 layout(location = 0) in uvec2 in_col_row;
-layout(location = 1) in uint in_sub_col;
-layout(location = 2) in uint in_sub_cells;
+layout(location = 1) in uvec2 in_sub_col_row;
+layout(location = 2) in uvec2 in_sub_cells;
 layout(location = 3) in vec4 in_color;
 layout(location = 4) in uvec2 in_corner;
 layout(location = 5) in vec2 in_line_thickness;
@@ -55,7 +55,7 @@ void main() {
         );
     }
     uvec2 local_cell = (in_col_row - pc.bottom_left) + pc.cell_offsets;
-    vec2 pixel_pos = vec2(float(local_cell.x), float(local_cell.y)) * pc.cell_size;
+    vec2 pixel_pos = vec2(float(local_cell.x) + float(in_sub_col_row.x) / float(in_sub_cells.x), float(local_cell.y) + float(in_sub_col_row.y) / float(in_sub_cells.y)) * pc.cell_size;
 
     float offset_x = corner_sign.x * (in_line_thickness.x * pc.cell_size.x + abs(pc.cell_size.x - pc.cell_size.x));
     float offset_y = corner_sign.y * (in_line_thickness.y * pc.cell_size.y + abs(pc.cell_size.y - pc.cell_size.y));

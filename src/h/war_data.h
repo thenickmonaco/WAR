@@ -109,7 +109,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 6,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 35,
+    NUM_SEQUENCES = 36,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -154,8 +154,14 @@ typedef struct war_input_cmd_context {
     uint32_t row;
     uint32_t sub_col;
     uint32_t sub_row;
-    uint32_t navigation_whole_number;
-    uint32_t navigation_sub_cells;
+    uint32_t navigation_whole_number_col;
+    uint32_t navigation_whole_number_row;
+    uint32_t navigation_sub_cells_col;
+    uint32_t navigation_sub_cells_row;
+    uint32_t previous_navigation_whole_number_col;
+    uint32_t previous_navigation_whole_number_row;
+    uint32_t previous_navigation_sub_cells_col;
+    uint32_t previous_navigation_sub_cells_row;
     uint8_t hud_state;
     uint32_t f_navigation_whole_number;
     uint32_t t_navigation_sub_cells;
@@ -166,8 +172,10 @@ typedef struct war_input_cmd_context {
     uint32_t cursor_width_sub_cells;
     uint32_t f_cursor_width_whole_number;
     uint32_t f_cursor_width_sub_cells;
+    uint32_t f_cursor_width_sub_col;
     uint32_t t_cursor_width_whole_number;
     uint32_t t_cursor_width_sub_cells;
+    uint32_t t_cursor_width_sub_col;
     uint32_t gridline_splits[4];
     uint32_t left_col;
     uint32_t bottom_row;
@@ -281,23 +289,15 @@ typedef struct sdf_push_constants {
     uint32_t _pad2;
 } sdf_push_constants;
 
-typedef struct war_note_quad {
-    uint32_t bottom_left_corner[2];
-    uint32_t span[2];
-    float scale[2];
-    float line_thickness[2];
-    uint32_t color;
-} war_note_quad;
-
 typedef struct quad_vertex {
     uint32_t col_row[2];
-    uint32_t sub_col;
-    uint32_t sub_cells;
+    uint32_t sub_col_row[2];
+    uint32_t sub_cells[2];
     uint32_t color;
     uint32_t corner[2];
     float line_thickness[2];
     float float_offset[2];
-    uint32_t _pad1[2];
+    uint32_t _pad1[3];
 } quad_vertex;
 
 typedef struct quad_instance {

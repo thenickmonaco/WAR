@@ -462,13 +462,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {
             .location = 1,
             .binding = 0,
-            .format = VK_FORMAT_R32_UINT,
-            .offset = offsetof(quad_vertex, sub_col),
+            .format = VK_FORMAT_R32G32_UINT,
+            .offset = offsetof(quad_vertex, sub_col_row),
         },
         {
             .location = 2,
             .binding = 0,
-            .format = VK_FORMAT_R32_UINT,
+            .format = VK_FORMAT_R32G32_UINT,
             .offset = offsetof(quad_vertex, sub_cells),
         },
         {

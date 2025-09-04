@@ -336,8 +336,66 @@ void* war_window_render(void* args) {
                (input_cmd_context.num_rows_for_status_bars +
                 max_gridlines_per_split + MAX_MIDI_NOTES * 5));
 
-    quad_vertex* dynamic_quad_verts = malloc(sizeof(quad_vertex) * 4);
-    uint16_t* dynamic_quad_indices = malloc(sizeof(uint16_t) * 6);
+    quad_vertex* dynamic_quad_verts =
+        malloc(sizeof(quad_vertex) * 4 * (max_note_quads + 1));
+    uint16_t* dynamic_quad_indices =
+        malloc(sizeof(uint16_t) * 6 * (max_note_quads + 1));
+
+    // --- WAR_NOTE_QUADS ALLOCATION WITH 32-BYTE PER-ARRAY ALIGNMENT ---
+    size_t num_uint32_arrays = 11;
+    size_t num_float_arrays = 2;
+    size_t padding_per_array = 31;
+    size_t note_quads_total_size =
+        num_uint32_arrays *
+            (sizeof(uint32_t) * max_note_quads + padding_per_array) +
+        num_float_arrays * (sizeof(float) * max_note_quads + padding_per_array);
+    void* note_quads_block = NULL;
+    int note_quads_res =
+        posix_memalign(&note_quads_block, 32, note_quads_total_size);
+    assert(note_quads_res == 0 && note_quads_block != NULL);
+    uint8_t* note_quads_p = (uint8_t*)note_quads_block;
+    war_note_quads note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.col = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.row = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.sub_col = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.sub_row = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.sub_cells_col = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.cursor_width_whole_number = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.cursor_width_sub_col = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.cursor_width_sub_cells = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.color = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.strength = (float*)note_quads_p;
+    note_quads_p += sizeof(float) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.voice = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.hidden = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.mute = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    assert(note_quads_p <= (uint8_t*)note_quads_block + note_quads_total_size);
+    uint32_t note_quads_count = 0;
 
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
@@ -1624,19 +1682,69 @@ void* war_window_render(void* args) {
                                       vulkan_context.quad_pipeline);
                     current_pipeline = PIPELINE_QUAD;
                 }
+                uint32_t rows_in_view =
+                    input_cmd_context.top_row - input_cmd_context.bottom_row;
+                uint32_t cols_in_view =
+                    input_cmd_context.right_col - input_cmd_context.left_col;
+                uint32_t view_size = rows_in_view * cols_in_view;
+                uint32_t* notes_in_view_indices =
+                    malloc(sizeof(uint32_t) * view_size);
+                uint32_t notes_in_view_indices_count = 0;
+                war_note_quads_in_view(&note_quads,
+                                       note_quads_count,
+                                       input_cmd_context.bottom_row,
+                                       input_cmd_context.top_row,
+                                       input_cmd_context.left_col,
+                                       input_cmd_context.right_col,
+                                       notes_in_view_indices,
+                                       &notes_in_view_indices_count);
+                for (uint32_t i = 0; i < notes_in_view_indices_count; i++) {
+                    uint32_t i_verts = i * 4;
+                    uint32_t i_indices = i * 6;
+                    uint32_t i_in_view = notes_in_view_indices[i];
+                    if (!note_quads.hidden[i_in_view]) {
+                        war_make_quad(
+                            dynamic_quad_verts,
+                            dynamic_quad_indices,
+                            i_verts,
+                            i_indices,
+                            (uint32_t[2]){note_quads.col[i_in_view],
+                                          note_quads.row[i_in_view]},
+                            (uint32_t[2]){note_quads.sub_col[i_in_view], 0},
+                            (uint32_t[2]){note_quads.sub_cells_col[i_in_view],
+                                          1},
+                            (uint32_t[2]){
+                                note_quads.cursor_width_sub_col[i_in_view], 0},
+                            (uint32_t[2]){
+                                note_quads.cursor_width_whole_number[i_in_view],
+                                0},
+                            (uint32_t[2]){
+                                note_quads.cursor_width_sub_cells[i_in_view],
+                                1},
+                            (uint32_t[2]){0, 1},
+                            (float[2]){0.0f, 0.0f},
+                            (float[2]){0.0f, 0.0f},
+                            note_quads.color[i_in_view]);
+                    } else {
+                        war_make_blank_quad(dynamic_quad_verts,
+                                            dynamic_quad_indices,
+                                            i_verts,
+                                            i_indices);
+                    }
+                }
                 // draw cursor
                 quad_instance cursor_quad_instances[0];
                 uint16_t num_cursor_quad_instances = 1;
                 war_make_quad(
                     dynamic_quad_verts,
                     dynamic_quad_indices,
-                    0,
-                    0,
+                    notes_in_view_indices_count * 4,
+                    notes_in_view_indices_count * 6,
                     (uint32_t[2]){input_cmd_context.col, input_cmd_context.row},
                     (uint32_t[2]){input_cmd_context.sub_col,
                                   input_cmd_context.sub_row},
                     (uint32_t[2]){input_cmd_context.navigation_sub_cells_col,
-                                  input_cmd_context.navigation_sub_cells_row},
+                                  1},
                     (uint32_t[2]){input_cmd_context.cursor_width_sub_col, 0},
                     (uint32_t[2]){input_cmd_context.cursor_width_whole_number,
                                   0},
@@ -1645,8 +1753,10 @@ void* war_window_render(void* args) {
                     (float[2]){0.0f, 0.0f},
                     (float[2]){0.0f, 0.0f},
                     white_hex);
-                size_t num_dynamic_quad_verts = 4;
-                size_t num_dynamic_quad_indices = 6;
+                size_t num_dynamic_quad_verts =
+                    (notes_in_view_indices_count + 1) * 4;
+                size_t num_dynamic_quad_indices =
+                    (notes_in_view_indices_count + 1) * 6;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
                        dynamic_quad_verts,
@@ -2662,6 +2772,14 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_s, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_z, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_RETURN, .mod = 0},
+                            {0},
+                        },
                     };
                 void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2702,6 +2820,8 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_gt},
                     {&&cmd_normal_gm},
                     {&&cmd_normal_s},
+                    {&&cmd_normal_z},
+                    {&&cmd_normal_return},
                 };
                 size_t state_counter = 1; // 0 = root
                 for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
@@ -3689,7 +3809,8 @@ void* war_window_render(void* args) {
                 if (input_cmd_context.numeric_prefix) {
                     input_cmd_context.previous_navigation_sub_cells_col =
                         input_cmd_context.navigation_sub_cells_col;
-                    input_cmd_context.navigation_sub_cells_col = input_cmd_context.numeric_prefix;
+                    input_cmd_context.navigation_sub_cells_col =
+                        input_cmd_context.numeric_prefix;
                     input_cmd_context.t_navigation_sub_cells =
                         input_cmd_context.numeric_prefix;
                     if (input_cmd_context.navigation_sub_cells_col !=
@@ -3851,8 +3972,71 @@ void* war_window_render(void* args) {
                        0,
                        sizeof(input_cmd_context.input_sequence));
                 goto cmd_done;
+            cmd_normal_z:
+                call_carmack("cmd_normal_z");
+                war_note_quads_add(&note_quads,
+                                   &note_quads_count,
+                                   window_render_to_audio_ring_buffer,
+                                   write_to_audio_index,
+                                   input_cmd_context.col,
+                                   input_cmd_context.row,
+                                   input_cmd_context.sub_col,
+                                   input_cmd_context.navigation_sub_cells_col,
+                                   input_cmd_context.cursor_width_sub_col,
+                                   input_cmd_context.cursor_width_whole_number,
+                                   input_cmd_context.cursor_width_sub_cells,
+                                   red_hex,
+                                   100.0f,
+                                   VOICE_GRAND_PIANO,
+                                   false,
+                                   false);
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_return:
+                call_carmack("cmd_normal_return");
+                war_note_quads_add(&note_quads,
+                                   &note_quads_count,
+                                   window_render_to_audio_ring_buffer,
+                                   write_to_audio_index,
+                                   input_cmd_context.col,
+                                   input_cmd_context.row,
+                                   input_cmd_context.sub_col,
+                                   input_cmd_context.navigation_sub_cells_col,
+                                   input_cmd_context.cursor_width_sub_col,
+                                   input_cmd_context.cursor_width_whole_number,
+                                   input_cmd_context.cursor_width_sub_cells,
+                                   red_hex,
+                                   100.0f,
+                                   VOICE_GRAND_PIANO,
+                                   false,
+                                   false);
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
+                goto cmd_done;
             cmd_normal_x:
                 call_carmack("cmd_normal_x");
+                war_note_quads_delete(
+                    &note_quads,
+                    &note_quads_count,
+                    window_render_to_audio_ring_buffer,
+                    write_to_audio_index,
+                    input_cmd_context.col,
+                    input_cmd_context.row,
+                    input_cmd_context.sub_col,
+                    input_cmd_context.navigation_sub_cells_col,
+                    input_cmd_context.cursor_width_sub_col,
+                    input_cmd_context.cursor_width_whole_number,
+                    input_cmd_context.cursor_width_sub_cells,
+                    red_hex,
+                    100.0f,
+                    VOICE_GRAND_PIANO,
+                    false,
+                    false);
                 memset(input_cmd_context.input_sequence,
                        0,
                        sizeof(input_cmd_context.input_sequence));

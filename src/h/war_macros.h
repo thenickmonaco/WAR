@@ -26,6 +26,7 @@
 #include "h/war_data.h"
 #include "h/war_debug_macros.h"
 
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -33,6 +34,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <xkbcommon/xkbcommon.h>
+
+#define ALIGN32(p) (uint8_t*)(((uintptr_t)(p) + 31) & ~((uintptr_t)31))
 
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
@@ -157,6 +160,8 @@ static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
         return 259;
     case XKB_KEY_Down:
         return 260;
+    case XKB_KEY_Return:
+        return 261;
     case XKB_KEY_A:
         return XKB_KEY_a;
     case XKB_KEY_B:
@@ -531,6 +536,120 @@ static inline void war_make_blank_quad(quad_vertex* quad_verts,
     quad_indices[i_indices + 3] = i_verts + 2;
     quad_indices[i_indices + 4] = i_verts + 3;
     quad_indices[i_indices + 5] = i_verts;
+}
+
+static inline void
+war_note_quads_add(war_note_quads* note_quads,
+                   uint32_t* note_quads_count,
+                   uint8_t* window_render_to_audio_ring_buffer,
+                   uint8_t* write_to_audio_index,
+                   uint32_t col,
+                   uint32_t row,
+                   uint32_t sub_col,
+                   uint32_t sub_cells_col,
+                   uint32_t cursor_width_sub_col,
+                   uint32_t cursor_width_whole_number,
+                   uint32_t cursor_width_sub_cells,
+                   uint32_t color,
+                   float strength,
+                   uint32_t voice,
+                   uint32_t hidden,
+                   uint32_t mute) {
+    assert(*note_quads_count < max_note_quads);
+    note_quads->col[*note_quads_count] = col;
+    note_quads->row[*note_quads_count] = row;
+    note_quads->sub_col[*note_quads_count] = sub_col;
+    note_quads->sub_cells_col[*note_quads_count] = sub_cells_col;
+    note_quads->cursor_width_whole_number[*note_quads_count] =
+        cursor_width_whole_number;
+    note_quads->cursor_width_sub_col[*note_quads_count] = cursor_width_sub_col;
+    note_quads->cursor_width_sub_cells[*note_quads_count] =
+        cursor_width_sub_cells;
+    note_quads->color[*note_quads_count] = color;
+    note_quads->strength[*note_quads_count] = strength;
+    note_quads->voice[*note_quads_count] = voice;
+    note_quads->hidden[*note_quads_count] = hidden;
+    note_quads->mute[*note_quads_count] = mute;
+    (*note_quads_count)++;
+
+    // TODO: send add command to audio thread
+}
+
+static inline void
+war_note_quads_delete(war_note_quads* note_quads,
+                      uint32_t* note_quads_count,
+                      uint8_t* window_render_to_audio_ring_buffer,
+                      uint8_t* write_to_audio_index,
+                      uint32_t col,
+                      uint32_t row,
+                      uint32_t sub_col,
+                      uint32_t sub_cells_col,
+                      uint32_t cursor_width_sub_col,
+                      uint32_t cursor_width_whole_number,
+                      uint32_t cursor_width_sub_cells,
+                      uint32_t color,
+                      float strength,
+                      uint32_t voice,
+                      uint32_t hidden,
+                      uint32_t mute) {
+    if (*note_quads_count == 0) return;
+
+    while (*note_quads_count > 0 &&
+           note_quads->col[*note_quads_count - 1] == col &&
+           note_quads->row[*note_quads_count - 1] == row) {
+        (*note_quads_count)--;
+        // TODO: send delete command to audio thread
+    }
+
+    uint32_t i = 0;
+    while (i < *note_quads_count) {
+        if (note_quads->col[i] == col && note_quads->row[i] == row) {
+            uint32_t last = *note_quads_count - 1;
+
+            // Swap into i
+            note_quads->col[i] = note_quads->col[last];
+            note_quads->row[i] = note_quads->row[last];
+            note_quads->sub_col[i] = note_quads->sub_col[last];
+            note_quads->sub_cells_col[i] = note_quads->sub_cells_col[last];
+            note_quads->cursor_width_whole_number[i] =
+                note_quads->cursor_width_whole_number[last];
+            note_quads->cursor_width_sub_col[i] =
+                note_quads->cursor_width_sub_col[last];
+            note_quads->cursor_width_sub_cells[i] =
+                note_quads->cursor_width_sub_cells[last];
+            note_quads->color[i] = note_quads->color[last];
+            note_quads->strength[i] = note_quads->strength[last];
+            note_quads->voice[i] = note_quads->voice[last];
+            note_quads->hidden[i] = note_quads->hidden[last];
+            note_quads->mute[i] = note_quads->mute[last];
+
+            (*note_quads_count)--;
+
+            // TODO: send delete command to audio thread
+
+        } else {
+            i++;
+        }
+    }
+}
+
+static inline void war_note_quads_in_view(war_note_quads* note_quads,
+                                          uint32_t note_quads_count,
+                                          uint32_t bottom_row,
+                                          uint32_t top_row,
+                                          uint32_t left_col,
+                                          uint32_t right_col,
+                                          uint32_t* out_indices,
+                                          uint32_t* out_indices_count) {
+    for (uint32_t i = 0; i < note_quads_count; i++) {
+        uint32_t note_col = note_quads->col[i];
+        uint32_t note_row = note_quads->row[i];
+        if ((note_col >= left_col && note_col <= right_col) &&
+            (note_row >= bottom_row && note_row <= top_row)) {
+            out_indices[*out_indices_count] = i;
+            (*out_indices_count)++;
+        }
+    }
 }
 
 #endif // WAR_MACROS_H

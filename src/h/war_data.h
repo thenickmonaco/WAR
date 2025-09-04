@@ -48,6 +48,7 @@ enum war_mods {
 
 enum war_keysyms {
     KEYSYM_ESCAPE = 256,
+    KEYSYM_RETURN = 261,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -73,7 +74,7 @@ enum war_misc {
     max_opcodes = 20,
     max_quads = 8000,
     max_sdf_quads = 8000,
-    max_note_quads = 1000,
+    max_note_quads = 8000,
     max_frames = 1, // no need for double/triple yet
     max_instances_per_quad = 1,
     max_instances_per_sdf_quad = 1,
@@ -109,7 +110,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 6,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 36,
+    NUM_SEQUENCES = 38,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -148,6 +149,46 @@ typedef struct rgba_t {
     float b;
     float a;
 } rgba_t;
+
+enum war_voice {
+    VOICE_GRAND_PIANO = 0,
+};
+
+// AoS for audio thread
+typedef struct war_note {
+    uint32_t id;
+    uint32_t col;
+    uint32_t row;
+    uint32_t sub_col;
+    uint32_t sub_row;
+    uint32_t sub_cells_col;
+    uint32_t cursor_width_whole_number;
+    uint32_t cursor_width_sub_col;
+    uint32_t cursor_width_sub_cells;
+    float float_offset;
+    uint32_t color;
+    float strength;
+    uint32_t voice;
+    uint32_t hidden;
+    uint32_t mute;
+} war_note;
+
+// SoA for main thread
+typedef struct war_note_quads {
+    uint32_t* col;
+    uint32_t* row;
+    uint32_t* sub_col;
+    uint32_t* sub_row;
+    uint32_t* sub_cells_col;
+    uint32_t* cursor_width_whole_number;
+    uint32_t* cursor_width_sub_col;
+    uint32_t* cursor_width_sub_cells;
+    uint32_t* color;
+    float* strength;
+    uint32_t* voice;
+    uint32_t* hidden;
+    uint32_t* mute;
+} war_note_quads;
 
 typedef struct war_input_cmd_context {
     uint32_t col;

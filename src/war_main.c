@@ -342,7 +342,7 @@ void* war_window_render(void* args) {
         malloc(sizeof(uint16_t) * 6 * (max_note_quads + 1));
 
     // --- WAR_NOTE_QUADS ALLOCATION WITH 32-BYTE PER-ARRAY ALIGNMENT ---
-    size_t num_uint32_arrays = 11;
+    size_t num_uint32_arrays = 12;
     size_t num_float_arrays = 2;
     size_t padding_per_array = 31;
     size_t note_quads_total_size =
@@ -381,6 +381,9 @@ void* war_window_render(void* args) {
     note_quads_p += sizeof(uint32_t) * max_note_quads;
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.color = (uint32_t*)note_quads_p;
+    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p = ALIGN32(note_quads_p);
+    note_quads.outline_color = (uint32_t*)note_quads_p;
     note_quads_p += sizeof(uint32_t) * max_note_quads;
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.strength = (float*)note_quads_p;
@@ -838,8 +841,9 @@ void* war_window_render(void* args) {
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
                 const uint32_t full_white_hex = 0xFFFFFFFF;
-                const float default_horizontal_line_width = 0.018;
-                const float default_vertical_line_width = 0.018;
+                const float default_horizontal_line_width = 0.018f;
+                const float default_vertical_line_width = 0.018f;
+                const float note_outline_thickness = 0.2f;
                 // single buffer
                 assert(vulkan_context.current_frame == 0);
                 vkWaitForFences(
@@ -923,6 +927,8 @@ void* war_window_render(void* args) {
                                   (uint32_t[2]){0, 0},
                                   (uint32_t[2]){1, 0},
                                   span,
+                                  0.0f,
+                                  0,
                                   line_thickness,
                                   (float[2]){0.0f, 0.0f},
                                   color);
@@ -964,6 +970,8 @@ void* war_window_render(void* args) {
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 0},
                                       span,
+                                      0.0f,
+                                      0,
                                       line_thickness,
                                       (float[2]){0.0f, 0.0f},
                                       color);
@@ -1055,6 +1063,8 @@ void* war_window_render(void* args) {
                                           (uint32_t[2]){0, 0},
                                           (uint32_t[2]){1, 0},
                                           span,
+                                          0.0f,
+                                          0,
                                           line_thickness,
                                           (float[2]){0.0f, 0.0f},
                                           color);
@@ -1116,6 +1126,8 @@ void* war_window_render(void* args) {
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 0},
                                       black_span,
+                                      0.0f,
+                                      0,
                                       black_line_thickness,
                                       (float[2]){0.0f, 0.0f},
                                       black_color);
@@ -1138,6 +1150,8 @@ void* war_window_render(void* args) {
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 0},
                                       white_span,
+                                      0.0f,
+                                      0,
                                       white_line_thickness,
                                       (float[2]){0.0f, 0.0f},
                                       white_color);
@@ -1161,6 +1175,8 @@ void* war_window_render(void* args) {
                                       (uint32_t[2]){0, 0},
                                       (uint32_t[2]){1, 0},
                                       white_span,
+                                      0.0f,
+                                      0,
                                       white_line_thickness,
                                       (float[2]){0.0f, 0.0f},
                                       white_color);
@@ -1682,6 +1698,7 @@ void* war_window_render(void* args) {
                                       vulkan_context.quad_pipeline);
                     current_pipeline = PIPELINE_QUAD;
                 }
+                // draw notes
                 uint32_t rows_in_view =
                     input_cmd_context.top_row - input_cmd_context.bottom_row;
                 uint32_t cols_in_view =
@@ -1722,6 +1739,8 @@ void* war_window_render(void* args) {
                                 note_quads.cursor_width_sub_cells[i_in_view],
                                 1},
                             (uint32_t[2]){0, 1},
+                            note_outline_thickness,
+                            note_quads.outline_color[i_in_view],
                             (float[2]){0.0f, 0.0f},
                             (float[2]){0.0f, 0.0f},
                             note_quads.color[i_in_view]);
@@ -1750,6 +1769,8 @@ void* war_window_render(void* args) {
                                   0},
                     (uint32_t[2]){input_cmd_context.cursor_width_sub_cells, 1},
                     (uint32_t[2]){0, 1},
+                    0.0f,
+                    0,
                     (float[2]){0.0f, 0.0f},
                     (float[2]){0.0f, 0.0f},
                     white_hex);
@@ -3986,6 +4007,7 @@ void* war_window_render(void* args) {
                                    input_cmd_context.cursor_width_whole_number,
                                    input_cmd_context.cursor_width_sub_cells,
                                    red_hex,
+                                   white_hex,
                                    100.0f,
                                    VOICE_GRAND_PIANO,
                                    false,
@@ -4009,6 +4031,7 @@ void* war_window_render(void* args) {
                                    input_cmd_context.cursor_width_whole_number,
                                    input_cmd_context.cursor_width_sub_cells,
                                    red_hex,
+                                   white_hex,
                                    100.0f,
                                    VOICE_GRAND_PIANO,
                                    false,
@@ -4033,6 +4056,7 @@ void* war_window_render(void* args) {
                     input_cmd_context.cursor_width_whole_number,
                     input_cmd_context.cursor_width_sub_cells,
                     red_hex,
+                    white_hex,
                     100.0f,
                     VOICE_GRAND_PIANO,
                     false,

@@ -30,10 +30,15 @@ layout(location = 4) in uvec2 in_cursor_size_whole_number;
 layout(location = 5) in uvec2 in_cursor_size_sub_cells;
 layout(location = 6) in vec4 in_color;
 layout(location = 7) in uvec2 in_corner;
-layout(location = 8) in vec2 in_line_thickness;
-layout(location = 9) in vec2 in_float_offset;
+layout(location = 8) in float in_outline_thickness;
+layout(location = 9) in vec4 in_outline_color;
+layout(location = 10) in vec2 in_line_thickness;
+layout(location = 11) in vec2 in_float_offset;
 
-layout(location = 0) out vec4 color;
+layout(location = 0) out vec4 frag_color;
+layout(location = 1) out float frag_outline_thickness;
+layout(location = 2) out vec4 frag_outline_color;
+layout(location = 3) out vec2 frag_local_pos;
 
 layout(push_constant) uniform PushConstants {
     layout(offset = 0) uvec2 bottom_left;
@@ -74,5 +79,9 @@ void main() {
         1.0 - (zoomed.y / pc.physical_size.y) * 2.0
     );
     gl_Position = vec4(ndc, 0.0, 1.0);
-    color = in_color;
+
+    frag_color = in_color;
+    frag_outline_color = in_outline_color;
+    frag_outline_thickness = in_outline_thickness;
+    frag_local_pos = vec2(in_corner);
 }

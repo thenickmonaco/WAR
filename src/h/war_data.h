@@ -184,6 +184,7 @@ typedef struct war_note_quads {
     uint32_t* cursor_width_sub_col;
     uint32_t* cursor_width_sub_cells;
     uint32_t* color;
+    uint32_t* outline_color;
     float* strength;
     uint32_t* voice;
     uint32_t* hidden;
@@ -339,6 +340,8 @@ typedef struct quad_vertex {
     uint32_t cursor_size_sub_cells[2];
     uint32_t color;
     uint32_t corner[2];
+    float outline_thickness;
+    uint32_t outline_color;
     float line_thickness[2];
     float float_offset[2];
     uint32_t _pad1[1];

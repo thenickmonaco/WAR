@@ -505,17 +505,29 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {
             .location = 8,
             .binding = 0,
+            .format = VK_FORMAT_R32_SFLOAT,
+            .offset = offsetof(quad_vertex, outline_thickness),
+        },
+        {
+            .location = 9,
+            .binding = 0,
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .offset = offsetof(quad_vertex, outline_color),
+        },
+        {
+            .location = 10,
+            .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(quad_vertex, line_thickness),
         },
         {
-            .location = 9,
+            .location = 11,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = offsetof(quad_vertex, float_offset),
         },
     };
-    uint32_t num_quad_vertex_attrs = 10;
+    uint32_t num_quad_vertex_attrs = 12;
     VkVertexInputAttributeDescription quad_instance_attrs[] = {
         {.location = num_quad_vertex_attrs,
          .binding = 1,

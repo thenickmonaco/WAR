@@ -39,6 +39,9 @@ layout(location = 0) out vec4 frag_color;
 layout(location = 1) out float frag_outline_thickness;
 layout(location = 2) out vec4 frag_outline_color;
 layout(location = 3) out vec2 frag_local_pos;
+layout(location = 4) out vec2 frag_quad_size;
+layout(location = 5) out vec2 frag_corner_sign;
+layout(location = 6) out vec2 frag_pc_cell_size;
 
 layout(push_constant) uniform PushConstants {
     layout(offset = 0) uvec2 bottom_left;
@@ -82,6 +85,9 @@ void main() {
 
     frag_color = in_color;
     frag_outline_color = in_outline_color;
-    frag_outline_thickness = in_outline_thickness;
-    frag_local_pos = vec2(in_corner);
+    frag_outline_thickness = in_outline_thickness * pc.cell_size.x;
+    frag_local_pos = vec2(in_corner) * vec2(cursor_x, pc.cell_size.y);
+    frag_quad_size = vec2(cursor_x, pc.cell_size.y);
+    frag_corner_sign = corner_sign;
+    frag_pc_cell_size = pc.cell_size;
 }

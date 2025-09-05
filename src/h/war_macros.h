@@ -656,6 +656,40 @@ war_note_quads_delete(war_note_quads* note_quads,
     }
 }
 
+static inline void
+war_note_quads_delete_at_i(war_note_quads* note_quads,
+                           uint32_t* note_quads_count,
+                           uint8_t* window_render_to_audio_ring_buffer,
+                           uint8_t* write_to_audio_index,
+                           uint32_t i_delete) {
+    if (*note_quads_count == 0 || i_delete >= *note_quads_count) return;
+
+    // Swap-back delete
+    uint32_t last = *note_quads_count - 1;
+
+    // Swap the element to delete with the last element
+    note_quads->col[i_delete] = note_quads->col[last];
+    note_quads->row[i_delete] = note_quads->row[last];
+    note_quads->sub_col[i_delete] = note_quads->sub_col[last];
+    note_quads->sub_cells_col[i_delete] = note_quads->sub_cells_col[last];
+    note_quads->cursor_width_whole_number[i_delete] =
+        note_quads->cursor_width_whole_number[last];
+    note_quads->cursor_width_sub_col[i_delete] =
+        note_quads->cursor_width_sub_col[last];
+    note_quads->cursor_width_sub_cells[i_delete] =
+        note_quads->cursor_width_sub_cells[last];
+    note_quads->color[i_delete] = note_quads->color[last];
+    note_quads->outline_color[i_delete] = note_quads->outline_color[last];
+    note_quads->strength[i_delete] = note_quads->strength[last];
+    note_quads->voice[i_delete] = note_quads->voice[last];
+    note_quads->hidden[i_delete] = note_quads->hidden[last];
+    note_quads->mute[i_delete] = note_quads->mute[last];
+
+    (*note_quads_count)--;
+
+    // TODO: send delete command to audio thread if needed
+}
+
 static inline void war_note_quads_in_view(war_note_quads* note_quads,
                                           uint32_t note_quads_count,
                                           uint32_t bottom_row,

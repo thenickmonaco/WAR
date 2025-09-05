@@ -400,6 +400,9 @@ void* war_window_render(void* args) {
     assert(note_quads_p <= (uint8_t*)note_quads_block + note_quads_total_size);
     uint32_t note_quads_count = 0;
 
+    uint32_t* notes_in_view = malloc(sizeof(uint32_t) * max_note_quads);
+    uint32_t notes_in_view_count = 0;
+
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
 
@@ -842,8 +845,11 @@ void* war_window_render(void* args) {
                 const uint32_t black_hex = 0xFF000000;
                 const uint32_t full_white_hex = 0xFFFFFFFF;
                 const float default_horizontal_line_width = 0.018f;
-                const float default_vertical_line_width = 0.018f;
-                const float note_outline_thickness = 0.2f;
+                const float default_vertical_line_width =
+                    0.018f; // default: 0.018
+                const float note_outline_thickness =
+                    0.027f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
+                            // sub_cursor right outline from disappearing
                 // single buffer
                 assert(vulkan_context.current_frame == 0);
                 vkWaitForFences(
@@ -1699,26 +1705,19 @@ void* war_window_render(void* args) {
                     current_pipeline = PIPELINE_QUAD;
                 }
                 // draw notes
-                uint32_t rows_in_view =
-                    input_cmd_context.top_row - input_cmd_context.bottom_row;
-                uint32_t cols_in_view =
-                    input_cmd_context.right_col - input_cmd_context.left_col;
-                uint32_t view_size = rows_in_view * cols_in_view;
-                uint32_t* notes_in_view_indices =
-                    malloc(sizeof(uint32_t) * view_size);
-                uint32_t notes_in_view_indices_count = 0;
+                notes_in_view_count = 0;
                 war_note_quads_in_view(&note_quads,
                                        note_quads_count,
                                        input_cmd_context.bottom_row,
                                        input_cmd_context.top_row,
                                        input_cmd_context.left_col,
                                        input_cmd_context.right_col,
-                                       notes_in_view_indices,
-                                       &notes_in_view_indices_count);
-                for (uint32_t i = 0; i < notes_in_view_indices_count; i++) {
+                                       notes_in_view,
+                                       &notes_in_view_count);
+                for (uint32_t i = 0; i < notes_in_view_count; i++) {
                     uint32_t i_verts = i * 4;
                     uint32_t i_indices = i * 6;
-                    uint32_t i_in_view = notes_in_view_indices[i];
+                    uint32_t i_in_view = notes_in_view[i];
                     if (!note_quads.hidden[i_in_view]) {
                         war_make_quad(
                             dynamic_quad_verts,
@@ -1757,8 +1756,8 @@ void* war_window_render(void* args) {
                 war_make_quad(
                     dynamic_quad_verts,
                     dynamic_quad_indices,
-                    notes_in_view_indices_count * 4,
-                    notes_in_view_indices_count * 6,
+                    notes_in_view_count * 4,
+                    notes_in_view_count * 6,
                     (uint32_t[2]){input_cmd_context.col, input_cmd_context.row},
                     (uint32_t[2]){input_cmd_context.sub_col,
                                   input_cmd_context.sub_row},
@@ -1774,10 +1773,8 @@ void* war_window_render(void* args) {
                     (float[2]){0.0f, 0.0f},
                     (float[2]){0.0f, 0.0f},
                     white_hex);
-                size_t num_dynamic_quad_verts =
-                    (notes_in_view_indices_count + 1) * 4;
-                size_t num_dynamic_quad_indices =
-                    (notes_in_view_indices_count + 1) * 6;
+                size_t num_dynamic_quad_verts = (notes_in_view_count + 1) * 4;
+                size_t num_dynamic_quad_indices = (notes_in_view_count + 1) * 6;
                 memcpy(vulkan_context.quads_vertex_buffer_mapped +
                            quads_vertex_offset,
                        dynamic_quad_verts,
@@ -2801,6 +2798,12 @@ void* war_window_render(void* args) {
                             {.keysym = KEYSYM_RETURN, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_d, .mod = 0},
+                            {.keysym = XKB_KEY_i, .mod = 0},
+                            {.keysym = XKB_KEY_v, .mod = 0},
+                            {0},
+                        },
                     };
                 void* key_labels[NUM_SEQUENCES][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2843,6 +2846,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_s},
                     {&&cmd_normal_z},
                     {&&cmd_normal_return},
+                    {&&cmd_normal_div},
                 };
                 size_t state_counter = 1; // 0 = root
                 for (size_t seq_idx = 0; seq_idx < NUM_SEQUENCES; seq_idx++) {
@@ -4007,7 +4011,7 @@ void* war_window_render(void* args) {
                                    input_cmd_context.cursor_width_whole_number,
                                    input_cmd_context.cursor_width_sub_cells,
                                    red_hex,
-                                   white_hex,
+                                   full_white_hex,
                                    100.0f,
                                    VOICE_GRAND_PIANO,
                                    false,
@@ -4031,7 +4035,7 @@ void* war_window_render(void* args) {
                                    input_cmd_context.cursor_width_whole_number,
                                    input_cmd_context.cursor_width_sub_cells,
                                    red_hex,
-                                   white_hex,
+                                   full_white_hex,
                                    100.0f,
                                    VOICE_GRAND_PIANO,
                                    false,
@@ -4056,11 +4060,37 @@ void* war_window_render(void* args) {
                     input_cmd_context.cursor_width_whole_number,
                     input_cmd_context.cursor_width_sub_cells,
                     red_hex,
-                    white_hex,
+                    full_white_hex,
                     100.0f,
                     VOICE_GRAND_PIANO,
                     false,
                     false);
+                memset(input_cmd_context.input_sequence,
+                       0,
+                       sizeof(input_cmd_context.input_sequence));
+                input_cmd_context.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_div:
+                call_carmack("cmd_normal_div");
+                notes_in_view_count = 0;
+                war_note_quads_in_view(&note_quads,
+                                       note_quads_count,
+                                       input_cmd_context.bottom_row,
+                                       input_cmd_context.top_row,
+                                       input_cmd_context.left_col,
+                                       input_cmd_context.right_col,
+                                       notes_in_view,
+                                       &notes_in_view_count);
+                for (int32_t i = (int32_t)notes_in_view_count - 1; i >= 0;
+                     i--) {
+                    uint32_t i_delete = notes_in_view[i];
+                    war_note_quads_delete_at_i(
+                        &note_quads,
+                        &note_quads_count,
+                        window_render_to_audio_ring_buffer,
+                        write_to_audio_index,
+                        i_delete);
+                }
                 memset(input_cmd_context.input_sequence,
                        0,
                        sizeof(input_cmd_context.input_sequence));

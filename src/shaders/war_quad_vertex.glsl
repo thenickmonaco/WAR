@@ -57,14 +57,10 @@ layout(push_constant) uniform PushConstants {
 } pc;
 
 void main() {
-    vec2 corner_sign = vec2((in_corner.x == 0u ? -1.0 : 1.0), // left -> -1, right -> +1
-         (in_corner.y == 0u ? -1.0 : 1.0) // bottom -> -1, top -> +1
+    vec2 corner_sign = vec2(
+        (in_corner.x == 0u ? (in_line_thickness.x == 0.0 ? 0.0 : -1.0) : 1.0),
+        (in_corner.y == 0u ? (in_line_thickness.y == 0.0 ? 0.0 : -1.0) : 1.0)
     );
-    if (in_line_thickness.x == 0.0 && in_line_thickness.y == 0.0) {
-        corner_sign = vec2((in_corner.x == 0u ? 0.0 : 1.0), // left -> 0, right -> +1
-             (in_corner.y == 0u ? 0.0 : 1.0) // bottom -> 0, top -> +1
-        );
-    }
     uvec2 local_cell = (in_col_row - pc.bottom_left) + pc.cell_offsets;
     vec2 pixel_pos = vec2(float(local_cell.x) + float(in_sub_col_row.x) / float(in_sub_cells.x), float(local_cell.y) + float(in_sub_col_row.y) / float(in_sub_cells.y)) * pc.cell_size;
 

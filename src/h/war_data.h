@@ -48,7 +48,12 @@ enum war_mods {
 
 enum war_keysyms {
     KEYSYM_ESCAPE = 256,
+    KEYSYM_LEFT = 257,
+    KEYSYM_UP = 258,
+    KEYSYM_RIGHT = 259,
+    KEYSYM_DOWN = 260,
     KEYSYM_RETURN = 261,
+    KEYSYM_SPACE = 262,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -86,6 +91,7 @@ enum war_misc {
     MAX_DIGITS = 10,
     NUM_STATUS_BARS = 3,
     MAX_GRIDLINE_SPLITS = 4,
+    MAX_VIEWS_SAVED = 8,
 };
 
 enum war_hud {
@@ -95,7 +101,7 @@ enum war_hud {
 };
 
 enum war_modes {
-    MODE_COUNT = 8,
+    MODE_COUNT = 9,
     MODE_NORMAL = 0,
     MODE_VISUAL = 1,
     MODE_VISUAL_LINE = 2,
@@ -104,13 +110,14 @@ enum war_modes {
     MODE_COMMAND = 5,
     MODE_M = 6,
     MODE_O = 7,
+    MODE_VIEWS_SAVED = 8,
 };
 
 enum war_fsm {
     MAX_NODES = 1024,
-    MAX_SEQUENCE_LENGTH = 6,
+    MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    NUM_SEQUENCES = 39,
+    SEQUENCE_COUNT = 90,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -175,6 +182,7 @@ typedef struct war_note {
 
 // SoA for main thread
 typedef struct war_note_quads {
+    uint64_t* timestamp;
     uint32_t* col;
     uint32_t* row;
     uint32_t* sub_col;
@@ -191,7 +199,21 @@ typedef struct war_note_quads {
     uint32_t* mute;
 } war_note_quads;
 
+typedef struct war_views {
+    uint32_t col[MAX_VIEWS_SAVED];
+    uint32_t row[MAX_VIEWS_SAVED];
+    uint32_t left_col[MAX_VIEWS_SAVED];
+    uint32_t right_col[MAX_VIEWS_SAVED];
+    uint32_t bottom_row[MAX_VIEWS_SAVED];
+    uint32_t top_row[MAX_VIEWS_SAVED];
+} war_views;
+
+typedef struct war_warpoon {
+    uint32_t col;
+} war_warpoon;
+
 typedef struct war_input_cmd_context {
+    uint64_t now;
     uint32_t col;
     uint32_t row;
     uint32_t sub_col;
@@ -260,6 +282,10 @@ typedef struct war_input_cmd_context {
     uint32_t mode;
     char input_sequence[MAX_SEQUENCE_LENGTH];
     uint8_t num_chars_in_sequence;
+    war_views views_saved;
+    uint32_t views_saved_count;
+    war_note_quads note_quads;
+    uint32_t note_quads_count;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {

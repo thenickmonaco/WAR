@@ -41,14 +41,14 @@
 
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
-static inline uint64_t get_monotonic_time_us(void) {
+static inline uint64_t war_get_monotonic_time_us(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
 
-static inline rgba_t unpack_abgr(uint32_t hex_color) {
-    rgba_t color;
+static inline war_rgba_t war_unpack_abgr(uint32_t hex_color) {
+    war_rgba_t color;
     color.r = ((hex_color >> 0) & 0xFF) / 255.0f;  // Red
     color.g = ((hex_color >> 8) & 0xFF) / 255.0f;  // Green
     color.b = ((hex_color >> 16) & 0xFF) / 255.0f; // Blue
@@ -56,30 +56,30 @@ static inline rgba_t unpack_abgr(uint32_t hex_color) {
     return color;
 }
 
-static inline int32_t to_fixed(float f) { return (int32_t)(f * 256.0f); }
+static inline int32_t war_to_fixed(float f) { return (int32_t)(f * 256.0f); }
 
-static inline uint32_t pad_to_scale(float value, uint32_t scale) {
+static inline uint32_t war_pad_to_scale(float value, uint32_t scale) {
     uint32_t rounded = (uint32_t)(value + 0.5f);
     return (rounded + scale - 1) / scale * scale;
 }
 
-static inline uint64_t read_le64(const uint8_t* p) {
+static inline uint64_t war_read_le64(const uint8_t* p) {
     return ((uint64_t)p[0]) | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
            ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) |
            ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) |
            ((uint64_t)p[7] << 56);
 }
 
-static inline uint32_t read_le32(const uint8_t* p) {
+static inline uint32_t war_read_le32(const uint8_t* p) {
     return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);
 }
 
-static inline uint16_t read_le16(const uint8_t* p) {
+static inline uint16_t war_read_le16(const uint8_t* p) {
     return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8);
 }
 
-static inline void write_le64(uint8_t* p, uint64_t v) {
+static inline void war_write_le64(uint8_t* p, uint64_t v) {
     p[0] = (uint8_t)(v);
     p[1] = (uint8_t)(v >> 8);
     p[2] = (uint8_t)(v >> 16);
@@ -90,27 +90,27 @@ static inline void write_le64(uint8_t* p, uint64_t v) {
     p[7] = (uint8_t)(v >> 56);
 }
 
-static inline void write_le32(uint8_t* p, uint32_t v) {
+static inline void war_write_le32(uint8_t* p, uint32_t v) {
     p[0] = (uint8_t)(v);
     p[1] = (uint8_t)(v >> 8);
     p[2] = (uint8_t)(v >> 16);
     p[3] = (uint8_t)(v >> 24);
 }
 
-static inline void write_le16(uint8_t* p, uint16_t v) {
+static inline void war_write_le16(uint8_t* p, uint16_t v) {
     p[0] = (uint8_t)(v);
     p[1] = (uint8_t)(v >> 8);
 }
 
 static inline uint32_t
-clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+war_clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t sum = (uint64_t)a + b;
     uint64_t mask = -(sum > max_value);
     return (uint32_t)((sum & ~mask) | ((uint64_t)max_value & mask));
 }
 
 static inline uint32_t
-clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
+war_clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
     uint32_t diff = a - b;
     uint32_t underflow_mask = -(a < b);
     uint32_t below_min_mask = -(diff < min_value);
@@ -120,20 +120,21 @@ clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
 }
 
 static inline uint32_t
-clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+war_clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t prod = (uint64_t)a * (uint64_t)b;
     uint64_t mask = -(prod > max_value);
     return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
 }
 
 static inline uint32_t
-clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
+war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
     a = a < min_value ? min_value : a;
     a = a > max_value ? max_value : a;
     return a;
 }
 
-static inline bool state_is_prefix(uint16_t state_index, war_fsm_state* fsm) {
+static inline bool war_state_is_prefix(uint16_t state_index,
+                                       war_fsm_state* fsm) {
     for (int k = 0; k < 256; k++) {
         for (int m = 0; m < 16; m++) {
             if (fsm[state_index].next_state[k][m] != 0) { return true; }
@@ -142,9 +143,11 @@ static inline bool state_is_prefix(uint16_t state_index, war_fsm_state* fsm) {
     return false;
 }
 
-static inline uint64_t align64(uint64_t value) { return (value + 63) & ~63ULL; }
+static inline uint64_t war_align64(uint64_t value) {
+    return (value + 63) & ~63ULL;
+}
 
-static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
+static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
         (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) {
         return (uint16_t)ks;
@@ -241,7 +244,7 @@ static inline uint16_t normalize_keysym(xkb_keysym_t ks) {
     }
 }
 
-static inline char keysym_to_key(xkb_keysym_t ks, uint8_t mod) {
+static inline char war_keysym_to_key(xkb_keysym_t ks, uint8_t mod) {
     char lowercase = ks;
     int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
     // Letters a-z or A-Z -> always lowercase
@@ -278,18 +281,18 @@ int war_compare_desc_uint32(const void* a, const void* b) {
     return 0;
 }
 
-static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
-                                     uint16_t* sdf_indices,
-                                     size_t i_verts,
-                                     size_t i_indices,
-                                     uint32_t bottom_left_corner[2],
+static inline void war_make_sdf_quad(war_text_vertex* text_vertices,
+                                     uint16_t* text_indices,
+                                     uint32_t* text_vertices_count,
+                                     uint32_t* text_indices_count,
+                                     float bottom_left_pos[3],
                                      war_glyph_info glyph_info,
                                      float thickness,
                                      float feather,
                                      uint32_t color) {
-    sdf_verts[i_verts] = (sdf_vertex){
+    text_vertices[*text_vertices_count] = (war_text_vertex){
         .corner = {0, 0},
-        .pos = {bottom_left_corner[0], bottom_left_corner[1]},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[3]},
         .uv = {glyph_info.uv_x0, glyph_info.uv_y1},
         .glyph_size = {glyph_info.width, glyph_info.height},
         .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
@@ -299,9 +302,9 @@ static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
         .feather = feather,
         .color = color,
     };
-    sdf_verts[i_verts + 1] = (sdf_vertex){
+    text_vertices[*text_vertices_count + 1] = (war_text_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_corner[0] + 1, bottom_left_corner[1]},
+        .pos = {bottom_left_pos[0] + 1, bottom_left_pos[1], bottom_left_pos[3]},
         .uv = {glyph_info.uv_x1, glyph_info.uv_y1},
         .glyph_size = {glyph_info.width, glyph_info.height},
         .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
@@ -311,9 +314,11 @@ static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
         .feather = feather,
         .color = color,
     };
-    sdf_verts[i_verts + 2] = (sdf_vertex){
+    text_vertices[*text_vertices_count + 2] = (war_text_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_corner[0] + 1, bottom_left_corner[1] + 1},
+        .pos = {bottom_left_pos[0] + 1,
+                bottom_left_pos[1] + 1,
+                bottom_left_pos[3]},
         .uv = {glyph_info.uv_x1, glyph_info.uv_y0},
         .glyph_size = {glyph_info.width, glyph_info.height},
         .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
@@ -323,9 +328,9 @@ static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
         .feather = feather,
         .color = color,
     };
-    sdf_verts[i_verts + 3] = (sdf_vertex){
+    text_vertices[*text_vertices_count + 3] = (war_text_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_corner[0], bottom_left_corner[1] + 1},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1] + 1, bottom_left_pos[3]},
         .uv = {glyph_info.uv_x0, glyph_info.uv_y0},
         .glyph_size = {glyph_info.width, glyph_info.height},
         .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
@@ -335,21 +340,21 @@ static inline void war_make_sdf_quad(sdf_vertex* sdf_verts,
         .feather = feather,
         .color = color,
     };
-    sdf_indices[i_indices] = i_verts;
-    sdf_indices[i_indices + 1] = i_verts + 1;
-    sdf_indices[i_indices + 2] = i_verts + 2;
-    sdf_indices[i_indices + 3] = i_verts + 2;
-    sdf_indices[i_indices + 4] = i_verts + 3;
-    sdf_indices[i_indices + 5] = i_verts;
+    text_indices[*text_indices_count] = *text_vertices_count;
+    text_indices[*text_indices_count + 1] = *text_vertices_count + 1;
+    text_indices[*text_indices_count + 2] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 3] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 4] = *text_vertices_count + 3;
+    text_indices[*text_indices_count + 5] = *text_vertices_count;
 }
 
-static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
-                                           uint16_t* sdf_indices,
-                                           size_t i_verts,
-                                           size_t i_indices) {
-    sdf_verts[i_verts] = (sdf_vertex){
+static inline void war_make_blank_sdf_quad(war_text_vertex* text_vertices,
+                                           uint16_t* text_indices,
+                                           uint32_t* text_vertices_count,
+                                           uint32_t* text_indices_count) {
+    text_vertices[*text_vertices_count] = (war_text_vertex){
         .corner = {0, 0},
-        .pos = {0, 0},
+        .pos = {0, 0, 0},
         .uv = {0, 0},
         .glyph_size = {0, 0},
         .glyph_bearing = {0, 0},
@@ -359,9 +364,9 @@ static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
         .feather = 0,
         .color = 0,
     };
-    sdf_verts[i_verts + 1] = (sdf_vertex){
+    text_vertices[*text_vertices_count + 1] = (war_text_vertex){
         .corner = {0, 0},
-        .pos = {0, 0},
+        .pos = {0, 0, 0},
         .uv = {0, 0},
         .glyph_size = {0, 0},
         .glyph_bearing = {0, 0},
@@ -371,9 +376,9 @@ static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
         .feather = 0,
         .color = 0,
     };
-    sdf_verts[i_verts + 2] = (sdf_vertex){
+    text_vertices[*text_vertices_count + 2] = (war_text_vertex){
         .corner = {0, 0},
-        .pos = {0, 0},
+        .pos = {0, 0, 0},
         .uv = {0, 0},
         .glyph_size = {0, 0},
         .glyph_bearing = {0, 0},
@@ -383,9 +388,9 @@ static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
         .feather = 0,
         .color = 0,
     };
-    sdf_verts[i_verts + 3] = (sdf_vertex){
+    text_vertices[*text_vertices_count + 3] = (war_text_vertex){
         .corner = {0, 0},
-        .pos = {0, 0},
+        .pos = {0, 0, 0},
         .uv = {0, 0},
         .glyph_size = {0, 0},
         .glyph_bearing = {0, 0},
@@ -395,173 +400,125 @@ static inline void war_make_blank_sdf_quad(sdf_vertex* sdf_verts,
         .feather = 0,
         .color = 0,
     };
-    sdf_indices[i_indices] = i_verts;
-    sdf_indices[i_indices + 1] = i_verts + 1;
-    sdf_indices[i_indices + 2] = i_verts + 2;
-    sdf_indices[i_indices + 3] = i_verts + 2;
-    sdf_indices[i_indices + 4] = i_verts + 3;
-    sdf_indices[i_indices + 5] = i_verts;
+    text_indices[*text_indices_count] = *text_vertices_count;
+    text_indices[*text_indices_count + 1] = *text_vertices_count + 1;
+    text_indices[*text_indices_count + 2] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 3] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 4] = *text_vertices_count + 3;
+    text_indices[*text_indices_count + 5] = *text_vertices_count;
 }
 
-static inline void war_make_quad(quad_vertex* quad_verts,
+static inline void war_make_quad(war_quad_vertex* quad_vertices,
                                  uint16_t* quad_indices,
-                                 size_t i_verts,
-                                 size_t i_indices,
-                                 uint32_t bottom_left_corner[2],
-                                 uint32_t sub_col_row[2],
-                                 uint32_t sub_cells[2],
-                                 uint32_t cursor_size_sub_col_row[2],
-                                 uint32_t cursor_size_whole_number[2],
-                                 uint32_t cursor_size_sub_cells[2],
-                                 uint32_t span[2],
+                                 uint32_t* vertices_count,
+                                 uint32_t* indices_count,
+                                 float bottom_left_pos[3],
+                                 float span[2],
+                                 uint32_t color,
                                  float outline_thickness,
                                  uint32_t outline_color,
                                  float line_thickness[2],
-                                 float float_offset[2],
-                                 uint32_t color) {
-    quad_verts[i_verts] = (quad_vertex){
+                                 uint32_t flags) {
+    quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
-        .sub_col_row = {sub_col_row[0], sub_col_row[1]},
-        .sub_cells = {sub_cells[0], sub_cells[1]},
-        .col_row = {bottom_left_corner[0], bottom_left_corner[1]},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[3]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
         .line_thickness = {line_thickness[0], line_thickness[1]},
-        .float_offset = {float_offset[0], float_offset[1]},
-        .cursor_size_sub_col_row = {cursor_size_sub_col_row[0],
-                                    cursor_size_sub_col_row[1]},
-        .cursor_size_whole_number = {cursor_size_whole_number[0],
-                                     cursor_size_whole_number[1]},
-        .cursor_size_sub_cells = {cursor_size_sub_cells[0],
-                                  cursor_size_sub_cells[1]},
+        .flags = flags,
     };
-    quad_verts[i_verts + 1] = (quad_vertex){
+    quad_vertices[*vertices_count + 1] = (war_quad_vertex){
         .corner = {1, 0},
-        .sub_col_row = {sub_col_row[0], sub_col_row[1]},
-        .sub_cells = {sub_cells[0], sub_cells[1]},
-        .col_row = {bottom_left_corner[0] + span[0], bottom_left_corner[1]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[3]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
         .line_thickness = {line_thickness[0], line_thickness[1]},
-        .float_offset = {float_offset[0], float_offset[1]},
-        .cursor_size_sub_col_row = {cursor_size_sub_col_row[0],
-                                    cursor_size_sub_col_row[1]},
-        .cursor_size_whole_number = {cursor_size_whole_number[0],
-                                     cursor_size_whole_number[1]},
-        .cursor_size_sub_cells = {cursor_size_sub_cells[0],
-                                  cursor_size_sub_cells[1]},
+        .flags = flags,
     };
-    quad_verts[i_verts + 2] = (quad_vertex){
+    quad_vertices[*vertices_count + 2] = (war_quad_vertex){
         .corner = {1, 1},
-        .sub_col_row = {sub_col_row[0], sub_col_row[1]},
-        .sub_cells = {sub_cells[0], sub_cells[1]},
-        .col_row = {bottom_left_corner[0] + span[0],
-                    bottom_left_corner[1] + span[1]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[3]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
         .line_thickness = {line_thickness[0], line_thickness[1]},
-        .float_offset = {float_offset[0], float_offset[1]},
-        .cursor_size_sub_col_row = {cursor_size_sub_col_row[0],
-                                    cursor_size_sub_col_row[1]},
-        .cursor_size_whole_number = {cursor_size_whole_number[0],
-                                     cursor_size_whole_number[1]},
-        .cursor_size_sub_cells = {cursor_size_sub_cells[0],
-                                  cursor_size_sub_cells[1]},
+        .flags = flags,
     };
-    quad_verts[i_verts + 3] = (quad_vertex){
+    quad_vertices[*vertices_count + 3] = (war_quad_vertex){
         .corner = {0, 1},
-        .sub_col_row = {sub_col_row[0], sub_col_row[1]},
-        .sub_cells = {sub_cells[0], sub_cells[1]},
-        .col_row = {bottom_left_corner[0], bottom_left_corner[1] + span[1]},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[3]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
         .line_thickness = {line_thickness[0], line_thickness[1]},
-        .float_offset = {float_offset[0], float_offset[1]},
-        .cursor_size_sub_col_row = {cursor_size_sub_col_row[0],
-                                    cursor_size_sub_col_row[1]},
-        .cursor_size_whole_number = {cursor_size_whole_number[0],
-                                     cursor_size_whole_number[1]},
-        .cursor_size_sub_cells = {cursor_size_sub_cells[0],
-                                  cursor_size_sub_cells[1]},
+        .flags = flags,
     };
-    quad_indices[i_indices] = i_verts;
-    quad_indices[i_indices + 1] = i_verts + 1;
-    quad_indices[i_indices + 2] = i_verts + 2;
-    quad_indices[i_indices + 3] = i_verts + 2;
-    quad_indices[i_indices + 4] = i_verts + 3;
-    quad_indices[i_indices + 5] = i_verts;
+    quad_indices[*indices_count] = *vertices_count;
+    quad_indices[*indices_count + 1] = *vertices_count + 1;
+    quad_indices[*indices_count + 2] = *vertices_count + 2;
+    quad_indices[*indices_count + 3] = *vertices_count + 2;
+    quad_indices[*indices_count + 4] = *vertices_count + 3;
+    quad_indices[*indices_count + 5] = *vertices_count;
+    (*vertices_count) += 4;
+    (*indices_count) += 6;
 }
 
-static inline void war_make_blank_quad(quad_vertex* quad_verts,
+static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
                                        uint16_t* quad_indices,
-                                       size_t i_verts,
-                                       size_t i_indices) {
-    quad_verts[i_verts] = (quad_vertex){
-        .col_row = {0, 0},
-        .sub_col_row = {0, 0},
-        .sub_cells = {0, 0},
-        .color = 0,
+                                       uint32_t* vertices_count,
+                                       uint32_t* indices_count) {
+    quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
         .line_thickness = {0, 0},
-        .float_offset = {0, 0},
-        .cursor_size_sub_col_row = {0, 0},
-        .cursor_size_whole_number = {0, 0},
-        .cursor_size_sub_cells = {0, 0},
+        .flags = 0,
     };
-    quad_verts[i_verts + 1] = (quad_vertex){
-        .col_row = {0, 0},
-        .sub_col_row = {0, 0},
-        .sub_cells = {0, 0},
-        .color = 0,
+    quad_vertices[*vertices_count + 1] = (war_quad_vertex){
         .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
         .line_thickness = {0, 0},
-        .float_offset = {0, 0},
-        .cursor_size_sub_col_row = {0, 0},
-        .cursor_size_whole_number = {0, 0},
-        .cursor_size_sub_cells = {0, 0},
+        .flags = 0,
     };
-    quad_verts[i_verts + 2] = (quad_vertex){
-        .col_row = {0, 0},
-        .sub_col_row = {0, 0},
-        .sub_cells = {0, 0},
-        .color = 0,
+    quad_vertices[*vertices_count + 2] = (war_quad_vertex){
         .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
         .line_thickness = {0, 0},
-        .float_offset = {0, 0},
-        .cursor_size_sub_col_row = {0, 0},
-        .cursor_size_whole_number = {0, 0},
-        .cursor_size_sub_cells = {0, 0},
+        .flags = 0,
     };
-    quad_verts[i_verts + 3] = (quad_vertex){
-        .col_row = {0, 0},
-        .sub_col_row = {0, 0},
-        .sub_cells = {0, 0},
-        .color = 0,
+    quad_vertices[*vertices_count + 3] = (war_quad_vertex){
         .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
         .line_thickness = {0, 0},
-        .float_offset = {0, 0},
-        .cursor_size_sub_col_row = {0, 0},
-        .cursor_size_whole_number = {0, 0},
-        .cursor_size_sub_cells = {0, 0},
+        .flags = 0,
     };
-    quad_indices[i_indices] = i_verts;
-    quad_indices[i_indices + 1] = i_verts + 1;
-    quad_indices[i_indices + 2] = i_verts + 2;
-    quad_indices[i_indices + 3] = i_verts + 2;
-    quad_indices[i_indices + 4] = i_verts + 3;
-    quad_indices[i_indices + 5] = i_verts;
+    quad_indices[*indices_count] = *vertices_count;
+    quad_indices[*indices_count + 1] = *vertices_count + 1;
+    quad_indices[*indices_count + 2] = *vertices_count + 2;
+    quad_indices[*indices_count + 3] = *vertices_count + 2;
+    quad_indices[*indices_count + 4] = *vertices_count + 3;
+    quad_indices[*indices_count + 5] = *vertices_count;
+    (*vertices_count) += 4;
+    (*indices_count) += 6;
 }
 
 static inline void

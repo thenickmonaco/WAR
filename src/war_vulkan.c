@@ -429,7 +429,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkPushConstantRange push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = sizeof(quad_push_constants),
+        .size = sizeof(war_quad_push_constants),
     };
     VkPipelineLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -446,105 +446,80 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     VkVertexInputBindingDescription quad_vertex_binding = {
         .binding = 0,
-        .stride = sizeof(quad_vertex),
+        .stride = sizeof(war_quad_vertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
     VkVertexInputBindingDescription quad_instance_binding = {
         .binding = 1,
-        .stride = sizeof(quad_instance),
+        .stride = sizeof(war_quad_instance),
         .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
     };
     VkVertexInputAttributeDescription quad_vertex_attrs[] = {
-        {.location = 0,
-         .binding = 0,
-         .format = VK_FORMAT_R32G32_UINT,
-         .offset = offsetof(quad_vertex, col_row)},
-        {
+        (VkVertexInputAttributeDescription){
+            .location = 0,
+            .binding = 0,
+            .offset = offsetof(war_quad_vertex, corner),
+            .format = VK_FORMAT_R32G32_SFLOAT,
+        },
+        (VkVertexInputAttributeDescription){
             .location = 1,
             .binding = 0,
-            .format = VK_FORMAT_R32G32_UINT,
-            .offset = offsetof(quad_vertex, sub_col_row),
+            .offset = offsetof(war_quad_vertex, pos),
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
         },
-        {
+        (VkVertexInputAttributeDescription){
             .location = 2,
             .binding = 0,
-            .format = VK_FORMAT_R32G32_UINT,
-            .offset = offsetof(quad_vertex, sub_cells),
+            .offset = offsetof(war_quad_vertex, color),
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
         },
-        {
+        (VkVertexInputAttributeDescription){
             .location = 3,
             .binding = 0,
-            .format = VK_FORMAT_R32G32_UINT,
-            .offset = offsetof(quad_vertex, cursor_size_sub_col_row),
+            .offset = offsetof(war_quad_vertex, outline_thickness),
+            .format = VK_FORMAT_R32_SFLOAT,
         },
-        {
+        (VkVertexInputAttributeDescription){
             .location = 4,
             .binding = 0,
-            .format = VK_FORMAT_R32G32_UINT,
-            .offset = offsetof(quad_vertex, cursor_size_whole_number),
+            .offset = offsetof(war_quad_vertex, outline_color),
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
         },
-        {
+        (VkVertexInputAttributeDescription){
             .location = 5,
             .binding = 0,
-            .format = VK_FORMAT_R32G32_UINT,
-            .offset = offsetof(quad_vertex, cursor_size_sub_cells),
+            .offset = offsetof(war_quad_vertex, line_thickness),
+            .format = VK_FORMAT_R32_SFLOAT,
         },
-
-        {
+        (VkVertexInputAttributeDescription){
             .location = 6,
             .binding = 0,
-            .format = VK_FORMAT_R8G8B8A8_UNORM,
-            .offset = offsetof(quad_vertex, color),
-        },
-        {
-            .location = 7,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32_UINT,
-            .offset = offsetof(quad_vertex, corner),
-        },
-        {
-            .location = 8,
-            .binding = 0,
-            .format = VK_FORMAT_R32_SFLOAT,
-            .offset = offsetof(quad_vertex, outline_thickness),
-        },
-        {
-            .location = 9,
-            .binding = 0,
-            .format = VK_FORMAT_R8G8B8A8_UNORM,
-            .offset = offsetof(quad_vertex, outline_color),
-        },
-        {
-            .location = 10,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = offsetof(quad_vertex, line_thickness),
-        },
-        {
-            .location = 11,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = offsetof(quad_vertex, float_offset),
+            .offset = offsetof(war_quad_vertex, flags),
+            .format = VK_FORMAT_R32_UINT,
         },
     };
-    uint32_t num_quad_vertex_attrs = 12;
+    uint32_t num_quad_vertex_attrs = 6;
     VkVertexInputAttributeDescription quad_instance_attrs[] = {
-        {.location = num_quad_vertex_attrs,
-         .binding = 1,
-         .format = VK_FORMAT_R32_UINT,
-         .offset = offsetof(quad_instance, x)},
-        {.location = num_quad_vertex_attrs + 1,
-         .binding = 1,
-         .format = VK_FORMAT_R32_UINT,
-         .offset = offsetof(quad_instance, y)},
-        {.location = num_quad_vertex_attrs + 2,
-         .binding = 1,
-         .format = VK_FORMAT_R32_UINT,
-         .offset = offsetof(quad_instance, color)},
-        {.location = num_quad_vertex_attrs + 3,
-         .binding = 1,
-         .format = VK_FORMAT_R32_UINT,
-         .offset = offsetof(quad_instance, flags)},
+        (VkVertexInputAttributeDescription){.location = num_quad_vertex_attrs,
+                                            .binding = 1,
+                                            .format = VK_FORMAT_R32_UINT,
+                                            .offset =
+                                                offsetof(war_quad_instance, x)},
+        (VkVertexInputAttributeDescription){
+            .location = num_quad_vertex_attrs + 1,
+            .binding = 1,
+            .format = VK_FORMAT_R32_UINT,
+            .offset = offsetof(war_quad_instance, y)},
+        (VkVertexInputAttributeDescription){
+            .location = num_quad_vertex_attrs + 2,
+            .binding = 1,
+            .format = VK_FORMAT_R32_UINT,
+            .offset = offsetof(war_quad_instance, color)},
+        (VkVertexInputAttributeDescription){
+            .location = num_quad_vertex_attrs + 3,
+            .binding = 1,
+            .format = VK_FORMAT_R32_UINT,
+            .offset = offsetof(war_quad_instance, flags)},
     };
     uint32_t num_quad_instance_attrs = 4;
     VkVertexInputAttributeDescription* all_attrs =
@@ -566,6 +541,25 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             num_quad_instance_attrs + num_quad_vertex_attrs,
         .pVertexAttributeDescriptions = all_attrs,
     };
+    VkViewport viewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)width,
+        .height = (float)height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    VkRect2D scissor = {
+        .offset = {0, 0},
+        .extent = {width, height},
+    };
+    VkPipelineDepthStencilStateCreateInfo depth_stencil = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,  // enable depth testing
+        .depthWriteEnable = VK_TRUE, // enable writing to depth buffer
+        .depthCompareOp = VK_COMPARE_OP_GREATER, // higher Z drawn on top
+        .stencilTestEnable = VK_FALSE,
+    };
     VkGraphicsPipelineCreateInfo pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .stageCount = 2,
@@ -581,19 +575,10 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             &(VkPipelineViewportStateCreateInfo){
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
                 .viewportCount = 1,
-                .pViewports = NULL,
+                .pViewports = &viewport,
                 .scissorCount = 1,
-                .pScissors = NULL,
+                .pScissors = &scissor,
             },
-        .pDynamicState =
-            &(VkPipelineDynamicStateCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                .dynamicStateCount = 2,
-                .pDynamicStates =
-                    (VkDynamicState[]){
-                        VK_DYNAMIC_STATE_VIEWPORT,
-                        VK_DYNAMIC_STATE_SCISSOR,
-                    }},
         .pRasterizationState =
             &(VkPipelineRasterizationStateCreateInfo){
                 .sType =
@@ -628,6 +613,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .layout = pipeline_layout,
         .renderPass = render_pass,
         .subpass = 0,
+        .pDynamicState = NULL,
     };
     VkPipeline pipeline;
     result = vkCreateGraphicsPipelines(
@@ -697,7 +683,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     }
     VkBufferCreateInfo quads_vertex_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = max_quads * sizeof(quad_vertex) * 4 * max_frames,
+        .size = max_quads * sizeof(war_quad_vertex) * 4 * max_frames,
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
@@ -717,7 +703,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     assert(result == VK_SUCCESS);
     VkBufferCreateInfo quads_instance_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = max_quads * max_instances_per_quad * sizeof(quad_instance) *
+        .size = max_quads * max_instances_per_quad * sizeof(war_quad_instance) *
                 max_frames,
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -932,7 +918,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkMapMemory(device,
                 quads_vertex_buffer_memory,
                 0,
-                sizeof(quad_vertex) * max_quads * 4 * max_frames,
+                sizeof(war_quad_vertex) * max_quads * 4 * max_frames,
                 0,
                 &quads_vertex_buffer_mapped);
     void* quads_index_buffer_mapped;
@@ -946,7 +932,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkMapMemory(device,
                 quads_instance_buffer_memory,
                 0,
-                sizeof(quad_instance) * max_quads * max_instances_per_quad *
+                sizeof(war_quad_instance) * max_quads * max_instances_per_quad *
                     max_frames,
                 0,
                 &quads_instance_buffer_mapped);
@@ -1024,11 +1010,11 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VkImage sdf_image;
-    result = vkCreateImage(device, &sdf_image_info, NULL, &sdf_image);
+    VkImage text_image;
+    result = vkCreateImage(device, &sdf_image_info, NULL, &text_image);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements sdf_memory_requirements;
-    vkGetImageMemoryRequirements(device, sdf_image, &sdf_memory_requirements);
+    vkGetImageMemoryRequirements(device, text_image, &sdf_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_image_memory_properties;
     vkGetPhysicalDeviceMemoryProperties(physical_device,
                                         &sdf_image_memory_properties);
@@ -1047,15 +1033,15 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .allocationSize = sdf_memory_requirements.size,
         .memoryTypeIndex = sdf_image_memory_type_index,
     };
-    VkDeviceMemory sdf_image_memory;
+    VkDeviceMemory text_image_memory;
     result = vkAllocateMemory(
-        device, &sdf_image_allocate_info, NULL, &sdf_image_memory);
+        device, &sdf_image_allocate_info, NULL, &text_image_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindImageMemory(device, sdf_image, sdf_image_memory, 0);
+    result = vkBindImageMemory(device, text_image, text_image_memory, 0);
     assert(result == VK_SUCCESS);
     VkImageViewCreateInfo sdf_view_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = sdf_image,
+        .image = text_image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = VK_FORMAT_R8_UNORM,
         .subresourceRange =
@@ -1067,8 +1053,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 .layerCount = 1,
             },
     };
-    VkImageView sdf_image_view;
-    result = vkCreateImageView(device, &sdf_view_info, NULL, &sdf_image_view);
+    VkImageView text_image_view;
+    result = vkCreateImageView(device, &sdf_view_info, NULL, &text_image_view);
     assert(result == VK_SUCCESS);
     VkSamplerCreateInfo sdf_sampler_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1088,8 +1074,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .minLod = 0.0f,
         .maxLod = 0.0f,
     };
-    VkSampler sdf_sampler;
-    vkCreateSampler(device, &sdf_sampler_info, NULL, &sdf_sampler);
+    VkSampler text_sampler;
+    vkCreateSampler(device, &sdf_sampler_info, NULL, &text_sampler);
     VkDeviceSize sdf_image_size = atlas_width * atlas_height;
     VkBuffer sdf_staging_buffer;
     VkDeviceMemory sdf_staging_buffer_memory;
@@ -1159,7 +1145,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = sdf_image,
+        .image = text_image,
         .subresourceRange =
             {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1200,7 +1186,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkCmdCopyBufferToImage(sdf_copy_command_buffer,
                            sdf_staging_buffer,
-                           sdf_image,
+                           text_image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            1,
                            &sdf_region);
@@ -1212,7 +1198,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = sdf_image,
+        .image = text_image,
         .subresourceRange =
             {
                 .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1279,8 +1265,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     vkAllocateDescriptorSets(
         device, &sdf_descriptor_set_allocate_info, &font_descriptor_set);
     VkDescriptorImageInfo sdf_descriptor_info = {
-        .sampler = sdf_sampler,
-        .imageView = sdf_image_view,
+        .sampler = text_sampler,
+        .imageView = text_image_view,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
     VkWriteDescriptorSet write_descriptor_sets = {
@@ -1293,7 +1279,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkUpdateDescriptorSets(device, 1, &write_descriptor_sets, 0, NULL);
     uint32_t* sdf_vertex_code;
-    const char* sdf_vertex_path = "build/shaders/war_sdf_vertex.spv";
+    const char* sdf_vertex_path = "build/shaders/war_text_vertex.spv";
     FILE* sdf_vertex_spv = fopen(sdf_vertex_path, "rb");
     assert(sdf_vertex_spv);
     fseek(sdf_vertex_spv, 0, SEEK_END);
@@ -1311,13 +1297,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = sdf_vertex_size,
         .pCode = sdf_vertex_code};
-    VkShaderModule sdf_vertex_shader;
+    VkShaderModule text_vertex_shader;
     result = vkCreateShaderModule(
-        device, &sdf_vertex_shader_info, NULL, &sdf_vertex_shader);
+        device, &sdf_vertex_shader_info, NULL, &text_vertex_shader);
     assert(result == VK_SUCCESS);
     free(sdf_vertex_code);
     uint32_t* sdf_fragment_code;
-    const char* sdf_fragment_path = "build/shaders/war_sdf_fragment.spv";
+    const char* sdf_fragment_path = "build/shaders/war_text_fragment.spv";
     FILE* sdf_fragment_spv = fopen(sdf_fragment_path, "rb");
     assert(sdf_fragment_spv);
     fseek(sdf_fragment_spv, 0, SEEK_END);
@@ -1335,43 +1321,43 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .codeSize = sdf_fragment_size,
         .pCode = sdf_fragment_code};
-    VkShaderModule sdf_fragment_shader;
+    VkShaderModule text_fragment_shader;
     result = vkCreateShaderModule(
-        device, &sdf_fragment_shader_info, NULL, &sdf_fragment_shader);
+        device, &sdf_fragment_shader_info, NULL, &text_fragment_shader);
     assert(result == VK_SUCCESS);
     free(sdf_fragment_code);
-    VkPushConstantRange sdf_push_constant_range = {
+    VkPushConstantRange text_push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
-        .size = sizeof(sdf_push_constants),
+        .size = sizeof(war_text_push_constants),
     };
     VkPipelineLayoutCreateInfo sdf_pipeline_layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1,
         .pSetLayouts = &font_descriptor_set_layout,
         .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &sdf_push_constant_range,
+        .pPushConstantRanges = &text_push_constant_range,
     };
-    VkPipelineLayout sdf_pipeline_layout;
+    VkPipelineLayout text_pipeline_layout;
     result = vkCreatePipelineLayout(
-        device, &sdf_pipeline_layout_info, NULL, &sdf_pipeline_layout);
+        device, &sdf_pipeline_layout_info, NULL, &text_pipeline_layout);
     assert(result == VK_SUCCESS);
     VkPipelineShaderStageCreateInfo sdf_shader_stages[] = {
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_VERTEX_BIT,
-            .module = sdf_vertex_shader,
+            .module = text_vertex_shader,
             .pName = "main",
         },
         {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = sdf_fragment_shader,
+            .module = text_fragment_shader,
             .pName = "main",
         },
     };
     VkDeviceSize sdf_vertex_buffer_size =
-        sizeof(sdf_vertex) * max_sdf_quads * 4 * max_frames;
+        sizeof(war_text_vertex) * max_text_quads * 4 * max_frames;
     VkBufferCreateInfo sdf_vertex_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_vertex_buffer_size,
@@ -1379,13 +1365,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
-    VkBuffer sdf_vertex_buffer;
+    VkBuffer text_vertex_buffer;
     result = vkCreateBuffer(
-        device, &sdf_vertex_buffer_info, NULL, &sdf_vertex_buffer);
+        device, &sdf_vertex_buffer_info, NULL, &text_vertex_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements sdf_vertex_buffer_memory_requirements;
     vkGetBufferMemoryRequirements(
-        device, sdf_vertex_buffer, &sdf_vertex_buffer_memory_requirements);
+        device, text_vertex_buffer, &sdf_vertex_buffer_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_vertex_buffer_memory_properties;
     vkGetPhysicalDeviceMemoryProperties(physical_device,
                                         &sdf_vertex_buffer_memory_properties);
@@ -1406,17 +1392,17 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .allocationSize = sdf_vertex_buffer_memory_requirements.size,
         .memoryTypeIndex = sdf_vertex_buffer_memory_type,
     };
-    VkDeviceMemory sdf_vertex_buffer_memory;
+    VkDeviceMemory text_vertex_buffer_memory;
     result = vkAllocateMemory(device,
                               &sdf_vertex_buffer_allocate_info,
                               NULL,
-                              &sdf_vertex_buffer_memory);
+                              &text_vertex_buffer_memory);
     assert(result == VK_SUCCESS);
     result = vkBindBufferMemory(
-        device, sdf_vertex_buffer, sdf_vertex_buffer_memory, 0);
+        device, text_vertex_buffer, text_vertex_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkDeviceSize sdf_index_buffer_size =
-        sizeof(uint16_t) * max_sdf_quads * 6 * max_frames;
+        sizeof(uint16_t) * max_text_quads * 6 * max_frames;
     VkBufferCreateInfo sdf_index_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_index_buffer_size,
@@ -1424,13 +1410,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
-    VkBuffer sdf_index_buffer;
-    result =
-        vkCreateBuffer(device, &sdf_index_buffer_info, NULL, &sdf_index_buffer);
+    VkBuffer text_index_buffer;
+    result = vkCreateBuffer(
+        device, &sdf_index_buffer_info, NULL, &text_index_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements sdf_index_buffer_memory_requirements;
     vkGetBufferMemoryRequirements(
-        device, sdf_index_buffer, &sdf_index_buffer_memory_requirements);
+        device, text_index_buffer, &sdf_index_buffer_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_index_buffer_memory_properties;
     vkGetPhysicalDeviceMemoryProperties(physical_device,
                                         &sdf_index_buffer_memory_properties);
@@ -1450,18 +1436,18 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .allocationSize = sdf_index_buffer_memory_requirements.size,
         .memoryTypeIndex = sdf_index_buffer_memory_type,
     };
-    VkDeviceMemory sdf_index_buffer_memory;
+    VkDeviceMemory text_index_buffer_memory;
     result = vkAllocateMemory(device,
                               &sdf_index_buffer_allocate_info,
                               NULL,
-                              &sdf_index_buffer_memory);
+                              &text_index_buffer_memory);
     assert(result == VK_SUCCESS);
     result = vkBindBufferMemory(
-        device, sdf_index_buffer, sdf_index_buffer_memory, 0);
+        device, text_index_buffer, text_index_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkDeviceSize sdf_instance_buffer_size =
-        sizeof(sdf_instance) * max_sdf_quads * max_instances_per_sdf_quad *
-        max_frames;
+        sizeof(war_text_instance) * max_text_quads *
+        max_instances_per_sdf_quad * max_frames;
     VkBufferCreateInfo sdf_instance_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_instance_buffer_size,
@@ -1469,13 +1455,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
-    VkBuffer sdf_instance_buffer;
+    VkBuffer text_instance_buffer;
     result = vkCreateBuffer(
-        device, &sdf_instance_buffer_info, NULL, &sdf_instance_buffer);
+        device, &sdf_instance_buffer_info, NULL, &text_instance_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements sdf_instance_buffer_memory_requirements;
     vkGetBufferMemoryRequirements(
-        device, sdf_instance_buffer, &sdf_instance_buffer_memory_requirements);
+        device, text_instance_buffer, &sdf_instance_buffer_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_instance_buffer_memory_properties;
     vkGetPhysicalDeviceMemoryProperties(physical_device,
                                         &sdf_instance_buffer_memory_properties);
@@ -1498,47 +1484,50 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .allocationSize = sdf_instance_buffer_memory_requirements.size,
         .memoryTypeIndex = sdf_instance_buffer_memory_type,
     };
-    VkDeviceMemory sdf_instance_buffer_memory;
+    VkDeviceMemory text_instance_buffer_memory;
     result = vkAllocateMemory(device,
                               &sdf_instance_buffer_allocate_info,
                               NULL,
-                              &sdf_instance_buffer_memory);
+                              &text_instance_buffer_memory);
     assert(result == VK_SUCCESS);
     result = vkBindBufferMemory(
-        device, sdf_instance_buffer, sdf_instance_buffer_memory, 0);
+        device, text_instance_buffer, text_instance_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkVertexInputBindingDescription sdf_vertex_binding_desc = {
         .binding = 0,
-        .stride = sizeof(sdf_vertex),
+        .stride = sizeof(war_text_vertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
     VkVertexInputBindingDescription sdf_instance_binding_desc = {
         .binding = 1,
-        .stride = sizeof(sdf_instance),
+        .stride = sizeof(war_text_instance),
         .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
     };
     VkVertexInputAttributeDescription sdf_vertex_attribute_descs[] = {
-        {0, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex, pos)},
-        {1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, uv)},
-        {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, glyph_bearing)},
-        {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, glyph_size)},
-        {4, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, ascent)},
-        {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(sdf_vertex, descent)},
-        {6, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, thickness)},
-        {7, 0, VK_FORMAT_R32_SFLOAT, offsetof(sdf_vertex, feather)},
-        {8, 0, VK_FORMAT_R32G32_UINT, offsetof(sdf_vertex, corner)},
-        {9, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(sdf_vertex, color)},
+        {0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, corner)},
+        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(war_text_vertex, pos)},
+        {2, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(war_text_vertex, color)},
+        {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, uv)},
+        {4,
+         0,
+         VK_FORMAT_R32G32_SFLOAT,
+         offsetof(war_text_vertex, glyph_bearing)},
+        {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, glyph_size)},
+        {6, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, ascent)},
+        {7, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, descent)},
+        {8, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, thickness)},
+        {9, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, feather)},
     };
     uint32_t num_sdf_vertex_attrs = 10;
     VkVertexInputAttributeDescription sdf_instance_attribute_descs[] = {
-        {10, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, x)},
-        {11, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, y)},
-        {12, 1, VK_FORMAT_R8G8B8A8_UINT, offsetof(sdf_instance, color)},
-        {13, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_x)},
-        {14, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, uv_y)},
-        {15, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, thickness)},
-        {16, 1, VK_FORMAT_R32_SFLOAT, offsetof(sdf_instance, feather)},
-        {17, 1, VK_FORMAT_R32G32_UINT, offsetof(sdf_instance, flags)},
+        {10, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, x)},
+        {11, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, y)},
+        {12, 1, VK_FORMAT_R8G8B8A8_UINT, offsetof(war_text_instance, color)},
+        {13, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, uv_x)},
+        {14, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, uv_y)},
+        {15, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, thickness)},
+        {16, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, feather)},
+        {17, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, flags)},
     };
     uint32_t num_sdf_instance_attrs = 8;
     VkVertexInputAttributeDescription* sdf_all_attrs =
@@ -1565,10 +1554,31 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .primitiveRestartEnable = VK_FALSE,
     };
-    VkPipelineViewportStateCreateInfo viewport_state = {
+    VkViewport sdf_viewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)width,
+        .height = (float)height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    VkRect2D sdf_scissor = {
+        .offset = {0, 0},
+        .extent = {width, height},
+    };
+    VkPipelineDepthStencilStateCreateInfo sdf_depth_stencil = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,  // enable depth testing
+        .depthWriteEnable = VK_TRUE, // enable writing to depth buffer
+        .depthCompareOp = VK_COMPARE_OP_GREATER, // higher Z drawn on top
+        .stencilTestEnable = VK_FALSE,
+    };
+    VkPipelineViewportStateCreateInfo sdf_viewport_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
+        .pViewports = &sdf_viewport,
         .scissorCount = 1,
+        .pScissors = &sdf_scissor,
     };
     VkPipelineRasterizationStateCreateInfo rasterizer = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -1584,13 +1594,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .sampleShadingEnable = VK_FALSE,
         .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-    };
-    VkPipelineDepthStencilStateCreateInfo depth_stencil = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = VK_FALSE,
-        .depthWriteEnable = VK_FALSE,
-        .depthCompareOp = VK_COMPARE_OP_ALWAYS,
-        .stencilTestEnable = VK_FALSE,
     };
     VkPipelineColorBlendAttachmentState color_blend_attachment = {
         .blendEnable = VK_TRUE,
@@ -1608,15 +1611,6 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .logicOpEnable = VK_FALSE,
         .attachmentCount = 1,
         .pAttachments = &color_blend_attachment,
-    };
-    VkDynamicState dynamic_states[] = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR,
-    };
-    VkPipelineDynamicStateCreateInfo dynamic_state = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-        .dynamicStateCount = 2,
-        .pDynamicStates = dynamic_states,
     };
     VkAttachmentDescription sdf_color_attachment = {
         .format = VK_FORMAT_B8G8R8A8_UNORM, // e.g., VK_FORMAT_B8G8R8A8_UNORM
@@ -1644,9 +1638,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .subpassCount = 1,
         .pSubpasses = &sdf_subpass,
     };
-    VkRenderPass sdf_render_pass;
+    VkRenderPass text_render_pass;
     result = vkCreateRenderPass(
-        device, &sdf_render_pass_info, NULL, &sdf_render_pass);
+        device, &sdf_render_pass_info, NULL, &text_render_pass);
     assert(result == VK_SUCCESS);
     VkGraphicsPipelineCreateInfo sdf_pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -1654,46 +1648,46 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pStages = sdf_shader_stages,
         .pVertexInputState = &sdf_vertex_input_info,
         .pInputAssemblyState = &input_assembly,
-        .pViewportState = &viewport_state,
+        .pViewportState = &sdf_viewport_state,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
-        .pDepthStencilState = &depth_stencil,
+        .pDepthStencilState = &sdf_depth_stencil,
         .pColorBlendState = &color_blending,
-        .pDynamicState = &dynamic_state,
-        .layout = sdf_pipeline_layout,
-        .renderPass = sdf_render_pass,
+        .pDynamicState = NULL,
+        .layout = text_pipeline_layout,
+        .renderPass = text_render_pass,
         .subpass = 0,
         .basePipelineHandle = VK_NULL_HANDLE,
         .basePipelineIndex = -1,
     };
-    VkPipeline sdf_pipeline;
+    VkPipeline text_pipeline;
     result = vkCreateGraphicsPipelines(
-        device, VK_NULL_HANDLE, 1, &sdf_pipeline_info, NULL, &sdf_pipeline);
+        device, VK_NULL_HANDLE, 1, &sdf_pipeline_info, NULL, &text_pipeline);
     assert(result == VK_SUCCESS);
     war_glyph_info* heap_glyphs = malloc(sizeof(war_glyph_info) * 128);
     memcpy(heap_glyphs, glyphs, sizeof(war_glyph_info) * 128);
-    void* sdf_vertex_buffer_mapped;
+    void* text_vertex_buffer_mapped;
     vkMapMemory(device,
-                sdf_vertex_buffer_memory,
+                text_vertex_buffer_memory,
                 0,
-                sizeof(sdf_vertex) * max_sdf_quads * 4 * max_frames,
+                sizeof(war_text_vertex) * max_text_quads * 4 * max_frames,
                 0,
-                &sdf_vertex_buffer_mapped);
-    void* sdf_index_buffer_mapped;
+                &text_vertex_buffer_mapped);
+    void* text_index_buffer_mapped;
     vkMapMemory(device,
-                sdf_index_buffer_memory,
+                text_index_buffer_memory,
                 0,
-                sizeof(uint16_t) * max_sdf_quads * 6 * max_frames,
+                sizeof(uint16_t) * max_text_quads * 6 * max_frames,
                 0,
-                &sdf_index_buffer_mapped);
-    void* sdf_instance_buffer_mapped;
+                &text_index_buffer_mapped);
+    void* text_instance_buffer_mapped;
     vkMapMemory(device,
-                sdf_instance_buffer_memory,
+                text_instance_buffer_memory,
                 0,
-                sizeof(sdf_instance) * max_sdf_quads *
+                sizeof(war_text_instance) * max_text_quads *
                     max_instances_per_sdf_quad * max_frames,
                 0,
-                &sdf_instance_buffer_mapped);
+                &text_instance_buffer_mapped);
 
     return (war_vulkan_context){
         //----------------------------------------------------------------------
@@ -1735,30 +1729,30 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .current_frame = 0,
 
         //---------------------------------------------------------------------
-        // SDF PIPELINE
+        // SDF TEXT PIPELINE
         //---------------------------------------------------------------------
         .ft_library = ft_library,
         .ft_regular = ft_regular,
-        .sdf_image = sdf_image,
-        .sdf_image_view = sdf_image_view,
-        .sdf_image_memory = sdf_image_memory,
-        .sdf_sampler = sdf_sampler,
+        .text_image = text_image,
+        .text_image_view = text_image_view,
+        .text_image_memory = text_image_memory,
+        .text_sampler = text_sampler,
         .glyphs = heap_glyphs,
         .font_descriptor_set = font_descriptor_set,
         .font_descriptor_set_layout = font_descriptor_set_layout,
         .font_descriptor_pool = font_descriptor_pool,
-        .sdf_pipeline = sdf_pipeline,
-        .sdf_pipeline_layout = sdf_pipeline_layout,
-        .sdf_vertex_shader = sdf_vertex_shader,
-        .sdf_vertex_buffer = sdf_vertex_buffer,
-        .sdf_vertex_buffer_memory = sdf_vertex_buffer_memory,
-        .sdf_index_buffer = sdf_index_buffer,
-        .sdf_index_buffer_memory = sdf_index_buffer_memory,
-        .sdf_instance_buffer = sdf_instance_buffer,
-        .sdf_instance_buffer_memory = sdf_instance_buffer_memory,
-        .sdf_fragment_shader = sdf_fragment_shader,
-        .sdf_push_constant_range = sdf_push_constant_range,
-        .sdf_render_pass = sdf_render_pass,
+        .text_pipeline = text_pipeline,
+        .text_pipeline_layout = text_pipeline_layout,
+        .text_vertex_shader = text_vertex_shader,
+        .text_vertex_buffer = text_vertex_buffer,
+        .text_vertex_buffer_memory = text_vertex_buffer_memory,
+        .text_index_buffer = text_index_buffer,
+        .text_index_buffer_memory = text_index_buffer_memory,
+        .text_instance_buffer = text_instance_buffer,
+        .text_instance_buffer_memory = text_instance_buffer_memory,
+        .text_fragment_shader = text_fragment_shader,
+        .text_push_constant_range = text_push_constant_range,
+        .text_render_pass = text_render_pass,
         .ascent = ascent,
         .descent = descent,
         .line_gap = line_gap,
@@ -1766,8 +1760,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .font_height = font_height,
         .cell_height = cell_height,
         .cell_width = cell_width,
-        .sdf_vertex_buffer_mapped = sdf_vertex_buffer_mapped,
-        .sdf_index_buffer_mapped = sdf_index_buffer_mapped,
-        .sdf_instance_buffer_mapped = sdf_instance_buffer_mapped,
+        .text_vertex_buffer_mapped = text_vertex_buffer_mapped,
+        .text_index_buffer_mapped = text_index_buffer_mapped,
+        .text_instance_buffer_mapped = text_instance_buffer_mapped,
     };
 }

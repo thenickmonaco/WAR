@@ -78,9 +78,9 @@ enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
     max_quads = 8000,
-    max_sdf_quads = 8000,
+    max_text_quads = 8000,
     max_note_quads = 8000,
-    max_frames = 1, // no need for double/triple yet
+    max_frames = 1,
     max_instances_per_quad = 1,
     max_instances_per_sdf_quad = 1,
     max_fds = 50,
@@ -94,10 +94,22 @@ enum war_misc {
     MAX_VIEWS_SAVED = 8,
 };
 
+enum war_layers {
+    LAYER_COUNT = 8,
+    LAYER_BACKGROUND = 0,
+    LAYER_GRIDLINES = 1,
+    LAYER_PLAYBACK_BAR = 2,
+    LAYER_NOTES = 3,
+    LAYER_NOTE_TEXT = 4,
+    LAYER_HUD = 5,
+    LAYER_HUD_TEXT = 6,
+    LAYER_CURSOR = 7,
+};
+
 enum war_hud {
     SHOW_PIANO = 0,
     SHOW_LINE_NUMBERS = 1,
-    SHOW_PIANO_AND_LINE_NUMBERS = 3,
+    SHOW_PIANO_AND_LINE_NUMBERS = 2,
 };
 
 enum war_modes {
@@ -150,18 +162,17 @@ typedef struct war_key_trie_node {
     uint64_t last_event_us;
 } war_key_trie_node;
 
-typedef struct rgba_t {
+typedef struct war_rgba_t {
     float r;
     float g;
     float b;
     float a;
-} rgba_t;
+} war_rgba_t;
 
 enum war_voice {
     VOICE_GRAND_PIANO = 0,
 };
 
-// AoS for audio thread
 typedef struct war_note {
     uint32_t id;
     uint32_t col;
@@ -180,7 +191,6 @@ typedef struct war_note {
     uint32_t mute;
 } war_note;
 
-// SoA for main thread
 typedef struct war_note_quads {
     uint64_t* timestamp;
     uint32_t* col;
@@ -240,7 +250,7 @@ typedef struct war_input_cmd_context {
     uint32_t t_cursor_width_whole_number;
     uint32_t t_cursor_width_sub_cells;
     uint32_t t_cursor_width_sub_col;
-    uint32_t gridline_splits[4];
+    uint32_t gridline_splits[MAX_GRIDLINE_SPLITS];
     uint32_t left_col;
     uint32_t bottom_row;
     uint32_t right_col;
@@ -286,6 +296,8 @@ typedef struct war_input_cmd_context {
     uint32_t views_saved_count;
     war_note_quads note_quads;
     uint32_t note_quads_count;
+    float layers[LAYER_COUNT];
+    float layer_count;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {
@@ -314,8 +326,10 @@ typedef struct war_glyph_info {
     float descent;
 } war_glyph_info;
 
-typedef struct sdf_vertex {
-    uint32_t pos[2];
+typedef struct war_text_vertex {
+    float corner[2];
+    float pos[3];
+    uint32_t color;
     float uv[2];
     float glyph_bearing[2];
     float glyph_size[2];
@@ -323,12 +337,9 @@ typedef struct sdf_vertex {
     float descent;
     float thickness;
     float feather;
-    uint32_t color;
-    uint32_t corner[2];
-    uint32_t _pad1;
-} sdf_vertex;
+} war_text_vertex;
 
-typedef struct sdf_instance {
+typedef struct war_text_instance {
     uint32_t x;
     uint32_t y;
     uint32_t color;
@@ -337,60 +348,61 @@ typedef struct sdf_instance {
     float thickness;
     float feather;
     uint32_t flags;
-} sdf_instance;
+} war_text_instance;
 
-typedef struct sdf_push_constants {
-    uint32_t bottom_left[2];
+typedef struct war_text_push_constants {
+    float bottom_left[2];
     float physical_size[2];
     float cell_size[2];
     float zoom;
-    uint32_t _pad1;
-    uint32_t cell_offsets[2];
-    uint32_t scroll_margin[2];
-    uint32_t anchor_cell[2];
-    uint32_t top_right[2];
+    float cell_offsets[2];
+    float scroll_margin[2];
+    float anchor_cell[2];
+    float top_right[2];
     float ascent;
     float descent;
     float line_gap;
     float baseline;
     float font_height;
-    uint32_t _pad2;
-} sdf_push_constants;
+    uint32_t _pad[2];
+} war_text_push_constants;
 
-typedef struct quad_vertex {
-    uint32_t col_row[2];
-    uint32_t sub_col_row[2];
-    uint32_t sub_cells[2];
-    uint32_t cursor_size_sub_col_row[2];
-    uint32_t cursor_size_whole_number[2];
-    uint32_t cursor_size_sub_cells[2];
+typedef enum war_quad_flags {
+    QUAD_LINE = 1 << 0,
+    QUAD_OUTLINE = 1 << 1,
+    QUAD_GRID = 1 << 2,
+} war_quad_flags;
+
+typedef struct war_quad_vertex {
+    float corner[2];
+    float pos[3];
     uint32_t color;
-    uint32_t corner[2];
     float outline_thickness;
     uint32_t outline_color;
     float line_thickness[2];
-    float float_offset[2];
-    uint32_t _pad1[1];
-} quad_vertex;
+    uint32_t flags;
+    uint32_t _pad[1];
+} war_quad_vertex;
 
-typedef struct quad_instance {
+typedef struct war_quad_instance {
     uint32_t x;
     uint32_t y;
     uint32_t color;
     uint32_t flags;
-} quad_instance;
+} war_quad_instance;
 
-typedef struct quad_push_constants {
-    uint32_t bottom_left[2];
+typedef struct war_quad_push_constants {
+    float bottom_left[2];
     float physical_size[2];
     float cell_size[2];
     float zoom;
-    uint32_t _pad1;
-    uint32_t cell_offsets[2];
-    uint32_t scroll_margin[2];
-    uint32_t anchor_cell[2];
-    uint32_t top_right[2];
-} quad_push_constants;
+    uint _pad1;
+    float cell_offsets[2];
+    float scroll_margin[2];
+    float anchor_cell[2];
+    float top_right[2];
+    uint32_t _pad2[2];
+} war_quad_push_constants;
 
 typedef struct war_vulkan_context {
     //-------------------------------------------------------------------------
@@ -436,26 +448,26 @@ typedef struct war_vulkan_context {
     //-------------------------------------------------------------------------
     FT_Library ft_library;
     FT_Face ft_regular;
-    VkImage sdf_image;
-    VkImageView sdf_image_view;
-    VkDeviceMemory sdf_image_memory;
-    VkSampler sdf_sampler;
+    VkImage text_image;
+    VkImageView text_image_view;
+    VkDeviceMemory text_image_memory;
+    VkSampler text_sampler;
     war_glyph_info* glyphs;
     VkDescriptorSet font_descriptor_set;
     VkDescriptorSetLayout font_descriptor_set_layout;
     VkDescriptorPool font_descriptor_pool;
-    VkPipeline sdf_pipeline;
-    VkPipelineLayout sdf_pipeline_layout;
-    VkShaderModule sdf_vertex_shader;
-    VkShaderModule sdf_fragment_shader;
-    VkPushConstantRange sdf_push_constant_range;
-    VkBuffer sdf_vertex_buffer;
-    VkDeviceMemory sdf_vertex_buffer_memory;
-    VkBuffer sdf_instance_buffer;
-    VkDeviceMemory sdf_instance_buffer_memory;
-    VkBuffer sdf_index_buffer;
-    VkDeviceMemory sdf_index_buffer_memory;
-    VkRenderPass sdf_render_pass;
+    VkPipeline text_pipeline;
+    VkPipelineLayout text_pipeline_layout;
+    VkShaderModule text_vertex_shader;
+    VkShaderModule text_fragment_shader;
+    VkPushConstantRange text_push_constant_range;
+    VkBuffer text_vertex_buffer;
+    VkDeviceMemory text_vertex_buffer_memory;
+    VkBuffer text_instance_buffer;
+    VkDeviceMemory text_instance_buffer_memory;
+    VkBuffer text_index_buffer;
+    VkDeviceMemory text_index_buffer_memory;
+    VkRenderPass text_render_pass;
     float ascent;
     float descent;
     float line_gap;
@@ -463,9 +475,9 @@ typedef struct war_vulkan_context {
     float font_height;
     float cell_height;
     float cell_width;
-    void* sdf_vertex_buffer_mapped;
-    void* sdf_instance_buffer_mapped;
-    void* sdf_index_buffer_mapped;
+    void* text_vertex_buffer_mapped;
+    void* text_instance_buffer_mapped;
+    void* text_index_buffer_mapped;
 } war_vulkan_context;
 
 typedef struct war_drm_context {

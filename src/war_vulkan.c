@@ -306,10 +306,55 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     };
+    VkImageCreateInfo depth_image_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_D32_SFLOAT, // 32-bit float depth
+        .extent = {width, height, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    };
+    VkImage depth_image;
+    vkCreateImage(device, &depth_image_info, NULL, &depth_image);
+    VkImageViewCreateInfo depth_view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = depth_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_D32_SFLOAT,
+        .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+    };
+    VkImageView depth_image_view;
+    vkCreateImageView(device, &depth_view_info, NULL, &depth_image_view);
+    VkAttachmentDescription depth_attachment = {
+        .format = VK_FORMAT_D32_SFLOAT,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
+    VkAttachmentReference depth_attachment_ref = {
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
     VkSubpassDescription subpass = {
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_attachment_ref,
+        .pDepthStencilAttachment = &depth_attachment_ref,
     };
     VkRenderPassCreateInfo render_pass_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -557,7 +602,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = VK_TRUE,  // enable depth testing
         .depthWriteEnable = VK_TRUE, // enable writing to depth buffer
-        .depthCompareOp = VK_COMPARE_OP_GREATER, // higher Z drawn on top
+        .depthCompareOp = VK_COMPARE_OP_GREATER,
         .stencilTestEnable = VK_FALSE,
     };
     VkGraphicsPipelineCreateInfo pipeline_info = {
@@ -579,6 +624,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 .scissorCount = 1,
                 .pScissors = &scissor,
             },
+        .pDepthStencilState = &depth_stencil,
         .pRasterizationState =
             &(VkPipelineRasterizationStateCreateInfo){
                 .sType =
@@ -1570,7 +1616,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = VK_TRUE,  // enable depth testing
         .depthWriteEnable = VK_TRUE, // enable writing to depth buffer
-        .depthCompareOp = VK_COMPARE_OP_GREATER, // higher Z drawn on top
+        .depthCompareOp = VK_COMPARE_OP_GREATER,
         .stencilTestEnable = VK_FALSE,
     };
     VkPipelineViewportStateCreateInfo sdf_viewport_state = {

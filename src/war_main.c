@@ -882,18 +882,28 @@ void* war_window_render(void* args) {
                                   vk_ctx.quad_pipeline);
                 quad_vertices_count = 0;
                 quad_indices_count = 0;
-                war_make_quad(
-                    quad_vertices,
-                    quad_indices,
-                    &quad_vertices_count,
-                    &quad_indices_count,
-                    (float[3]){ctx.col, ctx.row, ctx.layers[LAYER_CURSOR]},
-                    (float[2]){ctx.cell_width, ctx.cell_height},
-                    white_hex,
-                    0,
-                    0,
-                    (float[2]){0.0f, 0.0f},
-                    QUAD_GRID);
+                war_make_quad(quad_vertices,
+                              quad_indices,
+                              &quad_vertices_count,
+                              &quad_indices_count,
+                              (float[3]){ctx.col, ctx.row, 0.75f},
+                              (float[2]){ctx.cell_width, ctx.cell_height},
+                              white_hex,
+                              0,
+                              0,
+                              (float[2]){0.0f, 0.0f},
+                              QUAD_GRID);
+                war_make_quad(quad_vertices,
+                              quad_indices,
+                              &quad_vertices_count,
+                              &quad_indices_count,
+                              (float[3]){ctx.col, ctx.row, 0.25f},
+                              (float[2]){ctx.cell_width, ctx.cell_height},
+                              red_hex,
+                              0,
+                              0,
+                              (float[2]){0.0f, 0.0f},
+                              QUAD_GRID);
                 memcpy(vk_ctx.quads_vertex_buffer_mapped,
                        quad_vertices,
                        sizeof(war_quad_vertex) * quad_vertices_count);

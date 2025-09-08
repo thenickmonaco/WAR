@@ -29,8 +29,13 @@ layout (location = 3) in float in_outline_thickness;
 layout (location = 4) in vec4 in_outline_color;
 layout (location = 5) in vec2 in_line_thickness;
 layout (location = 6) in uint in_flags;
+layout (location = 7) in vec2 in_span;
 
 layout(location = 0) out vec4 frag_color;
+layout(location = 1) out float frag_outline_thickness;
+layout(location = 2) out vec4 frag_outline_color;
+layout(location = 3) out vec2 frag_uv;
+layout(location = 4) out vec2 frag_span;
 
 layout(push_constant) uniform PushConstants {
     layout(offset = 0) vec2 bottom_left;
@@ -41,39 +46,27 @@ layout(push_constant) uniform PushConstants {
     layout(offset = 40) vec2 scroll_margin; 
     layout(offset = 48) vec2 anchor_cell;
     layout(offset = 56) vec2 top_right;
-    layout(offset = 64) uint _pad;
 } pc;
 
 void main() {
-    vec2 ndc = vec2(in_pos.x / pc.physical_size.x * 2.0 - 1.0, 
-            1.0 - in_pos.y / pc.physical_size.y * 2.0);
+    const uint QUAD_LINE = 1u << 0;
+    const uint QUAD_OUTLINE = 1u << 1;
+    const uint QUAD_GRID = 1u << 2;
+    bool quad_grid = (in_flags & QUAD_GRID) != 0u;
+    bool quad_line = (in_flags & QUAD_LINE) != 0u;
+
+    vec2 corner_sign = vec2(
+         (in_corner.x == 0u ? -1.0 : 1.0), // left -> -1, right -> +1
+         (in_corner.y == 0u ? -1.0 : 1.0) // bottom -> -1, top -> +1
+    );
+    vec2 offsets = quad_grid ? pc.cell_offsets : vec2(0.0);
+    offsets += (quad_line ? vec2(corner_sign * in_line_thickness) : vec2(0.0));
+    vec2 ndc = vec2((in_pos.x + offsets.x - pc.bottom_left.x) * pc.cell_size.x / pc.physical_size.x * 2.0 - 1.0, 
+            1.0 - (in_pos.y + offsets.y - pc.bottom_left.y) * pc.cell_size.y / pc.physical_size.y * 2.0);
     gl_Position = vec4(ndc, in_pos.z, 1.0);
     frag_color = in_color;
-    // vec2 corner_sign = vec2((in_corner.x == 0u ? -1.0 : 1.0), // left -> -1, right -> +1
-    //      (in_corner.y == 0u ? -1.0 : 1.0) // bottom -> -1, top -> +1
-    // );
-    // if (in_line_thickness.x == 0.0 && in_line_thickness.y == 0.0) {
-    //     corner_sign = vec2((in_corner.x == 0u ? 0.0 : 1.0), // left -> 0, right -> +1
-    //          (in_corner.y == 0u ? 0.0 : 1.0) // bottom -> 0, top -> +1
-    //     );
-    // }
-    // uvec2 local_cell = (in_col_row - pc.bottom_left) + pc.cell_offsets;
-    // vec2 pixel_pos = vec2(float(local_cell.x) + float(in_sub_col_row.x) / float(in_sub_cells.x), float(local_cell.y) + float(in_sub_col_row.y) / float(in_sub_cells.y)) * pc.cell_size;
-
-    // float cursor_x = (in_cursor_size_sub_col_row.x * in_cursor_size_whole_number.x) / float(in_cursor_size_sub_cells.x) * pc.cell_size.x;
-    // float offset_x = corner_sign.x * (in_line_thickness.x * pc.cell_size.x + abs(pc.cell_size.x - pc.cell_size.x) + cursor_x);
-    // float offset_y = corner_sign.y * (in_line_thickness.y * pc.cell_size.y + abs(pc.cell_size.y - pc.cell_size.y));
-    // vec2 transformed = vec2(pixel_pos.x + offset_x, pixel_pos.y + offset_y);
-    // 
-    // vec2 anchor_pixel = vec2(float(pc.anchor_cell.x - pc.bottom_left.x + pc.cell_offsets.x),
-    //                          float(pc.anchor_cell.y - pc.bottom_left.y + pc.cell_offsets.y)) * pc.cell_size;
-    // vec2 delta = transformed - anchor_pixel;
-    // vec2 zoomed = delta * pc.zoom + anchor_pixel;
-    // vec2 ndc = vec2(
-    //     (zoomed.x / pc.physical_size.x) * 2.0 - 1.0,
-    //     1.0 - (zoomed.y / pc.physical_size.y) * 2.0
-    // );
-    // gl_Position = vec4(ndc, 0.0, 1.0);
-    // color = in_color;
-    // outline_thickness = in_outline_thickness;
+    frag_outline_thickness = in_outline_thickness * pc.cell_size.x;
+    frag_outline_color = in_outline_color;
+    frag_uv = in_corner;
+    frag_span = in_span * pc.cell_size;
 }

@@ -199,6 +199,84 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkDevice device;
     result = vkCreateDevice(physical_device, &device_info, NULL, &device);
     assert(result == VK_SUCCESS);
+
+    VkFormat quad_depth_format = VK_FORMAT_D32_SFLOAT;
+
+    VkImageCreateInfo quad_depth_image_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = quad_depth_format,
+        .extent = {width, height, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                 VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    VkImage quad_depth_image;
+    VkResult r =
+        vkCreateImage(device, &quad_depth_image_info, NULL, &quad_depth_image);
+    assert(r == VK_SUCCESS);
+    VkMemoryRequirements quad_depth_mem_reqs;
+    vkGetImageMemoryRequirements(
+        device, quad_depth_image, &quad_depth_mem_reqs);
+    VkPhysicalDeviceMemoryProperties quad_depth_mem_props;
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &quad_depth_mem_props);
+    int quad_depth_memory_type_index = -1;
+    for (uint32_t i = 0; i < quad_depth_mem_props.memoryTypeCount; i++) {
+        if ((quad_depth_mem_reqs.memoryTypeBits & (1u << i)) &&
+            (quad_depth_mem_props.memoryTypes[i].propertyFlags &
+             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ==
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+            quad_depth_memory_type_index = i;
+            break;
+        }
+    }
+    assert(quad_depth_memory_type_index != -1);
+    VkMemoryAllocateInfo quad_depth_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = quad_depth_mem_reqs.size,
+        .memoryTypeIndex = quad_depth_memory_type_index,
+    };
+    VkDeviceMemory quad_depth_image_memory;
+    r = vkAllocateMemory(
+        device, &quad_depth_alloc_info, NULL, &quad_depth_image_memory);
+    assert(r == VK_SUCCESS);
+    r = vkBindImageMemory(device, quad_depth_image, quad_depth_image_memory, 0);
+    assert(r == VK_SUCCESS);
+    // --- create image view ---
+    VkImageViewCreateInfo quad_depth_view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = quad_depth_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = quad_depth_format,
+        .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+    };
+    VkImageView quad_depth_image_view;
+    r = vkCreateImageView(
+        device, &quad_depth_view_info, NULL, &quad_depth_image_view);
+    assert(r == VK_SUCCESS);
+    VkAttachmentDescription quad_depth_attachment = {
+        .format = quad_depth_format,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
     VkQueue queue;
     vkGetDeviceQueue(device, queue_family_index, 0, &queue);
     VkCommandPool cmd_pool;
@@ -302,64 +380,26 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
     };
+    VkAttachmentDescription quad_attachments[2] = {color_attachment,
+                                                   quad_depth_attachment};
     VkAttachmentReference color_attachment_ref = {
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     };
-    VkImageCreateInfo depth_image_info = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_D32_SFLOAT, // 32-bit float depth
-        .extent = {width, height, 1},
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-    };
-    VkImage depth_image;
-    vkCreateImage(device, &depth_image_info, NULL, &depth_image);
-    VkImageViewCreateInfo depth_view_info = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = depth_image,
-        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = VK_FORMAT_D32_SFLOAT,
-        .subresourceRange =
-            {
-                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-    };
-    VkImageView depth_image_view;
-    vkCreateImageView(device, &depth_view_info, NULL, &depth_image_view);
-    VkAttachmentDescription depth_attachment = {
-        .format = VK_FORMAT_D32_SFLOAT,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
-
-    VkAttachmentReference depth_attachment_ref = {
+    VkAttachmentReference quad_depth_ref = {
         .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
-
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
     VkSubpassDescription subpass = {
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_attachment_ref,
-        .pDepthStencilAttachment = &depth_attachment_ref,
+        .pDepthStencilAttachment = &quad_depth_ref,
     };
     VkRenderPassCreateInfo render_pass_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &color_attachment,
+        .attachmentCount = 2,
+        .pAttachments = quad_attachments,
         .subpassCount = 1,
         .pSubpasses = &subpass,
     };
@@ -383,11 +423,12 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkImageView image_view;
     result = vkCreateImageView(device, &image_view_info, NULL, &image_view);
     assert(result == VK_SUCCESS);
+    VkImageView quad_fb_attachments[2] = {image_view, quad_depth_image_view};
     VkFramebufferCreateInfo frame_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = render_pass,
-        .attachmentCount = 1,
-        .pAttachments = &image_view,
+        .attachmentCount = 2,
+        .pAttachments = quad_fb_attachments,
         .width = width,
         .height = height,
         .layers = 1,
@@ -396,6 +437,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     result =
         vkCreateFramebuffer(device, &frame_buffer_info, NULL, &frame_buffer);
     assert(result == VK_SUCCESS);
+
     uint32_t* vertex_code;
     const char* vertex_path = "build/shaders/war_quad_vertex.spv";
     FILE* vertex_spv = fopen(vertex_path, "rb");
@@ -534,7 +576,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             .location = 5,
             .binding = 0,
             .offset = offsetof(war_quad_vertex, line_thickness),
-            .format = VK_FORMAT_R32_SFLOAT,
+            .format = VK_FORMAT_R32G32_SFLOAT,
         },
         (VkVertexInputAttributeDescription){
             .location = 6,
@@ -542,8 +584,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             .offset = offsetof(war_quad_vertex, flags),
             .format = VK_FORMAT_R32_UINT,
         },
+        (VkVertexInputAttributeDescription){
+            .location = 7,
+            .binding = 0,
+            .offset = offsetof(war_quad_vertex, span),
+            .format = VK_FORMAT_R32G32_SFLOAT,
+        },
     };
-    uint32_t num_quad_vertex_attrs = 6;
+    uint32_t num_quad_vertex_attrs = 8;
     VkVertexInputAttributeDescription quad_instance_attrs[] = {
         (VkVertexInputAttributeDescription){.location = num_quad_vertex_attrs,
                                             .binding = 1,
@@ -602,7 +650,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = VK_TRUE,  // enable depth testing
         .depthWriteEnable = VK_TRUE, // enable writing to depth buffer
-        .depthCompareOp = VK_COMPARE_OP_GREATER,
+        .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
         .stencilTestEnable = VK_FALSE,
     };
     VkGraphicsPipelineCreateInfo pipeline_info = {
@@ -683,6 +731,28 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .srcAccessMask = 0,
         .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
     };
+    VkImageMemoryBarrier quad_depth_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = quad_depth_image, // <-- the depth VkImage you created
+        .subresourceRange =
+            {
+                .aspectMask =
+                    VK_IMAGE_ASPECT_DEPTH_BIT, // use DEPTH_BIT, add STENCIL_BIT
+                                               // if format has stencil
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+    };
+    VkImageMemoryBarrier quad_barriers[2] = {barrier, quad_depth_barrier};
     vkBeginCommandBuffer(
         cmd_buffer,
         &(VkCommandBufferBeginInfo){
@@ -690,14 +760,15 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         });
     vkCmdPipelineBarrier(cmd_buffer,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                          0,
                          0,
                          NULL,
                          0,
                          NULL,
-                         1,
-                         &barrier);
+                         2,
+                         quad_barriers);
     vkEndCommandBuffer(cmd_buffer);
     VkSubmitInfo submit = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1559,21 +1630,46 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
          VK_FORMAT_R32G32_SFLOAT,
          offsetof(war_text_vertex, glyph_bearing)},
         {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, glyph_size)},
-        {6, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, ascent)},
-        {7, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, descent)},
+        {6, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, ascent)},
+        {7, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, descent)},
         {8, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, thickness)},
         {9, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, feather)},
+        {10, 0, VK_FORMAT_R32_UINT, offsetof(war_text_vertex, flags)},
     };
-    uint32_t num_sdf_vertex_attrs = 10;
+    uint32_t num_sdf_vertex_attrs = 11;
     VkVertexInputAttributeDescription sdf_instance_attribute_descs[] = {
-        {10, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, x)},
-        {11, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, y)},
-        {12, 1, VK_FORMAT_R8G8B8A8_UINT, offsetof(war_text_instance, color)},
-        {13, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, uv_x)},
-        {14, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, uv_y)},
-        {15, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, thickness)},
-        {16, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, feather)},
-        {17, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, flags)},
+        {num_sdf_vertex_attrs,
+         1,
+         VK_FORMAT_R32G32_UINT,
+         offsetof(war_text_instance, x)},
+        {num_sdf_vertex_attrs + 1,
+         1,
+         VK_FORMAT_R32G32_UINT,
+         offsetof(war_text_instance, y)},
+        {num_sdf_vertex_attrs + 2,
+         1,
+         VK_FORMAT_R8G8B8A8_UINT,
+         offsetof(war_text_instance, color)},
+        {num_sdf_vertex_attrs + 3,
+         1,
+         VK_FORMAT_R32_SFLOAT,
+         offsetof(war_text_instance, uv_x)},
+        {num_sdf_vertex_attrs + 4,
+         1,
+         VK_FORMAT_R32_SFLOAT,
+         offsetof(war_text_instance, uv_y)},
+        {num_sdf_vertex_attrs + 5,
+         1,
+         VK_FORMAT_R32_SFLOAT,
+         offsetof(war_text_instance, thickness)},
+        {num_sdf_vertex_attrs + 6,
+         1,
+         VK_FORMAT_R32_SFLOAT,
+         offsetof(war_text_instance, feather)},
+        {num_sdf_vertex_attrs + 7,
+         1,
+         VK_FORMAT_R32G32_UINT,
+         offsetof(war_text_instance, flags)},
     };
     uint32_t num_sdf_instance_attrs = 8;
     VkVertexInputAttributeDescription* sdf_all_attrs =
@@ -1631,7 +1727,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .depthClampEnable = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .cullMode = VK_CULL_MODE_NONE,
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .depthBiasEnable = VK_FALSE,
         .lineWidth = 1.0f,
@@ -1676,11 +1772,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount = 1,
         .pColorAttachments = &sdf_color_attachment_ref,
+        .pDepthStencilAttachment = &quad_depth_ref,
     };
+    VkAttachmentDescription sdf_attachments[2] = {sdf_color_attachment,
+                                                  quad_depth_attachment};
     VkRenderPassCreateInfo sdf_render_pass_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &sdf_color_attachment,
+        .attachmentCount = 2,
+        .pAttachments = sdf_attachments,
         .subpassCount = 1,
         .pSubpasses = &sdf_subpass,
     };
@@ -1694,10 +1793,17 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pStages = sdf_shader_stages,
         .pVertexInputState = &sdf_vertex_input_info,
         .pInputAssemblyState = &input_assembly,
-        .pViewportState = &sdf_viewport_state,
+        .pViewportState =
+            &(VkPipelineViewportStateCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                .viewportCount = 1,
+                .pViewports = &viewport,
+                .scissorCount = 1,
+                .pScissors = &scissor,
+            },
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
-        .pDepthStencilState = &sdf_depth_stencil,
+        .pDepthStencilState = &depth_stencil,
         .pColorBlendState = &color_blending,
         .pDynamicState = NULL,
         .layout = text_pipeline_layout,

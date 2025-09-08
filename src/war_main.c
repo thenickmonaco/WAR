@@ -115,7 +115,7 @@ void* war_window_render(void* args) {
     war_input_cmd_context ctx = {
         .now = 0,
         .mode = MODE_NORMAL,
-        .hud_state = SHOW_PIANO,
+        .hud_state = HUD_PIANO,
         .col = 0,
         .row = 60,
         .sub_col = 0,
@@ -837,9 +837,8 @@ void* war_window_render(void* args) {
                 const float default_vertical_line_thickness =
                     0.018f; // default: 0.018
                 const float default_outline_thickness =
-                    0.027f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
-                            // sub_cursor right outline from disappearing
-                // single buffer
+                    0.05f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
+                           // sub_cursor right outline from disappearing
                 assert(vk_ctx.current_frame == 0);
                 vkWaitForFences(vk_ctx.device,
                                 1,
@@ -856,9 +855,11 @@ void* war_window_render(void* args) {
                 VkResult result =
                     vkBeginCommandBuffer(vk_ctx.cmd_buffer, &begin_info);
                 assert(result == VK_SUCCESS);
-                VkClearValue clear_color = {
-                    .color = {{0.1569f, 0.1569f, 0.1569f, 1.0f}},
-                };
+                VkClearValue clear_values[2];
+                clear_values[0].color =
+                    (VkClearColorValue){{0.1569f, 0.1569f, 0.1569f, 1.0f}};
+                clear_values[1].depthStencil =
+                    (VkClearDepthStencilValue){ctx.layers[LAYER_BACKGROUND], 0};
                 VkRenderPassBeginInfo render_pass_info = {
                     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                     .renderPass = vk_ctx.render_pass,
@@ -868,8 +869,8 @@ void* war_window_render(void* args) {
                             .offset = {0, 0},
                             .extent = {physical_width, physical_height},
                         },
-                    .clearValueCount = 1,
-                    .pClearValues = &clear_color,
+                    .clearValueCount = 2,
+                    .pClearValues = clear_values,
                 };
                 vkCmdBeginRenderPass(vk_ctx.cmd_buffer,
                                      &render_pass_info,
@@ -882,28 +883,200 @@ void* war_window_render(void* args) {
                                   vk_ctx.quad_pipeline);
                 quad_vertices_count = 0;
                 quad_indices_count = 0;
+                // draw cursor quads
+                war_make_quad(
+                    quad_vertices,
+                    quad_indices,
+                    &quad_vertices_count,
+                    &quad_indices_count,
+                    (float[3]){ctx.col + (float)ctx.sub_col /
+                                             ctx.navigation_sub_cells_col,
+                               ctx.row,
+                               ctx.layers[LAYER_CURSOR]},
+                    (float[2]){(float)ctx.cursor_width_whole_number *
+                                   ctx.cursor_width_sub_col /
+                                   ctx.cursor_width_sub_cells,
+                               1},
+                    white_hex,
+                    0,
+                    0,
+                    (float[2]){0.0f, 0.0f},
+                    QUAD_GRID);
+                // draw note quads
+                note_quads_in_x_count = 0;
+                war_note_quads_in_view(&note_quads,
+                                       note_quads_count,
+                                       &ctx,
+                                       note_quads_in_x,
+                                       &note_quads_in_x_count);
+                for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
+                    uint32_t i_in_view = note_quads_in_x[i];
+                    if (!note_quads.hidden[i_in_view]) {
+                        float pos_x = note_quads.col[i_in_view] +
+                                      (float)note_quads.sub_col[i_in_view] /
+                                          note_quads.sub_cells_col[i_in_view];
+                        float span_x =
+                            (float)note_quads
+                                .cursor_width_whole_number[i_in_view] *
+                            note_quads.cursor_width_sub_col[i_in_view] /
+                            note_quads.cursor_width_sub_cells[i_in_view];
+                        war_make_quad(quad_vertices,
+                                      quad_indices,
+                                      &quad_vertices_count,
+                                      &quad_indices_count,
+                                      (float[3]){pos_x,
+                                                 note_quads.row[i_in_view],
+                                                 ctx.layers[LAYER_NOTES]},
+                                      (float[2]){span_x, 1},
+                                      note_quads.color[i_in_view],
+                                      default_outline_thickness,
+                                      note_quads.outline_color[i_in_view],
+                                      (float[2]){0.0f, 0.0f},
+                                      QUAD_GRID);
+                    }
+                }
+                // draw status bar quads
                 war_make_quad(quad_vertices,
                               quad_indices,
                               &quad_vertices_count,
                               &quad_indices_count,
-                              (float[3]){ctx.col, ctx.row, 0.75f},
-                              (float[2]){ctx.cell_width, ctx.cell_height},
-                              white_hex,
-                              0,
-                              0,
-                              (float[2]){0.0f, 0.0f},
-                              QUAD_GRID);
-                war_make_quad(quad_vertices,
-                              quad_indices,
-                              &quad_vertices_count,
-                              &quad_indices_count,
-                              (float[3]){ctx.col, ctx.row, 0.25f},
-                              (float[2]){ctx.cell_width, ctx.cell_height},
+                              (float[3]){ctx.left_col,
+                                         ctx.bottom_row,
+                                         ctx.layers[LAYER_HUD]},
+                              (float[2]){ctx.viewport_cols + 1, 1},
                               red_hex,
                               0,
                               0,
                               (float[2]){0.0f, 0.0f},
-                              QUAD_GRID);
+                              0);
+                war_make_quad(quad_vertices,
+                              quad_indices,
+                              &quad_vertices_count,
+                              &quad_indices_count,
+                              (float[3]){ctx.left_col,
+                                         ctx.bottom_row + 1,
+                                         ctx.layers[LAYER_HUD]},
+                              (float[2]){ctx.viewport_cols + 1, 1},
+                              dark_gray_hex,
+                              0,
+                              0,
+                              (float[2]){0.0f, 0.0f},
+                              0);
+                war_make_quad(quad_vertices,
+                              quad_indices,
+                              &quad_vertices_count,
+                              &quad_indices_count,
+                              (float[3]){ctx.left_col,
+                                         ctx.bottom_row + 2,
+                                         ctx.layers[LAYER_HUD]},
+                              (float[2]){ctx.viewport_cols + 1, 1},
+                              light_gray_hex,
+                              0,
+                              0,
+                              (float[2]){0.0f, 0.0f},
+                              0);
+                // draw piano quads
+                switch (ctx.hud_state) {
+                case HUD_PIANO_AND_LINE_NUMBERS:
+                case HUD_PIANO:
+                    war_make_quad(quad_vertices,
+                                  quad_indices,
+                                  &quad_vertices_count,
+                                  &quad_indices_count,
+                                  (float[3]){ctx.left_col,
+                                             ctx.bottom_row +
+                                                 ctx.num_rows_for_status_bars,
+                                             ctx.layers[LAYER_HUD]},
+                                  (float[2]){3, ctx.viewport_rows},
+                                  full_white_hex,
+                                  0,
+                                  0,
+                                  (float[2]){0.0f, 0.0f},
+                                  0);
+                    for (uint32_t row = ctx.bottom_row; row < ctx.top_row;
+                         row++) {
+                        uint32_t note = row % 12;
+                        if (note == 1 || note == 3 || note == 6 || note == 8 ||
+                            note == 10) {
+                            war_make_quad(
+                                quad_vertices,
+                                quad_indices,
+                                &quad_vertices_count,
+                                &quad_indices_count,
+                                (float[3]){ctx.left_col,
+                                           row + ctx.num_rows_for_status_bars,
+                                           ctx.layers[LAYER_HUD]},
+                                (float[2]){2, 1},
+                                black_hex,
+                                0,
+                                0,
+                                (float[2]){0.0f, 0.0f},
+                                0);
+                        }
+                    }
+                    break;
+                }
+                // draw gridline quads
+                for (uint32_t row = ctx.bottom_row + 1; row <= ctx.top_row + 1;
+                     row++) {
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){
+                            ctx.left_col, row, ctx.layers[LAYER_GRIDLINES]},
+                        (float[2]){ctx.viewport_cols, 0},
+                        darker_light_gray_hex,
+                        0,
+                        0,
+                        (float[2]){0.0f, default_horizontal_line_thickness},
+                        QUAD_LINE | QUAD_GRID);
+                }
+                qsort(ctx.gridline_splits,
+                      MAX_GRIDLINE_SPLITS,
+                      sizeof(uint32_t),
+                      war_compare_desc_uint32);
+                for (uint32_t col = ctx.left_col + 1; col <= ctx.right_col + 1;
+                     col++) {
+                    bool draw_vertical_line = false;
+                    uint32_t color;
+                    for (uint32_t i = 0; i < MAX_GRIDLINE_SPLITS; i++) {
+                        draw_vertical_line =
+                            (col % ctx.gridline_splits[i]) == 0;
+                        if (draw_vertical_line) {
+                            switch (i) {
+                            case 0:
+                                color = white_hex;
+                                break;
+                            case 1:
+                                color = darker_light_gray_hex;
+                                break;
+                            case 2:
+                                color = red_hex;
+                                break;
+                            case 3:
+                                color = black_hex;
+                                break;
+                            }
+                            break;
+                        }
+                    }
+                    if (!draw_vertical_line) { continue; }
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){
+                            col, ctx.bottom_row, ctx.layers[LAYER_GRIDLINES]},
+                        (float[2]){0, ctx.viewport_rows},
+                        color,
+                        0,
+                        0,
+                        (float[2]){default_vertical_line_thickness, 0},
+                        QUAD_LINE | QUAD_GRID);
+                }
                 memcpy(vk_ctx.quads_vertex_buffer_mapped,
                        quad_vertices,
                        sizeof(war_quad_vertex) * quad_vertices_count);
@@ -960,13 +1133,83 @@ void* war_window_render(void* args) {
                 vkCmdDrawIndexed(
                     vk_ctx.cmd_buffer, quad_indices_count, 1, 0, 0, 0);
                 //---------------------------------------------------------
-                // SDF TEXT PIPELINE
+                // TEXT PIPELINE
                 //---------------------------------------------------------
-                // vkCmdBindPipeline(vk_ctx.cmd_buffer,
-                //                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-                //                  vk_ctx.text_pipeline);
+                vkCmdBindPipeline(vk_ctx.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  vk_ctx.text_pipeline);
+                vkCmdBindDescriptorSets(vk_ctx.cmd_buffer,
+                                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                        vk_ctx.text_pipeline_layout,
+                                        0,
+                                        1,
+                                        &vk_ctx.font_descriptor_set,
+                                        0,
+                                        NULL);
+                text_vertices_count = 0;
+                text_indices_count = 0;
+                memcpy(vk_ctx.text_vertex_buffer_mapped,
+                       text_vertices,
+                       sizeof(war_text_vertex) * text_vertices_count);
+                memcpy(vk_ctx.text_index_buffer_mapped,
+                       text_indices,
+                       sizeof(uint16_t) * text_indices_count);
+                VkMappedMemoryRange text_flush_ranges[2] = {
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = vk_ctx.text_vertex_buffer_memory,
+                     .offset = 0,
+                     .size = war_align64(sizeof(war_text_vertex) *
+                                         text_vertices_count)},
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = vk_ctx.text_index_buffer_memory,
+                     .offset = 0,
+                     .size =
+                         war_align64(sizeof(uint16_t) * text_indices_count)}};
+                vkFlushMappedMemoryRanges(vk_ctx.device, 2, text_flush_ranges);
+                VkDeviceSize text_vertices_offsets[2] = {0};
+                vkCmdBindVertexBuffers(vk_ctx.cmd_buffer,
+                                       0,
+                                       1,
+                                       &vk_ctx.text_vertex_buffer,
+                                       text_vertices_offsets);
+                VkDeviceSize text_instances_offsets[2] = {0};
+                vkCmdBindVertexBuffers(vk_ctx.cmd_buffer,
+                                       1,
+                                       1,
+                                       &vk_ctx.text_instance_buffer,
+                                       text_instances_offsets);
+                VkDeviceSize text_indices_offset = 0;
+                vkCmdBindIndexBuffer(vk_ctx.cmd_buffer,
+                                     vk_ctx.text_index_buffer,
+                                     text_indices_offset,
+                                     VK_INDEX_TYPE_UINT16);
+                war_text_push_constants text_push_constants = {
+                    .bottom_left = {ctx.left_col, ctx.bottom_row},
+                    .physical_size = {physical_width, physical_height},
+                    .cell_size = {ctx.cell_width, ctx.cell_height},
+                    .zoom = ctx.zoom_scale,
+                    .cell_offsets = {ctx.num_cols_for_line_numbers,
+                                     ctx.num_rows_for_status_bars},
+                    .scroll_margin = {ctx.scroll_margin_cols,
+                                      ctx.scroll_margin_rows},
+                    .anchor_cell = {ctx.col, ctx.row},
+                    .top_right = {ctx.right_col, ctx.top_row},
+                    .ascent = vk_ctx.ascent,
+                    .descent = vk_ctx.descent,
+                    .line_gap = vk_ctx.line_gap,
+                    .baseline = vk_ctx.baseline,
+                    .font_height = vk_ctx.font_height,
+                };
+                vkCmdPushConstants(vk_ctx.cmd_buffer,
+                                   vk_ctx.text_pipeline_layout,
+                                   VK_SHADER_STAGE_VERTEX_BIT,
+                                   0,
+                                   sizeof(war_text_push_constants),
+                                   &text_push_constants);
+                vkCmdDrawIndexed(
+                    vk_ctx.cmd_buffer, text_indices_count, 1, 0, 0, 0);
                 //---------------------------------------------------------
-                //  END RENDER PASS
+                //   END RENDER PASS
                 //---------------------------------------------------------
                 vkCmdEndRenderPass(vk_ctx.cmd_buffer);
                 result = vkEndCommandBuffer(vk_ctx.cmd_buffer);

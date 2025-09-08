@@ -107,9 +107,9 @@ enum war_layers {
 };
 
 enum war_hud {
-    SHOW_PIANO = 0,
-    SHOW_LINE_NUMBERS = 1,
-    SHOW_PIANO_AND_LINE_NUMBERS = 2,
+    HUD_PIANO = 0,
+    HUD_LINE_NUMBERS = 1,
+    HUD_PIANO_AND_LINE_NUMBERS = 2,
 };
 
 enum war_modes {
@@ -337,6 +337,7 @@ typedef struct war_text_vertex {
     float descent;
     float thickness;
     float feather;
+    uint32_t flags;
 } war_text_vertex;
 
 typedef struct war_text_instance {
@@ -355,6 +356,7 @@ typedef struct war_text_push_constants {
     float physical_size[2];
     float cell_size[2];
     float zoom;
+    uint32_t _pad;
     float cell_offsets[2];
     float scroll_margin[2];
     float anchor_cell[2];
@@ -364,7 +366,6 @@ typedef struct war_text_push_constants {
     float line_gap;
     float baseline;
     float font_height;
-    uint32_t _pad[2];
 } war_text_push_constants;
 
 typedef enum war_quad_flags {
@@ -376,12 +377,13 @@ typedef enum war_quad_flags {
 typedef struct war_quad_vertex {
     float corner[2];
     float pos[3];
+    float span[2];
     uint32_t color;
     float outline_thickness;
     uint32_t outline_color;
     float line_thickness[2];
     uint32_t flags;
-    uint32_t _pad[1];
+    uint32_t _pad;
 } war_quad_vertex;
 
 typedef struct war_quad_instance {

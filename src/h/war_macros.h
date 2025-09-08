@@ -286,10 +286,12 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
                                       uint32_t* text_vertices_count,
                                       uint32_t* text_indices_count,
                                       float bottom_left_pos[3],
+                                      float span[2],
+                                      uint32_t color,
                                       war_glyph_info glyph_info,
                                       float thickness,
                                       float feather,
-                                      uint32_t color) {
+                                      uint32_t flags) {
     text_vertices[*text_vertices_count] = (war_text_vertex){
         .corner = {0, 0},
         .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
@@ -301,10 +303,13 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
         .thickness = thickness,
         .feather = feather,
         .color = color,
+        .flags = flags,
     };
     text_vertices[*text_vertices_count + 1] = (war_text_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_pos[0] + 1, bottom_left_pos[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
         .uv = {glyph_info.uv_x1, glyph_info.uv_y1},
         .glyph_size = {glyph_info.width, glyph_info.height},
         .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
@@ -313,11 +318,12 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
         .thickness = thickness,
         .feather = feather,
         .color = color,
+        .flags = flags,
     };
     text_vertices[*text_vertices_count + 2] = (war_text_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_pos[0] + 1,
-                bottom_left_pos[1] + 1,
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
                 bottom_left_pos[2]},
         .uv = {glyph_info.uv_x1, glyph_info.uv_y0},
         .glyph_size = {glyph_info.width, glyph_info.height},
@@ -327,18 +333,22 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
         .thickness = thickness,
         .feather = feather,
         .color = color,
+        .flags = flags,
     };
     text_vertices[*text_vertices_count + 3] = (war_text_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_pos[0], bottom_left_pos[1] + 1, bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
         .uv = {glyph_info.uv_x0, glyph_info.uv_y0},
+        .color = color,
         .glyph_size = {glyph_info.width, glyph_info.height},
         .glyph_bearing = {glyph_info.bearing_x, glyph_info.bearing_y},
         .ascent = glyph_info.ascent,
         .descent = glyph_info.descent,
         .thickness = thickness,
         .feather = feather,
-        .color = color,
+        .flags = flags,
     };
     text_indices[*text_indices_count] = *text_vertices_count;
     text_indices[*text_indices_count + 1] = *text_vertices_count + 1;
@@ -346,6 +356,8 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     text_indices[*text_indices_count + 3] = *text_vertices_count + 2;
     text_indices[*text_indices_count + 4] = *text_vertices_count + 3;
     text_indices[*text_indices_count + 5] = *text_vertices_count;
+    (*text_vertices_count) += 4;
+    (*text_indices_count) += 6;
 }
 
 static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
@@ -363,6 +375,7 @@ static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
         .thickness = 0,
         .feather = 0,
         .color = 0,
+        .flags = 0,
     };
     text_vertices[*text_vertices_count + 1] = (war_text_vertex){
         .corner = {0, 0},
@@ -375,6 +388,7 @@ static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
         .thickness = 0,
         .feather = 0,
         .color = 0,
+        .flags = 0,
     };
     text_vertices[*text_vertices_count + 2] = (war_text_vertex){
         .corner = {0, 0},
@@ -387,6 +401,7 @@ static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
         .thickness = 0,
         .feather = 0,
         .color = 0,
+        .flags = 0,
     };
     text_vertices[*text_vertices_count + 3] = (war_text_vertex){
         .corner = {0, 0},
@@ -399,6 +414,7 @@ static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
         .thickness = 0,
         .feather = 0,
         .color = 0,
+        .flags = 0,
     };
     text_indices[*text_indices_count] = *text_vertices_count;
     text_indices[*text_indices_count + 1] = *text_vertices_count + 1;
@@ -406,6 +422,8 @@ static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
     text_indices[*text_indices_count + 3] = *text_vertices_count + 2;
     text_indices[*text_indices_count + 4] = *text_vertices_count + 3;
     text_indices[*text_indices_count + 5] = *text_vertices_count;
+    (*text_vertices_count) += 4;
+    (*text_indices_count) += 6;
 }
 
 static inline void war_make_quad(war_quad_vertex* quad_vertices,
@@ -422,6 +440,7 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
@@ -433,6 +452,7 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
         .pos = {bottom_left_pos[0] + span[0],
                 bottom_left_pos[1],
                 bottom_left_pos[2]},
+        .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
@@ -444,6 +464,7 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
         .pos = {bottom_left_pos[0] + span[0],
                 bottom_left_pos[1] + span[1],
                 bottom_left_pos[2]},
+        .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
@@ -455,6 +476,7 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
         .pos = {bottom_left_pos[0],
                 bottom_left_pos[1] + span[1],
                 bottom_left_pos[2]},
+        .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
         .outline_color = outline_color,
@@ -478,6 +500,7 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
+        .span = {0, 0},
         .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
@@ -487,6 +510,7 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     quad_vertices[*vertices_count + 1] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
+        .span = {0, 0},
         .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
@@ -496,6 +520,7 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     quad_vertices[*vertices_count + 2] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
+        .span = {0, 0},
         .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
@@ -505,6 +530,7 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     quad_vertices[*vertices_count + 3] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
+        .span = {0, 0},
         .color = 0,
         .outline_thickness = 0,
         .outline_color = 0,
@@ -657,7 +683,6 @@ static inline void war_note_quads_in_view(war_note_quads* note_quads,
                 note_col + note_quads->cursor_width_sub_col[i] *
                                note_quads->cursor_width_whole_number[i] /
                                note_quads->cursor_width_sub_cells[i];
-        call_carmack("note_col_end: %u", note_col_end);
         if (((note_col >= ctx->left_col && note_col <= ctx->right_col) ||
              (note_col_end >= ctx->left_col)) &&
             (note_row >= ctx->bottom_row && note_row <= ctx->top_row)) {

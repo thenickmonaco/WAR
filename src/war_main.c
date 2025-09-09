@@ -828,7 +828,9 @@ void* war_window_render(void* args) {
                     0xFF36383C; // gutter / line numbers
                 const uint32_t dark_gray_hex = 0xFF282828;
                 const uint32_t red_hex = 0xFF011FDD;
+                const uint32_t red_hex_transparent = 0x80011FDD;
                 const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
+                const uint32_t white_hex_transparent = 0x80B1D9E9;
                 const uint32_t bright_white_hex =
                     0xFFEEEEEE; // tmux status text
                 const uint32_t black_hex = 0xFF000000;
@@ -837,8 +839,9 @@ void* war_window_render(void* args) {
                 const float default_vertical_line_thickness =
                     0.018f; // default: 0.018
                 const float default_outline_thickness =
-                    0.05f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
-                           // sub_cursor right outline from disappearing
+                    0.075f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
+                            // sub_cursor right outline from disappearing
+                const float default_alpha_scale = 0.1f;
                 assert(vk_ctx.current_frame == 0);
                 vkWaitForFences(vk_ctx.device,
                                 1,
@@ -858,8 +861,8 @@ void* war_window_render(void* args) {
                 VkClearValue clear_values[2];
                 clear_values[0].color =
                     (VkClearColorValue){{0.1569f, 0.1569f, 0.1569f, 1.0f}};
-                clear_values[1].depthStencil =
-                    (VkClearDepthStencilValue){ctx.layers[LAYER_BACKGROUND], 0};
+                clear_values[1].depthStencil = (VkClearDepthStencilValue){
+                    ctx.layers[LAYER_BACKGROUND], 0.0f};
                 VkRenderPassBeginInfo render_pass_info = {
                     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                     .renderPass = vk_ctx.render_pass,
@@ -911,15 +914,19 @@ void* war_window_render(void* args) {
                                        &note_quads_in_x_count);
                 for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
                     uint32_t i_in_view = note_quads_in_x[i];
-                    if (!note_quads.hidden[i_in_view]) {
-                        float pos_x = note_quads.col[i_in_view] +
-                                      (float)note_quads.sub_col[i_in_view] /
-                                          note_quads.sub_cells_col[i_in_view];
-                        float span_x =
-                            (float)note_quads
-                                .cursor_width_whole_number[i_in_view] *
-                            note_quads.cursor_width_sub_col[i_in_view] /
-                            note_quads.cursor_width_sub_cells[i_in_view];
+                    float pos_x = note_quads.col[i_in_view] +
+                                  (float)note_quads.sub_col[i_in_view] /
+                                      note_quads.sub_cells_col[i_in_view];
+                    float span_x =
+                        (float)note_quads.cursor_width_whole_number[i_in_view] *
+                        note_quads.cursor_width_sub_col[i_in_view] /
+                        note_quads.cursor_width_sub_cells[i_in_view];
+                    uint32_t color = note_quads.color[i_in_view];
+                    uint32_t outline_color =
+                        note_quads.outline_color[i_in_view];
+                    bool hidden = note_quads.hidden[i_in_view];
+                    bool mute = note_quads.mute[i_in_view];
+                    if (!hidden && !mute) {
                         war_make_quad(quad_vertices,
                                       quad_indices,
                                       &quad_vertices_count,
@@ -928,9 +935,33 @@ void* war_window_render(void* args) {
                                                  note_quads.row[i_in_view],
                                                  ctx.layers[LAYER_NOTES]},
                                       (float[2]){span_x, 1},
-                                      note_quads.color[i_in_view],
+                                      color,
                                       default_outline_thickness,
-                                      note_quads.outline_color[i_in_view],
+                                      outline_color,
+                                      (float[2]){0.0f, 0.0f},
+                                      QUAD_GRID);
+                    } else if (!hidden && mute) {
+                        float alpha_factor = default_alpha_scale;
+                        uint8_t color_alpha = (color >> 24) & 0xFF;
+                        uint8_t outline_color_alpha =
+                            (outline_color >> 24) & 0xFF;
+                        color = ((uint8_t)(color_alpha * alpha_factor) << 24) |
+                                (color & 0x00FFFFFF);
+                        outline_color =
+                            ((uint8_t)(outline_color_alpha * alpha_factor)
+                             << 24) |
+                            (outline_color & 0x00FFFFFF);
+                        war_make_quad(quad_vertices,
+                                      quad_indices,
+                                      &quad_vertices_count,
+                                      &quad_indices_count,
+                                      (float[3]){pos_x,
+                                                 note_quads.row[i_in_view],
+                                                 ctx.layers[LAYER_NOTES]},
+                                      (float[2]){span_x, 1},
+                                      color,
+                                      default_outline_thickness,
+                                      outline_color,
                                       (float[2]){0.0f, 0.0f},
                                       QUAD_GRID);
                     }
@@ -2106,13 +2137,11 @@ void* war_window_render(void* args) {
                             {0},
                         },
                         {
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {.keysym = XKB_KEY_t, .mod = 0},
+                            {.keysym = XKB_KEY_t, .mod = MOD_SHIFT},
                             {0},
                         },
                         {
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {.keysym = XKB_KEY_f, .mod = 0},
+                            {.keysym = XKB_KEY_f, .mod = MOD_SHIFT},
                             {0},
                         },
                         {
@@ -2143,21 +2172,30 @@ void* war_window_render(void* args) {
                             {0},
                         },
                         {
+                            {.keysym = KEYSYM_SPACE, .mod = 0},
                             {.keysym = XKB_KEY_d, .mod = 0},
                             {.keysym = XKB_KEY_i, .mod = 0},
                             {.keysym = XKB_KEY_v, .mod = 0},
                             {0},
                         },
                         {
+                            {.keysym = KEYSYM_SPACE, .mod = 0},
                             {.keysym = XKB_KEY_d, .mod = 0},
                             {.keysym = XKB_KEY_o, .mod = 0},
                             {.keysym = XKB_KEY_v, .mod = 0},
                             {0},
                         },
                         {
+                            {.keysym = KEYSYM_SPACE, .mod = 0},
                             {.keysym = XKB_KEY_d, .mod = 0},
                             {.keysym = XKB_KEY_i, .mod = 0},
                             {.keysym = XKB_KEY_w, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_SPACE, .mod = 0},
+                            {.keysym = XKB_KEY_d, .mod = 0},
+                            {.keysym = XKB_KEY_a, .mod = 0},
                             {0},
                         },
                         {
@@ -2376,6 +2414,7 @@ void* war_window_render(void* args) {
                             {0},
                         },
                         {
+                            {.keysym = KEYSYM_SPACE, .mod = 0},
                             {.keysym = XKB_KEY_d, .mod = 0},
                             {.keysym = KEYSYM_SPACE, .mod = 0},
                             {.keysym = XKB_KEY_a, .mod = 0},
@@ -2398,9 +2437,11 @@ void* war_window_render(void* args) {
                             {0},
                         },
                         {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
                             {.keysym = XKB_KEY_d, .mod = 0},
-                            {.keysym = XKB_KEY_c, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_m, .mod = 0},
                             {0},
                         },
                     };
@@ -2437,17 +2478,18 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_f},
                     {&&cmd_normal_t},
                     {&&cmd_normal_x},
-                    {&&cmd_normal_mt},
-                    {&&cmd_normal_mf},
+                    {&&cmd_normal_T},
+                    {&&cmd_normal_F},
                     {&&cmd_normal_gb},
                     {&&cmd_normal_gt},
                     {&&cmd_normal_gm},
                     {&&cmd_normal_s},
                     {&&cmd_normal_z},
                     {&&cmd_normal_return},
-                    {&&cmd_normal_div},
-                    {&&cmd_normal_dov},
-                    {&&cmd_normal_diw},
+                    {&&cmd_normal_spacediv},
+                    {&&cmd_normal_spacedov},
+                    {&&cmd_normal_spacediw},
+                    {&&cmd_normal_spaceda},
                     {&&cmd_normal_spacehov},
                     {&&cmd_normal_spacehiv},
                     {&&cmd_normal_spaceha},
@@ -2491,12 +2533,13 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_alt_8},
                     {&&cmd_normal_alt_9},
                     {&&cmd_normal_alt_0},
-                    {&&cmd_normal_dspacea},
+                    {&&cmd_normal_spacedspacea},
                     {&&cmd_normal_alt_shift_k},
                     {&&cmd_normal_alt_shift_j},
                     {&&cmd_normal_alt_shift_h},
                     {&&cmd_normal_alt_shift_l},
-                    {&&cmd_normal_spacedc},
+                    {&&cmd_normal_d},
+                    {&&cmd_normal_m},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3291,18 +3334,24 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_s:
                 call_carmack("cmd_normal_s");
-                if (ctx.numeric_prefix) {
-                    ctx.cursor_width_sub_col = ctx.numeric_prefix;
-                    ctx.t_cursor_width_sub_col = ctx.numeric_prefix;
-                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
-                    ctx.num_chars_in_sequence = 0;
-                    ctx.numeric_prefix = 0;
-                    goto cmd_done;
-                }
+                ctx.cursor_width_sub_cells = 1;
+                ctx.cursor_width_whole_number = 1;
                 ctx.cursor_width_sub_col = 1;
+                ctx.navigation_whole_number_col = 1;
+                ctx.navigation_sub_cells_col = 1;
+                if (ctx.navigation_sub_cells_col !=
+                    ctx.previous_navigation_sub_cells_col) {
+                    ctx.sub_col = (ctx.sub_col * ctx.navigation_sub_cells_col) /
+                                  ctx.previous_navigation_sub_cells_col;
+                    ctx.sub_col = war_clamp_uint32(
+                        ctx.sub_col, 0, ctx.navigation_sub_cells_col - 1);
+
+                    ctx.previous_navigation_sub_cells_col =
+                        ctx.navigation_sub_cells_col;
+                }
+                ctx.numeric_prefix = 0;
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
-                ctx.numeric_prefix = 0;
                 goto cmd_done;
             cmd_normal_f:
                 call_carmack("cmd_normal_f");
@@ -3332,8 +3381,8 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 ctx.numeric_prefix = 0;
-            cmd_normal_mt:
-                call_carmack("cmd_normal_mt");
+            cmd_normal_T:
+                call_carmack("cmd_normal_T");
                 if (ctx.numeric_prefix) {
                     ctx.previous_navigation_sub_cells_col =
                         ctx.navigation_sub_cells_col;
@@ -3360,8 +3409,8 @@ void* war_window_render(void* args) {
                 ctx.num_chars_in_sequence = 0;
                 ctx.numeric_prefix = 0;
                 goto cmd_done;
-            cmd_normal_mf:
-                call_carmack("cmd_normal_mf");
+            cmd_normal_F:
+                call_carmack("cmd_normal_F");
                 if (ctx.numeric_prefix) {
                     ctx.navigation_whole_number_col = ctx.numeric_prefix;
                     ctx.f_navigation_whole_number = ctx.numeric_prefix;
@@ -3465,7 +3514,7 @@ void* war_window_render(void* args) {
                                            write_to_audio_index,
                                            &ctx,
                                            red_hex,
-                                           full_white_hex,
+                                           white_hex,
                                            100.0f,
                                            VOICE_GRAND_PIANO,
                                            false,
@@ -3482,7 +3531,7 @@ void* war_window_render(void* args) {
                                    write_to_audio_index,
                                    &ctx,
                                    red_hex,
-                                   full_white_hex,
+                                   white_hex,
                                    100.0f,
                                    VOICE_GRAND_PIANO,
                                    false,
@@ -3510,31 +3559,67 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_x:
                 call_carmack("cmd_normal_x");
-                if (ctx.numeric_prefix) {
-                    for (uint32_t i = 0; i < ctx.numeric_prefix; i++) {
-                        war_note_quads_delete(
-                            &note_quads,
-                            &note_quads_count,
-                            window_render_to_audio_ring_buffer,
-                            write_to_audio_index,
-                            &ctx);
-                    }
+                note_quads_in_x_count = 0;
+                war_note_quads_under_cursor(&note_quads,
+                                            note_quads_count,
+                                            &ctx,
+                                            note_quads_in_x,
+                                            &note_quads_in_x_count);
+                if (!note_quads_in_x_count) {
                     ctx.numeric_prefix = 0;
                     memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                     ctx.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                war_note_quads_delete(&note_quads,
-                                      &note_quads_count,
-                                      window_render_to_audio_ring_buffer,
-                                      write_to_audio_index,
-                                      &ctx);
+                for (int32_t i = (int32_t)note_quads_in_x_count - 1;
+                     i >= (int32_t)note_quads_in_x_count - 1 -
+                              (int32_t)ctx.numeric_prefix;
+                     i--) {
+                    uint32_t i_trim = note_quads_in_x[i];
+                    war_note_quads_trim_right_at_i(
+                        &note_quads,
+                        &note_quads_count,
+                        &ctx,
+                        window_render_to_audio_ring_buffer,
+                        write_to_audio_index,
+                        i_trim);
+                }
                 ctx.numeric_prefix = 0;
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_div:
-                call_carmack("cmd_normal_div");
+            cmd_normal_d:
+                call_carmack("cmd_normal_d");
+                note_quads_in_x_count = 0;
+                war_note_quads_under_cursor(&note_quads,
+                                            note_quads_count,
+                                            &ctx,
+                                            note_quads_in_x,
+                                            &note_quads_in_x_count);
+                if (!note_quads_in_x_count) {
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                for (int32_t i = (int32_t)note_quads_in_x_count - 1;
+                     i >= (int32_t)note_quads_in_x_count - 1 -
+                              (int32_t)ctx.numeric_prefix;
+                     i--) {
+                    uint32_t i_delete = note_quads_in_x[i];
+                    war_note_quads_delete_at_i(
+                        &note_quads,
+                        &note_quads_count,
+                        window_render_to_audio_ring_buffer,
+                        write_to_audio_index,
+                        i_delete);
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_spacediv:
+                call_carmack("cmd_normal_spacediv");
                 note_quads_in_x_count = 0;
                 war_note_quads_in_view(&note_quads,
                                        note_quads_count,
@@ -3555,8 +3640,8 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_dov:
-                call_carmack("cmd_normal_dov");
+            cmd_normal_spacedov:
+                call_carmack("cmd_normal_spacedov");
                 note_quads_in_x_count = 0;
                 war_note_quads_outside_view(&note_quads,
                                             note_quads_count,
@@ -3573,6 +3658,43 @@ void* war_window_render(void* args) {
                         write_to_audio_index,
                         i_delete);
                 }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_spacediw:
+                call_carmack("cmd_normal_spacediw");
+                note_quads_in_x_count = 0;
+                war_note_quads_under_cursor(&note_quads,
+                                            note_quads_count,
+                                            &ctx,
+                                            note_quads_in_x,
+                                            &note_quads_in_x_count);
+                if (!note_quads_in_x_count) {
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                for (int32_t i = (int32_t)note_quads_in_x_count - 1;
+                     i >= (int32_t)note_quads_in_x_count - 1 -
+                              (int32_t)ctx.numeric_prefix;
+                     i--) {
+                    uint32_t i_delete = note_quads_in_x[i];
+                    war_note_quads_delete_at_i(
+                        &note_quads,
+                        &note_quads_count,
+                        window_render_to_audio_ring_buffer,
+                        write_to_audio_index,
+                        i_delete);
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_spaceda:
+                call_carmack("cmd_normal_spaceda");
+                note_quads_count = 0;
                 ctx.numeric_prefix = 0;
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
@@ -3694,6 +3816,27 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
+            cmd_normal_m:
+                call_carmack("cmd_normal_m");
+                note_quads_in_x_count = 0;
+                war_note_quads_under_cursor(&note_quads,
+                                            note_quads_count,
+                                            &ctx,
+                                            note_quads_in_x,
+                                            &note_quads_in_x_count);
+                if (!note_quads_in_x_count) {
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                note_quads.mute[note_quads_in_x[note_quads_in_x_count - 1]] =
+                    !note_quads
+                         .mute[note_quads_in_x[note_quads_in_x_count - 1]];
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
             cmd_normal_spaceuov:
                 call_carmack("cmd_normal_spaceuov");
                 note_quads_in_x_count = 0;
@@ -3733,28 +3876,6 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_diw:
-                call_carmack("cmd_normal_diw");
-                // note_quads_in_x_count = 0;
-                // war_note_quads_in_view(&note_quads,
-                //                        note_quads_count,
-                //                        &ctx,
-                //                        note_quads_in_x,
-                //                        &note_quads_in_x_count);
-                // for (int32_t i = (int32_t)note_quads_in_x_count - 1; i >= 0;
-                //      i--) {
-                //     uint32_t i_delete = note_quads_in_x[i];
-                //     war_note_quads_delete_at_i(
-                //         &note_quads,
-                //         &note_quads_count,
-                //         window_render_to_audio_ring_buffer,
-                //         write_to_audio_index,
-                //         i_delete);
-                // }
-                ctx.numeric_prefix = 0;
-                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
-                ctx.num_chars_in_sequence = 0;
-                goto cmd_done;
             cmd_normal_spacea:
                 call_carmack("cmd_normal_spacea");
                 if (ctx.views_saved_count < MAX_VIEWS_SAVED) {
@@ -3774,8 +3895,8 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_dspacea:
-                call_carmack("cmd_normal_dspacea");
+            cmd_normal_spacedspacea:
+                call_carmack("cmd_normal_spacedspacea");
                 ctx.views_saved_count = 0;
                 ctx.numeric_prefix = 0;
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
@@ -4024,27 +4145,6 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_alt_0:
                 call_carmack("cmd_normal_alt_0");
-                ctx.numeric_prefix = 0;
-                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
-                ctx.num_chars_in_sequence = 0;
-                goto cmd_done;
-            cmd_normal_spacedc:
-                call_carmack("cmd_normal_spacedc");
-                ctx.cursor_width_sub_cells = 1;
-                ctx.cursor_width_whole_number = 1;
-                ctx.cursor_width_sub_col = 1;
-                ctx.navigation_whole_number_col = 1;
-                ctx.navigation_sub_cells_col = 1;
-                if (ctx.navigation_sub_cells_col !=
-                    ctx.previous_navigation_sub_cells_col) {
-                    ctx.sub_col = (ctx.sub_col * ctx.navigation_sub_cells_col) /
-                                  ctx.previous_navigation_sub_cells_col;
-                    ctx.sub_col = war_clamp_uint32(
-                        ctx.sub_col, 0, ctx.navigation_sub_cells_col - 1);
-
-                    ctx.previous_navigation_sub_cells_col =
-                        ctx.navigation_sub_cells_col;
-                }
                 ctx.numeric_prefix = 0;
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;

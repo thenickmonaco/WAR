@@ -696,7 +696,20 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 .pAttachments =
                     (VkPipelineColorBlendAttachmentState[]){
                         {
-                            .blendEnable = VK_FALSE,
+                            .blendEnable = VK_TRUE, // enable blending
+                            .srcColorBlendFactor =
+                                VK_BLEND_FACTOR_SRC_ALPHA, // source color
+                                                           // weight
+                            .dstColorBlendFactor =
+                                VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // dest
+                                                                     // color
+                                                                     // weight
+                            .colorBlendOp = VK_BLEND_OP_ADD, // combine src+dst
+                            .srcAlphaBlendFactor =
+                                VK_BLEND_FACTOR_ONE, // source alpha
+                            .dstAlphaBlendFactor =
+                                VK_BLEND_FACTOR_ZERO,        // dest alpha
+                            .alphaBlendOp = VK_BLEND_OP_ADD, // combine alpha
                             .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
                                               VK_COLOR_COMPONENT_G_BIT |
                                               VK_COLOR_COMPONENT_B_BIT |
@@ -1738,13 +1751,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
     };
     VkPipelineColorBlendAttachmentState color_blend_attachment = {
-        .blendEnable = VK_TRUE,
-        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-        .colorBlendOp = VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .blendEnable = VK_TRUE,                           // enable blending
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA, // source color weight
+        .dstColorBlendFactor =
+            VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,     // dest color weight
+        .colorBlendOp = VK_BLEND_OP_ADD,             // combine src+dst
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,  // source alpha
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO, // dest alpha
+        .alphaBlendOp = VK_BLEND_OP_ADD,             // combine alpha
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
     };

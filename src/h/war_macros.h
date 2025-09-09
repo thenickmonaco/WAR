@@ -642,10 +642,11 @@ war_note_quads_delete_at_i(war_note_quads* note_quads,
                            uint32_t i_delete) {
     if (*note_quads_count == 0 || i_delete >= *note_quads_count) return;
 
-    // Swap-back delete
     uint32_t last = *note_quads_count - 1;
 
     // Swap the element to delete with the last element
+    uint64_t swapped_time = note_quads->timestamp[last];
+
     note_quads->timestamp[i_delete] = note_quads->timestamp[last];
     note_quads->col[i_delete] = note_quads->col[last];
     note_quads->row[i_delete] = note_quads->row[last];
@@ -666,7 +667,220 @@ war_note_quads_delete_at_i(war_note_quads* note_quads,
 
     (*note_quads_count)--;
 
-    // TODO: send delete command to audio thread if needed
+    // Bubble left if needed
+    int32_t i = i_delete;
+    while (i > 0 && note_quads->timestamp[i] < note_quads->timestamp[i - 1]) {
+        // Swap with previous
+        uint64_t tmp_time = note_quads->timestamp[i - 1];
+        note_quads->timestamp[i - 1] = note_quads->timestamp[i];
+        note_quads->timestamp[i] = tmp_time;
+
+        uint32_t tmp_col = note_quads->col[i - 1];
+        note_quads->col[i - 1] = note_quads->col[i];
+        note_quads->col[i] = tmp_col;
+
+        uint32_t tmp_row = note_quads->row[i - 1];
+        note_quads->row[i - 1] = note_quads->row[i];
+        note_quads->row[i] = tmp_row;
+
+        uint32_t tmp_sub_col = note_quads->sub_col[i - 1];
+        note_quads->sub_col[i - 1] = note_quads->sub_col[i];
+        note_quads->sub_col[i] = tmp_sub_col;
+
+        uint32_t tmp_sub_cells = note_quads->sub_cells_col[i - 1];
+        note_quads->sub_cells_col[i - 1] = note_quads->sub_cells_col[i];
+        note_quads->sub_cells_col[i] = tmp_sub_cells;
+
+        uint32_t tmp_cwwn = note_quads->cursor_width_whole_number[i - 1];
+        note_quads->cursor_width_whole_number[i - 1] =
+            note_quads->cursor_width_whole_number[i];
+        note_quads->cursor_width_whole_number[i] = tmp_cwwn;
+
+        uint32_t tmp_cwsc = note_quads->cursor_width_sub_col[i - 1];
+        note_quads->cursor_width_sub_col[i - 1] =
+            note_quads->cursor_width_sub_col[i];
+        note_quads->cursor_width_sub_col[i] = tmp_cwsc;
+
+        uint32_t tmp_cwscs = note_quads->cursor_width_sub_cells[i - 1];
+        note_quads->cursor_width_sub_cells[i - 1] =
+            note_quads->cursor_width_sub_cells[i];
+        note_quads->cursor_width_sub_cells[i] = tmp_cwscs;
+
+        uint32_t tmp_color = note_quads->color[i - 1];
+        note_quads->color[i - 1] = note_quads->color[i];
+        note_quads->color[i] = tmp_color;
+
+        uint32_t tmp_outline = note_quads->outline_color[i - 1];
+        note_quads->outline_color[i - 1] = note_quads->outline_color[i];
+        note_quads->outline_color[i] = tmp_outline;
+
+        uint8_t tmp_strength = note_quads->strength[i - 1];
+        note_quads->strength[i - 1] = note_quads->strength[i];
+        note_quads->strength[i] = tmp_strength;
+
+        uint8_t tmp_voice = note_quads->voice[i - 1];
+        note_quads->voice[i - 1] = note_quads->voice[i];
+        note_quads->voice[i] = tmp_voice;
+
+        uint8_t tmp_hidden = note_quads->hidden[i - 1];
+        note_quads->hidden[i - 1] = note_quads->hidden[i];
+        note_quads->hidden[i] = tmp_hidden;
+
+        uint8_t tmp_mute = note_quads->mute[i - 1];
+        note_quads->mute[i - 1] = note_quads->mute[i];
+        note_quads->mute[i] = tmp_mute;
+
+        i--;
+    }
+
+    // Bubble right if needed
+    i = i_delete;
+    while (i < (int32_t)(*note_quads_count - 1) &&
+           note_quads->timestamp[i] > note_quads->timestamp[i + 1]) {
+        // Swap with next (same as above but with i and i+1)
+        uint64_t tmp_time = note_quads->timestamp[i + 1];
+        note_quads->timestamp[i + 1] = note_quads->timestamp[i];
+        note_quads->timestamp[i] = tmp_time;
+
+        uint32_t tmp_col = note_quads->col[i + 1];
+        note_quads->col[i + 1] = note_quads->col[i];
+        note_quads->col[i] = tmp_col;
+
+        uint32_t tmp_row = note_quads->row[i + 1];
+        note_quads->row[i + 1] = note_quads->row[i];
+        note_quads->row[i] = tmp_row;
+
+        uint32_t tmp_sub_col = note_quads->sub_col[i + 1];
+        note_quads->sub_col[i + 1] = note_quads->sub_col[i];
+        note_quads->sub_col[i] = tmp_sub_col;
+
+        uint32_t tmp_sub_cells = note_quads->sub_cells_col[i + 1];
+        note_quads->sub_cells_col[i + 1] = note_quads->sub_cells_col[i];
+        note_quads->sub_cells_col[i] = tmp_sub_cells;
+
+        uint32_t tmp_cwwn = note_quads->cursor_width_whole_number[i + 1];
+        note_quads->cursor_width_whole_number[i + 1] =
+            note_quads->cursor_width_whole_number[i];
+        note_quads->cursor_width_whole_number[i] = tmp_cwwn;
+
+        uint32_t tmp_cwsc = note_quads->cursor_width_sub_col[i + 1];
+        note_quads->cursor_width_sub_col[i + 1] =
+            note_quads->cursor_width_sub_col[i];
+        note_quads->cursor_width_sub_col[i] = tmp_cwsc;
+
+        uint32_t tmp_cwscs = note_quads->cursor_width_sub_cells[i + 1];
+        note_quads->cursor_width_sub_cells[i + 1] =
+            note_quads->cursor_width_sub_cells[i];
+        note_quads->cursor_width_sub_cells[i] = tmp_cwscs;
+
+        uint32_t tmp_color = note_quads->color[i + 1];
+        note_quads->color[i + 1] = note_quads->color[i];
+        note_quads->color[i] = tmp_color;
+
+        uint32_t tmp_outline = note_quads->outline_color[i + 1];
+        note_quads->outline_color[i + 1] = note_quads->outline_color[i];
+        note_quads->outline_color[i] = tmp_outline;
+
+        uint8_t tmp_strength = note_quads->strength[i + 1];
+        note_quads->strength[i + 1] = note_quads->strength[i];
+        note_quads->strength[i] = tmp_strength;
+
+        uint8_t tmp_voice = note_quads->voice[i + 1];
+        note_quads->voice[i + 1] = note_quads->voice[i];
+        note_quads->voice[i] = tmp_voice;
+
+        uint8_t tmp_hidden = note_quads->hidden[i + 1];
+        note_quads->hidden[i + 1] = note_quads->hidden[i];
+        note_quads->hidden[i] = tmp_hidden;
+
+        uint8_t tmp_mute = note_quads->mute[i + 1];
+        note_quads->mute[i + 1] = note_quads->mute[i];
+        note_quads->mute[i] = tmp_mute;
+
+        i++;
+    }
+}
+
+static inline void
+war_note_quads_trim_right_at_i(war_note_quads* note_quads,
+                               uint32_t* note_quads_count,
+                               war_input_cmd_context* ctx,
+                               uint8_t* window_render_to_audio_ring_buffer,
+                               uint8_t* write_to_audio_index,
+                               uint32_t i_trim) {
+    if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
+
+    float cursor_pos_x =
+        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx->cursor_width_whole_number *
+                          ctx->cursor_width_sub_col /
+                          ctx->cursor_width_sub_cells;
+    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
+    float note_pos_x =
+        note_quads->col[i_trim] +
+        (float)note_quads->sub_col[i_trim] / note_quads->sub_cells_col[i_trim];
+    float note_span_x = (float)note_quads->cursor_width_whole_number[i_trim] *
+                        note_quads->cursor_width_sub_col[i_trim] /
+                        note_quads->cursor_width_sub_cells[i_trim];
+    float note_pos_x_end = note_pos_x + note_span_x;
+    bool delete = note_pos_x >= cursor_pos_x;
+    if (delete) {
+        war_note_quads_delete_at_i(note_quads,
+                                   note_quads_count,
+                                   window_render_to_audio_ring_buffer,
+                                   write_to_audio_index,
+                                   i_trim);
+        return;
+    }
+    // logic for trimming off the right side of the note quad
+    if (note_pos_x_end > cursor_pos_x_end) {
+        float new_span_x = cursor_pos_x_end - note_pos_x; // trimmed width
+        if (new_span_x < 0.0f) new_span_x = 0.0f;         // safeguard
+
+        // Convert float width back to integer whole + sub parts
+        // Keep the same sub_cells as before
+        uint32_t new_whole = (uint32_t)new_span_x; // integer part
+        uint32_t new_sub =
+            (uint32_t)((new_span_x - (float)new_whole) *
+                       note_quads->cursor_width_sub_cells[i_trim]);
+
+        note_quads->cursor_width_whole_number[i_trim] = new_whole;
+        note_quads->cursor_width_sub_col[i_trim] = new_sub;
+
+        // Optionally: if new width is zero, delete the note
+        if (new_whole == 0 && new_sub == 0) {
+            war_note_quads_delete_at_i(note_quads,
+                                       note_quads_count,
+                                       window_render_to_audio_ring_buffer,
+                                       write_to_audio_index,
+                                       i_trim);
+        }
+    }
+}
+
+static inline void
+war_note_quads_trim_left_at_i(war_note_quads* note_quads,
+                              uint32_t* note_quads_count,
+                              war_input_cmd_context* ctx,
+                              uint8_t* window_render_to_audio_ring_buffer,
+                              uint8_t* write_to_audio_index,
+                              uint32_t i_trim) {
+    if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
+
+    float cursor_pos_x =
+        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx->cursor_width_whole_number *
+                          ctx->cursor_width_sub_col /
+                          ctx->cursor_width_sub_cells;
+    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
+    float note_pos_x =
+        note_quads->col[i_trim] +
+        (float)note_quads->sub_col[i_trim] / note_quads->sub_cells_col[i_trim];
+    float note_span_x = (float)note_quads->cursor_width_whole_number[i_trim] *
+                        note_quads->cursor_width_sub_col[i_trim] /
+                        note_quads->cursor_width_sub_cells[i_trim];
+    float note_pos_x_end = note_pos_x + note_span_x;
+    bool delete = note_pos_x_end <= cursor_pos_x_end;
 }
 
 static inline void war_note_quads_in_view(war_note_quads* note_quads,
@@ -675,20 +889,23 @@ static inline void war_note_quads_in_view(war_note_quads* note_quads,
                                           uint32_t* out_indices,
                                           uint32_t* out_indices_count) {
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        uint32_t note_col = note_quads->col[i];
-        uint32_t note_row = note_quads->row[i];
-        uint32_t note_col_end =
-            (note_quads->sub_cells_col[i] == 1) ?
-                note_col + note_quads->cursor_width_whole_number[i] :
-                note_col + note_quads->cursor_width_sub_col[i] *
-                               note_quads->cursor_width_whole_number[i] /
-                               note_quads->cursor_width_sub_cells[i];
-        if (((note_col >= ctx->left_col && note_col <= ctx->right_col) ||
-             (note_col_end >= ctx->left_col)) &&
-            (note_row >= ctx->bottom_row && note_row <= ctx->top_row)) {
-            out_indices[*out_indices_count] = i;
-            (*out_indices_count)++;
-        }
+        float leftover_x =
+            fmodf(ctx->physical_width, ctx->cell_width) / ctx->cell_width;
+        float note_pos_x =
+            note_quads->col[i] +
+            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
+        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
+                            note_quads->cursor_width_sub_col[i] /
+                            note_quads->cursor_width_sub_cells[i];
+        float note_pos_y = note_quads->row[i];
+        float note_pos_x_end = note_pos_x + note_span_x;
+        float left_col = ctx->left_col;
+        float right_col = ctx->right_col + leftover_x + 1;
+        float bottom_row = ctx->bottom_row;
+        float top_row = ctx->top_row;
+        bool in_view = (note_pos_x <= right_col && note_pos_x_end > left_col) &&
+                       (note_pos_y >= bottom_row && note_pos_y <= top_row);
+        if (in_view) { out_indices[(*out_indices_count)++] = i; }
     }
 }
 
@@ -698,27 +915,55 @@ static inline void war_note_quads_outside_view(war_note_quads* note_quads,
                                                uint32_t* out_indices,
                                                uint32_t* out_indices_count) {
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        uint32_t note_col = note_quads->col[i];
-        uint32_t note_row = note_quads->row[i];
-        if ((note_col < ctx->left_col || note_col > ctx->right_col) ||
-            (note_row < ctx->bottom_row || note_row > ctx->top_row)) {
-            out_indices[*out_indices_count] = i;
-            (*out_indices_count)++;
-        }
+        float leftover_x =
+            fmodf(ctx->physical_width, ctx->cell_width) / ctx->cell_width;
+        float note_pos_x =
+            note_quads->col[i] +
+            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
+        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
+                            note_quads->cursor_width_sub_col[i] /
+                            note_quads->cursor_width_sub_cells[i];
+        float note_pos_y = note_quads->row[i];
+        float note_pos_x_end = note_pos_x + note_span_x;
+        float left_col = ctx->left_col;
+        float right_col = ctx->right_col + leftover_x + 1;
+        float bottom_row = ctx->bottom_row;
+        float top_row = ctx->top_row;
+        bool outside_view =
+            !((note_pos_x <= right_col && note_pos_x_end > left_col) &&
+              (note_pos_y >= bottom_row && note_pos_y <= top_row));
+        if (outside_view) { out_indices[(*out_indices_count)++] = i; }
     }
 }
 
-static inline void war_note_quads_in_cursor(war_note_quads* note_quads,
-                                            uint32_t note_quads_count,
-                                            war_input_cmd_context* ctx,
-                                            uint32_t* out_indices,
-                                            uint32_t* out_indices_count) {
-    uint32_t cursor_start_col = ctx->col;
-    uint32_t cursor_start_row = ctx->row;
-    uint32_t cursor_start_sub_col = ctx->sub_col;
-    uint32_t cursor_start_whole_number = ctx->navigation_whole_number_col;
-    uint32_t cursor_start_sub_cells = ctx->navigation_sub_cells_col;
-    for (uint32_t i = 0; i < note_quads_count; i++) {}
+static inline void war_note_quads_under_cursor(war_note_quads* note_quads,
+                                               uint32_t note_quads_count,
+                                               war_input_cmd_context* ctx,
+                                               uint32_t* out_indices,
+                                               uint32_t* out_indices_count) {
+    float cursor_pos_x =
+        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx->cursor_width_whole_number *
+                          ctx->cursor_width_sub_col /
+                          ctx->cursor_width_sub_cells;
+    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
+    float cursor_pos_y = ctx->row;
+    float cursor_pos_y_end = cursor_pos_y + 1;
+    for (uint32_t i = 0; i < note_quads_count; i++) {
+        float note_pos_x =
+            note_quads->col[i] +
+            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
+        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
+                            note_quads->cursor_width_sub_col[i] /
+                            note_quads->cursor_width_sub_cells[i];
+        float note_pos_x_end = note_pos_x + note_span_x;
+        float note_pos_y = note_quads->row[i];
+        float note_pos_y_end = note_pos_y + 1;
+        bool under_cursor =
+            (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x) &&
+            (note_pos_y >= cursor_pos_y && note_pos_y_end <= cursor_pos_y_end);
+        if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
+    }
 }
 
 #endif // WAR_MACROS_H

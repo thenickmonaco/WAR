@@ -27,6 +27,7 @@
 #include "h/war_debug_macros.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -801,6 +802,19 @@ war_note_quads_delete_at_i(war_note_quads* note_quads,
     }
 }
 
+static inline uint32_t war_gcd(uint32_t a, uint32_t b) {
+    while (b != 0) {
+        uint32_t t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
+static inline uint32_t war_lcm(uint32_t a, uint32_t b) {
+    return a / war_gcd(a, b) * b;
+}
+
 static inline void
 war_note_quads_trim_right_at_i(war_note_quads* note_quads,
                                uint32_t* note_quads_count,
@@ -823,7 +837,7 @@ war_note_quads_trim_right_at_i(war_note_quads* note_quads,
                         note_quads->cursor_width_sub_col[i_trim] /
                         note_quads->cursor_width_sub_cells[i_trim];
     float note_pos_x_end = note_pos_x + note_span_x;
-    bool delete = note_pos_x >= cursor_pos_x;
+    bool delete = cursor_pos_x <= note_pos_x;
     if (delete) {
         war_note_quads_delete_at_i(note_quads,
                                    note_quads_count,
@@ -832,30 +846,50 @@ war_note_quads_trim_right_at_i(war_note_quads* note_quads,
                                    i_trim);
         return;
     }
-    // logic for trimming off the right side of the note quad
-    if (note_pos_x_end > cursor_pos_x_end) {
-        float new_span_x = cursor_pos_x_end - note_pos_x; // trimmed width
-        if (new_span_x < 0.0f) new_span_x = 0.0f;         // safeguard
-
-        // Convert float width back to integer whole + sub parts
-        // Keep the same sub_cells as before
-        uint32_t new_whole = (uint32_t)new_span_x; // integer part
-        uint32_t new_sub =
-            (uint32_t)((new_span_x - (float)new_whole) *
-                       note_quads->cursor_width_sub_cells[i_trim]);
-
-        note_quads->cursor_width_whole_number[i_trim] = new_whole;
-        note_quads->cursor_width_sub_col[i_trim] = new_sub;
-
-        // Optionally: if new width is zero, delete the note
-        if (new_whole == 0 && new_sub == 0) {
-            war_note_quads_delete_at_i(note_quads,
-                                       note_quads_count,
-                                       window_render_to_audio_ring_buffer,
-                                       write_to_audio_index,
-                                       i_trim);
+    float new_span_x = cursor_pos_x - note_pos_x;
+    uint32_t new_cursor_width_whole_number = 1;
+    uint32_t new_cursor_width_sub_col = 1;
+    uint32_t new_cursor_width_sub_cells = 1;
+    float practical_span_x = (float)new_cursor_width_whole_number *
+                             new_cursor_width_sub_col /
+                             new_cursor_width_sub_cells;
+    const float EPS = 1e-2f;
+    float min_error = fabs(new_span_x - practical_span_x);
+    bool practical = false;
+    while (!practical) {
+        for (uint32_t sub_cells = 1; sub_cells <= 1000 && !practical;
+             sub_cells++) {
+            for (uint32_t sub_col = 1; sub_col <= 1000 && !practical;
+                 sub_col++) {
+                for (uint32_t whole = 1; whole <= 1000 && !practical; whole++) {
+                    float test_span = (float)whole * sub_col / sub_cells;
+                    float error = fabs(new_span_x - test_span);
+                    if (error < min_error) {
+                        min_error = error;
+                        new_cursor_width_whole_number = whole;
+                        new_cursor_width_sub_col = sub_col;
+                        new_cursor_width_sub_cells = sub_cells;
+                        practical_span_x = test_span;
+                    }
+                    if (error <= EPS) {
+                        practical = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (min_error <= EPS) {
+            practical = true;
+        } else {
+            break;
         }
     }
+    note_quads->cursor_width_whole_number[i_trim] =
+        new_cursor_width_whole_number;
+    note_quads->cursor_width_sub_col[i_trim] = new_cursor_width_sub_col;
+    ;
+    note_quads->cursor_width_sub_cells[i_trim] = new_cursor_width_sub_cells;
+    ;
 }
 
 static inline void
@@ -866,7 +900,6 @@ war_note_quads_trim_left_at_i(war_note_quads* note_quads,
                               uint8_t* write_to_audio_index,
                               uint32_t i_trim) {
     if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
-
     float cursor_pos_x =
         ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
     float cursor_span_x = (float)ctx->cursor_width_whole_number *
@@ -880,7 +913,97 @@ war_note_quads_trim_left_at_i(war_note_quads* note_quads,
                         note_quads->cursor_width_sub_col[i_trim] /
                         note_quads->cursor_width_sub_cells[i_trim];
     float note_pos_x_end = note_pos_x + note_span_x;
-    bool delete = note_pos_x_end <= cursor_pos_x_end;
+    bool delete = cursor_pos_x_end >= note_pos_x_end;
+    if (delete) {
+        war_note_quads_delete_at_i(note_quads,
+                                   note_quads_count,
+                                   window_render_to_audio_ring_buffer,
+                                   write_to_audio_index,
+                                   i_trim);
+        return;
+    }
+    float new_span_x = note_pos_x_end - cursor_pos_x_end;
+    uint32_t new_cursor_width_whole_number = 1;
+    uint32_t new_cursor_width_sub_col = 1;
+    uint32_t new_cursor_width_sub_cells = 1;
+    float practical_span_x = (float)new_cursor_width_whole_number *
+                             new_cursor_width_sub_col /
+                             new_cursor_width_sub_cells;
+    const float EPS = 1e-2f;
+    float min_error = fabs(new_span_x - practical_span_x);
+    bool practical = false;
+    while (!practical) {
+        for (uint32_t sub_cells = 1; sub_cells <= 1000 && !practical;
+             sub_cells++) {
+            for (uint32_t sub_col = 1; sub_col <= 1000 && !practical;
+                 sub_col++) {
+                for (uint32_t whole = 1; whole <= 1000 && !practical; whole++) {
+                    float test_span = (float)whole * sub_col / sub_cells;
+                    float error = fabs(new_span_x - test_span);
+                    if (error < min_error) {
+                        min_error = error;
+                        new_cursor_width_whole_number = whole;
+                        new_cursor_width_sub_col = sub_col;
+                        new_cursor_width_sub_cells = sub_cells;
+                        practical_span_x = test_span;
+                    }
+                    if (error <= EPS) {
+                        practical = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (min_error <= EPS) {
+            practical = true;
+        } else {
+            break;
+        }
+    }
+    note_quads->cursor_width_whole_number[i_trim] =
+        new_cursor_width_whole_number;
+    note_quads->cursor_width_sub_col[i_trim] = new_cursor_width_sub_col;
+    note_quads->cursor_width_sub_cells[i_trim] = new_cursor_width_sub_cells;
+    float new_pos_x = cursor_pos_x_end;
+    float new_col = ctx->col;
+    float new_sub_col = 1;
+    float new_sub_cells_col = 1;
+    float practical_pos_x = new_col + (float)new_sub_col / new_sub_cells_col;
+    float min_error_pos = fabs(new_pos_x - practical_pos_x);
+    bool practical_pos = false;
+    while (!practical_pos) {
+        for (uint32_t sub_cells = 1; sub_cells <= 1000 && !practical_pos;
+             sub_cells++) {
+            for (uint32_t sub_col = 1; sub_col <= 1000 && !practical_pos;
+                 sub_col++) {
+                for (uint32_t col = 0;
+                     col <= (uint32_t)new_pos_x && !practical_pos;
+                     col++) {
+                    float test_pos = col + (float)sub_col / sub_cells;
+                    float error = fabs(new_pos_x - test_pos);
+                    if (error < min_error_pos) {
+                        min_error_pos = error;
+                        new_col = col;
+                        new_sub_col = sub_col;
+                        new_sub_cells_col = sub_cells;
+                        practical_pos_x = test_pos;
+                    }
+                    if (error <= EPS) {
+                        practical_pos = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (min_error_pos <= EPS) {
+            practical_pos = true;
+        } else {
+            break;
+        }
+    }
+    note_quads->col[i_trim] = new_col;
+    note_quads->sub_col[i_trim] = new_sub_col;
+    note_quads->sub_cells_col[i_trim] = new_sub_cells_col;
 }
 
 static inline void war_note_quads_in_view(war_note_quads* note_quads,

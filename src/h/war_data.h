@@ -77,9 +77,9 @@ enum war_audio_functions {
 enum war_misc {
     max_objects = 1000,
     max_opcodes = 20,
-    max_quads = 8000,
-    max_text_quads = 8000,
-    max_note_quads = 8000,
+    max_quads = 20000,
+    max_text_quads = 20000,
+    max_note_quads = 20000,
     max_frames = 1,
     max_instances_per_quad = 1,
     max_instances_per_sdf_quad = 1,
@@ -129,7 +129,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 92,
+    SEQUENCE_COUNT = 93,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };

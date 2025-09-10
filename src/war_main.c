@@ -2444,6 +2444,10 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_m, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_x, .mod = MOD_SHIFT},
+                            {0},
+                        },
                     };
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2540,6 +2544,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_alt_shift_l},
                     {&&cmd_normal_d},
                     {&&cmd_normal_m},
+                    {&&cmd_normal_X},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3588,6 +3593,37 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
+            cmd_normal_X:
+                call_carmack("cmd_normal_X");
+                note_quads_in_x_count = 0;
+                war_note_quads_under_cursor(&note_quads,
+                                            note_quads_count,
+                                            &ctx,
+                                            note_quads_in_x,
+                                            &note_quads_in_x_count);
+                if (!note_quads_in_x_count) {
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                for (int32_t i = (int32_t)note_quads_in_x_count - 1;
+                     i >= (int32_t)note_quads_in_x_count - 1 -
+                              (int32_t)ctx.numeric_prefix;
+                     i--) {
+                    uint32_t i_trim = note_quads_in_x[i];
+                    war_note_quads_trim_left_at_i(
+                        &note_quads,
+                        &note_quads_count,
+                        &ctx,
+                        window_render_to_audio_ring_buffer,
+                        write_to_audio_index,
+                        i_trim);
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
             cmd_normal_d:
                 call_carmack("cmd_normal_d");
                 note_quads_in_x_count = 0;
@@ -4208,8 +4244,6 @@ void* war_window_render(void* args) {
                 ctx.cursor_y = (float)(int32_t)war_read_le32(
                                    msg_buffer + msg_buffer_offset + 16) /
                                256.0f * scale_factor;
-                call_carmack("CURSOR_X: %f", ctx.cursor_x);
-                call_carmack("CURSOR_Y: %f", ctx.cursor_y);
                 goto done;
             wl_pointer_button:
                 dump_bytes("wl_pointer_button event",

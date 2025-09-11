@@ -2,7 +2,7 @@
 
 ![WAR](/assets/images/WAR-over-rose-circle-white.jpg)
 
-## Piano Roll GUI Demo
+## VIDEO DEMO
 
 [![Watch the video](https://img.youtube.com/vi/b7Bf17YH_uQ/0.jpg)](https://youtu.be/b7Bf17YH_uQ)
 
@@ -10,7 +10,7 @@
 
 make music with vim motions
 
-## License
+## LICENSE
 
 WAR is licensed under **WAR 1.0**, an umbrella license:
 

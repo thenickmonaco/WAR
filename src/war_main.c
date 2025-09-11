@@ -4520,6 +4520,7 @@ void* war_window_render(void* args) {
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_u: {
+                // TODO REFACTOR: add the blocks to each jump label like above
                 call_carmack("cmd_normal_alt_u");
                 note_quads_in_x_count = 0;
                 war_note_quads_in_col(&note_quads,

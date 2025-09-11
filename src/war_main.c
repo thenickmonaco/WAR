@@ -2448,6 +2448,66 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_x, .mod = MOD_SHIFT},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_w, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_w, .mod = MOD_SHIFT},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_e, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_e, .mod = MOD_SHIFT},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_b, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_UP, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_DOWN, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_LEFT, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_RIGHT, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_UP, .mod = MOD_ALT},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_DOWN, .mod = MOD_ALT},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_LEFT, .mod = MOD_ALT},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_RIGHT, .mod = MOD_ALT},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_u, .mod = MOD_ALT},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_d, .mod = MOD_ALT},
+                            {0},
+                        },
                     };
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2545,6 +2605,21 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_d},
                     {&&cmd_normal_m},
                     {&&cmd_normal_X},
+                    {&&cmd_normal_w},
+                    {&&cmd_normal_W},
+                    {&&cmd_normal_e},
+                    {&&cmd_normal_E},
+                    {&&cmd_normal_b},
+                    {&&cmd_normal_k},
+                    {&&cmd_normal_j},
+                    {&&cmd_normal_h},
+                    {&&cmd_normal_l},
+                    {&&cmd_normal_alt_k},
+                    {&&cmd_normal_alt_j},
+                    {&&cmd_normal_alt_h},
+                    {&&cmd_normal_alt_l},
+                    {&&cmd_normal_alt_u},
+                    {&&cmd_normal_alt_d},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -4185,6 +4260,409 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
+            cmd_normal_w:
+                call_carmack("cmd_normal_w");
+                note_quads_in_x_count = 0;
+                war_note_quads_in_row(&note_quads,
+                                      note_quads_count,
+                                      &ctx,
+                                      note_quads_in_x,
+                                      &note_quads_in_x_count);
+                if (note_quads_in_x_count == 0) {
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                const float EPS = 1e-2f;
+                int i_next_note = -1;
+                uint32_t count = 1;
+                if (ctx.numeric_prefix) { count = ctx.numeric_prefix; }
+                uint32_t temp_i = 0;
+                float cursor_pos_x = war_cursor_pos_x(&ctx);
+                while (temp_i < count) {
+                    float next_note_distance = -1.0f;
+                    for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
+                        float next_note_distance_temp =
+                            war_note_pos_x(&note_quads, note_quads_in_x[i]) -
+                            cursor_pos_x;
+                        if (next_note_distance_temp < 0.0f) { continue; }
+                        if ((next_note_distance < 0.0f &&
+                             next_note_distance_temp > 0.0f) ||
+                            (next_note_distance_temp > 0.0f &&
+                             next_note_distance_temp <
+                                 next_note_distance + EPS)) {
+                            next_note_distance = next_note_distance_temp;
+                            i_next_note = note_quads_in_x[i];
+                        }
+                    }
+                    if (i_next_note < 0) {
+                        ctx.numeric_prefix = 0;
+                        memset(
+                            ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                        ctx.num_chars_in_sequence = 0;
+                        goto cmd_done;
+                    }
+                    ctx.col = war_clamp_uint32(
+                        note_quads.col[i_next_note], ctx.min_col, ctx.max_col);
+                    if (ctx.col > ctx.right_col || ctx.col < ctx.left_col) {
+                        ctx.sub_col = note_quads.sub_col[i_next_note];
+                        uint32_t viewport_width = ctx.right_col - ctx.left_col;
+                        distance = viewport_width / 2;
+                        ctx.left_col = war_clamp_subtract_uint32(
+                            ctx.col, distance, ctx.min_col);
+                        ctx.right_col = war_clamp_add_uint32(
+                            ctx.col, distance, ctx.max_col);
+                        ctx.sub_col = note_quads.sub_col[i_next_note];
+                        ctx.navigation_sub_cells_col =
+                            note_quads.sub_cells_col[i_next_note];
+                        uint32_t new_viewport_width = war_clamp_subtract_uint32(
+                            ctx.right_col, ctx.left_col, ctx.min_col);
+                        if (new_viewport_width < viewport_width) {
+                            uint32_t diff =
+                                war_clamp_subtract_uint32(viewport_width,
+                                                          new_viewport_width,
+                                                          ctx.min_col);
+                            uint32_t sum = war_clamp_add_uint32(
+                                ctx.right_col, diff, ctx.max_col);
+                            if (sum < ctx.max_col) {
+                                ctx.right_col = sum;
+                            } else {
+                                ctx.left_col = war_clamp_subtract_uint32(
+                                    ctx.left_col, diff, ctx.min_col);
+                            }
+                        }
+                    }
+                    cursor_pos_x = war_note_pos_x(&note_quads, i_next_note);
+                    temp_i++;
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_W:
+                call_carmack("cmd_normal_W");
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_e:
+                call_carmack("cmd_normal_e");
+                note_quads_in_x_count = 0;
+                war_note_quads_in_row(&note_quads,
+                                      note_quads_count,
+                                      &ctx,
+                                      note_quads_in_x,
+                                      &note_quads_in_x_count);
+                if (note_quads_in_x_count == 0) {
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                count = 1;
+                if (ctx.numeric_prefix) { count = ctx.numeric_prefix; }
+                temp_i = 0;
+                float cursor_pos_x_end = war_cursor_pos_x_end(&ctx);
+                while (temp_i < count) {
+                    i_next_note = -1;
+                    float next_note_distance = -1.0f;
+                    for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
+                        float next_note_distance_temp =
+                            war_note_pos_x_end(&note_quads,
+                                               note_quads_in_x[i]) -
+                            cursor_pos_x_end;
+                        if (next_note_distance_temp < 0.0f) { continue; }
+                        if ((next_note_distance < 0.0f &&
+                             next_note_distance_temp > 0.0f) ||
+                            (next_note_distance_temp > 0.0f &&
+                             next_note_distance_temp <
+                                 next_note_distance + EPS)) {
+                            next_note_distance = next_note_distance_temp;
+                            i_next_note = note_quads_in_x[i];
+                        }
+                    }
+                    if (i_next_note < 0) {
+                        ctx.numeric_prefix = 0;
+                        memset(
+                            ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                        ctx.num_chars_in_sequence = 0;
+                        goto cmd_done;
+                    }
+                    ctx.col =
+                        war_clamp_uint32(note_quads.col[i_next_note] +
+                                             (uint32_t)war_note_span_x(
+                                                 &note_quads, i_next_note) -
+                                             1,
+                                         ctx.min_col,
+                                         ctx.max_col);
+                    if (ctx.col > ctx.right_col || ctx.col < ctx.left_col) {
+                        ctx.sub_col = note_quads.sub_col[i_next_note];
+                        uint32_t viewport_width = ctx.right_col - ctx.left_col;
+                        distance = viewport_width / 2;
+                        ctx.left_col = war_clamp_subtract_uint32(
+                            ctx.col, distance, ctx.min_col);
+                        ctx.right_col = war_clamp_add_uint32(
+                            ctx.col, distance, ctx.max_col);
+                        ctx.sub_col = note_quads.sub_col[i_next_note];
+                        ctx.navigation_sub_cells_col =
+                            note_quads.sub_cells_col[i_next_note];
+                        uint32_t new_viewport_width = war_clamp_subtract_uint32(
+                            ctx.right_col, ctx.left_col, ctx.min_col);
+                        if (new_viewport_width < viewport_width) {
+                            uint32_t diff =
+                                war_clamp_subtract_uint32(viewport_width,
+                                                          new_viewport_width,
+                                                          ctx.min_col);
+                            uint32_t sum = war_clamp_add_uint32(
+                                ctx.right_col, diff, ctx.max_col);
+                            if (sum < ctx.max_col) {
+                                ctx.right_col = sum;
+                            } else {
+                                ctx.left_col = war_clamp_subtract_uint32(
+                                    ctx.left_col, diff, ctx.min_col);
+                            }
+                        }
+                    }
+                    cursor_pos_x_end =
+                        war_note_pos_x_end(&note_quads, i_next_note);
+                    temp_i++;
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_E:
+                call_carmack("cmd_normal_E");
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_b:
+                call_carmack("cmd_normal_b");
+                note_quads_in_x_count = 0;
+                war_note_quads_in_row(&note_quads,
+                                      note_quads_count,
+                                      &ctx,
+                                      note_quads_in_x,
+                                      &note_quads_in_x_count);
+                if (note_quads_in_x_count == 0) {
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                int i_previous_note = -1;
+                count = 1;
+                if (ctx.numeric_prefix) { count = ctx.numeric_prefix; }
+                temp_i = 0;
+                cursor_pos_x = war_cursor_pos_x(&ctx);
+                while (temp_i < count) {
+                    float previous_note_distance = -1.0f;
+                    for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
+                        float previous_note_distance_temp =
+                            cursor_pos_x -
+                            war_note_pos_x(&note_quads, note_quads_in_x[i]);
+                        if (previous_note_distance_temp < 0.0f) { continue; }
+                        if ((previous_note_distance < 0.0f &&
+                             previous_note_distance_temp > 0.0f) ||
+                            (previous_note_distance_temp > 0.0f &&
+                             previous_note_distance_temp <
+                                 previous_note_distance + EPS)) {
+                            previous_note_distance =
+                                previous_note_distance_temp;
+                            i_previous_note = note_quads_in_x[i];
+                        }
+                    }
+                    if (i_previous_note < 0) {
+                        ctx.numeric_prefix = 0;
+                        memset(
+                            ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                        ctx.num_chars_in_sequence = 0;
+                        goto cmd_done;
+                    }
+                    ctx.col = war_clamp_uint32(note_quads.col[i_previous_note],
+                                               ctx.min_col,
+                                               ctx.max_col);
+                    if (ctx.col > ctx.right_col || ctx.col < ctx.left_col) {
+                        ctx.sub_col = note_quads.sub_col[i_previous_note];
+                        uint32_t viewport_width = ctx.right_col - ctx.left_col;
+                        distance = viewport_width / 2;
+                        ctx.left_col = war_clamp_subtract_uint32(
+                            ctx.col, distance, ctx.min_col);
+                        ctx.right_col = war_clamp_add_uint32(
+                            ctx.col, distance, ctx.max_col);
+                        ctx.sub_col = note_quads.sub_col[i_previous_note];
+                        ctx.navigation_sub_cells_col =
+                            note_quads.sub_cells_col[i_previous_note];
+                        uint32_t new_viewport_width = war_clamp_subtract_uint32(
+                            ctx.right_col, ctx.left_col, ctx.min_col);
+                        if (new_viewport_width < viewport_width) {
+                            uint32_t diff =
+                                war_clamp_subtract_uint32(viewport_width,
+                                                          new_viewport_width,
+                                                          ctx.min_col);
+                            uint32_t sum = war_clamp_add_uint32(
+                                ctx.right_col, diff, ctx.max_col);
+                            if (sum < ctx.max_col) {
+                                ctx.right_col = sum;
+                            } else {
+                                ctx.left_col = war_clamp_subtract_uint32(
+                                    ctx.left_col, diff, ctx.min_col);
+                            }
+                        }
+                    }
+                    cursor_pos_x = war_note_pos_x(&note_quads, i_previous_note);
+                    temp_i++;
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_alt_u: {
+                call_carmack("cmd_normal_alt_u");
+                note_quads_in_x_count = 0;
+                war_note_quads_in_col(&note_quads,
+                                      note_quads_count,
+                                      &ctx,
+                                      note_quads_in_x,
+                                      &note_quads_in_x_count);
+                uint32_t cursor_row = ctx.row;
+                uint32_t count = 1;
+                int i_above = -1;
+                if (ctx.numeric_prefix) { count = ctx.numeric_prefix; }
+                uint32_t temp_i = 0;
+                while (temp_i < count) {
+                    float previous_note_distance = -1.0f;
+                    for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
+                        uint32_t note_row = note_quads.row[note_quads_in_x[i]];
+                        float previous_note_distance_temp =
+                            (int)note_row - (int)cursor_row;
+                        if (previous_note_distance_temp < 0.0f) { continue; }
+                        if ((previous_note_distance < 0.0f &&
+                             previous_note_distance_temp > 0.0f) ||
+                            (previous_note_distance_temp > 0.0f &&
+                             previous_note_distance_temp <
+                                 previous_note_distance)) {
+                            previous_note_distance =
+                                previous_note_distance_temp;
+                            i_above = note_quads_in_x[i];
+                        }
+                    }
+                    if (i_above < 0.0f) {
+                        ctx.numeric_prefix = 0;
+                        memset(
+                            ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                        ctx.num_chars_in_sequence = 0;
+                        goto cmd_done;
+                    }
+                    ctx.row = war_clamp_uint32(
+                        note_quads.row[i_above], ctx.min_row, ctx.max_row);
+                    if (ctx.row > ctx.top_row || ctx.row < ctx.bottom_row) {
+                        uint32_t viewport_height = ctx.top_row - ctx.bottom_row;
+                        uint32_t distance = viewport_height / 2;
+                        ctx.bottom_row = war_clamp_subtract_uint32(
+                            ctx.row, distance, ctx.min_row);
+                        ctx.top_row = war_clamp_add_uint32(
+                            ctx.row, distance, ctx.max_row);
+                        uint32_t new_viewport_height =
+                            war_clamp_subtract_uint32(
+                                ctx.top_row, ctx.bottom_row, ctx.min_row);
+                        if (new_viewport_height < viewport_height) {
+                            uint32_t diff =
+                                war_clamp_subtract_uint32(viewport_height,
+                                                          new_viewport_height,
+                                                          ctx.min_row);
+                            uint32_t sum = war_clamp_add_uint32(
+                                ctx.top_row, diff, ctx.max_row);
+                            if (sum < ctx.max_row) {
+                                ctx.top_row = sum;
+                            } else {
+                                ctx.bottom_row = war_clamp_subtract_uint32(
+                                    ctx.bottom_row, diff, ctx.min_row);
+                            }
+                        }
+                    }
+                    cursor_row = note_quads.row[i_above];
+                    temp_i++;
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_normal_alt_d: {
+                call_carmack("cmd_normal_alt_d");
+                note_quads_in_x_count = 0;
+                war_note_quads_in_col(&note_quads,
+                                      note_quads_count,
+                                      &ctx,
+                                      note_quads_in_x,
+                                      &note_quads_in_x_count);
+                uint32_t cursor_row = ctx.row;
+                uint32_t count = 1;
+                int i_above = -1;
+                if (ctx.numeric_prefix) { count = ctx.numeric_prefix; }
+                uint32_t temp_i = 0;
+                while (temp_i < count) {
+                    float previous_note_distance = -1.0f;
+                    for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
+                        uint32_t note_row = note_quads.row[note_quads_in_x[i]];
+                        float previous_note_distance_temp =
+                            (int)cursor_row - (int)note_row;
+                        if (previous_note_distance_temp < 0.0f) { continue; }
+                        if ((previous_note_distance < 0.0f &&
+                             previous_note_distance_temp > 0.0f) ||
+                            (previous_note_distance_temp > 0.0f &&
+                             previous_note_distance_temp <
+                                 previous_note_distance)) {
+                            previous_note_distance =
+                                previous_note_distance_temp;
+                            i_above = note_quads_in_x[i];
+                        }
+                    }
+                    if (i_above < 0.0f) {
+                        ctx.numeric_prefix = 0;
+                        memset(
+                            ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                        ctx.num_chars_in_sequence = 0;
+                        goto cmd_done;
+                    }
+                    ctx.row = war_clamp_uint32(
+                        note_quads.row[i_above], ctx.min_row, ctx.max_row);
+                    if (ctx.row > ctx.top_row || ctx.row < ctx.bottom_row) {
+                        uint32_t viewport_height = ctx.top_row - ctx.bottom_row;
+                        uint32_t distance = viewport_height / 2;
+                        ctx.bottom_row = war_clamp_subtract_uint32(
+                            ctx.row, distance, ctx.min_row);
+                        ctx.top_row = war_clamp_add_uint32(
+                            ctx.row, distance, ctx.max_row);
+                        uint32_t new_viewport_height =
+                            war_clamp_subtract_uint32(
+                                ctx.top_row, ctx.bottom_row, ctx.min_row);
+                        if (new_viewport_height < viewport_height) {
+                            uint32_t diff =
+                                war_clamp_subtract_uint32(viewport_height,
+                                                          new_viewport_height,
+                                                          ctx.min_row);
+                            uint32_t sum = war_clamp_add_uint32(
+                                ctx.top_row, diff, ctx.max_row);
+                            if (sum < ctx.max_row) {
+                                ctx.top_row = sum;
+                            } else {
+                                ctx.bottom_row = war_clamp_subtract_uint32(
+                                    ctx.bottom_row, diff, ctx.min_row);
+                            }
+                        }
+                    }
+                    cursor_row = note_quads.row[i_above];
+                    temp_i++;
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_done:
                 war_wayland_holy_trinity(fd,
                                          wl_surface_id,

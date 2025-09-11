@@ -548,6 +548,34 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     (*indices_count) += 6;
 }
 
+static inline float war_cursor_pos_x(war_input_cmd_context* ctx) {
+    return ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
+}
+
+static inline float war_cursor_span_x(war_input_cmd_context* ctx) {
+    return (float)ctx->cursor_width_whole_number * ctx->cursor_width_sub_col /
+           ctx->cursor_width_sub_cells;
+}
+
+static inline float war_cursor_pos_x_end(war_input_cmd_context* ctx) {
+    return war_cursor_pos_x(ctx) + war_cursor_span_x(ctx);
+}
+
+static inline float war_note_pos_x(war_note_quads* note_quads, uint32_t i) {
+    return note_quads->col[i] +
+           (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
+}
+
+static inline float war_note_span_x(war_note_quads* note_quads, uint32_t i) {
+    return (float)note_quads->cursor_width_whole_number[i] *
+           note_quads->cursor_width_sub_col[i] /
+           note_quads->cursor_width_sub_cells[i];
+}
+
+static inline float war_note_pos_x_end(war_note_quads* note_quads, uint32_t i) {
+    return war_note_pos_x(note_quads, i) + war_note_span_x(note_quads, i);
+}
+
 static inline void
 war_note_quads_add(war_note_quads* note_quads,
                    uint32_t* note_quads_count,
@@ -1085,6 +1113,48 @@ static inline void war_note_quads_under_cursor(war_note_quads* note_quads,
         bool under_cursor =
             (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x) &&
             (note_pos_y >= cursor_pos_y && note_pos_y_end <= cursor_pos_y_end);
+        if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
+    }
+}
+
+static inline void war_note_quads_in_row(war_note_quads* note_quads,
+                                         uint32_t note_quads_count,
+                                         war_input_cmd_context* ctx,
+                                         uint32_t* out_indices,
+                                         uint32_t* out_indices_count) {
+    uint32_t row = ctx->row;
+    for (uint32_t i = 0; i < note_quads_count; i++) {
+        if (row == note_quads->row[i] && !note_quads->hidden[i]) {
+            out_indices[(*out_indices_count)++] = i;
+        }
+    }
+}
+
+static inline void war_note_quads_in_col(war_note_quads* note_quads,
+                                         uint32_t note_quads_count,
+                                         war_input_cmd_context* ctx,
+                                         uint32_t* out_indices,
+                                         uint32_t* out_indices_count) {
+    float cursor_pos_x =
+        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx->cursor_width_whole_number *
+                          ctx->cursor_width_sub_col /
+                          ctx->cursor_width_sub_cells;
+    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
+    float cursor_pos_y = ctx->row;
+    float cursor_pos_y_end = cursor_pos_y + 1;
+    for (uint32_t i = 0; i < note_quads_count; i++) {
+        float note_pos_x =
+            note_quads->col[i] +
+            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
+        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
+                            note_quads->cursor_width_sub_col[i] /
+                            note_quads->cursor_width_sub_cells[i];
+        float note_pos_x_end = note_pos_x + note_span_x;
+        float note_pos_y = note_quads->row[i];
+        float note_pos_y_end = note_pos_y + 1;
+        bool under_cursor =
+            (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x);
         if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
     }
 }

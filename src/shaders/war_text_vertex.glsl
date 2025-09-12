@@ -57,8 +57,10 @@ layout(push_constant) uniform PushConstants {
 
 void main() {
     const uint QUAD_GRID = 1u << 2;
-    vec2 ndc = vec2((in_pos.x + pc.cell_offsets.x - pc.bottom_left.x) * pc.cell_size.x / pc.physical_size.x * 2.0 - 1.0, 
-            1.0 - (in_pos.y + pc.cell_offsets.y - pc.bottom_left.y) * pc.cell_size.y / pc.physical_size.y * 2.0);
+    bool quad_grid = (in_flags & QUAD_GRID) != 0u;
+    vec2 offsets = quad_grid ? pc.cell_offsets : vec2(0.0);
+    vec2 ndc = vec2((in_pos.x + offsets.x - pc.bottom_left.x) * pc.cell_size.x / pc.physical_size.x * 2.0 - 1.0, 
+            1.0 - (in_pos.y + offsets.y - pc.bottom_left.y) * pc.cell_size.y / pc.physical_size.y * 2.0);
     gl_Position = vec4(ndc, in_pos.z, 1.0);
     frag_uv = in_uv;
     frag_color = in_color;

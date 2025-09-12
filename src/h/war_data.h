@@ -298,6 +298,13 @@ typedef struct war_input_cmd_context {
     uint32_t note_quads_count;
     float layers[LAYER_COUNT];
     float layer_count;
+    float playback_bar_pos_x;
+    float playback_bar_pos_x_increment;
+    float BPM;
+    float FPS;
+    uint64_t frame_duration_us;
+    bool sleep;
+    uint64_t sleep_duration_us;
 } war_input_cmd_context;
 
 typedef struct war_key_trie_pool {

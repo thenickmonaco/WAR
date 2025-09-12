@@ -113,6 +113,7 @@ void* war_window_render(void* args) {
                     ((float)num_rows_for_status_bars * vk_ctx.cell_height)) /
                    vk_ctx.cell_height);
     war_input_cmd_context ctx = {
+        .FPS = 240,
         .now = 0,
         .mode = MODE_NORMAL,
         .hud_state = HUD_PIANO,
@@ -186,6 +187,7 @@ void* war_window_render(void* args) {
         .input_sequence = {0},
         .num_chars_in_sequence = 0,
         .layer_count = (float)LAYER_COUNT,
+        .sleep = false,
     };
     for (int i = 0; i < LAYER_COUNT; i++) {
         ctx.layers[i] = i / ctx.layer_count;
@@ -390,16 +392,26 @@ void* war_window_render(void* args) {
     uint16_t* text_indices = malloc(sizeof(uint16_t) * max_text_quads);
     uint32_t text_indices_count = 0;
 
-    const uint64_t frame_duration_us = 16666; // 60 fps
+    const double microsecond_conversion = 1000000.0;
+    ctx.sleep_duration_us = 50000;
+    ctx.frame_duration_us =
+        (uint64_t)round((1.0 / (double)ctx.FPS) * microsecond_conversion);
+    call_carmack("frame duration us: %lu", ctx.frame_duration_us);
     uint64_t last_frame_time = war_get_monotonic_time_us();
     int end_window_render = 0;
     //-------------------------------------------------------------------------
     // window_render loop
     //-------------------------------------------------------------------------
     while (!end_window_render) {
+        // if (ctx.sleep) {
+        //     call_carmack("sleep");
+        //     usleep(ctx.sleep_duration_us);
+        //     continue;
+        // }
         ctx.now = war_get_monotonic_time_us();
-        if (ctx.now - last_frame_time >= frame_duration_us) {
-            last_frame_time += frame_duration_us;
+        if (ctx.now - last_frame_time >= ctx.frame_duration_us) {
+            war_get_frame_duration_us(&ctx);
+            last_frame_time += ctx.frame_duration_us;
         }
         // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
         // if (*read_from_audio_index != *write_to_window_render_index) {
@@ -1179,6 +1191,146 @@ void* war_window_render(void* args) {
                                         NULL);
                 text_vertices_count = 0;
                 text_indices_count = 0;
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['~'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 1,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['*'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 2,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['m'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 3,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['M'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 4,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['y'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 5,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['t'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 6,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['1'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 7,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['3'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 8,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs['4'],
+                    0.1f,
+                    0.0f,
+                    0);
+                war_make_text_quad(
+                    text_vertices,
+                    text_indices,
+                    &text_vertices_count,
+                    &text_indices_count,
+                    (float[3]){ctx.left_col + ctx.num_cols_for_line_numbers + 9,
+                               ctx.bottom_row + 2,
+                               ctx.layers[LAYER_HUD_TEXT]},
+                    (float[2]){1, 1},
+                    full_white_hex,
+                    &vk_ctx.glyphs[':'],
+                    0.1f,
+                    0.0f,
+                    0);
                 memcpy(vk_ctx.text_vertex_buffer_mapped,
                        text_vertices,
                        sizeof(war_text_vertex) * text_vertices_count);
@@ -4305,8 +4457,10 @@ void* war_window_render(void* args) {
                     }
                     ctx.col = war_clamp_uint32(
                         note_quads.col[i_next_note], ctx.min_col, ctx.max_col);
+                    ctx.sub_col = note_quads.sub_col[i_next_note];
+                    ctx.navigation_sub_cells_col =
+                        note_quads.sub_cells_col[i_next_note];
                     if (ctx.col > ctx.right_col || ctx.col < ctx.left_col) {
-                        ctx.sub_col = note_quads.sub_col[i_next_note];
                         uint32_t viewport_width = ctx.right_col - ctx.left_col;
                         distance = viewport_width / 2;
                         ctx.left_col = war_clamp_subtract_uint32(
@@ -4314,8 +4468,6 @@ void* war_window_render(void* args) {
                         ctx.right_col = war_clamp_add_uint32(
                             ctx.col, distance, ctx.max_col);
                         ctx.sub_col = note_quads.sub_col[i_next_note];
-                        ctx.navigation_sub_cells_col =
-                            note_quads.sub_cells_col[i_next_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx.right_col, ctx.left_col, ctx.min_col);
                         if (new_viewport_width < viewport_width) {
@@ -4396,8 +4548,10 @@ void* war_window_render(void* args) {
                                              1,
                                          ctx.min_col,
                                          ctx.max_col);
+                    ctx.sub_col = note_quads.sub_col[i_next_note];
+                    ctx.navigation_sub_cells_col =
+                        note_quads.sub_cells_col[i_next_note];
                     if (ctx.col > ctx.right_col || ctx.col < ctx.left_col) {
-                        ctx.sub_col = note_quads.sub_col[i_next_note];
                         uint32_t viewport_width = ctx.right_col - ctx.left_col;
                         distance = viewport_width / 2;
                         ctx.left_col = war_clamp_subtract_uint32(
@@ -4405,8 +4559,6 @@ void* war_window_render(void* args) {
                         ctx.right_col = war_clamp_add_uint32(
                             ctx.col, distance, ctx.max_col);
                         ctx.sub_col = note_quads.sub_col[i_next_note];
-                        ctx.navigation_sub_cells_col =
-                            note_quads.sub_cells_col[i_next_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx.right_col, ctx.left_col, ctx.min_col);
                         if (new_viewport_width < viewport_width) {
@@ -4484,8 +4636,10 @@ void* war_window_render(void* args) {
                     ctx.col = war_clamp_uint32(note_quads.col[i_previous_note],
                                                ctx.min_col,
                                                ctx.max_col);
+                    ctx.sub_col = note_quads.sub_col[i_previous_note];
+                    ctx.navigation_sub_cells_col =
+                        note_quads.sub_cells_col[i_previous_note];
                     if (ctx.col > ctx.right_col || ctx.col < ctx.left_col) {
-                        ctx.sub_col = note_quads.sub_col[i_previous_note];
                         uint32_t viewport_width = ctx.right_col - ctx.left_col;
                         distance = viewport_width / 2;
                         ctx.left_col = war_clamp_subtract_uint32(
@@ -4493,8 +4647,6 @@ void* war_window_render(void* args) {
                         ctx.right_col = war_clamp_add_uint32(
                             ctx.col, distance, ctx.max_col);
                         ctx.sub_col = note_quads.sub_col[i_previous_note];
-                        ctx.navigation_sub_cells_col =
-                            note_quads.sub_cells_col[i_previous_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx.right_col, ctx.left_col, ctx.min_col);
                         if (new_viewport_width < viewport_width) {

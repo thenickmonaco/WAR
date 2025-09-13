@@ -113,6 +113,8 @@ void* war_window_render(void* args) {
                     ((float)num_rows_for_status_bars * vk_ctx.cell_height)) /
                    vk_ctx.cell_height);
     war_input_cmd_context ctx = {
+        .end_window_render = false,
+        .audio_state = AUDIO_CMD_STOP,
         .FPS = 240,
         .now = 0,
         .mode = MODE_NORMAL,
@@ -188,6 +190,7 @@ void* war_window_render(void* args) {
         .num_chars_in_sequence = 0,
         .layer_count = (float)LAYER_COUNT,
         .sleep = false,
+        .playback_bar_pos_x = 0.0f,
     };
     for (int i = 0; i < LAYER_COUNT; i++) {
         ctx.layers[i] = i / ctx.layer_count;
@@ -396,13 +399,11 @@ void* war_window_render(void* args) {
     ctx.sleep_duration_us = 50000;
     ctx.frame_duration_us =
         (uint64_t)round((1.0 / (double)ctx.FPS) * microsecond_conversion);
-    call_carmack("frame duration us: %lu", ctx.frame_duration_us);
     uint64_t last_frame_time = war_get_monotonic_time_us();
-    int end_window_render = 0;
     //-------------------------------------------------------------------------
     // window_render loop
     //-------------------------------------------------------------------------
-    while (!end_window_render) {
+    while (!ctx.end_window_render) {
         // if (ctx.sleep) {
         //     call_carmack("sleep");
         //     usleep(ctx.sleep_duration_us);
@@ -413,32 +414,33 @@ void* war_window_render(void* args) {
             war_get_frame_duration_us(&ctx);
             last_frame_time += ctx.frame_duration_us;
         }
-        // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_GET_TIMESTAMP)
-        // if (*read_from_audio_index != *write_to_window_render_index) {
-        //     switch (audio_to_window_render_ring_buffer
-        //                 [*read_from_audio_index]) {
-        //     case AUDIO_GET_TIMESTAMP:
-        //         *read_from_audio_index =
-        //             (*read_from_audio_index + 1) & 0xFF;
-        //        size_t space_till_end =
-        //            ring_buffer_size - *read_from_audio_index;
-        //        if (space_till_end < 16) { *read_from_audio_index = 0; }
-        //        current_repeat_us =
-        //            read_le64(audio_to_window_render_ring_buffer +
-        //                      *read_from_audio_index) *
-        //                1000000 +
-        //            read_le64(audio_to_window_render_ring_buffer +
-        //                      *read_from_audio_index + 8);
-        //        call_carmack("current_repeat_us: %lu", current_repeat_us);
-        //        *read_from_audio_index =
-        //            (*read_from_audio_index + 16) & 0xFF;
-        //        break;
-        //    }
-        //}
-        // COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
-        // alt+k
+        // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_CMD_GET_TIMESTAMP)
+        if (*read_from_audio_index != *write_to_window_render_index) {
+            switch (
+                audio_to_window_render_ring_buffer[*read_from_audio_index]) {
+            case AUDIO_CMD_GET_TIMESTAMP:
+                *read_from_audio_index = (*read_from_audio_index + 1) & 0xFF;
+                size_t space_till_end =
+                    ring_buffer_size - *read_from_audio_index;
+                ctx.audio_now =
+                    war_read_le64(audio_to_window_render_ring_buffer +
+                                  *read_from_audio_index) *
+                        1000000ULL +
+                    war_read_le64(audio_to_window_render_ring_buffer +
+                                  *read_from_audio_index + 8);
+                if (space_till_end < 16) { *read_from_audio_index = 0; }
+                *read_from_audio_index = (*read_from_audio_index + 16) & 0xFF;
+                break;
+            }
+        }
+        if (ctx.audio_state == AUDIO_CMD_PLAY) {
+            window_render_to_audio_ring_buffer[(*write_to_audio_index)++] =
+                AUDIO_CMD_GET_TIMESTAMP;
+        }
+        //  COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
+        //  alt+k
         //---------------------------------------------------------------------
-        // KEY REPEATS
+        //  KEY REPEATS
         //---------------------------------------------------------------------
         if (repeat_keysym) {
             uint32_t k = repeat_keysym;
@@ -977,6 +979,24 @@ void* war_window_render(void* args) {
                                       (float[2]){0.0f, 0.0f},
                                       QUAD_GRID);
                     }
+                }
+                // draw playback bar
+                if (ctx.audio_state == AUDIO_CMD_PLAY ||
+                    ctx.audio_state == AUDIO_CMD_PAUSE) {
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){ctx.playback_bar_pos_x,
+                                   ctx.bottom_row,
+                                   ctx.layers[LAYER_PLAYBACK_BAR]},
+                        (float[2]){0, ctx.viewport_rows},
+                        red_hex,
+                        0,
+                        0,
+                        (float[2]){default_vertical_line_thickness, 0.0f},
+                        QUAD_LINE | QUAD_GRID);
                 }
                 // draw status bar quads
                 war_make_quad(quad_vertices,
@@ -1693,10 +1713,10 @@ void* war_window_render(void* args) {
                 assert(wl_surface_destroy_written == 8);
 
                 window_render_to_audio_ring_buffer[*write_to_audio_index] =
-                    AUDIO_END_WAR;
+                    AUDIO_CMD_END_WAR;
                 *write_to_audio_index = (*write_to_audio_index + 1) & 0xFF;
 
-                end_window_render = 1;
+                ctx.end_window_render = true;
                 goto done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
@@ -2830,7 +2850,7 @@ void* war_window_render(void* args) {
                 dump_bytes("wl_keyboard_key event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                if (end_window_render) { goto done; }
+                if (ctx.end_window_render) { goto done; }
                 uint32_t wl_key_state = war_read_le32(
                     msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
                 uint32_t keycode =
@@ -3748,7 +3768,7 @@ void* war_window_render(void* args) {
                                            red_hex,
                                            white_hex,
                                            100.0f,
-                                           VOICE_GRAND_PIANO,
+                                           AUDIO_VOICE_GRAND_PIANO,
                                            false,
                                            false);
                     }
@@ -3765,7 +3785,7 @@ void* war_window_render(void* args) {
                                    red_hex,
                                    white_hex,
                                    100.0f,
-                                   VOICE_GRAND_PIANO,
+                                   AUDIO_VOICE_GRAND_PIANO,
                                    false,
                                    false);
                 ctx.numeric_prefix = 0;
@@ -3782,7 +3802,7 @@ void* war_window_render(void* args) {
                 //                    red_hex,
                 //                    full_white_hex,
                 //                    100.0f,
-                //                    VOICE_GRAND_PIANO,
+                //                    AUDIO_VOICE_GRAND_PIANO,
                 //                    false,
                 //                    false);
                 ctx.numeric_prefix = 0;
@@ -5064,13 +5084,19 @@ void* war_audio(void* args) {
     uint8_t* read_from_window_render_index = a->read_from_window_render_index;
     uint8_t* write_to_audio_index = a->write_to_audio_index;
     uint8_t from_window_render = 0;
-
+    war_audio_context audio_ctx = {
+        .audio_state = AUDIO_CMD_STOP,
+        .sample_rate = AUDIO_DEFAULT_SAMPLE_RATE,
+        .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
+        .BPM = AUDIO_DEFAULT_BPM,
+        .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
+        .logical_frames_played = 0,
+    };
     // Open the default PCM device for playback (blocking mode)
     snd_pcm_t* pcm_handle;
     int result =
         snd_pcm_open(&pcm_handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
     assert(result >= 0);
-
     // Set hardware parameters
     snd_pcm_hw_params_t* hw_params;
     snd_pcm_hw_params_alloca(&hw_params);
@@ -5079,55 +5105,44 @@ void* war_audio(void* args) {
         pcm_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
     snd_pcm_hw_params_set_format(
         pcm_handle, hw_params, SND_PCM_FORMAT_FLOAT_LE);
-
-    unsigned int sample_rate = SAMPLE_RATE;
-    snd_pcm_hw_params_set_rate_near(pcm_handle, hw_params, &sample_rate, 0);
-
+    snd_pcm_hw_params_set_rate_near(
+        pcm_handle, hw_params, &audio_ctx.sample_rate, 0);
     snd_pcm_hw_params_set_channels(
-        pcm_handle, hw_params, NUM_CHANNELS); // stereo
-
-    snd_pcm_uframes_t period_size = PERIOD_SIZE;
+        pcm_handle, hw_params, audio_ctx.channel_count); // stereo
     snd_pcm_hw_params_set_period_size_near(
-        pcm_handle, hw_params, &period_size, 0);
-
-    snd_pcm_uframes_t buffer_size = period_size * 4;
+        pcm_handle, hw_params, &audio_ctx.period_size, 0);
+    snd_pcm_uframes_t buffer_size =
+        audio_ctx.period_size * AUDIO_DEFAULT_PERIOD_COUNT;
     snd_pcm_hw_params_set_buffer_size_near(pcm_handle, hw_params, &buffer_size);
-
     result = snd_pcm_hw_params(pcm_handle, hw_params);
     assert(result >= 0);
-
     // prepare the device
     result = snd_pcm_prepare(pcm_handle);
     assert(result >= 0);
-
     // timestamp
     snd_pcm_status_t* status;
     snd_pcm_status_alloca(&status);
     result = snd_pcm_status(pcm_handle, status);
     assert(result >= 0);
-    snd_timestamp_t time_stamp;
-
-    size_t sec_size = sizeof(time_stamp.tv_sec);
+    size_t sec_size = sizeof(audio_ctx.timestamp.tv_sec);
     assert(sec_size == 8);
-    size_t usec_size = sizeof(time_stamp.tv_usec);
+    size_t usec_size = sizeof(audio_ctx.timestamp.tv_usec);
     assert(usec_size == 8);
-
-    float sample_buffer[PERIOD_SIZE * NUM_CHANNELS];
-
-    uint8_t end_audio = false;
-    while (!end_audio) {
+    float
+        sample_buffer[AUDIO_DEFAULT_PERIOD_SIZE * AUDIO_DEFAULT_CHANNEL_COUNT];
+    while (audio_ctx.audio_state != AUDIO_CMD_END_WAR) {
         if (read_from_window_render_index != write_to_audio_index) {
             from_window_render = window_render_to_audio_ring_buffer
                 [*read_from_window_render_index];
             (*read_from_window_render_index) =
                 ((*read_from_window_render_index) + 1) & 0xFF;
-
             switch (from_window_render) {
-            case AUDIO_GET_TIMESTAMP:
+            case AUDIO_CMD_GET_TIMESTAMP:
+                call_carmack("AUDIO_CMD_GET_TIMESTAMP");
                 snd_pcm_status(pcm_handle, status);
-                snd_pcm_status_get_tstamp(status, &time_stamp);
+                snd_pcm_status_get_tstamp(status, &audio_ctx.timestamp);
                 audio_to_window_render_ring_buffer
-                    [*write_to_window_render_index] = AUDIO_GET_TIMESTAMP;
+                    [*write_to_window_render_index] = AUDIO_CMD_GET_TIMESTAMP;
                 *write_to_window_render_index =
                     (*write_to_window_render_index + 1) & 0xFF;
                 size_t space_till_end =
@@ -5135,30 +5150,44 @@ void* war_audio(void* args) {
                 if (space_till_end < 16) { *write_to_window_render_index = 0; }
                 war_write_le64(audio_to_window_render_ring_buffer +
                                    *write_to_window_render_index,
-                               time_stamp.tv_sec);
+                               audio_ctx.timestamp.tv_sec);
                 war_write_le64(audio_to_window_render_ring_buffer +
                                    *write_to_window_render_index + 8,
-                               time_stamp.tv_usec);
+                               audio_ctx.timestamp.tv_usec);
                 *write_to_window_render_index =
                     (*write_to_window_render_index + 16) & 0xFF;
-
                 from_window_render = 0;
                 break;
-            case AUDIO_END_WAR:
-                call_carmack("AUDIO_END_WAR");
-
-                end_audio = true;
+            case AUDIO_CMD_PAUSE:
+                call_carmack("AUDIO_CMD_PAUSE");
+                audio_ctx.audio_state = AUDIO_CMD_PAUSE;
+                from_window_render = 0;
+                break;
+            case AUDIO_CMD_PLAY:
+                call_carmack("AUDIO_CMD_PLAY");
+                audio_ctx.audio_state = AUDIO_CMD_PLAY;
+                from_window_render = 0;
+                break;
+            case AUDIO_CMD_STOP:
+                call_carmack("AUDIO_CMD_STOP");
+                audio_ctx.audio_state = AUDIO_CMD_STOP;
+                audio_ctx.logical_frames_played = 0, from_window_render = 0;
+                break;
+            case AUDIO_CMD_END_WAR:
+                call_carmack("AUDIO_CMD_END_WAR");
+                audio_ctx.audio_state = AUDIO_CMD_END_WAR;
+                from_window_render = 0;
                 continue;
                 break;
             }
         }
-
-        for (int i = 0; i < PERIOD_SIZE * NUM_CHANNELS; i++) {
+        for (int i = 0;
+             i < AUDIO_DEFAULT_PERIOD_SIZE * AUDIO_DEFAULT_CHANNEL_COUNT;
+             i++) {
             sample_buffer[i] = 0;
         }
-
-        snd_pcm_sframes_t frames =
-            snd_pcm_writei(pcm_handle, sample_buffer, PERIOD_SIZE);
+        snd_pcm_sframes_t frames = snd_pcm_writei(
+            pcm_handle, sample_buffer, AUDIO_DEFAULT_PERIOD_SIZE);
         if (frames < 0) {
             frames = snd_pcm_recover(pcm_handle, frames, 1);
             if (frames < 0) {

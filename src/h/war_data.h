@@ -23,6 +23,7 @@
 #ifndef WAR_DATA_H
 #define WAR_DATA_H
 
+#include <alsa/asoundlib.h>
 #include <ft2build.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -57,21 +58,6 @@ enum war_keysyms {
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
-};
-
-enum war_audio {
-    SAMPLE_RATE = 48000,
-    PERIOD_SIZE = 512,
-    NUM_CHANNELS = 2,
-    BPM = 100,
-};
-
-enum war_audio_functions {
-    AUDIO_PLAY = 1,
-    AUDIO_PAUSE = 2,
-    AUDIO_GET_TIMESTAMP = 3,
-    AUDIO_ADD_NOTE = 4,
-    AUDIO_END_WAR = 5,
 };
 
 enum war_misc {
@@ -168,10 +154,6 @@ typedef struct war_rgba_t {
     float b;
     float a;
 } war_rgba_t;
-
-enum war_voice {
-    VOICE_GRAND_PIANO = 0,
-};
 
 typedef struct war_note {
     uint32_t id;
@@ -305,7 +287,41 @@ typedef struct war_input_cmd_context {
     uint64_t frame_duration_us;
     bool sleep;
     uint64_t sleep_duration_us;
+    uint8_t audio_state;
+    uint64_t audio_now;
+    bool end_window_render;
 } war_input_cmd_context;
+
+enum war_audio {
+    // defaults
+    AUDIO_DEFAULT_SAMPLE_RATE = 48000,
+    AUDIO_DEFAULT_PERIOD_SIZE = 512,
+    AUDIO_DEFAULT_CHANNEL_COUNT = 2,
+    AUDIO_DEFAULT_BPM = 100,
+    AUDIO_DEFAULT_PERIOD_COUNT = 4,
+    // cmds
+    AUDIO_CMD_STOP = 1,
+    AUDIO_CMD_PLAY = 2,
+    AUDIO_CMD_PAUSE = 3,
+    AUDIO_CMD_GET_TIMESTAMP = 4,
+    AUDIO_CMD_ADD_NOTE = 5,
+    AUDIO_CMD_END_WAR = 6,
+    // voices
+    AUDIO_VOICE_GRAND_PIANO = 0,
+    AUDIO_VOICE_COUNT = 128,
+};
+typedef struct war_audio_context {
+    float BPM;
+    uint32_t sample_rate;
+    snd_pcm_uframes_t period_size;
+    uint32_t channel_count;
+    uint8_t audio_state;
+    snd_timestamp_t timestamp;
+    uint64_t logical_frames_played;
+} war_audio_context;
+
+typedef struct war_voice {
+} war_voice;
 
 typedef struct war_key_trie_pool {
     war_key_trie_node nodes[MAX_NODES];
@@ -453,7 +469,7 @@ typedef struct war_vulkan_context {
     uint32_t current_frame;
 
     //-------------------------------------------------------------------------
-    // SDF PIPELINE
+    // TEXT PIPELINE
     //-------------------------------------------------------------------------
     FT_Library ft_library;
     FT_Face ft_regular;

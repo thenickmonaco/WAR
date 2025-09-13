@@ -48,6 +48,12 @@ static inline uint64_t war_get_monotonic_time_us(void) {
     return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
 
+static inline void
+war_get_playback_pos_x_increment_per_frame(war_input_cmd_context* ctx) {
+    ctx->playback_bar_pos_x_increment =
+        (ctx->audio_now / 1e6f) * (ctx->BPM * 4.0f / 60.0f) * ctx->cell_width;
+}
+
 static inline war_rgba_t war_unpack_abgr(uint32_t hex_color) {
     war_rgba_t color;
     color.r = ((hex_color >> 0) & 0xFF) / 255.0f;  // Red

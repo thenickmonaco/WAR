@@ -115,7 +115,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 108,
+    SEQUENCE_COUNT = 111,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -204,6 +204,59 @@ typedef struct war_warpoon {
     uint32_t col;
 } war_warpoon;
 
+enum war_audio {
+    // defaults
+    AUDIO_DEFAULT_SAMPLE_RATE = 48000,
+    AUDIO_DEFAULT_PERIOD_SIZE = 512,
+    AUDIO_DEFAULT_CHANNEL_COUNT = 2,
+    AUDIO_DEFAULT_BPM = 100,
+    AUDIO_DEFAULT_PERIOD_COUNT = 4,
+    // cmds
+    AUDIO_CMD_STOP = 1,
+    AUDIO_CMD_PLAY = 2,
+    AUDIO_CMD_PAUSE = 3,
+    AUDIO_CMD_GET_TIMESTAMP = 4,
+    AUDIO_CMD_GET_TIMESTAMP_LOGICAL = 5,
+    AUDIO_CMD_ADD_NOTE = 6,
+    AUDIO_CMD_END_WAR = 7,
+    AUDIO_CMD_TRAVERSE = 8,
+    // cmd sizes (not including header)
+    AUDIO_CMD_STOP_SIZE = 0,
+    AUDIO_CMD_PLAY_SIZE = 0,
+    AUDIO_CMD_PAUSE_SIZE = 0,
+    AUDIO_CMD_GET_TIMESTAMP_SIZE = 8,
+    AUDIO_CMD_GET_TIMESTAMP_LOGICAL_SIZE = 8,
+    AUDIO_CMD_ADD_NOTE_SIZE = 0,
+    AUDIO_CMD_END_WAR_SIZE = 0,
+    AUDIO_CMD_TRAVERSE_SIZE = 8,
+    AUDIO_CMD_HEADER_SIZE = 1,
+    // voices
+    AUDIO_VOICE_GRAND_PIANO = 0,
+    AUDIO_VOICE_COUNT = 128,
+};
+
+typedef struct war_audio_context {
+    float BPM;
+    uint32_t sample_rate;
+    snd_pcm_uframes_t period_size;
+    uint32_t channel_count;
+    uint8_t state;
+    snd_timestamp_t timestamp;
+    uint64_t logical_frames_played;
+} war_audio_context;
+
+typedef struct war_audio_context_for_window_render {
+    float BPM;
+    uint32_t sample_rate;
+    snd_pcm_uframes_t period_size;
+    uint32_t channel_count;
+    uint8_t state;
+    uint64_t now;
+} war_audio_context_for_window_render;
+
+typedef struct war_voice {
+} war_voice;
+
 typedef struct war_input_cmd_context {
     uint64_t now;
     uint32_t col;
@@ -282,46 +335,12 @@ typedef struct war_input_cmd_context {
     float layer_count;
     float playback_bar_pos_x;
     float playback_bar_pos_x_increment;
-    float BPM;
     float FPS;
     uint64_t frame_duration_us;
     bool sleep;
     uint64_t sleep_duration_us;
-    uint8_t audio_state;
-    uint64_t audio_now;
     bool end_window_render;
 } war_input_cmd_context;
-
-enum war_audio {
-    // defaults
-    AUDIO_DEFAULT_SAMPLE_RATE = 48000,
-    AUDIO_DEFAULT_PERIOD_SIZE = 512,
-    AUDIO_DEFAULT_CHANNEL_COUNT = 2,
-    AUDIO_DEFAULT_BPM = 100,
-    AUDIO_DEFAULT_PERIOD_COUNT = 4,
-    // cmds
-    AUDIO_CMD_STOP = 1,
-    AUDIO_CMD_PLAY = 2,
-    AUDIO_CMD_PAUSE = 3,
-    AUDIO_CMD_GET_TIMESTAMP = 4,
-    AUDIO_CMD_ADD_NOTE = 5,
-    AUDIO_CMD_END_WAR = 6,
-    // voices
-    AUDIO_VOICE_GRAND_PIANO = 0,
-    AUDIO_VOICE_COUNT = 128,
-};
-typedef struct war_audio_context {
-    float BPM;
-    uint32_t sample_rate;
-    snd_pcm_uframes_t period_size;
-    uint32_t channel_count;
-    uint8_t audio_state;
-    snd_timestamp_t timestamp;
-    uint64_t logical_frames_played;
-} war_audio_context;
-
-typedef struct war_voice {
-} war_voice;
 
 typedef struct war_key_trie_pool {
     war_key_trie_node nodes[MAX_NODES];

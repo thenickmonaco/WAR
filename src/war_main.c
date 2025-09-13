@@ -71,6 +71,9 @@ int main() {
     return 0;
 }
 
+//-----------------------------------------------------------------------------
+// WINDOW RENDER THREAD
+//-----------------------------------------------------------------------------
 void* war_window_render(void* args) {
     header("war_window_render");
     war_thread_args* a = (war_thread_args*)args;
@@ -81,6 +84,7 @@ void* war_window_render(void* args) {
         a->audio_to_window_render_ring_buffer;
     uint8_t* read_from_audio_index = a->read_from_audio_index;
     uint8_t* write_to_window_render_index = a->write_to_window_render_index;
+    uint8_t from_audio = 0;
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
@@ -90,9 +94,9 @@ void* war_window_render(void* args) {
     const uint32_t stride = physical_width * 4;
 
 #if DMABUF
-    war_vulkan_context vk_ctx =
+    war_vulkan_context ctx_vk =
         war_vulkan_init(physical_width, physical_height);
-    assert(vk_ctx.dmabuf_fd >= 0);
+    assert(ctx_vk.dmabuf_fd >= 0);
     uint32_t zwp_linux_dmabuf_v1_id = 0;
     uint32_t zwp_linux_buffer_params_v1_id = 0;
     uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
@@ -106,15 +110,22 @@ void* war_window_render(void* args) {
 
     uint32_t num_rows_for_status_bars = 3;
     uint32_t num_cols_for_line_numbers = 3;
-    uint32_t viewport_cols = (uint32_t)(physical_width / vk_ctx.cell_width);
-    uint32_t viewport_rows = (uint32_t)(physical_height / vk_ctx.cell_height);
+    uint32_t viewport_cols = (uint32_t)(physical_width / ctx_vk.cell_width);
+    uint32_t viewport_rows = (uint32_t)(physical_height / ctx_vk.cell_height);
     uint32_t visible_rows =
         (uint32_t)((physical_height -
-                    ((float)num_rows_for_status_bars * vk_ctx.cell_height)) /
-                   vk_ctx.cell_height);
+                    ((float)num_rows_for_status_bars * ctx_vk.cell_height)) /
+                   ctx_vk.cell_height);
+    war_audio_context_for_window_render ctx_audio = {
+        .state = AUDIO_CMD_STOP,
+        .sample_rate = AUDIO_DEFAULT_SAMPLE_RATE,
+        .now = 0,
+        .BPM = AUDIO_DEFAULT_BPM,
+        .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
+        .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
+    };
     war_input_cmd_context ctx = {
         .end_window_render = false,
-        .audio_state = AUDIO_CMD_STOP,
         .FPS = 240,
         .now = 0,
         .mode = MODE_NORMAL,
@@ -148,8 +159,8 @@ void* war_window_render(void* args) {
         .left_col = 0,
         .right_col =
             (uint32_t)((physical_width - ((float)num_cols_for_line_numbers *
-                                          vk_ctx.cell_width)) /
-                       vk_ctx.cell_width) -
+                                          ctx_vk.cell_width)) /
+                       ctx_vk.cell_width) -
             1,
         .col_increment = 1,
         .row_increment = 1,
@@ -175,8 +186,8 @@ void* war_window_render(void* args) {
         .viewport_rows = viewport_rows,
         .scroll_margin_cols = 0, // cols from visible min/max col
         .scroll_margin_rows = 0, // rows from visible min/max row
-        .cell_width = vk_ctx.cell_width,
-        .cell_height = vk_ctx.cell_height,
+        .cell_width = ctx_vk.cell_width,
+        .cell_height = ctx_vk.cell_height,
         .physical_width = physical_width,
         .physical_height = physical_height,
         .logical_width = logical_width,
@@ -312,9 +323,9 @@ void* war_window_render(void* args) {
     obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
 
     uint32_t max_viewport_cols =
-        (uint32_t)(physical_width / (vk_ctx.cell_width * ctx.min_zoom_scale));
+        (uint32_t)(physical_width / (ctx_vk.cell_width * ctx.min_zoom_scale));
     uint32_t max_viewport_rows =
-        (uint32_t)(physical_height / (vk_ctx.cell_height * ctx.min_zoom_scale));
+        (uint32_t)(physical_height / (ctx_vk.cell_height * ctx.min_zoom_scale));
     uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
 
     // --- WAR_NOTE_QUADS ALLOCATION WITH 32-BYTE PER-ARRAY ALIGNMENT ---
@@ -414,28 +425,56 @@ void* war_window_render(void* args) {
             war_get_frame_duration_us(&ctx);
             last_frame_time += ctx.frame_duration_us;
         }
+
         // COMMENT ADD: SYNC REPEAT TO AUDIO THREAD (AUDIO_CMD_GET_TIMESTAMP)
+        //---------------------------------------------------------------------
+        // RING BUFFER WINDOW RENDER
+        //---------------------------------------------------------------------
         if (*read_from_audio_index != *write_to_window_render_index) {
-            switch (
-                audio_to_window_render_ring_buffer[*read_from_audio_index]) {
-            case AUDIO_CMD_GET_TIMESTAMP:
-                *read_from_audio_index = (*read_from_audio_index + 1) & 0xFF;
-                size_t space_till_end =
-                    ring_buffer_size - *read_from_audio_index;
-                ctx.audio_now =
-                    war_read_le64(audio_to_window_render_ring_buffer +
-                                  *read_from_audio_index) *
-                        1000000ULL +
-                    war_read_le64(audio_to_window_render_ring_buffer +
-                                  *read_from_audio_index + 8);
-                if (space_till_end < 16) { *read_from_audio_index = 0; }
-                *read_from_audio_index = (*read_from_audio_index + 16) & 0xFF;
+            from_audio =
+                audio_to_window_render_ring_buffer[*read_from_audio_index];
+            *read_from_audio_index =
+                (*read_from_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
+            switch (from_audio) {
+            case AUDIO_CMD_GET_TIMESTAMP: {
+                // size_t space_till_end =
+                //     ring_buffer_size - *read_from_audio_index;
+                // ctx_audio.audio_now =
+                //     war_read_le64(audio_to_window_render_ring_buffer +
+                //                   *read_from_audio_index);
+                // if (space_till_end < AUDIO_CMD_GET_TIMESTAMP_SIZE) {
+                //     *read_from_audio_index = 0;
+                // }
+                //*read_from_audio_index =
+                //     (*read_from_audio_index + AUDIO_CMD_GET_TIMESTAMP_SIZE) &
+                //     0xFF;
+                // from_audio = 0;
                 break;
             }
+            case AUDIO_CMD_GET_TIMESTAMP_LOGICAL: {
+                size_t space_till_end =
+                    ring_buffer_size - *read_from_audio_index;
+                ctx_audio.now =
+                    war_read_le64(audio_to_window_render_ring_buffer +
+                                  *read_from_audio_index);
+                call_carmack("audio.now on window render: %lu", ctx_audio.now);
+                if (space_till_end < AUDIO_CMD_GET_TIMESTAMP_LOGICAL_SIZE) {
+                    *read_from_audio_index = 0;
+                }
+                *read_from_audio_index =
+                    (*read_from_audio_index +
+                     AUDIO_CMD_GET_TIMESTAMP_LOGICAL_SIZE) &
+                    0xFF;
+                from_audio = 0;
+                break;
+            }
+            }
         }
-        if (ctx.audio_state == AUDIO_CMD_PLAY) {
-            window_render_to_audio_ring_buffer[(*write_to_audio_index)++] =
-                AUDIO_CMD_GET_TIMESTAMP;
+        if (ctx_audio.state == AUDIO_CMD_PLAY) {
+            // window_render_to_audio_ring_buffer[*write_to_audio_index] =
+            //     AUDIO_CMD_GET_TIMESTAMP_LOGICAL;
+            //*write_to_audio_index =
+            //     (*write_to_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
         }
         //  COMMENT TODO ISSUE: fix repeat_key switching between alt+j and
         //  alt+k
@@ -856,21 +895,22 @@ void* war_window_render(void* args) {
                     0.075f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
                             // sub_cursor right outline from disappearing
                 const float default_alpha_scale = 0.1f;
-                assert(vk_ctx.current_frame == 0);
-                vkWaitForFences(vk_ctx.device,
+                const float default_playback_bar_thickness = 0.3f;
+                assert(ctx_vk.current_frame == 0);
+                vkWaitForFences(ctx_vk.device,
                                 1,
-                                &vk_ctx.in_flight_fences[vk_ctx.current_frame],
+                                &ctx_vk.in_flight_fences[ctx_vk.current_frame],
                                 VK_TRUE,
                                 UINT64_MAX);
-                vkResetFences(vk_ctx.device,
+                vkResetFences(ctx_vk.device,
                               1,
-                              &vk_ctx.in_flight_fences[vk_ctx.current_frame]);
+                              &ctx_vk.in_flight_fences[ctx_vk.current_frame]);
                 VkCommandBufferBeginInfo begin_info = {
                     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
                 };
                 VkResult result =
-                    vkBeginCommandBuffer(vk_ctx.cmd_buffer, &begin_info);
+                    vkBeginCommandBuffer(ctx_vk.cmd_buffer, &begin_info);
                 assert(result == VK_SUCCESS);
                 VkClearValue clear_values[2];
                 clear_values[0].color =
@@ -879,8 +919,8 @@ void* war_window_render(void* args) {
                     ctx.layers[LAYER_BACKGROUND], 0.0f};
                 VkRenderPassBeginInfo render_pass_info = {
                     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-                    .renderPass = vk_ctx.render_pass,
-                    .framebuffer = vk_ctx.frame_buffer,
+                    .renderPass = ctx_vk.render_pass,
+                    .framebuffer = ctx_vk.frame_buffer,
                     .renderArea =
                         {
                             .offset = {0, 0},
@@ -889,15 +929,15 @@ void* war_window_render(void* args) {
                     .clearValueCount = 2,
                     .pClearValues = clear_values,
                 };
-                vkCmdBeginRenderPass(vk_ctx.cmd_buffer,
+                vkCmdBeginRenderPass(ctx_vk.cmd_buffer,
                                      &render_pass_info,
                                      VK_SUBPASS_CONTENTS_INLINE);
                 //---------------------------------------------------------
                 // QUAD PIPELINE
                 //---------------------------------------------------------
-                vkCmdBindPipeline(vk_ctx.cmd_buffer,
+                vkCmdBindPipeline(ctx_vk.cmd_buffer,
                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  vk_ctx.quad_pipeline);
+                                  ctx_vk.quad_pipeline);
                 quad_vertices_count = 0;
                 quad_indices_count = 0;
                 // draw cursor quads
@@ -981,21 +1021,23 @@ void* war_window_render(void* args) {
                     }
                 }
                 // draw playback bar
-                if (ctx.audio_state == AUDIO_CMD_PLAY ||
-                    ctx.audio_state == AUDIO_CMD_PAUSE) {
+                if (ctx_audio.state != AUDIO_CMD_STOP) {
+                    war_get_playback_pos_x_increment_per_frame(&ctx,
+                                                               &ctx_audio);
                     war_make_quad(
                         quad_vertices,
                         quad_indices,
                         &quad_vertices_count,
                         &quad_indices_count,
-                        (float[3]){ctx.playback_bar_pos_x,
+                        (float[3]){ctx.playback_bar_pos_x +
+                                       ctx.playback_bar_pos_x_increment,
                                    ctx.bottom_row,
                                    ctx.layers[LAYER_PLAYBACK_BAR]},
                         (float[2]){0, ctx.viewport_rows},
                         red_hex,
                         0,
                         0,
-                        (float[2]){default_vertical_line_thickness, 0.0f},
+                        (float[2]){default_playback_bar_thickness, 0.0f},
                         QUAD_LINE | QUAD_GRID);
                 }
                 // draw status bar quads
@@ -1140,39 +1182,39 @@ void* war_window_render(void* args) {
                         (float[2]){default_vertical_line_thickness, 0},
                         QUAD_LINE | QUAD_GRID);
                 }
-                memcpy(vk_ctx.quads_vertex_buffer_mapped,
+                memcpy(ctx_vk.quads_vertex_buffer_mapped,
                        quad_vertices,
                        sizeof(war_quad_vertex) * quad_vertices_count);
-                memcpy(vk_ctx.quads_index_buffer_mapped,
+                memcpy(ctx_vk.quads_index_buffer_mapped,
                        quad_indices,
                        sizeof(uint16_t) * quad_indices_count);
                 VkMappedMemoryRange quad_flush_ranges[2] = {
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                     .memory = vk_ctx.quads_vertex_buffer_memory,
+                     .memory = ctx_vk.quads_vertex_buffer_memory,
                      .offset = 0,
                      .size = war_align64(sizeof(war_quad_vertex) *
                                          quad_vertices_count)},
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                     .memory = vk_ctx.quads_index_buffer_memory,
+                     .memory = ctx_vk.quads_index_buffer_memory,
                      .offset = 0,
                      .size =
                          war_align64(sizeof(uint16_t) * quad_indices_count)}};
-                vkFlushMappedMemoryRanges(vk_ctx.device, 2, quad_flush_ranges);
+                vkFlushMappedMemoryRanges(ctx_vk.device, 2, quad_flush_ranges);
                 VkDeviceSize quad_vertices_offsets[2] = {0};
-                vkCmdBindVertexBuffers(vk_ctx.cmd_buffer,
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
                                        0,
                                        1,
-                                       &vk_ctx.quads_vertex_buffer,
+                                       &ctx_vk.quads_vertex_buffer,
                                        quad_vertices_offsets);
                 VkDeviceSize quad_instances_offsets[2] = {0};
-                vkCmdBindVertexBuffers(vk_ctx.cmd_buffer,
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
                                        1,
                                        1,
-                                       &vk_ctx.quads_instance_buffer,
+                                       &ctx_vk.quads_instance_buffer,
                                        quad_instances_offsets);
                 VkDeviceSize quad_indices_offset = 0;
-                vkCmdBindIndexBuffer(vk_ctx.cmd_buffer,
-                                     vk_ctx.quads_index_buffer,
+                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer,
+                                     ctx_vk.quads_index_buffer,
                                      quad_indices_offset,
                                      VK_INDEX_TYPE_UINT16);
                 war_quad_push_constants quad_push_constants = {
@@ -1187,26 +1229,26 @@ void* war_window_render(void* args) {
                     .anchor_cell = {ctx.col, ctx.row},
                     .top_right = {ctx.right_col, ctx.top_row},
                 };
-                vkCmdPushConstants(vk_ctx.cmd_buffer,
-                                   vk_ctx.pipeline_layout,
+                vkCmdPushConstants(ctx_vk.cmd_buffer,
+                                   ctx_vk.pipeline_layout,
                                    VK_SHADER_STAGE_VERTEX_BIT,
                                    0,
                                    sizeof(war_quad_push_constants),
                                    &quad_push_constants);
                 vkCmdDrawIndexed(
-                    vk_ctx.cmd_buffer, quad_indices_count, 1, 0, 0, 0);
+                    ctx_vk.cmd_buffer, quad_indices_count, 1, 0, 0, 0);
                 //---------------------------------------------------------
                 // TEXT PIPELINE
                 //---------------------------------------------------------
-                vkCmdBindPipeline(vk_ctx.cmd_buffer,
+                vkCmdBindPipeline(ctx_vk.cmd_buffer,
                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  vk_ctx.text_pipeline);
-                vkCmdBindDescriptorSets(vk_ctx.cmd_buffer,
+                                  ctx_vk.text_pipeline);
+                vkCmdBindDescriptorSets(ctx_vk.cmd_buffer,
                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        vk_ctx.text_pipeline_layout,
+                                        ctx_vk.text_pipeline_layout,
                                         0,
                                         1,
-                                        &vk_ctx.font_descriptor_set,
+                                        &ctx_vk.font_descriptor_set,
                                         0,
                                         NULL);
                 text_vertices_count = 0;
@@ -1221,7 +1263,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['~'],
+                    &ctx_vk.glyphs['~'],
                     0.1f,
                     0.0f,
                     0);
@@ -1235,7 +1277,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['*'],
+                    &ctx_vk.glyphs['*'],
                     0.1f,
                     0.0f,
                     0);
@@ -1249,7 +1291,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['m'],
+                    &ctx_vk.glyphs['m'],
                     0.1f,
                     0.0f,
                     0);
@@ -1263,7 +1305,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['M'],
+                    &ctx_vk.glyphs['M'],
                     0.1f,
                     0.0f,
                     0);
@@ -1277,7 +1319,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['y'],
+                    &ctx_vk.glyphs['y'],
                     0.1f,
                     0.0f,
                     0);
@@ -1291,7 +1333,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['t'],
+                    &ctx_vk.glyphs['t'],
                     0.1f,
                     0.0f,
                     0);
@@ -1305,7 +1347,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['1'],
+                    &ctx_vk.glyphs['1'],
                     0.1f,
                     0.0f,
                     0);
@@ -1319,7 +1361,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['3'],
+                    &ctx_vk.glyphs['3'],
                     0.1f,
                     0.0f,
                     0);
@@ -1333,7 +1375,7 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs['4'],
+                    &ctx_vk.glyphs['4'],
                     0.1f,
                     0.0f,
                     0);
@@ -1347,43 +1389,43 @@ void* war_window_render(void* args) {
                                ctx.layers[LAYER_HUD_TEXT]},
                     (float[2]){1, 1},
                     full_white_hex,
-                    &vk_ctx.glyphs[':'],
+                    &ctx_vk.glyphs[':'],
                     0.1f,
                     0.0f,
                     0);
-                memcpy(vk_ctx.text_vertex_buffer_mapped,
+                memcpy(ctx_vk.text_vertex_buffer_mapped,
                        text_vertices,
                        sizeof(war_text_vertex) * text_vertices_count);
-                memcpy(vk_ctx.text_index_buffer_mapped,
+                memcpy(ctx_vk.text_index_buffer_mapped,
                        text_indices,
                        sizeof(uint16_t) * text_indices_count);
                 VkMappedMemoryRange text_flush_ranges[2] = {
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                     .memory = vk_ctx.text_vertex_buffer_memory,
+                     .memory = ctx_vk.text_vertex_buffer_memory,
                      .offset = 0,
                      .size = war_align64(sizeof(war_text_vertex) *
                                          text_vertices_count)},
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                     .memory = vk_ctx.text_index_buffer_memory,
+                     .memory = ctx_vk.text_index_buffer_memory,
                      .offset = 0,
                      .size =
                          war_align64(sizeof(uint16_t) * text_indices_count)}};
-                vkFlushMappedMemoryRanges(vk_ctx.device, 2, text_flush_ranges);
+                vkFlushMappedMemoryRanges(ctx_vk.device, 2, text_flush_ranges);
                 VkDeviceSize text_vertices_offsets[2] = {0};
-                vkCmdBindVertexBuffers(vk_ctx.cmd_buffer,
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
                                        0,
                                        1,
-                                       &vk_ctx.text_vertex_buffer,
+                                       &ctx_vk.text_vertex_buffer,
                                        text_vertices_offsets);
                 VkDeviceSize text_instances_offsets[2] = {0};
-                vkCmdBindVertexBuffers(vk_ctx.cmd_buffer,
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
                                        1,
                                        1,
-                                       &vk_ctx.text_instance_buffer,
+                                       &ctx_vk.text_instance_buffer,
                                        text_instances_offsets);
                 VkDeviceSize text_indices_offset = 0;
-                vkCmdBindIndexBuffer(vk_ctx.cmd_buffer,
-                                     vk_ctx.text_index_buffer,
+                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer,
+                                     ctx_vk.text_index_buffer,
                                      text_indices_offset,
                                      VK_INDEX_TYPE_UINT16);
                 war_text_push_constants text_push_constants = {
@@ -1397,40 +1439,40 @@ void* war_window_render(void* args) {
                                       ctx.scroll_margin_rows},
                     .anchor_cell = {ctx.col, ctx.row},
                     .top_right = {ctx.right_col, ctx.top_row},
-                    .ascent = vk_ctx.ascent,
-                    .descent = vk_ctx.descent,
-                    .line_gap = vk_ctx.line_gap,
-                    .baseline = vk_ctx.baseline,
-                    .font_height = vk_ctx.font_height,
+                    .ascent = ctx_vk.ascent,
+                    .descent = ctx_vk.descent,
+                    .line_gap = ctx_vk.line_gap,
+                    .baseline = ctx_vk.baseline,
+                    .font_height = ctx_vk.font_height,
                 };
-                vkCmdPushConstants(vk_ctx.cmd_buffer,
-                                   vk_ctx.text_pipeline_layout,
+                vkCmdPushConstants(ctx_vk.cmd_buffer,
+                                   ctx_vk.text_pipeline_layout,
                                    VK_SHADER_STAGE_VERTEX_BIT,
                                    0,
                                    sizeof(war_text_push_constants),
                                    &text_push_constants);
                 vkCmdDrawIndexed(
-                    vk_ctx.cmd_buffer, text_indices_count, 1, 0, 0, 0);
+                    ctx_vk.cmd_buffer, text_indices_count, 1, 0, 0, 0);
                 //---------------------------------------------------------
                 //   END RENDER PASS
                 //---------------------------------------------------------
-                vkCmdEndRenderPass(vk_ctx.cmd_buffer);
-                result = vkEndCommandBuffer(vk_ctx.cmd_buffer);
+                vkCmdEndRenderPass(ctx_vk.cmd_buffer);
+                result = vkEndCommandBuffer(ctx_vk.cmd_buffer);
                 assert(result == VK_SUCCESS);
                 VkSubmitInfo submit_info = {
                     .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                     .commandBufferCount = 1,
-                    .pCommandBuffers = &vk_ctx.cmd_buffer,
+                    .pCommandBuffers = &ctx_vk.cmd_buffer,
                     .waitSemaphoreCount = 0,
                     .pWaitSemaphores = NULL,
                     .signalSemaphoreCount = 0,
                     .pSignalSemaphores = NULL,
                 };
                 result = vkQueueSubmit(
-                    vk_ctx.queue,
+                    ctx_vk.queue,
                     1,
                     &submit_info,
-                    vk_ctx.in_flight_fences[vk_ctx.current_frame]);
+                    ctx_vk.in_flight_fences[ctx_vk.current_frame]);
                 assert(result == VK_SUCCESS);
 #endif
 #if WL_SHM
@@ -1453,11 +1495,11 @@ void* war_window_render(void* args) {
                     }
                 }
 
-                uint32_t cursor_w = vk_ctx.cell_width;
-                uint32_t cursor_h = vk_ctx.cell_height;
-                ctx.cursor_x = ctx.col * vk_ctx.cell_width;
+                uint32_t cursor_w = ctx_vk.cell_width;
+                uint32_t cursor_h = ctx_vk.cell_height;
+                ctx.cursor_x = ctx.col * ctx_vk.cell_width;
                 ctx.cursor_y =
-                    (physical_height - 1) - (ctx.row * vk_ctx.cell_height);
+                    (physical_height - 1) - (ctx.row * ctx_vk.cell_height);
 
                 for (uint32_t y = ctx.cursor_y; y < ctx.cursor_y + cursor_h;
                      ++y) {
@@ -1798,7 +1840,7 @@ void* war_window_render(void* args) {
                 cmsg->cmsg_len = CMSG_LEN(sizeof(int));
                 cmsg->cmsg_level = SOL_SOCKET;
                 cmsg->cmsg_type = SCM_RIGHTS;
-                *((int*)CMSG_DATA(cmsg)) = vk_ctx.dmabuf_fd;
+                *((int*)CMSG_DATA(cmsg)) = ctx_vk.dmabuf_fd;
                 ssize_t dmabuf_sent = sendmsg(fd, &msg, 0);
                 if (dmabuf_sent < 0) perror("sendmsg");
                 assert(dmabuf_sent == 28);
@@ -2680,6 +2722,18 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_d, .mod = MOD_ALT},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_a, .mod = MOD_SHIFT},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_a, .mod = MOD_ALT},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_ESCAPE, .mod = MOD_ALT},
+                            {0},
+                        },
                     };
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2770,10 +2824,10 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_alt_9},
                     {&&cmd_normal_alt_0},
                     {&&cmd_normal_spacedspacea},
-                    {&&cmd_normal_alt_shift_k},
-                    {&&cmd_normal_alt_shift_j},
-                    {&&cmd_normal_alt_shift_h},
-                    {&&cmd_normal_alt_shift_l},
+                    {&&cmd_normal_alt_K},
+                    {&&cmd_normal_alt_J},
+                    {&&cmd_normal_alt_H},
+                    {&&cmd_normal_alt_L},
                     {&&cmd_normal_d},
                     {&&cmd_normal_m},
                     {&&cmd_normal_X},
@@ -2792,6 +2846,9 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_alt_l},
                     {&&cmd_normal_alt_u},
                     {&&cmd_normal_alt_d},
+                    {&&cmd_normal_A},
+                    {&&cmd_normal_alt_a},
+                    {&&cmd_normal_alt_esc},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3217,7 +3274,7 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_alt_shift_k:
+            cmd_normal_alt_K:
                 call_carmack("cmd_normal_alt_shift_k");
                 increment = ctx.viewport_rows - ctx.num_rows_for_status_bars;
                 if (ctx.numeric_prefix) {
@@ -3242,7 +3299,7 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_alt_shift_j:
+            cmd_normal_alt_J:
                 call_carmack("cmd_normal_alt_shift_j");
                 increment = ctx.viewport_rows - ctx.num_rows_for_status_bars;
                 if (ctx.numeric_prefix) {
@@ -3268,7 +3325,7 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_alt_shift_l:
+            cmd_normal_alt_L:
                 call_carmack("cmd_normal_alt_shift_l");
                 increment = ctx.viewport_cols - ctx.num_cols_for_line_numbers;
                 if (ctx.numeric_prefix) {
@@ -3293,7 +3350,7 @@ void* war_window_render(void* args) {
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_alt_shift_h:
+            cmd_normal_alt_H:
                 call_carmack("cmd_normal_alt_shift_h");
                 increment = ctx.viewport_cols - ctx.num_cols_for_line_numbers;
                 if (ctx.numeric_prefix) {
@@ -4306,12 +4363,101 @@ void* war_window_render(void* args) {
                 ctx.num_chars_in_sequence = 0;
                 call_carmack("mode: %u", ctx.mode);
                 goto cmd_done;
-            cmd_normal_a:
+            cmd_normal_a: {
                 call_carmack("cmd_normal_a");
+                switch (ctx_audio.state) {
+                case AUDIO_CMD_PLAY:
+                    window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                        AUDIO_CMD_PAUSE;
+                    *write_to_audio_index =
+                        (*write_to_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
+                    ctx_audio.state = AUDIO_CMD_PAUSE;
+                    break;
+                case AUDIO_CMD_STOP:
+                case AUDIO_CMD_PAUSE:
+                    window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                        AUDIO_CMD_PLAY;
+                    *write_to_audio_index =
+                        (*write_to_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
+                    ctx_audio.state = AUDIO_CMD_PLAY;
+                    break;
+                }
                 ctx.numeric_prefix = 0;
                 memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
                 ctx.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
+            cmd_normal_alt_a: {
+                call_carmack("cmd_normal_alt_a");
+                window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                    AUDIO_CMD_TRAVERSE;
+                *write_to_audio_index =
+                    (*write_to_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
+                size_t space_till_end =
+                    ring_buffer_size - *write_to_audio_index;
+                if (space_till_end < AUDIO_CMD_TRAVERSE_SIZE) {
+                    *write_to_audio_index = 0;
+                }
+                uint64_t traverse_frames = 0;
+                war_write_le64(window_render_to_audio_ring_buffer +
+                                   *write_to_audio_index,
+                               traverse_frames);
+                *write_to_audio_index =
+                    (*write_to_audio_index + AUDIO_CMD_TRAVERSE_SIZE) & 0xFF;
+                window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                    AUDIO_CMD_PLAY;
+                *write_to_audio_index =
+                    (*write_to_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
+                ctx_audio.state = AUDIO_CMD_PLAY;
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_normal_A: {
+                call_carmack("cmd_normal_A");
+                if (ctx.numeric_prefix) {
+                    window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                        AUDIO_CMD_TRAVERSE;
+                    *write_to_audio_index =
+                        (*write_to_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
+                    size_t space_till_end =
+                        ring_buffer_size - *write_to_audio_index;
+                    if (space_till_end < AUDIO_CMD_TRAVERSE_SIZE) {
+                        *write_to_audio_index = 0;
+                    }
+                    uint64_t traverse_frames =
+                        (uint64_t)((double)ctx.numeric_prefix *
+                                   ctx_audio.sample_rate);
+                    war_write_le64(window_render_to_audio_ring_buffer +
+                                       *write_to_audio_index,
+                                   traverse_frames);
+                    *write_to_audio_index =
+                        (*write_to_audio_index + AUDIO_CMD_TRAVERSE_SIZE) &
+                        0xFF;
+                    ctx.numeric_prefix = 0;
+                    memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                    ctx.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_normal_alt_esc: {
+                call_carmack("cmd_normal_alt_esc");
+                window_render_to_audio_ring_buffer[*write_to_audio_index] =
+                    AUDIO_CMD_STOP;
+                *write_to_audio_index =
+                    (*write_to_audio_index + AUDIO_CMD_HEADER_SIZE) & 0xFF;
+                ctx_audio.state = AUDIO_CMD_STOP;
+                ctx_audio.now = 0;
+                ctx.numeric_prefix = 0;
+                memset(ctx.input_sequence, 0, sizeof(ctx.input_sequence));
+                ctx.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_normal_space1:
                 call_carmack("cmd_normal_space1");
                 ctx.numeric_prefix = 0;
@@ -4905,21 +5051,21 @@ void* war_window_render(void* args) {
                 case 1:
                     if (war_read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
                         BTN_LEFT) {
-                        if (((int)(ctx.cursor_x / vk_ctx.cell_width) -
+                        if (((int)(ctx.cursor_x / ctx_vk.cell_width) -
                              (int)ctx.num_cols_for_line_numbers) < 0) {
                             ctx.col = ctx.left_col;
                             break;
                         }
                         if ((((physical_height - ctx.cursor_y) /
-                              vk_ctx.cell_height) -
+                              ctx_vk.cell_height) -
                              ctx.num_rows_for_status_bars) < 0) {
                             ctx.row = ctx.bottom_row;
                             break;
                         }
-                        ctx.col = (uint32_t)(ctx.cursor_x / vk_ctx.cell_width) -
+                        ctx.col = (uint32_t)(ctx.cursor_x / ctx_vk.cell_width) -
                                   ctx.num_cols_for_line_numbers + ctx.left_col;
                         ctx.row = (uint32_t)((physical_height - ctx.cursor_y) /
-                                             vk_ctx.cell_height) -
+                                             ctx_vk.cell_height) -
                                   ctx.num_rows_for_status_bars + ctx.bottom_row;
                         if (ctx.row > ctx.max_row) { ctx.row = ctx.max_row; }
                         if (ctx.row > ctx.top_row) { ctx.row = ctx.top_row; }
@@ -5063,8 +5209,8 @@ void* war_window_render(void* args) {
     // CLEANUP
     //-------------------------------------------------------------------------
 #if DMABUF
-    close(vk_ctx.dmabuf_fd);
-    vk_ctx.dmabuf_fd = -1;
+    close(ctx_vk.dmabuf_fd);
+    ctx_vk.dmabuf_fd = -1;
 #endif
     xkb_state_unref(xkb_state);
     xkb_context_unref(xkb_context);
@@ -5073,6 +5219,9 @@ void* war_window_render(void* args) {
     return 0;
 }
 
+//-----------------------------------------------------------------------------
+// AUDIO THREAD
+//-----------------------------------------------------------------------------
 void* war_audio(void* args) {
     header("war_audio");
     war_thread_args* a = (war_thread_args*)args;
@@ -5084,8 +5233,8 @@ void* war_audio(void* args) {
     uint8_t* read_from_window_render_index = a->read_from_window_render_index;
     uint8_t* write_to_audio_index = a->write_to_audio_index;
     uint8_t from_window_render = 0;
-    war_audio_context audio_ctx = {
-        .audio_state = AUDIO_CMD_STOP,
+    war_audio_context ctx_audio = {
+        .state = AUDIO_CMD_STOP,
         .sample_rate = AUDIO_DEFAULT_SAMPLE_RATE,
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
         .BPM = AUDIO_DEFAULT_BPM,
@@ -5106,13 +5255,13 @@ void* war_audio(void* args) {
     snd_pcm_hw_params_set_format(
         pcm_handle, hw_params, SND_PCM_FORMAT_FLOAT_LE);
     snd_pcm_hw_params_set_rate_near(
-        pcm_handle, hw_params, &audio_ctx.sample_rate, 0);
+        pcm_handle, hw_params, &ctx_audio.sample_rate, 0);
     snd_pcm_hw_params_set_channels(
-        pcm_handle, hw_params, audio_ctx.channel_count); // stereo
+        pcm_handle, hw_params, ctx_audio.channel_count); // stereo
     snd_pcm_hw_params_set_period_size_near(
-        pcm_handle, hw_params, &audio_ctx.period_size, 0);
+        pcm_handle, hw_params, &ctx_audio.period_size, 0);
     snd_pcm_uframes_t buffer_size =
-        audio_ctx.period_size * AUDIO_DEFAULT_PERIOD_COUNT;
+        ctx_audio.period_size * AUDIO_DEFAULT_PERIOD_COUNT;
     snd_pcm_hw_params_set_buffer_size_near(pcm_handle, hw_params, &buffer_size);
     result = snd_pcm_hw_params(pcm_handle, hw_params);
     assert(result >= 0);
@@ -5124,58 +5273,119 @@ void* war_audio(void* args) {
     snd_pcm_status_alloca(&status);
     result = snd_pcm_status(pcm_handle, status);
     assert(result >= 0);
-    size_t sec_size = sizeof(audio_ctx.timestamp.tv_sec);
+    size_t sec_size = sizeof(ctx_audio.timestamp.tv_sec);
     assert(sec_size == 8);
-    size_t usec_size = sizeof(audio_ctx.timestamp.tv_usec);
+    size_t usec_size = sizeof(ctx_audio.timestamp.tv_usec);
     assert(usec_size == 8);
     float
         sample_buffer[AUDIO_DEFAULT_PERIOD_SIZE * AUDIO_DEFAULT_CHANNEL_COUNT];
-    while (audio_ctx.audio_state != AUDIO_CMD_END_WAR) {
+    //-------------------------------------------------------------------------
+    // RING BUFFER AUDIO
+    //-------------------------------------------------------------------------
+    while (ctx_audio.state != AUDIO_CMD_END_WAR) {
         if (read_from_window_render_index != write_to_audio_index) {
             from_window_render = window_render_to_audio_ring_buffer
                 [*read_from_window_render_index];
             (*read_from_window_render_index) =
-                ((*read_from_window_render_index) + 1) & 0xFF;
+                ((*read_from_window_render_index) + AUDIO_CMD_HEADER_SIZE) &
+                0xFF;
             switch (from_window_render) {
-            case AUDIO_CMD_GET_TIMESTAMP:
-                call_carmack("AUDIO_CMD_GET_TIMESTAMP");
-                snd_pcm_status(pcm_handle, status);
-                snd_pcm_status_get_tstamp(status, &audio_ctx.timestamp);
+            case AUDIO_CMD_GET_TIMESTAMP: {
+                // call_carmack("AUDIO_CMD_GET_TIMESTAMP");
+                // snd_pcm_status(pcm_handle, status);
+                // snd_pcm_status_get_tstamp(status, &ctx_audio.timestamp);
+                // audio_to_window_render_ring_buffer
+                //    [*write_to_window_render_index] = AUDIO_CMD_GET_TIMESTAMP;
+                //*write_to_window_render_index =
+                //    (*write_to_window_render_index + 1) & 0xFF;
+                // size_t space_till_end =
+                //    ring_buffer_size - *write_to_window_render_index;
+                // if (space_till_end < AUDIO_CMD_GET_TIMESTAMP_SIZE) {
+                //    *write_to_window_render_index = 0;
+                //}
+                // uint64_t timestamp =
+                //    (ctx_audio.state == AUDIO_CMD_PLAY) ?
+                //        (uint64_t)(((float)ctx_audio.logical_frames_played /
+                //                    ctx_audio.sample_rate) *
+                //                   1e6) :
+                //        ctx_audio.timestamp.tv_sec * 1000000ULL +
+                //            ctx_audio.timestamp.tv_usec;
+                // war_write_le64(audio_to_window_render_ring_buffer +
+                //                   *write_to_window_render_index,
+                //               timestamp);
+                //*write_to_window_render_index = (*write_to_window_render_index
+                //+
+                //                                 AUDIO_CMD_GET_TIMESTAMP_SIZE)
+                //                                 &
+                //                                0xFF;
+                // from_window_render = 0;
+                break;
+            }
+            case AUDIO_CMD_GET_TIMESTAMP_LOGICAL: {
+                call_carmack("AUDIO_CMD_GET_TIMESTAMP_LOGICAL");
                 audio_to_window_render_ring_buffer
-                    [*write_to_window_render_index] = AUDIO_CMD_GET_TIMESTAMP;
+                    [*write_to_window_render_index] =
+                        AUDIO_CMD_GET_TIMESTAMP_LOGICAL;
                 *write_to_window_render_index =
-                    (*write_to_window_render_index + 1) & 0xFF;
+                    (*write_to_window_render_index + AUDIO_CMD_HEADER_SIZE) &
+                    0xFF;
                 size_t space_till_end =
                     ring_buffer_size - *write_to_window_render_index;
-                if (space_till_end < 16) { *write_to_window_render_index = 0; }
+                if (space_till_end < AUDIO_CMD_GET_TIMESTAMP_LOGICAL_SIZE) {
+                    *write_to_window_render_index = 0;
+                }
+                call_carmack("audio.now on audio as frames: %lu",
+                             ctx_audio.logical_frames_played);
+                uint64_t timestamp =
+                    (uint64_t)(((double)ctx_audio.logical_frames_played /
+                                ctx_audio.sample_rate) *
+                               1e6);
+                call_carmack("audio.now on audio: %lu", timestamp);
                 war_write_le64(audio_to_window_render_ring_buffer +
                                    *write_to_window_render_index,
-                               audio_ctx.timestamp.tv_sec);
-                war_write_le64(audio_to_window_render_ring_buffer +
-                                   *write_to_window_render_index + 8,
-                               audio_ctx.timestamp.tv_usec);
+                               timestamp);
                 *write_to_window_render_index =
-                    (*write_to_window_render_index + 16) & 0xFF;
+                    (*write_to_window_render_index +
+                     AUDIO_CMD_GET_TIMESTAMP_LOGICAL_SIZE) &
+                    0xFF;
                 from_window_render = 0;
                 break;
+            }
             case AUDIO_CMD_PAUSE:
                 call_carmack("AUDIO_CMD_PAUSE");
-                audio_ctx.audio_state = AUDIO_CMD_PAUSE;
+                ctx_audio.state = AUDIO_CMD_PAUSE;
                 from_window_render = 0;
                 break;
+            case AUDIO_CMD_TRAVERSE: {
+                call_carmack("AUDIO_CMD_TRAVERSE");
+                size_t space_till_end =
+                    ring_buffer_size - *read_from_window_render_index;
+                ctx_audio.logical_frames_played =
+                    war_read_le64(window_render_to_audio_ring_buffer +
+                                  *read_from_window_render_index);
+                if (space_till_end < AUDIO_CMD_TRAVERSE_SIZE) {
+                    *read_from_window_render_index = 0;
+                }
+                *read_from_window_render_index =
+                    (*read_from_window_render_index + AUDIO_CMD_TRAVERSE_SIZE) &
+                    0xFF;
+                from_window_render = 0;
+                break;
+            }
             case AUDIO_CMD_PLAY:
                 call_carmack("AUDIO_CMD_PLAY");
-                audio_ctx.audio_state = AUDIO_CMD_PLAY;
+                ctx_audio.state = AUDIO_CMD_PLAY;
                 from_window_render = 0;
                 break;
             case AUDIO_CMD_STOP:
                 call_carmack("AUDIO_CMD_STOP");
-                audio_ctx.audio_state = AUDIO_CMD_STOP;
-                audio_ctx.logical_frames_played = 0, from_window_render = 0;
+                ctx_audio.state = AUDIO_CMD_STOP;
+                ctx_audio.logical_frames_played = 0;
+                from_window_render = 0;
                 break;
             case AUDIO_CMD_END_WAR:
                 call_carmack("AUDIO_CMD_END_WAR");
-                audio_ctx.audio_state = AUDIO_CMD_END_WAR;
+                ctx_audio.state = AUDIO_CMD_END_WAR;
                 from_window_render = 0;
                 continue;
                 break;
@@ -5193,6 +5403,10 @@ void* war_audio(void* args) {
             if (frames < 0) {
                 call_carmack("snd_pcm_writei failed: %s", snd_strerror(frames));
             }
+        }
+
+        if (ctx_audio.state == AUDIO_CMD_PLAY && frames > 0) {
+            ctx_audio.logical_frames_played += frames;
         }
     }
     end("war_audio");

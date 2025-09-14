@@ -5265,7 +5265,7 @@ void* war_audio(void* args) {
     war_producer_consumer* pc = (war_producer_consumer*)args;
     // set scheduling to SCHED_FIFO
     struct sched_param param;
-    param.sched_priority = 5; // RT priorities: 1–99 (higher = more)
+    param.sched_priority = 20; // RT priorities: 1–99 (higher = more)
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
         call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
         perror("pthread_setschedparam");

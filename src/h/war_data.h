@@ -70,7 +70,6 @@ enum war_misc {
     max_instances_per_quad = 1,
     max_instances_per_sdf_quad = 1,
     max_fds = 50,
-    ring_buffer_size = 256,
     OLED_MODE = 0,
     MAX_MIDI_NOTES = 128,
     UNSET = 0,
@@ -208,6 +207,7 @@ enum war_audio {
     // defaults
     AUDIO_DEFAULT_SAMPLE_RATE = 48000,
     AUDIO_DEFAULT_PERIOD_SIZE = 512,
+    AUDIO_DEFAULT_SUB_PERIOD_FACTOR = 20,
     AUDIO_DEFAULT_CHANNEL_COUNT = 2,
     AUDIO_DEFAULT_BPM = 100,
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
@@ -215,17 +215,15 @@ enum war_audio {
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
-    AUDIO_CMD_GET_TIMESTAMP = 4,
-    AUDIO_CMD_GET_TIMESTAMP_LOGICAL = 5,
-    AUDIO_CMD_ADD_NOTE = 6,
-    AUDIO_CMD_END_WAR = 7,
-    AUDIO_CMD_TRAVERSE = 8,
+    AUDIO_CMD_GET_TIME = 4,
+    AUDIO_CMD_ADD_NOTE = 5,
+    AUDIO_CMD_END_WAR = 6,
+    AUDIO_CMD_SEEK = 7,
     // cmd sizes (not including header)
     AUDIO_CMD_STOP_SIZE = 0,
     AUDIO_CMD_PLAY_SIZE = 0,
     AUDIO_CMD_PAUSE_SIZE = 0,
-    AUDIO_CMD_GET_TIMESTAMP_SIZE = 8,
-    AUDIO_CMD_GET_TIMESTAMP_LOGICAL_SIZE = 8,
+    AUDIO_CMD_GET_TIME_SIZE = 8,
     AUDIO_CMD_ADD_NOTE_SIZE = 0,
     AUDIO_CMD_END_WAR_SIZE = 0,
     AUDIO_CMD_TRAVERSE_SIZE = 8,
@@ -239,6 +237,7 @@ typedef struct war_audio_context {
     float BPM;
     uint32_t sample_rate;
     snd_pcm_uframes_t period_size;
+    snd_pcm_uframes_t sub_period_size;
     uint32_t channel_count;
     uint8_t state;
     snd_timestamp_t timestamp;
@@ -257,7 +256,7 @@ typedef struct war_audio_context_for_window_render {
 typedef struct war_voice {
 } war_voice;
 
-typedef struct war_input_cmd_context {
+typedef struct war_window_render_context {
     uint64_t now;
     uint32_t col;
     uint32_t row;
@@ -340,21 +339,25 @@ typedef struct war_input_cmd_context {
     bool sleep;
     uint64_t sleep_duration_us;
     bool end_window_render;
-} war_input_cmd_context;
+} war_window_render_context;
 
 typedef struct war_key_trie_pool {
     war_key_trie_node nodes[MAX_NODES];
     size_t node_count;
 } war_key_trie_pool;
 
-typedef struct war_thread_args {
-    uint8_t* window_render_to_audio_ring_buffer;
-    uint8_t* audio_to_window_render_ring_buffer;
-    uint8_t* write_to_audio_index;
-    uint8_t* read_from_audio_index;
-    uint8_t* write_to_window_render_index;
-    uint8_t* read_from_window_render_index;
-} war_thread_args;
+enum war_producer_consumer_enum {
+    PC_BUFFER_SIZE = 4096,
+};
+
+typedef struct war_producer_consumer {
+    uint8_t* to_a;
+    uint8_t* to_wr;
+    uint32_t i_to_a;
+    uint32_t i_to_wr;
+    uint32_t i_from_a;
+    uint32_t i_from_wr;
+} war_producer_consumer;
 
 typedef struct war_glyph_info {
     float advance_x;

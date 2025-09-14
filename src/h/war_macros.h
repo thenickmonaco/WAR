@@ -42,6 +42,170 @@
 
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
+static inline bool war_pc_to_a(war_producer_consumer* pc,
+                               uint32_t header,
+                               uint32_t payload_size,
+                               void* payload) {
+    uint32_t total_size =
+        8 + payload_size; // 4 bytes header + 4 bytes size + payload
+    uint32_t write_index = pc->i_to_a;
+    uint32_t read_index = pc->i_from_wr;
+    uint32_t free_bytes =
+        (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
+    if (free_bytes < total_size) return false;
+
+    uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
+
+    if (cont_bytes >= total_size) {
+        // contiguous write
+        memcpy(pc->to_a + write_index, &header, 4);
+        memcpy(pc->to_a + write_index + 4, &payload_size, 4);
+        if (payload_size)
+            memcpy(pc->to_a + write_index + 8, payload, payload_size);
+    } else {
+        // wrap-around write
+        // header+size never split
+        if (cont_bytes < 8) return false; // must always fit header+size
+        memcpy(pc->to_a + write_index, &header, 4);
+        memcpy(pc->to_a + write_index + 4, &payload_size, 4);
+
+        uint32_t first_payload = cont_bytes - 8;
+        if (first_payload)
+            memcpy(pc->to_a + write_index + 8, payload, first_payload);
+        memcpy(pc->to_a,
+               (uint8_t*)payload + first_payload,
+               payload_size - first_payload);
+    }
+
+    pc->i_to_a = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
+    return true;
+}
+
+static inline bool war_pc_from_a(war_producer_consumer* pc,
+                                 uint32_t* out_header,
+                                 uint32_t* out_size,
+                                 void* out_payload) {
+    uint32_t write_index = pc->i_to_wr;
+    uint32_t read_index = pc->i_from_a;
+    uint32_t used_bytes =
+        (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
+    if (used_bytes < 8) return false;
+
+    // read header
+    uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
+    if (cont_bytes >= 8) {
+        memcpy(out_header, pc->to_wr + read_index, 4);
+        memcpy(out_size, pc->to_wr + read_index + 4, 4);
+    } else {
+        uint8_t tmp[8];
+        memcpy(tmp, pc->to_wr + read_index, cont_bytes);
+        memcpy(tmp + cont_bytes, pc->to_wr, 8 - cont_bytes);
+        memcpy(out_header, tmp, 4);
+        memcpy(out_size, tmp + 4, 4);
+    }
+
+    uint32_t total_size = 8 + *out_size;
+    if (used_bytes < total_size) return false;
+
+    // read payload
+    if (*out_size) {
+        uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
+        uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
+        if (first_chunk >= *out_size) {
+            memcpy(out_payload, pc->to_wr + payload_start, *out_size);
+        } else {
+            memcpy(out_payload, pc->to_wr + payload_start, first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk,
+                   pc->to_wr,
+                   *out_size - first_chunk);
+        }
+    }
+
+    pc->i_from_a = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
+    return true;
+}
+
+static inline bool war_pc_to_wr(war_producer_consumer* pc,
+                                uint32_t header,
+                                uint32_t payload_size,
+                                void* payload) {
+    uint32_t total_size = 8 + payload_size;
+    uint32_t write_index = pc->i_to_wr;
+    uint32_t read_index = pc->i_from_a;
+    uint32_t free_bytes =
+        (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
+    if (free_bytes < total_size) return false;
+
+    uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
+
+    if (cont_bytes >= total_size) {
+        memcpy(pc->to_wr + write_index, &header, 4);
+        memcpy(pc->to_wr + write_index + 4, &payload_size, 4);
+        if (payload_size)
+            memcpy(pc->to_wr + write_index + 8, payload, payload_size);
+    } else {
+        if (cont_bytes < 8) return false;
+        memcpy(pc->to_wr + write_index, &header, 4);
+        memcpy(pc->to_wr + write_index + 4, &payload_size, 4);
+
+        uint32_t first_payload = cont_bytes - 8;
+        if (first_payload)
+            memcpy(pc->to_wr + write_index + 8, payload, first_payload);
+        memcpy(pc->to_wr,
+               (uint8_t*)payload + first_payload,
+               payload_size - first_payload);
+    }
+
+    pc->i_to_wr = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
+    return true;
+}
+
+static inline bool war_pc_from_wr(war_producer_consumer* pc,
+                                  uint32_t* out_header,
+                                  uint32_t* out_size,
+                                  void* out_payload) {
+    uint32_t write_index = pc->i_to_a;
+    uint32_t read_index = pc->i_from_wr;
+    uint32_t used_bytes =
+        (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
+    if (used_bytes < 8) return false;
+
+    uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
+    if (cont_bytes >= 8) {
+        memcpy(out_header, pc->to_a + read_index, 4);
+        memcpy(out_size, pc->to_a + read_index + 4, 4);
+    } else {
+        uint8_t tmp[8];
+        memcpy(tmp, pc->to_a + read_index, cont_bytes);
+        memcpy(tmp + cont_bytes, pc->to_a, 8 - cont_bytes);
+        memcpy(out_header, tmp, 4);
+        memcpy(out_size, tmp + 4, 4);
+    }
+
+    uint32_t total_size = 8 + *out_size;
+    if (used_bytes < total_size) return false;
+
+    if (*out_size) {
+        uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
+        uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
+        if (first_chunk >= *out_size) {
+            memcpy(out_payload, pc->to_a + payload_start, *out_size);
+        } else {
+            memcpy(out_payload, pc->to_a + payload_start, first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk,
+                   pc->to_a,
+                   *out_size - first_chunk);
+        }
+    }
+
+    pc->i_from_wr = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
+    return true;
+}
+
 static inline uint64_t war_get_monotonic_time_us(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -49,11 +213,10 @@ static inline uint64_t war_get_monotonic_time_us(void) {
 }
 
 static inline void war_get_playback_pos_x_increment_per_frame(
-    war_input_cmd_context* ctx,
-    war_audio_context_for_window_render* ctx_audio) {
-    ctx->playback_bar_pos_x_increment = (ctx_audio->now / 1e6f) *
-                                        (ctx_audio->BPM * 4.0f / 60.0f) *
-                                        ctx->cell_width;
+    war_window_render_context* ctx_wr,
+    war_audio_context_for_window_render* ctx_a) {
+    ctx_wr->playback_bar_pos_x_increment =
+        (ctx_a->now / 1e6f) * (ctx_a->BPM * 4.0f / 60.0f) * ctx_wr->cell_width;
 }
 
 static inline war_rgba_t war_unpack_abgr(uint32_t hex_color) {
@@ -253,10 +416,11 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     }
 }
 
-static inline void war_get_frame_duration_us(war_input_cmd_context* ctx) {
+static inline void
+war_get_frame_duration_us(war_window_render_context* ctx_wr) {
     const double microsecond_conversion = 1000000;
-    ctx->frame_duration_us =
-        (uint64_t)round((1.0 / (double)ctx->FPS) * microsecond_conversion);
+    ctx_wr->frame_duration_us =
+        (uint64_t)round((1.0 / (double)ctx_wr->FPS) * microsecond_conversion);
 }
 
 static inline char war_keysym_to_key(xkb_keysym_t ks, uint8_t mod) {
@@ -562,17 +726,18 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     (*indices_count) += 6;
 }
 
-static inline float war_cursor_pos_x(war_input_cmd_context* ctx) {
-    return ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
+static inline float war_cursor_pos_x(war_window_render_context* ctx_wr) {
+    return ctx_wr->col +
+           (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
 }
 
-static inline float war_cursor_span_x(war_input_cmd_context* ctx) {
-    return (float)ctx->cursor_width_whole_number * ctx->cursor_width_sub_col /
-           ctx->cursor_width_sub_cells;
+static inline float war_cursor_span_x(war_window_render_context* ctx_wr) {
+    return (float)ctx_wr->cursor_width_whole_number *
+           ctx_wr->cursor_width_sub_col / ctx_wr->cursor_width_sub_cells;
 }
 
-static inline float war_cursor_pos_x_end(war_input_cmd_context* ctx) {
-    return war_cursor_pos_x(ctx) + war_cursor_span_x(ctx);
+static inline float war_cursor_pos_x_end(war_window_render_context* ctx_wr) {
+    return war_cursor_pos_x(ctx_wr) + war_cursor_span_x(ctx_wr);
 }
 
 static inline float war_note_pos_x(war_note_quads* note_quads, uint32_t i) {
@@ -590,31 +755,29 @@ static inline float war_note_pos_x_end(war_note_quads* note_quads, uint32_t i) {
     return war_note_pos_x(note_quads, i) + war_note_span_x(note_quads, i);
 }
 
-static inline void
-war_note_quads_add(war_note_quads* note_quads,
-                   uint32_t* note_quads_count,
-                   uint8_t* window_render_to_audio_ring_buffer,
-                   uint8_t* write_to_audio_index,
-                   war_input_cmd_context* ctx,
-                   uint32_t color,
-                   uint32_t outline_color,
-                   float strength,
-                   uint32_t voice,
-                   uint32_t hidden,
-                   uint32_t mute) {
+static inline void war_note_quads_add(war_note_quads* note_quads,
+                                      uint32_t* note_quads_count,
+                                      war_producer_consumer* pc,
+                                      war_window_render_context* ctx_wr,
+                                      uint32_t color,
+                                      uint32_t outline_color,
+                                      float strength,
+                                      uint32_t voice,
+                                      uint32_t hidden,
+                                      uint32_t mute) {
     assert(*note_quads_count < max_note_quads);
-    note_quads->timestamp[*note_quads_count] = ctx->now;
-    note_quads->col[*note_quads_count] = ctx->col;
-    note_quads->row[*note_quads_count] = ctx->row;
-    note_quads->sub_col[*note_quads_count] = ctx->sub_col;
+    note_quads->timestamp[*note_quads_count] = ctx_wr->now;
+    note_quads->col[*note_quads_count] = ctx_wr->col;
+    note_quads->row[*note_quads_count] = ctx_wr->row;
+    note_quads->sub_col[*note_quads_count] = ctx_wr->sub_col;
     note_quads->sub_cells_col[*note_quads_count] =
-        ctx->navigation_sub_cells_col;
+        ctx_wr->navigation_sub_cells_col;
     note_quads->cursor_width_whole_number[*note_quads_count] =
-        ctx->cursor_width_whole_number;
+        ctx_wr->cursor_width_whole_number;
     note_quads->cursor_width_sub_col[*note_quads_count] =
-        ctx->cursor_width_sub_col;
+        ctx_wr->cursor_width_sub_col;
     note_quads->cursor_width_sub_cells[*note_quads_count] =
-        ctx->cursor_width_sub_cells;
+        ctx_wr->cursor_width_sub_cells;
     note_quads->color[*note_quads_count] = color;
     note_quads->outline_color[*note_quads_count] = outline_color;
     note_quads->strength[*note_quads_count] = strength;
@@ -626,12 +789,10 @@ war_note_quads_add(war_note_quads* note_quads,
     // TODO: send add command to audio thread
 }
 
-static inline void
-war_note_quads_delete(war_note_quads* note_quads,
-                      uint32_t* note_quads_count,
-                      uint8_t* window_render_to_audio_ring_buffer,
-                      uint8_t* write_to_audio_index,
-                      war_input_cmd_context* ctx) {
+static inline void war_note_quads_delete(war_note_quads* note_quads,
+                                         uint32_t* note_quads_count,
+                                         war_producer_consumer* pc,
+                                         war_window_render_context* ctx_wr) {
     if (*note_quads_count == 0) return;
 
     // Find the index of the freshest note at the given col/row
@@ -639,7 +800,8 @@ war_note_quads_delete(war_note_quads* note_quads,
     int32_t freshest_index = -1;
 
     for (uint32_t i = 0; i < *note_quads_count; i++) {
-        if (note_quads->col[i] == ctx->col && note_quads->row[i] == ctx->row &&
+        if (note_quads->col[i] == ctx_wr->col &&
+            note_quads->row[i] == ctx_wr->row &&
             note_quads->timestamp[i] > freshest_time) {
             freshest_time = note_quads->timestamp[i];
             freshest_index = i;
@@ -677,12 +839,10 @@ war_note_quads_delete(war_note_quads* note_quads,
     // TODO: send delete command to audio thread
 }
 
-static inline void
-war_note_quads_delete_at_i(war_note_quads* note_quads,
-                           uint32_t* note_quads_count,
-                           uint8_t* window_render_to_audio_ring_buffer,
-                           uint8_t* write_to_audio_index,
-                           uint32_t i_delete) {
+static inline void war_note_quads_delete_at_i(war_note_quads* note_quads,
+                                              uint32_t* note_quads_count,
+                                              war_producer_consumer* pc,
+                                              uint32_t i_delete) {
     if (*note_quads_count == 0 || i_delete >= *note_quads_count) return;
 
     uint32_t last = *note_quads_count - 1;
@@ -860,17 +1020,16 @@ static inline uint32_t war_lcm(uint32_t a, uint32_t b) {
 static inline void
 war_note_quads_trim_right_at_i(war_note_quads* note_quads,
                                uint32_t* note_quads_count,
-                               war_input_cmd_context* ctx,
-                               uint8_t* window_render_to_audio_ring_buffer,
-                               uint8_t* write_to_audio_index,
+                               war_window_render_context* ctx_wr,
+                               war_producer_consumer* pc,
                                uint32_t i_trim) {
     if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
 
     float cursor_pos_x =
-        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx->cursor_width_whole_number *
-                          ctx->cursor_width_sub_col /
-                          ctx->cursor_width_sub_cells;
+        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
+                          ctx_wr->cursor_width_sub_col /
+                          ctx_wr->cursor_width_sub_cells;
     float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
     float note_pos_x =
         note_quads->col[i_trim] +
@@ -881,11 +1040,7 @@ war_note_quads_trim_right_at_i(war_note_quads* note_quads,
     float note_pos_x_end = note_pos_x + note_span_x;
     bool delete = cursor_pos_x <= note_pos_x;
     if (delete) {
-        war_note_quads_delete_at_i(note_quads,
-                                   note_quads_count,
-                                   window_render_to_audio_ring_buffer,
-                                   write_to_audio_index,
-                                   i_trim);
+        war_note_quads_delete_at_i(note_quads, note_quads_count, pc, i_trim);
         return;
     }
     float new_span_x = cursor_pos_x - note_pos_x;
@@ -937,16 +1092,15 @@ war_note_quads_trim_right_at_i(war_note_quads* note_quads,
 static inline void
 war_note_quads_trim_left_at_i(war_note_quads* note_quads,
                               uint32_t* note_quads_count,
-                              war_input_cmd_context* ctx,
-                              uint8_t* window_render_to_audio_ring_buffer,
-                              uint8_t* write_to_audio_index,
+                              war_window_render_context* ctx_wr,
+                              war_producer_consumer* pc,
                               uint32_t i_trim) {
     if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
     float cursor_pos_x =
-        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx->cursor_width_whole_number *
-                          ctx->cursor_width_sub_col /
-                          ctx->cursor_width_sub_cells;
+        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
+                          ctx_wr->cursor_width_sub_col /
+                          ctx_wr->cursor_width_sub_cells;
     float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
     float note_pos_x =
         note_quads->col[i_trim] +
@@ -957,11 +1111,7 @@ war_note_quads_trim_left_at_i(war_note_quads* note_quads,
     float note_pos_x_end = note_pos_x + note_span_x;
     bool delete = cursor_pos_x_end >= note_pos_x_end;
     if (delete) {
-        war_note_quads_delete_at_i(note_quads,
-                                   note_quads_count,
-                                   window_render_to_audio_ring_buffer,
-                                   write_to_audio_index,
-                                   i_trim);
+        war_note_quads_delete_at_i(note_quads, note_quads_count, pc, i_trim);
         return;
     }
     float new_span_x = note_pos_x_end - cursor_pos_x_end;
@@ -1007,7 +1157,7 @@ war_note_quads_trim_left_at_i(war_note_quads* note_quads,
     note_quads->cursor_width_sub_col[i_trim] = new_cursor_width_sub_col;
     note_quads->cursor_width_sub_cells[i_trim] = new_cursor_width_sub_cells;
     float new_pos_x = cursor_pos_x_end;
-    float new_col = ctx->col;
+    float new_col = ctx_wr->col;
     float new_sub_col = 1;
     float new_sub_cells_col = 1;
     float practical_pos_x = new_col + (float)new_sub_col / new_sub_cells_col;
@@ -1050,12 +1200,12 @@ war_note_quads_trim_left_at_i(war_note_quads* note_quads,
 
 static inline void war_note_quads_in_view(war_note_quads* note_quads,
                                           uint32_t note_quads_count,
-                                          war_input_cmd_context* ctx,
+                                          war_window_render_context* ctx_wr,
                                           uint32_t* out_indices,
                                           uint32_t* out_indices_count) {
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        float leftover_x =
-            fmodf(ctx->physical_width, ctx->cell_width) / ctx->cell_width;
+        float leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
+                           ctx_wr->cell_width;
         float note_pos_x =
             note_quads->col[i] +
             (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
@@ -1064,24 +1214,25 @@ static inline void war_note_quads_in_view(war_note_quads* note_quads,
                             note_quads->cursor_width_sub_cells[i];
         float note_pos_y = note_quads->row[i];
         float note_pos_x_end = note_pos_x + note_span_x;
-        float left_col = ctx->left_col;
-        float right_col = ctx->right_col + leftover_x + 1;
-        float bottom_row = ctx->bottom_row;
-        float top_row = ctx->top_row;
+        float left_col = ctx_wr->left_col;
+        float right_col = ctx_wr->right_col + leftover_x + 1;
+        float bottom_row = ctx_wr->bottom_row;
+        float top_row = ctx_wr->top_row;
         bool in_view = (note_pos_x <= right_col && note_pos_x_end > left_col) &&
                        (note_pos_y >= bottom_row && note_pos_y <= top_row);
         if (in_view) { out_indices[(*out_indices_count)++] = i; }
     }
 }
 
-static inline void war_note_quads_outside_view(war_note_quads* note_quads,
-                                               uint32_t note_quads_count,
-                                               war_input_cmd_context* ctx,
-                                               uint32_t* out_indices,
-                                               uint32_t* out_indices_count) {
+static inline void
+war_note_quads_outside_view(war_note_quads* note_quads,
+                            uint32_t note_quads_count,
+                            war_window_render_context* ctx_wr,
+                            uint32_t* out_indices,
+                            uint32_t* out_indices_count) {
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        float leftover_x =
-            fmodf(ctx->physical_width, ctx->cell_width) / ctx->cell_width;
+        float leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
+                           ctx_wr->cell_width;
         float note_pos_x =
             note_quads->col[i] +
             (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
@@ -1090,10 +1241,10 @@ static inline void war_note_quads_outside_view(war_note_quads* note_quads,
                             note_quads->cursor_width_sub_cells[i];
         float note_pos_y = note_quads->row[i];
         float note_pos_x_end = note_pos_x + note_span_x;
-        float left_col = ctx->left_col;
-        float right_col = ctx->right_col + leftover_x + 1;
-        float bottom_row = ctx->bottom_row;
-        float top_row = ctx->top_row;
+        float left_col = ctx_wr->left_col;
+        float right_col = ctx_wr->right_col + leftover_x + 1;
+        float bottom_row = ctx_wr->bottom_row;
+        float top_row = ctx_wr->top_row;
         bool outside_view =
             !((note_pos_x <= right_col && note_pos_x_end > left_col) &&
               (note_pos_y >= bottom_row && note_pos_y <= top_row));
@@ -1101,18 +1252,19 @@ static inline void war_note_quads_outside_view(war_note_quads* note_quads,
     }
 }
 
-static inline void war_note_quads_under_cursor(war_note_quads* note_quads,
-                                               uint32_t note_quads_count,
-                                               war_input_cmd_context* ctx,
-                                               uint32_t* out_indices,
-                                               uint32_t* out_indices_count) {
+static inline void
+war_note_quads_under_cursor(war_note_quads* note_quads,
+                            uint32_t note_quads_count,
+                            war_window_render_context* ctx_wr,
+                            uint32_t* out_indices,
+                            uint32_t* out_indices_count) {
     float cursor_pos_x =
-        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx->cursor_width_whole_number *
-                          ctx->cursor_width_sub_col /
-                          ctx->cursor_width_sub_cells;
+        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
+                          ctx_wr->cursor_width_sub_col /
+                          ctx_wr->cursor_width_sub_cells;
     float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float cursor_pos_y = ctx->row;
+    float cursor_pos_y = ctx_wr->row;
     float cursor_pos_y_end = cursor_pos_y + 1;
     for (uint32_t i = 0; i < note_quads_count; i++) {
         float note_pos_x =
@@ -1133,10 +1285,10 @@ static inline void war_note_quads_under_cursor(war_note_quads* note_quads,
 
 static inline void war_note_quads_in_row(war_note_quads* note_quads,
                                          uint32_t note_quads_count,
-                                         war_input_cmd_context* ctx,
+                                         war_window_render_context* ctx_wr,
                                          uint32_t* out_indices,
                                          uint32_t* out_indices_count) {
-    uint32_t row = ctx->row;
+    uint32_t row = ctx_wr->row;
     for (uint32_t i = 0; i < note_quads_count; i++) {
         if (row == note_quads->row[i] && !note_quads->hidden[i]) {
             out_indices[(*out_indices_count)++] = i;
@@ -1146,16 +1298,16 @@ static inline void war_note_quads_in_row(war_note_quads* note_quads,
 
 static inline void war_note_quads_in_col(war_note_quads* note_quads,
                                          uint32_t note_quads_count,
-                                         war_input_cmd_context* ctx,
+                                         war_window_render_context* ctx_wr,
                                          uint32_t* out_indices,
                                          uint32_t* out_indices_count) {
     float cursor_pos_x =
-        ctx->col + (float)ctx->sub_col / ctx->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx->cursor_width_whole_number *
-                          ctx->cursor_width_sub_col /
-                          ctx->cursor_width_sub_cells;
+        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
+                          ctx_wr->cursor_width_sub_col /
+                          ctx_wr->cursor_width_sub_cells;
     float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float cursor_pos_y = ctx->row;
+    float cursor_pos_y = ctx_wr->row;
     float cursor_pos_y_end = cursor_pos_y + 1;
     for (uint32_t i = 0; i < note_quads_count; i++) {
         float note_pos_x =

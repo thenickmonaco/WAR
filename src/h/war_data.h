@@ -114,7 +114,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 111,
+    SEQUENCE_COUNT = 112,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -215,7 +215,7 @@ enum war_audio {
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
-    AUDIO_CMD_GET_TIME = 4,
+    AUDIO_CMD_GET_FRAMES = 4,
     AUDIO_CMD_ADD_NOTE = 5,
     AUDIO_CMD_END_WAR = 6,
     AUDIO_CMD_SEEK = 7,
@@ -223,7 +223,7 @@ enum war_audio {
     AUDIO_CMD_STOP_SIZE = 0,
     AUDIO_CMD_PLAY_SIZE = 0,
     AUDIO_CMD_PAUSE_SIZE = 0,
-    AUDIO_CMD_GET_TIME_SIZE = 8,
+    AUDIO_CMD_GET_FRAMES_SIZE = 8,
     AUDIO_CMD_ADD_NOTE_SIZE = 0,
     AUDIO_CMD_END_WAR_SIZE = 0,
     AUDIO_CMD_TRAVERSE_SIZE = 8,
@@ -243,15 +243,6 @@ typedef struct war_audio_context {
     snd_timestamp_t timestamp;
     uint64_t logical_frames_played;
 } war_audio_context;
-
-typedef struct war_audio_context_for_window_render {
-    float BPM;
-    uint32_t sample_rate;
-    snd_pcm_uframes_t period_size;
-    uint32_t channel_count;
-    uint8_t state;
-    uint64_t now;
-} war_audio_context_for_window_render;
 
 typedef struct war_voice {
 } war_voice;

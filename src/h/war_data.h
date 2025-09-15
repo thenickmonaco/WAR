@@ -114,7 +114,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 112,
+    SEQUENCE_COUNT = 113,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -331,6 +331,7 @@ typedef struct war_window_render_context {
     bool sleep;
     uint64_t sleep_duration_us;
     bool end_window_render;
+    bool trinity;
 } war_window_render_context;
 
 typedef struct war_key_trie_pool {

@@ -212,40 +212,6 @@ static inline uint64_t war_get_monotonic_time_us(void) {
     return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
 
-static inline void
-war_get_playback_pos_x_increment_per_frame(war_window_render_context* ctx_wr,
-                                           war_audio_context* ctx_a) {
-    ctx_wr->playback_bar_pos_x_increment =
-        (ctx_a->logical_frames_played / 1e6f) * (ctx_a->BPM * 4.0f / 60.0f) *
-        ctx_wr->cell_width;
-}
-
-static inline uint64_t
-war_get_time_from_logical_frames_played(war_audio_context* ctx_a) {
-    return (
-        uint64_t)(((double)ctx_a->logical_frames_played / ctx_a->sample_rate) *
-                  1e6);
-}
-
-static inline uint64_t war_get_logical_frames_played_from_pos_x(
-    war_window_render_context* ctx_wr, war_audio_context* ctx_a, float pos_x) {
-    return (uint64_t)((((pos_x / ctx_wr->cell_width) / 4.0f) *
-                       (60.0f / ctx_a->BPM)) *
-                      ctx_a->sample_rate);
-}
-
-static inline float
-war_get_pos_x_from_logical_frames_played(war_window_render_context* ctx_wr,
-                                         war_audio_context* ctx_a,
-                                         uint64_t logical_frames_played) {
-    double seconds_per_cell = (60.0 / (ctx_a->BPM * 4.0));
-    double seconds_played =
-        (double)logical_frames_played / (double)ctx_a->sample_rate;
-    double cells_played = seconds_played / seconds_per_cell;
-    double pixels = cells_played * (double)ctx_wr->cell_width;
-    return (float)pixels;
-}
-
 static inline war_rgba_t war_unpack_abgr(uint32_t hex_color) {
     war_rgba_t color;
     color.r = ((hex_color >> 0) & 0xFF) / 255.0f;  // Red

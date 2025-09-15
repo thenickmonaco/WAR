@@ -85,7 +85,7 @@ void war_wayland_wl_surface_attach(int fd,
     war_write_le32(attach + 8, wl_buffer_id);
     war_write_le32(attach + 12, x);
     war_write_le32(attach + 16, y);
-    dump_bytes("wl_surface::attach request", attach, 20);
+    // dump_bytes("wl_surface::attach request", attach, 20);
     ssize_t attach_written = write(fd, attach, 20);
     assert(attach_written == 20);
 }
@@ -104,7 +104,7 @@ void war_wayland_wl_surface_damage(int fd,
     war_write_le32(damage + 12, y);
     war_write_le32(damage + 16, width);
     war_write_le32(damage + 20, height);
-    dump_bytes("wl_surface_damage request", damage, 24);
+    // dump_bytes("wl_surface_damage request", damage, 24);
     ssize_t damage_written = write(fd, damage, 24);
     assert(damage_written == 24);
 }
@@ -114,7 +114,7 @@ void war_wayland_wl_surface_commit(int fd, uint32_t wl_surface_id) {
     war_write_le32(commit, wl_surface_id);
     war_write_le16(commit + 4, 6);
     war_write_le16(commit + 6, 8);
-    dump_bytes("wl_surface_commit request", commit, 8);
+    // dump_bytes("wl_surface_commit request", commit, 8);
     ssize_t commit_written = write(fd, commit, 8);
     assert(commit_written == 8);
 }
@@ -128,8 +128,8 @@ void war_wayland_wl_surface_frame(int fd,
     war_write_le16(frame + 4, 3);
     war_write_le16(frame + 6, 12);
     war_write_le32(frame + 8, new_id);
-    call_carmack("bound wl_callback");
-    dump_bytes("wl_surface::frame request", frame, 12);
+    // call_carmack("bound wl_callback");
+    // dump_bytes("wl_surface::frame request", frame, 12);
     ssize_t frame_written = write(fd, frame, 12);
     assert(frame_written == 12);
 }
@@ -150,9 +150,9 @@ void war_wayland_registry_bind(int fd,
     war_write_le16(bind + 6, total_size);
     war_write_le32(bind + size, new_id);
 
-    dump_bytes("bind request", bind, size + 4);
-    call_carmack("bound: %s", (const char*)msg_buffer + msg_buffer_offset + 16);
-    call_carmack("to id: %u", new_id);
+    // dump_bytes("bind request", bind, size + 4);
+    // call_carmack("bound: %s", (const char*)msg_buffer + msg_buffer_offset +
+    // 16); call_carmack("to id: %u", new_id);
 
     ssize_t bind_written = write(fd, bind, size + 4);
     assert(bind_written == size + 4);

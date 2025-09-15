@@ -101,8 +101,9 @@ void* war_window_render(void* args) {
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
     };
     war_window_render_context ctx_wr = {
+        .trinity = false,
         .end_window_render = false,
-        .FPS = 240,
+        .FPS = 60,
         .now = 0,
         .mode = MODE_NORMAL,
         .hud_state = HUD_PIANO,
@@ -393,26 +394,9 @@ void* war_window_render(void* args) {
     // window_render loop
     //-------------------------------------------------------------------------
     while (!ctx_wr.end_window_render) {
-        ctx_wr.now = war_get_monotonic_time_us();
-        if (ctx_wr.now - last_frame_time >= ctx_wr.frame_duration_us) {
-            war_get_frame_duration_us(&ctx_wr);
-            last_frame_time += ctx_wr.frame_duration_us;
-        }
         //---------------------------------------------------------------------
         // PC WINDOW RENDER
         //---------------------------------------------------------------------
-        if (ctx_a.state == AUDIO_CMD_PLAY) {
-            war_pc_to_a(pc, AUDIO_CMD_GET_FRAMES, 0, NULL);
-            war_wayland_holy_trinity(fd,
-                                     wl_surface_id,
-                                     wl_buffer_id,
-                                     0,
-                                     0,
-                                     0,
-                                     0,
-                                     physical_width,
-                                     physical_height);
-        }
         uint32_t header, size;
         uint8_t payload[PC_BUFFER_SIZE];
         while (war_pc_from_a(pc, &header, &size, payload)) {
@@ -441,17 +425,31 @@ void* war_window_render(void* args) {
                 uint64_t logical_frames_played;
                 memcpy(&logical_frames_played, payload, size);
                 ctx_a.logical_frames_played = logical_frames_played;
-                call_carmack("to seconds: %lu",
-                             ctx_a.logical_frames_played / ctx_a.sample_rate);
-                call_carmack("col float: %f",
-                             war_get_pos_x_from_logical_frames_played(
-                                 &ctx_wr, &ctx_a, logical_frames_played));
                 break;
             }
             case AUDIO_CMD_END_WAR:
                 call_carmack("from a: END_WAR");
                 ctx_wr.end_window_render = true;
                 break;
+            }
+        }
+        ctx_wr.now = war_get_monotonic_time_us();
+        if (ctx_wr.now - last_frame_time >= ctx_wr.frame_duration_us) {
+            war_get_frame_duration_us(&ctx_wr);
+            last_frame_time += ctx_wr.frame_duration_us;
+            if (ctx_wr.trinity) {
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
+            }
+            if (ctx_a.state == AUDIO_CMD_PLAY) {
+                war_pc_to_a(pc, AUDIO_CMD_GET_FRAMES, 0, NULL);
             }
         }
         //---------------------------------------------------------------------
@@ -848,9 +846,9 @@ void* war_window_render(void* args) {
                 //-------------------------------------------------------------
                 // RENDERING WITH VULKAN
                 //-------------------------------------------------------------
-                dump_bytes("wl_callback::done event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
+                // dump_bytes("wl_callback::done event",
+                //           msg_buffer + msg_buffer_offset,
+                //           size);
 #if DMABUF
                 const uint32_t light_gray_hex = 0xFF454950;
                 const uint32_t darker_light_gray_hex =
@@ -998,12 +996,6 @@ void* war_window_render(void* args) {
                     }
                 }
                 // draw playback bar
-                call_carmack("play state: %s",
-                             (ctx_a.state != AUDIO_CMD_STOP) ?
-                                 ((ctx_a.state == AUDIO_CMD_PLAY) ?
-                                      "AUDIO_CMD_PLAY" :
-                                      "AUDIO_CMD_PAUSE") :
-                                 "AUDIO_CMD_STOP");
                 uint32_t playback_bar_color = bright_red_hex;
                 if (ctx_a.state == AUDIO_CMD_STOP) {
                     float playback_bar_alpha_factor = default_alpha_scale;
@@ -1014,14 +1006,13 @@ void* war_window_render(void* args) {
                                           << 24) |
                                          (playback_bar_color & 0x00FFFFFF);
                 }
-                ctx_wr.playback_bar_pos_x =
-                    war_get_pos_x_from_logical_frames_played(
-                        &ctx_wr, &ctx_a, ctx_a.logical_frames_played);
                 war_make_quad(quad_vertices,
                               quad_indices,
                               &quad_vertices_count,
                               &quad_indices_count,
-                              (float[3]){ctx_wr.playback_bar_pos_x,
+                              (float[3]){((float)ctx_a.logical_frames_played /
+                                          ctx_a.sample_rate) /
+                                             ((60.0f / ctx_a.BPM) / 4.0f),
                                          ctx_wr.bottom_row,
                                          ctx_wr.layers[LAYER_PLAYBACK_BAR]},
                               (float[2]){0, ctx_wr.viewport_rows},
@@ -1535,9 +1526,9 @@ void* war_window_render(void* args) {
                            size);
                 goto done;
             wl_display_delete_id:
-                dump_bytes("wl_display::delete_id event",
-                           msg_buffer + msg_buffer_offset,
-                           size);
+                // dump_bytes("wl_display::delete_id event",
+                //            msg_buffer + msg_buffer_offset,
+                //            size);
 
                 if (war_read_le32(msg_buffer + msg_buffer_offset + 8) ==
                     wl_callback_id) {
@@ -1711,7 +1702,6 @@ void* war_window_render(void* args) {
                     new_id++;
                 }
                 war_wayland_wl_surface_commit(fd, wl_surface_id);
-
                 goto done;
             xdg_toplevel_configure:
                 dump_bytes("xdg_toplevel_configure event",
@@ -2742,6 +2732,10 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_a, .mod = MOD_ALT | MOD_SHIFT},
                             {0},
                         },
+                        {
+                            {.keysym = XKB_KEY_a, .mod = MOD_CTRL},
+                            {0},
+                        },
                     };
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2858,6 +2852,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_alt_a},
                     {&&cmd_normal_alt_esc},
                     {&&cmd_normal_alt_A},
+                    {&&cmd_normal_ctrl_a},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -4440,11 +4435,11 @@ void* war_window_render(void* args) {
             }
             cmd_normal_alt_a: {
                 call_carmack("cmd_normal_alt_a");
-                uint64_t seek_zero = 0;
-                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_zero);
-                if (ctx_a.state != AUDIO_CMD_PLAY) {
-                    war_pc_to_a(pc, AUDIO_CMD_PLAY, 0, NULL);
-                }
+                uint64_t seek_viewport = (uint64_t)((
+                    float)(ctx_wr.left_col * ((60.0f / ctx_a.BPM) / 4.0f) *
+                           ctx_a.sample_rate));
+                war_pc_to_a(
+                    pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_viewport);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -4452,13 +4447,10 @@ void* war_window_render(void* args) {
             }
             cmd_normal_alt_A: {
                 call_carmack("cmd_normal_alt_A");
-                uint64_t seek_logical_frames_played =
-                    war_get_logical_frames_played_from_pos_x(
-                        &ctx_wr, &ctx_a, war_cursor_pos_x(&ctx_wr));
-                war_pc_to_a(pc,
-                            AUDIO_CMD_SEEK,
-                            sizeof(uint64_t),
-                            &seek_logical_frames_played);
+                uint64_t seek = (uint64_t)((
+                    float)(war_cursor_pos_x(&ctx_wr) *
+                           ((60.0f / ctx_a.BPM) / 4.0f) * ctx_a.sample_rate));
+                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -4466,13 +4458,12 @@ void* war_window_render(void* args) {
             }
             cmd_normal_A: {
                 call_carmack("cmd_normal_A");
-                uint64_t seek_logical_frames_played =
-                    war_get_logical_frames_played_from_pos_x(
-                        &ctx_wr, &ctx_a, (float)ctx_wr.numeric_prefix);
-                war_pc_to_a(pc,
-                            AUDIO_CMD_SEEK,
-                            sizeof(uint64_t),
-                            &seek_logical_frames_played);
+                if (ctx_wr.numeric_prefix) {
+                    uint64_t seek = (uint64_t)((float)ctx_wr.numeric_prefix *
+                                               ((60.0f / ctx_a.BPM) / 4.0f) *
+                                               ctx_a.sample_rate);
+                    war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek);
+                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -4483,6 +4474,15 @@ void* war_window_render(void* args) {
                 if (ctx_a.state != AUDIO_CMD_STOP) {
                     war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
                 }
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_normal_ctrl_a: {
+                call_carmack("cmd_normal_ctrl_a");
+                uint64_t seek_start = 0;
+                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_start);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5039,16 +5039,8 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
-            cmd_done:
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
+            cmd_done: {
+                ctx_wr.trinity = true;
                 if (goto_cmd_repeat_done) {
                     goto_cmd_repeat_done = false;
                     goto cmd_repeat_done;
@@ -5058,6 +5050,7 @@ void* war_window_render(void* args) {
                     goto cmd_timeout_done;
                 }
                 goto done;
+            }
             wl_keyboard_modifiers:
                 dump_bytes("wl_keyboard_modifiers event",
                            msg_buffer + msg_buffer_offset,
@@ -5263,7 +5256,6 @@ void* war_window_render(void* args) {
                 msg_buffer_offset += size;
                 continue;
             }
-
             if (msg_buffer_offset > 0) {
                 memmove(msg_buffer,
                         msg_buffer + msg_buffer_offset,
@@ -5294,7 +5286,7 @@ void* war_audio(void* args) {
     war_producer_consumer* pc = (war_producer_consumer*)args;
     // set scheduling to SCHED_FIFO
     struct sched_param param;
-    param.sched_priority = 1; // RT priorities: 1–99 (higher = more)
+    param.sched_priority = 5; // RT priorities: 1–99 (higher = more)
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
         call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
         perror("pthread_setschedparam");
@@ -5375,7 +5367,7 @@ void* war_audio(void* args) {
                 uint64_t seek_logical_frames_played;
                 memcpy(&seek_logical_frames_played, payload, size);
                 ctx_a.logical_frames_played = seek_logical_frames_played;
-                ctx_a.total_frames_written = 0;
+                ctx_a.total_frames_written = seek_logical_frames_played;
                 war_pc_to_wr(pc,
                              AUDIO_CMD_SEEK,
                              sizeof(ctx_a.logical_frames_played),
@@ -5419,6 +5411,7 @@ void* war_audio(void* args) {
             if (result < 0) {
                 delay_frames = 0; // fallback in case of error
             }
+            if (delay_frames < 0) { delay_frames = 0; }
 
             // Compute logical frames actually played by hardware
             ctx_a.logical_frames_played =

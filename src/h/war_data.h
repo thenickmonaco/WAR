@@ -242,6 +242,7 @@ typedef struct war_audio_context {
     uint8_t state;
     snd_timestamp_t timestamp;
     uint64_t logical_frames_played;
+    uint64_t total_frames_written;
 } war_audio_context;
 
 typedef struct war_voice {

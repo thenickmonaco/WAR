@@ -238,8 +238,12 @@ static inline float
 war_get_pos_x_from_logical_frames_played(war_window_render_context* ctx_wr,
                                          war_audio_context* ctx_a,
                                          uint64_t logical_frames_played) {
-    return (float)logical_frames_played * (ctx_a->BPM / 60.0f) *
-           (4.0f * ctx_wr->cell_width / (float)ctx_a->sample_rate);
+    double seconds_per_cell = (60.0 / (ctx_a->BPM * 4.0));
+    double seconds_played =
+        (double)logical_frames_played / (double)ctx_a->sample_rate;
+    double cells_played = seconds_played / seconds_per_cell;
+    double pixels = cells_played * (double)ctx_wr->cell_width;
+    return (float)pixels;
 }
 
 static inline war_rgba_t war_unpack_abgr(uint32_t hex_color) {

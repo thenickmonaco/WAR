@@ -2907,6 +2907,18 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_w, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = KEYSYM_SPACE, .mod = 0},
+                            {.keysym = XKB_KEY_u, .mod = 0},
+                            {.keysym = XKB_KEY_i, .mod = 0},
+                            {.keysym = XKB_KEY_w, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_g, .mod = 0},
+                            {.keysym = XKB_KEY_a, .mod = 0},
+                            {0},
+                        },
                     };
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -3027,6 +3039,8 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_tab},
                     {&&cmd_normal_spacehiw},
                     {&&cmd_normal_spacesiw},
+                    {&&cmd_normal_spaceuiw},
+                    {&&cmd_normal_ga},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3607,6 +3621,39 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 ctx_wr.numeric_prefix = 0;
                 goto cmd_done;
+            cmd_normal_ga: {
+                call_carmack("cmd_normal_$");
+                uint32_t col =
+                    ((float)ctx_a.logical_frames_played / ctx_a.sample_rate) /
+                    ((60.0f / ctx_a.BPM) / 4.0f);
+                ctx_wr.col =
+                    war_clamp_uint32(col, ctx_wr.min_col, ctx_wr.max_col);
+                ctx_wr.sub_col = 0;
+                uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                uint32_t distance = viewport_width / 2;
+                ctx_wr.left_col = war_clamp_subtract_uint32(
+                    ctx_wr.col, distance, ctx_wr.min_col);
+                ctx_wr.right_col =
+                    war_clamp_add_uint32(ctx_wr.col, distance, ctx_wr.max_col);
+                uint32_t new_viewport_width = war_clamp_subtract_uint32(
+                    ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
+                if (new_viewport_width < viewport_width) {
+                    uint32_t diff = war_clamp_subtract_uint32(
+                        viewport_width, new_viewport_width, ctx_wr.min_col);
+                    uint32_t sum = war_clamp_add_uint32(
+                        ctx_wr.right_col, diff, ctx_wr.max_col);
+                    if (sum < ctx_wr.max_col) {
+                        ctx_wr.right_col = sum;
+                    } else {
+                        ctx_wr.left_col = war_clamp_subtract_uint32(
+                            ctx_wr.left_col, diff, ctx_wr.min_col);
+                    }
+                }
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_normal_$:
                 call_carmack("cmd_normal_$");
                 if (ctx_wr.numeric_prefix) {
@@ -4505,6 +4552,33 @@ void* war_window_render(void* args) {
                     uint32_t i_unmute = note_quads_in_x[i];
                     if (note_quads.hidden[i_unmute]) { continue; }
                     note_quads.mute[i_unmute] = false;
+                }
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_normal_spaceuiw:
+                call_carmack("cmd_normal_spaceuiw");
+                note_quads_in_x_count = 0;
+                war_note_quads_under_cursor(&note_quads,
+                                            note_quads_count,
+                                            &ctx_wr,
+                                            note_quads_in_x,
+                                            &note_quads_in_x_count);
+                if (!note_quads_in_x_count) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                for (int32_t i = (int32_t)note_quads_in_x_count - 1;
+                     i >= (int32_t)note_quads_in_x_count - 1 -
+                              (int32_t)ctx_wr.numeric_prefix;
+                     i--) {
+                    uint32_t i_mute = note_quads_in_x[i];
+                    note_quads.mute[i_mute] = false;
                 }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));

@@ -50,22 +50,22 @@
 #define STR(x) #x
 
 static inline void war_get_top_text(war_window_render_context* ctx_wr) {
-    memset(ctx_wr->text_top_status_bar, 0, MAX_STATUS_BAR_COLS);
     memcpy(ctx_wr->text_top_status_bar,
-           "projects/demo.war",
+           "projects/test.war",
            sizeof("projects/test.war"));
     ctx_wr->text_top_status_bar_count += sizeof("projects/test.war");
     char tmp[MAX_STATUS_BAR_COLS];
-    memset(tmp, 0, MAX_STATUS_BAR_COLS);
-    snprintf(tmp, MAX_STATUS_BAR_COLS, "%u,%u", ctx_wr->row, ctx_wr->col);
-    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
+    snprintf(
+        tmp, sizeof(MAX_STATUS_BAR_COLS), "%d,%d", ctx_wr->row, ctx_wr->col);
+    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_top_status_bar_count,
            tmp,
-           sizeof(ctx_wr->text_top_status_bar));
+           sizeof(MAX_STATUS_BAR_COLS));
 }
 
 static inline void war_get_middle_text(war_window_render_context* ctx_wr) {
-    memset(ctx_wr->text_middle_status_bar, 0, MAX_STATUS_BAR_COLS);
     switch (ctx_wr->mode) {
+    case MODE_NORMAL:
+        return;
     case MODE_VISUAL:
         memcpy(ctx_wr->text_middle_status_bar,
                "-- VISUAL --",
@@ -77,15 +77,11 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr) {
     case MODE_COMMAND:
         memcpy(ctx_wr->text_middle_status_bar, ":", sizeof(":"));
     default:
-        break;
+        return;
     }
-    memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index,
-           ctx_wr->input_sequence,
-           1);
 }
 
 static inline void war_get_bottom_text(war_window_render_context* ctx_wr) {
-    memset(ctx_wr->text_bottom_status_bar, 0, MAX_STATUS_BAR_COLS);
     memcpy(ctx_wr->text_bottom_status_bar,
            "[WAR] 1:roll*",
            sizeof("[WAR] 1:roll*"));
@@ -377,8 +373,6 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return KEYSYM_RETURN;
     case XKB_KEY_space:
         return KEYSYM_SPACE;
-    case XKB_KEY_Tab:
-        return KEYSYM_TAB;
     case XKB_KEY_A:
         return XKB_KEY_a;
     case XKB_KEY_B:

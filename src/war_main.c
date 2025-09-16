@@ -69,6 +69,29 @@ void* war_window_render(void* args) {
     uint32_t physical_height = 1600;
     const uint32_t stride = physical_width * 4;
 
+    const uint32_t light_gray_hex = 0xFF454950;
+    const uint32_t darker_light_gray_hex = 0xFF36383C; // gutter / line numbers
+    const uint32_t dark_gray_hex = 0xFF282828;
+    const uint32_t red_hex = 0xFF011FDD;
+    const uint32_t red_hex_transparent = 0x80011FDD;
+    const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
+    const uint32_t white_hex_transparent = 0x80B1D9E9;
+    const uint32_t bright_white_hex = 0xFFEEEEEE; // tmux status text
+    const uint32_t black_hex = 0xFF000000;
+    const uint32_t full_white_hex = 0xFFFFFFFF;
+    const uint32_t bright_red_hex = 0xFF0000FF;
+    const float default_horizontal_line_thickness = 0.018f;
+    const float default_vertical_line_thickness = 0.018f; // default: 0.018
+    const float default_outline_thickness =
+        0.075f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
+                // sub_cursor right outline from disappearing
+    const float default_alpha_scale = 0.2f;
+    const float default_playback_bar_thickness = 0.05f;
+    const float default_text_feather = 0.5f;
+    const float default_text_thickness = 0.0f;
+    const float windowed_text_feather = 0.0f;
+    const float windowed_text_thickness = 0.0f;
+
 #if DMABUF
     war_vulkan_context ctx_vk =
         war_vulkan_init(physical_width, physical_height);
@@ -102,8 +125,9 @@ void* war_window_render(void* args) {
     };
     war_window_render_context ctx_wr = {
         .trinity = false,
+        .fullscreen = false,
         .end_window_render = false,
-        .FPS = 60,
+        .FPS = 240,
         .now = 0,
         .mode = MODE_NORMAL,
         .hud_state = HUD_PIANO,
@@ -179,6 +203,27 @@ void* war_window_render(void* args) {
         .layer_count = (float)LAYER_COUNT,
         .sleep = false,
         .playback_bar_pos_x = 0.0f,
+        .light_gray_hex = light_gray_hex,
+        .darker_light_gray_hex = darker_light_gray_hex,
+        .dark_gray_hex = dark_gray_hex,
+        .red_hex = red_hex,
+        .red_hex_transparent = red_hex_transparent,
+        .white_hex = white_hex,
+        .white_hex_transparent = white_hex_transparent,
+        .bright_white_hex = bright_white_hex,
+        .black_hex = black_hex,
+        .full_white_hex = full_white_hex,
+        .bright_red_hex = bright_red_hex,
+        .horizontal_line_thickness = default_horizontal_line_thickness,
+        .vertical_line_thickness = default_vertical_line_thickness,
+        .outline_thickness = default_outline_thickness,
+        .alpha_scale = default_alpha_scale,
+        .playback_bar_thickness = default_playback_bar_thickness,
+        .text_feather = default_text_feather,
+        .text_thickness = default_text_thickness,
+        .text_top_status_bar_count = 0,
+        .text_middle_status_bar_count = 0,
+        .text_bottom_status_bar_count = 0,
     };
     for (int i = 0; i < LAYER_COUNT; i++) {
         ctx_wr.layers[i] = i / ctx_wr.layer_count;
@@ -241,6 +286,7 @@ void* war_window_render(void* args) {
     uint32_t wl_buffer_id = 0;
     uint32_t wl_callback_id = 0;
     uint32_t wl_compositor_id = 0;
+    uint32_t wl_region_id = 0;
     uint32_t wp_viewporter_id = 0;
     uint32_t wl_surface_id = 0;
     uint32_t wp_viewport_id = 0;
@@ -267,6 +313,7 @@ void* war_window_render(void* args) {
     uint32_t zwlr_layer_shell_v1_id = 0;
     uint32_t ext_foreign_toplevel_list_v1_id = 0;
     uint32_t wp_content_type_manager_v1_id = 0;
+    uint32_t zxdg_toplevel_decoration_v1_id = 0;
     // uint32_t wl_keyboard_id = 0;
     // uint32_t wl_pointer_id = 0;
     // uint32_t zwp_linux_explicit_synchronization_v1_id = 0;
@@ -384,6 +431,10 @@ void* war_window_render(void* args) {
     uint32_t text_vertices_count = 0;
     uint16_t* text_indices = malloc(sizeof(uint16_t) * max_text_quads);
     uint32_t text_indices_count = 0;
+
+    ctx_wr.text_bottom_status_bar = malloc(sizeof(char) * MAX_STATUS_BAR_COLS);
+    ctx_wr.text_middle_status_bar = malloc(sizeof(char) * MAX_STATUS_BAR_COLS);
+    ctx_wr.text_top_status_bar = malloc(sizeof(char) * MAX_STATUS_BAR_COLS);
 
     const double microsecond_conversion = 1000000.0;
     ctx_wr.sleep_duration_us = 50000;
@@ -761,6 +812,35 @@ void* war_window_render(void* args) {
                         &&wl_surface_preferred_buffer_transform;
                     new_id++;
                 }
+                if (!wl_region_id && wl_surface_id && wl_compositor_id) {
+                    uint8_t create_region[12];
+                    war_write_le32(create_region, wl_compositor_id);
+                    war_write_le16(create_region + 4, 1);
+                    war_write_le16(create_region + 6, 12);
+                    war_write_le32(create_region + 8, new_id);
+                    dump_bytes("create_region request", create_region, 12);
+                    call_carmack("bound: wl_region");
+                    ssize_t create_region_written =
+                        write(fd, create_region, 12);
+                    assert(create_region_written == 12);
+                    wl_region_id = new_id;
+                    new_id++;
+
+                    uint8_t region_add[24];
+                    war_write_le32(region_add, wl_region_id);
+                    war_write_le16(region_add + 4, 1);
+                    war_write_le16(region_add + 6, 24);
+                    war_write_le32(region_add + 8, 0);
+                    war_write_le32(region_add + 12, 0);
+                    war_write_le32(region_add + 16, physical_width);
+                    war_write_le32(region_add + 20, physical_height);
+                    dump_bytes("wl_region::add request", region_add, 24);
+                    ssize_t region_add_written = write(fd, region_add, 24);
+                    assert(region_add_written == 24);
+
+                    war_wl_surface_set_opaque_region(
+                        fd, wl_surface_id, wl_region_id);
+                }
 #if DMABUF
                 if (!zwp_linux_dmabuf_feedback_v1_id &&
                     zwp_linux_dmabuf_v1_id && wl_surface_id) {
@@ -832,6 +912,29 @@ void* war_window_render(void* args) {
                     obj_op[obj_op_index(xdg_toplevel_id, 3)] =
                         &&xdg_toplevel_wm_capabilities;
                     new_id++;
+                }
+                if (!zxdg_toplevel_decoration_v1_id && xdg_toplevel_id &&
+                    zxdg_decoration_manager_v1_id) {
+                    uint8_t get_toplevel_decoration[16];
+                    war_write_le32(get_toplevel_decoration,
+                                   zxdg_decoration_manager_v1_id);
+                    war_write_le16(get_toplevel_decoration + 4, 1);
+                    war_write_le16(get_toplevel_decoration + 6, 16);
+                    war_write_le32(get_toplevel_decoration + 8, new_id);
+                    war_write_le32(get_toplevel_decoration + 12,
+                                   xdg_toplevel_id);
+                    dump_bytes("get_toplevel_decoration request",
+                               get_toplevel_decoration,
+                               16);
+                    call_carmack("bound: zxdg_toplevel_decoration_v1");
+                    ssize_t get_toplevel_decoration_written =
+                        write(fd, get_toplevel_decoration, 16);
+                    assert(get_toplevel_decoration_written == 16);
+                    zxdg_toplevel_decoration_v1_id = new_id;
+                    obj_op[obj_op_index(zxdg_toplevel_decoration_v1_id, 0)] =
+                        &&zxdg_toplevel_decoration_v1_configure;
+                    new_id++;
+
                     //---------------------------------------------------------
                     // initial commit
                     //---------------------------------------------------------
@@ -850,27 +953,6 @@ void* war_window_render(void* args) {
                 //           msg_buffer + msg_buffer_offset,
                 //           size);
 #if DMABUF
-                const uint32_t light_gray_hex = 0xFF454950;
-                const uint32_t darker_light_gray_hex =
-                    0xFF36383C; // gutter / line numbers
-                const uint32_t dark_gray_hex = 0xFF282828;
-                const uint32_t red_hex = 0xFF011FDD;
-                const uint32_t red_hex_transparent = 0x80011FDD;
-                const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
-                const uint32_t white_hex_transparent = 0x80B1D9E9;
-                const uint32_t bright_white_hex =
-                    0xFFEEEEEE; // tmux status text
-                const uint32_t black_hex = 0xFF000000;
-                const uint32_t full_white_hex = 0xFFFFFFFF;
-                const uint32_t bright_red_hex = 0xFF0000FF;
-                const float default_horizontal_line_thickness = 0.018f;
-                const float default_vertical_line_thickness =
-                    0.018f; // default: 0.018
-                const float default_outline_thickness =
-                    0.075f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
-                            // sub_cursor right outline from disappearing
-                const float default_alpha_scale = 0.2f;
-                const float default_playback_bar_thickness = 0.05f;
                 assert(ctx_vk.current_frame == 0);
                 vkWaitForFences(ctx_vk.device,
                                 1,
@@ -891,7 +973,7 @@ void* war_window_render(void* args) {
                 clear_values[0].color =
                     (VkClearColorValue){{0.1569f, 0.1569f, 0.1569f, 1.0f}};
                 clear_values[1].depthStencil = (VkClearDepthStencilValue){
-                    ctx_wr.layers[LAYER_BACKGROUND], 0.0f};
+                    ctx_wr.layers[LAYER_OPAQUE_REGION], 0.0f};
                 VkRenderPassBeginInfo render_pass_info = {
                     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                     .renderPass = ctx_vk.render_pass,
@@ -929,7 +1011,7 @@ void* war_window_render(void* args) {
                                    ctx_wr.cursor_width_sub_col /
                                    ctx_wr.cursor_width_sub_cells,
                                1},
-                    white_hex,
+                    ctx_wr.white_hex,
                     0,
                     0,
                     (float[2]){0.0f, 0.0f},
@@ -970,7 +1052,7 @@ void* war_window_render(void* args) {
                                       (float[2]){0.0f, 0.0f},
                                       QUAD_GRID);
                     } else if (!hidden && mute) {
-                        float alpha_factor = default_alpha_scale;
+                        float alpha_factor = ctx_wr.alpha_scale;
                         uint8_t color_alpha = (color >> 24) & 0xFF;
                         uint8_t outline_color_alpha =
                             (outline_color >> 24) & 0xFF;
@@ -996,9 +1078,9 @@ void* war_window_render(void* args) {
                     }
                 }
                 // draw playback bar
-                uint32_t playback_bar_color = bright_red_hex;
+                uint32_t playback_bar_color = ctx_wr.bright_red_hex;
                 if (ctx_a.state == AUDIO_CMD_STOP) {
-                    float playback_bar_alpha_factor = default_alpha_scale;
+                    float playback_bar_alpha_factor = ctx_wr.alpha_scale;
                     uint8_t playback_bar_color_alpha =
                         (playback_bar_color >> 24) & 0xFF;
                     playback_bar_color = ((uint8_t)(playback_bar_color_alpha *
@@ -1030,7 +1112,7 @@ void* war_window_render(void* args) {
                                          ctx_wr.bottom_row,
                                          ctx_wr.layers[LAYER_HUD]},
                               (float[2]){ctx_wr.viewport_cols + 1, 1},
-                              red_hex,
+                              ctx_wr.bright_red_hex,
                               0,
                               0,
                               (float[2]){0.0f, 0.0f},
@@ -1043,7 +1125,7 @@ void* war_window_render(void* args) {
                                          ctx_wr.bottom_row + 1,
                                          ctx_wr.layers[LAYER_HUD]},
                               (float[2]){ctx_wr.viewport_cols + 1, 1},
-                              dark_gray_hex,
+                              ctx_wr.dark_gray_hex,
                               0,
                               0,
                               (float[2]){0.0f, 0.0f},
@@ -1056,7 +1138,7 @@ void* war_window_render(void* args) {
                                          ctx_wr.bottom_row + 2,
                                          ctx_wr.layers[LAYER_HUD]},
                               (float[2]){ctx_wr.viewport_cols + 1, 1},
-                              light_gray_hex,
+                              ctx_wr.darker_light_gray_hex,
                               0,
                               0,
                               (float[2]){0.0f, 0.0f},
@@ -1075,12 +1157,13 @@ void* war_window_render(void* args) {
                                        ctx_wr.num_rows_for_status_bars,
                                    ctx_wr.layers[LAYER_HUD]},
                         (float[2]){3, ctx_wr.viewport_rows},
-                        full_white_hex,
+                        ctx_wr.full_white_hex,
                         0,
                         0,
                         (float[2]){0.0f, 0.0f},
                         0);
-                    for (uint32_t row = ctx_wr.bottom_row; row < ctx_wr.top_row;
+                    for (uint32_t row = ctx_wr.bottom_row;
+                         row <= ctx_wr.top_row;
                          row++) {
                         uint32_t note = row % 12;
                         if (note == 1 || note == 3 || note == 6 || note == 8 ||
@@ -1095,7 +1178,7 @@ void* war_window_render(void* args) {
                                                ctx_wr.num_rows_for_status_bars,
                                            ctx_wr.layers[LAYER_HUD]},
                                 (float[2]){2, 1},
-                                black_hex,
+                                ctx_wr.black_hex,
                                 0,
                                 0,
                                 (float[2]){0.0f, 0.0f},
@@ -1103,6 +1186,25 @@ void* war_window_render(void* args) {
                         }
                     }
                     break;
+                }
+                // draw line number quad
+                int ln_offset = (ctx_wr.hud_state == HUD_LINE_NUMBERS) ? 0 : 3;
+                if (ctx_wr.hud_state != HUD_PIANO) {
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){ctx_wr.left_col + ln_offset,
+                                   ctx_wr.bottom_row +
+                                       ctx_wr.num_rows_for_status_bars,
+                                   ctx_wr.layers[LAYER_HUD]},
+                        (float[2]){3, ctx_wr.viewport_rows},
+                        ctx_wr.bright_red_hex,
+                        0,
+                        0,
+                        (float[2]){0.0f, 0.0f},
+                        0);
                 }
                 // draw gridline quads
                 for (uint32_t row = ctx_wr.bottom_row + 1;
@@ -1117,7 +1219,7 @@ void* war_window_render(void* args) {
                                    row,
                                    ctx_wr.layers[LAYER_GRIDLINES]},
                         (float[2]){ctx_wr.viewport_cols, 0},
-                        darker_light_gray_hex,
+                        ctx_wr.darker_light_gray_hex,
                         0,
                         0,
                         (float[2]){0.0f, default_horizontal_line_thickness},
@@ -1138,16 +1240,16 @@ void* war_window_render(void* args) {
                         if (draw_vertical_line) {
                             switch (i) {
                             case 0:
-                                color = white_hex;
+                                color = ctx_wr.white_hex;
                                 break;
                             case 1:
-                                color = darker_light_gray_hex;
+                                color = ctx_wr.darker_light_gray_hex;
                                 break;
                             case 2:
-                                color = red_hex;
+                                color = ctx_wr.bright_red_hex;
                                 break;
                             case 3:
-                                color = black_hex;
+                                color = ctx_wr.black_hex;
                                 break;
                             }
                             break;
@@ -1240,156 +1342,151 @@ void* war_window_render(void* args) {
                                         NULL);
                 text_vertices_count = 0;
                 text_indices_count = 0;
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['~'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 1,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['*'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 2,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['m'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 3,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['M'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 4,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['y'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 5,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['t'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 6,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['1'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 7,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['3'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 8,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs['4'],
-                    0.1f,
-                    0.0f,
-                    0);
-                war_make_text_quad(
-                    text_vertices,
-                    text_indices,
-                    &text_vertices_count,
-                    &text_indices_count,
-                    (float[3]){ctx_wr.left_col +
-                                   ctx_wr.num_cols_for_line_numbers + 9,
-                               ctx_wr.bottom_row + 2,
-                               ctx_wr.layers[LAYER_HUD_TEXT]},
-                    (float[2]){1, 1},
-                    full_white_hex,
-                    &ctx_vk.glyphs[':'],
-                    0.1f,
-                    0.0f,
-                    0);
+                // draw status bar text
+                ctx_wr.text_status_bar_start_index = 0;
+                ctx_wr.text_status_bar_middle_index = ctx_wr.viewport_cols / 2;
+                ctx_wr.text_status_bar_end_index =
+                    (ctx_wr.viewport_cols * 3) / 4;
+                war_get_top_text(&ctx_wr);
+                war_get_middle_text(&ctx_wr);
+                war_get_bottom_text(&ctx_wr);
+                for (float col = 0; col < ctx_wr.viewport_cols; col++) {
+                    if (ctx_wr.text_top_status_bar[(int)col] != 0) {
+                        war_make_text_quad(
+                            text_vertices,
+                            text_indices,
+                            &text_vertices_count,
+                            &text_indices_count,
+                            (float[3]){col + ctx_wr.left_col,
+                                       2 + ctx_wr.bottom_row,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[2]){1, 1},
+                            ctx_wr.white_hex,
+                            &ctx_vk
+                                 .glyphs[ctx_wr.text_top_status_bar[(int)col]],
+                            ctx_wr.text_thickness,
+                            ctx_wr.text_feather,
+                            0);
+                    }
+                    if (ctx_wr.text_middle_status_bar[(int)col] != 0) {
+                        war_make_text_quad(
+                            text_vertices,
+                            text_indices,
+                            &text_vertices_count,
+                            &text_indices_count,
+                            (float[3]){col + ctx_wr.left_col,
+                                       1 + ctx_wr.bottom_row,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[2]){1, 1},
+                            ctx_wr.bright_red_hex,
+                            &ctx_vk.glyphs[ctx_wr.text_middle_status_bar[(
+                                int)col]],
+                            ctx_wr.text_thickness,
+                            ctx_wr.text_feather,
+                            0);
+                    }
+                    if (ctx_wr.text_bottom_status_bar[(int)col] != 0) {
+                        war_make_text_quad(
+                            text_vertices,
+                            text_indices,
+                            &text_vertices_count,
+                            &text_indices_count,
+                            (float[3]){col + ctx_wr.left_col,
+                                       ctx_wr.bottom_row,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[2]){1, 1},
+                            ctx_wr.full_white_hex,
+                            &ctx_vk.glyphs[ctx_wr.text_bottom_status_bar[(
+                                int)col]],
+                            ctx_wr.text_thickness,
+                            ctx_wr.text_feather,
+                            0);
+                    }
+                }
+                // draw piano text
+                char* piano_notes[12] = {"C",
+                                         "C#",
+                                         "D",
+                                         "D#",
+                                         "E",
+                                         "F",
+                                         "F#",
+                                         "G",
+                                         "G#",
+                                         "A",
+                                         "A#",
+                                         "B"};
+                for (uint32_t row = ctx_wr.bottom_row;
+                     row <= ctx_wr.top_row &&
+                     ctx_wr.hud_state != HUD_LINE_NUMBERS;
+                     row++) {
+                    uint32_t i_piano_notes = row % 12;
+                    if (i_piano_notes == 1 || i_piano_notes == 3 ||
+                        i_piano_notes == 6 || i_piano_notes == 8 ||
+                        i_piano_notes == 10) {
+                        continue;
+                    }
+                    int octave = row / 12 - 1;
+                    if (octave < 0) { octave = '-' - '0'; }
+                    war_make_text_quad(
+                        text_vertices,
+                        text_indices,
+                        &text_vertices_count,
+                        &text_indices_count,
+                        (float[3]){1 + ctx_wr.left_col,
+                                   row + ctx_wr.num_rows_for_status_bars,
+                                   ctx_wr.layers[LAYER_HUD_TEXT]},
+                        (float[2]){1, 1},
+                        ctx_wr.black_hex,
+                        &ctx_vk.glyphs[piano_notes[i_piano_notes][0]],
+                        ctx_wr.text_thickness,
+                        ctx_wr.text_feather,
+                        0);
+                    war_make_text_quad(
+                        text_vertices,
+                        text_indices,
+                        &text_vertices_count,
+                        &text_indices_count,
+                        (float[3]){2 + ctx_wr.left_col,
+                                   row + ctx_wr.num_rows_for_status_bars,
+                                   ctx_wr.layers[LAYER_HUD_TEXT]},
+                        (float[2]){1, 1},
+                        ctx_wr.black_hex,
+                        &ctx_vk.glyphs['0' + octave],
+                        ctx_wr.text_thickness,
+                        ctx_wr.text_feather,
+                        0);
+                }
+                // draw line numbers
+                for (uint32_t row = ctx_wr.bottom_row;
+                     row <= ctx_wr.top_row && ctx_wr.hud_state != HUD_PIANO;
+                     row++) {
+                    uint32_t digits[3];
+                    digits[0] = (row / 100) % 10;
+                    digits[1] = (row / 10) % 10;
+                    digits[2] = row % 10;
+                    int digit_count = 3;
+                    if (digits[0] == 0) { digit_count--; }
+                    if (digits[1] == 0) { digit_count--; }
+                    for (int col = ln_offset + 2;
+                         col > (ln_offset + 2) - digit_count;
+                         col--) {
+                        war_make_text_quad(
+                            text_vertices,
+                            text_indices,
+                            &text_vertices_count,
+                            &text_indices_count,
+                            (float[3]){ctx_wr.left_col + col,
+                                       row + ctx_wr.num_rows_for_status_bars,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[2]){1, 1},
+                            ctx_wr.full_white_hex,
+                            &ctx_vk.glyphs['0' + digits[col - ln_offset]],
+                            ctx_wr.text_thickness,
+                            ctx_wr.text_feather,
+                            0);
+                    }
+                }
                 memcpy(ctx_vk.text_vertex_buffer_mapped,
                        text_vertices,
                        sizeof(war_text_vertex) * text_vertices_count);
@@ -1510,15 +1607,15 @@ void* war_window_render(void* args) {
                     }
                 }
 #endif
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
+                // war_wayland_holy_trinity(fd,
+                //                          wl_surface_id,
+                //                          wl_buffer_id,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          physical_width,
+                //                          physical_height);
                 goto done;
             wl_display_error:
                 dump_bytes("wl_display::error event",
@@ -1671,10 +1768,9 @@ void* war_window_render(void* args) {
                     // war_write_le32(set_source + 16, physical_width);
                     // war_write_le32(set_source + 20, physical_height);
                     // dump_bytes(
-                    //     "wp_viewport::set_source request", set_source,
-                    //     24);
-                    // ssize_t set_source_written = write(fd, set_source,
-                    // 24); assert(set_source_written == 24);
+                    //    "wp_viewport::set_source request", set_source, 24);
+                    // ssize_t set_source_written = write(fd, set_source, 24);
+                    // assert(set_source_written == 24);
 
                     uint8_t set_destination[16];
                     war_write_le32(set_destination, wp_viewport_id);
@@ -1707,6 +1803,35 @@ void* war_window_render(void* args) {
                 dump_bytes("xdg_toplevel_configure event",
                            msg_buffer + msg_buffer_offset,
                            size);
+                uint32_t width =
+                    *(uint32_t*)(msg_buffer + msg_buffer_offset + 0);
+                uint32_t height =
+                    *(uint32_t*)(msg_buffer + msg_buffer_offset + 4);
+                // States array starts at offset 8
+                uint8_t* states_ptr = msg_buffer + msg_buffer_offset + 8;
+                size_t states_bytes =
+                    size -
+                    12; // subtract object_id/opcode/length + width/height
+                size_t num_states = states_bytes / 4;
+                ctx_wr.fullscreen = false;
+                for (size_t i = 0; i < num_states; i++) {
+                    uint32_t state = *(uint32_t*)(states_ptr + i * 4);
+                    if (state == 2) { // XDG_TOPLEVEL_STATE_FULLSCREEN
+                        ctx_wr.fullscreen = true;
+                        call_carmack("true fullscreen");
+                        break;
+                    }
+                }
+                if (ctx_wr.fullscreen) {
+                    war_wl_surface_set_opaque_region(fd, wl_surface_id, 0);
+                    ctx_wr.text_feather = default_text_feather;
+                    ctx_wr.text_thickness = default_text_thickness;
+                } else if (!ctx_wr.fullscreen) {
+                    war_wl_surface_set_opaque_region(
+                        fd, wl_surface_id, wl_region_id);
+                    ctx_wr.text_feather = windowed_text_feather;
+                    ctx_wr.text_thickness = windowed_text_thickness;
+                }
                 goto done;
             xdg_toplevel_close:
                 dump_bytes("xdg_toplevel_close event",
@@ -1741,6 +1866,15 @@ void* war_window_render(void* args) {
                     write(fd, wl_buffer_destroy, 8);
                 dump_bytes("wl_buffer::destroy request", wl_buffer_destroy, 8);
                 assert(wl_buffer_destroy_written == 8);
+
+                uint8_t wl_region_destroy[8];
+                war_write_le32(wl_region_destroy, wl_region_id);
+                war_write_le16(wl_region_destroy + 4, 0);
+                war_write_le16(wl_region_destroy + 6, 8);
+                ssize_t wl_region_destroy_written =
+                    write(fd, wl_region_destroy, 8);
+                dump_bytes("wl_region::destroy request", wl_region_destroy, 8);
+                assert(wl_region_destroy_written == 8);
 
                 uint8_t wl_surface_destroy[8];
                 war_write_le32(wl_surface_destroy, wl_surface_id);
@@ -1955,15 +2089,15 @@ void* war_window_render(void* args) {
                     write(fd, set_buffer_scale, 12);
                 assert(set_buffer_scale_written == 12);
 
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
+                // war_wayland_holy_trinity(fd,
+                //                          wl_surface_id,
+                //                          wl_buffer_id,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          physical_width,
+                //                          physical_height);
                 goto done;
             wl_surface_preferred_buffer_transform:
                 dump_bytes("wl_surface_preferred_buffer_transform event",
@@ -1985,15 +2119,15 @@ void* war_window_render(void* args) {
                     write(fd, set_buffer_transform, 12);
                 assert(set_buffer_transform_written == 12);
 
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
+                // war_wayland_holy_trinity(fd,
+                //                          wl_surface_id,
+                //                          wl_buffer_id,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          physical_width,
+                //                          physical_height);
                 goto done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
@@ -2010,6 +2144,25 @@ void* war_window_render(void* args) {
                            msg_buffer + msg_buffer_offset,
                            size);
                 goto done;
+            zxdg_toplevel_decoration_v1_configure: {
+                dump_bytes("zxdg_toplevel_decoration_v1_configure event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
+                uint8_t set_mode[12];
+                war_write_le32(set_mode, zxdg_toplevel_decoration_v1_id);
+                war_write_le16(set_mode + 4, 1);
+                war_write_le16(set_mode + 6, 12);
+                war_write_le32(set_mode + 8, 1);
+                // war_write_le32(
+                //     set_mode + 8,
+                //     war_read_le32(msg_buffer + msg_buffer_offset + 8));
+                dump_bytes("zxdg_toplevel_decoration_v1::set_mode request",
+                           set_mode,
+                           12);
+                ssize_t set_mode_written = write(fd, set_mode, 12);
+                assert(set_mode_written == 12);
+                goto done;
+            }
             zwp_relative_pointer_manager_v1_jump:
                 dump_bytes("zwp_relative_pointer_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
@@ -2736,6 +2889,10 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_a, .mod = MOD_CTRL},
                             {0},
                         },
+                        {
+                            {.keysym = KEYSYM_TAB, .mod = 0},
+                            {0},
+                        },
                     };
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -2853,6 +3010,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_alt_esc},
                     {&&cmd_normal_alt_A},
                     {&&cmd_normal_ctrl_a},
+                    {&&cmd_normal_tab},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3889,8 +4047,8 @@ void* war_window_render(void* args) {
                                            &note_quads_count,
                                            pc,
                                            &ctx_wr,
-                                           red_hex,
-                                           white_hex,
+                                           ctx_wr.bright_red_hex,
+                                           ctx_wr.white_hex,
                                            100.0f,
                                            AUDIO_VOICE_GRAND_PIANO,
                                            false,
@@ -3907,8 +4065,8 @@ void* war_window_render(void* args) {
                                    &note_quads_count,
                                    pc,
                                    &ctx_wr,
-                                   red_hex,
-                                   white_hex,
+                                   ctx_wr.bright_red_hex,
+                                   ctx_wr.white_hex,
                                    100.0f,
                                    AUDIO_VOICE_GRAND_PIANO,
                                    false,
@@ -3955,6 +4113,7 @@ void* war_window_render(void* args) {
                               (int32_t)ctx_wr.numeric_prefix;
                      i--) {
                     uint32_t i_trim = note_quads_in_x[i];
+                    if (note_quads.hidden[i_trim]) { continue; }
                     war_note_quads_trim_right_at_i(
                         &note_quads, &note_quads_count, &ctx_wr, pc, i_trim);
                 }
@@ -3983,6 +4142,7 @@ void* war_window_render(void* args) {
                               (int32_t)ctx_wr.numeric_prefix;
                      i--) {
                     uint32_t i_trim = note_quads_in_x[i];
+                    if (note_quads.hidden[i_trim]) { continue; }
                     war_note_quads_trim_left_at_i(
                         &note_quads, &note_quads_count, &ctx_wr, pc, i_trim);
                 }
@@ -4011,6 +4171,7 @@ void* war_window_render(void* args) {
                               (int32_t)ctx_wr.numeric_prefix;
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
+                    if (note_quads.hidden[i_delete]) { continue; }
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
                 }
@@ -4029,6 +4190,7 @@ void* war_window_render(void* args) {
                 for (int32_t i = (int32_t)note_quads_in_x_count - 1; i >= 0;
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
+                    if (note_quads.hidden[i_delete]) { continue; }
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
                 }
@@ -4047,6 +4209,7 @@ void* war_window_render(void* args) {
                 for (int32_t i = (int32_t)note_quads_in_x_count - 1; i >= 0;
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
+                    if (note_quads.hidden[i_delete]) { continue; }
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
                 }
@@ -4075,6 +4238,7 @@ void* war_window_render(void* args) {
                               (int32_t)ctx_wr.numeric_prefix;
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
+                    if (note_quads.hidden[i_delete]) { continue; }
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
                 }
@@ -4176,7 +4340,9 @@ void* war_window_render(void* args) {
                                             note_quads_in_x,
                                             &note_quads_in_x_count);
                 for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
-                    note_quads.mute[note_quads_in_x[i]] = true;
+                    uint32_t i_mute = note_quads_in_x[i];
+                    if (note_quads.hidden[i_mute]) { continue; }
+                    note_quads.mute[i_mute] = true;
                 }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -4191,7 +4357,9 @@ void* war_window_render(void* args) {
                                        note_quads_in_x,
                                        &note_quads_in_x_count);
                 for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
-                    note_quads.mute[note_quads_in_x[i]] = true;
+                    uint32_t i_mute = note_quads_in_x[i];
+                    if (note_quads.hidden[i_mute]) { continue; }
+                    note_quads.mute[i_mute] = true;
                 }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -4222,6 +4390,15 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
+                if (note_quads
+                        .hidden[note_quads_in_x[note_quads_in_x_count - 1]]) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
                 note_quads.mute[note_quads_in_x[note_quads_in_x_count - 1]] =
                     !note_quads
                          .mute[note_quads_in_x[note_quads_in_x_count - 1]];
@@ -4238,7 +4415,9 @@ void* war_window_render(void* args) {
                                             note_quads_in_x,
                                             &note_quads_in_x_count);
                 for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
-                    note_quads.mute[note_quads_in_x[i]] = false;
+                    uint32_t i_unmute = note_quads_in_x[i];
+                    if (note_quads.hidden[i_unmute]) { continue; }
+                    note_quads.mute[i_unmute] = false;
                 }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -4253,7 +4432,9 @@ void* war_window_render(void* args) {
                                        note_quads_in_x,
                                        &note_quads_in_x_count);
                 for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
-                    note_quads.mute[note_quads_in_x[i]] = false;
+                    uint32_t i_unmute = note_quads_in_x[i];
+                    if (note_quads.hidden[i_unmute]) { continue; }
+                    note_quads.mute[i_unmute] = false;
                 }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -5039,6 +5220,33 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
+            cmd_normal_tab: {
+                call_carmack("cmd_normal_tab");
+                switch (ctx_wr.hud_state) {
+                case HUD_PIANO:
+                    ctx_wr.hud_state = HUD_PIANO_AND_LINE_NUMBERS;
+                    ctx_wr.num_cols_for_line_numbers = 6;
+                    ctx_wr.right_col -= 3;
+                    ctx_wr.col =
+                        war_clamp_uint32(ctx_wr.col, 0, ctx_wr.right_col);
+                    break;
+                case HUD_PIANO_AND_LINE_NUMBERS:
+                    ctx_wr.hud_state = HUD_LINE_NUMBERS;
+                    ctx_wr.num_cols_for_line_numbers = 3;
+                    ctx_wr.right_col += 3;
+                    ctx_wr.col =
+                        war_clamp_uint32(ctx_wr.col, 0, ctx_wr.right_col);
+                    break;
+                case HUD_LINE_NUMBERS:
+                    ctx_wr.hud_state = HUD_PIANO;
+                    ctx_wr.num_cols_for_line_numbers = 3;
+                    break;
+                }
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_done: {
                 ctx_wr.trinity = true;
                 if (goto_cmd_repeat_done) {
@@ -5149,15 +5357,15 @@ void* war_window_render(void* args) {
                 dump_bytes("wl_pointer_frame event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                war_wayland_holy_trinity(fd,
-                                         wl_surface_id,
-                                         wl_buffer_id,
-                                         0,
-                                         0,
-                                         0,
-                                         0,
-                                         physical_width,
-                                         physical_height);
+                // war_wayland_holy_trinity(fd,
+                //                          wl_surface_id,
+                //                          wl_buffer_id,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          0,
+                //                          physical_width,
+                //                          physical_height);
                 goto done;
             wl_pointer_axis_source:
                 dump_bytes("wl_pointer_axis_source event",
@@ -5286,7 +5494,7 @@ void* war_audio(void* args) {
     war_producer_consumer* pc = (war_producer_consumer*)args;
     // set scheduling to SCHED_FIFO
     struct sched_param param;
-    param.sched_priority = 5; // RT priorities: 1–99 (higher = more)
+    param.sched_priority = 10; // RT priorities: 1–99 (higher = more)
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
         call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
         perror("pthread_setschedparam");
@@ -5417,6 +5625,7 @@ void* war_audio(void* args) {
             ctx_a.logical_frames_played =
                 ctx_a.total_frames_written - (uint64_t)delay_frames;
         }
+        usleep(500);
     }
     snd_pcm_close(pcm_handle);
     end("war_audio");

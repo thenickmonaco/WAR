@@ -58,9 +58,24 @@ layout(push_constant) uniform PushConstants {
 void main() {
     const uint QUAD_GRID = 1u << 2;
     bool quad_grid = (in_flags & QUAD_GRID) != 0u;
+    vec2 corner_sign = vec2(
+            (in_corner.x == 0u ? 1.0 : -1.0), // left -> +1, right -> -1
+         (in_corner.y == 0u ? 1.0 : -1.0) // bottom -> +1, top -> -1
+    );
     vec2 offsets = quad_grid ? pc.cell_offsets : vec2(0.0);
-    vec2 ndc = vec2((in_pos.x + offsets.x - pc.bottom_left.x) * pc.cell_size.x / pc.physical_size.x * 2.0 - 1.0, 
-            1.0 - (in_pos.y + offsets.y - pc.bottom_left.y) * pc.cell_size.y / pc.physical_size.y * 2.0);
+    vec2 cell_origin = in_pos.xy + offsets - pc.bottom_left;
+
+    float glyph_offset_x = corner_sign.x * (((pc.cell_size.x - in_glyph_size.x) * 0.5 + in_glyph_bearing.x) * 0.5);
+    float glyph_offset_y_bottom = corner_sign.y * pc.cell_size.y - pc.baseline - in_descent;
+    float glyph_offset_y_top = corner_sign.y * (pc.baseline - in_glyph_bearing.y);
+    float glyph_offset_y = mix(glyph_offset_y_bottom, glyph_offset_y_top, float(in_corner.y));
+
+    vec2 pixel_pos = cell_origin * pc.cell_size + vec2(glyph_offset_x, glyph_offset_y);
+
+    vec2 ndc = vec2(
+            (pixel_pos.x / pc.physical_size.x) * 2.0 - 1.0,
+            1.0 - (pixel_pos.y / pc.physical_size.y) * 2.0
+            );
     gl_Position = vec4(ndc, in_pos.z, 1.0);
     frag_uv = in_uv;
     frag_color = in_color;

@@ -1074,7 +1074,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     FT_Init_FreeType(&ft_library);
     FT_Face ft_regular;
     FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
-    float font_pixel_height = 64.0f;
+    float font_pixel_height = 69.0f;
     FT_Set_Pixel_Sizes(ft_regular, 0, (int)font_pixel_height);
     float ascent = ft_regular->size->metrics.ascender / 64.0f;
     float descent = ft_regular->size->metrics.descender / 64.0f;
@@ -1083,11 +1083,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     float line_gap = cell_height - font_height;
     float baseline = ascent + line_gap / 2.0f;
     float cell_width = 0;
-    enum {
-        atlas_width = 512,
-        atlas_height = 512,
-    };
-    uint8_t atlas_pixels[atlas_width * atlas_height];
+    uint8_t* atlas_pixels = malloc(atlas_width * atlas_height);
+    assert(atlas_pixels);
     war_glyph_info glyphs[128];
     int pen_x = 0, pen_y = 0, row_height = 0;
     for (int c = 0; c < 128; c++) {

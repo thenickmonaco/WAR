@@ -55,6 +55,7 @@ enum war_keysyms {
     KEYSYM_DOWN = 260,
     KEYSYM_RETURN = 261,
     KEYSYM_SPACE = 262,
+    KEYSYM_TAB = 263,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -77,18 +78,22 @@ enum war_misc {
     NUM_STATUS_BARS = 3,
     MAX_GRIDLINE_SPLITS = 4,
     MAX_VIEWS_SAVED = 8,
+    atlas_width = 8192,
+    atlas_height = 8192,
+    MAX_STATUS_BAR_COLS = 200,
 };
 
 enum war_layers {
-    LAYER_COUNT = 8,
-    LAYER_BACKGROUND = 0,
-    LAYER_GRIDLINES = 1,
-    LAYER_PLAYBACK_BAR = 2,
-    LAYER_NOTES = 3,
-    LAYER_NOTE_TEXT = 4,
-    LAYER_HUD = 5,
-    LAYER_HUD_TEXT = 6,
-    LAYER_CURSOR = 7,
+    LAYER_COUNT = 9,
+    LAYER_OPAQUE_REGION = 0,
+    LAYER_BACKGROUND = 1,
+    LAYER_GRIDLINES = 2,
+    LAYER_PLAYBACK_BAR = 3,
+    LAYER_NOTES = 4,
+    LAYER_NOTE_TEXT = 5,
+    LAYER_HUD = 6,
+    LAYER_HUD_TEXT = 7,
+    LAYER_CURSOR = 8,
 };
 
 enum war_hud {
@@ -114,7 +119,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 113,
+    SEQUENCE_COUNT = 114,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -332,6 +337,34 @@ typedef struct war_window_render_context {
     uint64_t sleep_duration_us;
     bool end_window_render;
     bool trinity;
+    bool fullscreen;
+    uint32_t light_gray_hex;
+    uint32_t darker_light_gray_hex;
+    uint32_t dark_gray_hex;
+    uint32_t red_hex;
+    uint32_t red_hex_transparent;
+    uint32_t white_hex;
+    uint32_t white_hex_transparent;
+    uint32_t bright_white_hex;
+    uint32_t black_hex;
+    uint32_t full_white_hex;
+    uint32_t bright_red_hex;
+    float horizontal_line_thickness;
+    float vertical_line_thickness;
+    float outline_thickness;
+    float alpha_scale;
+    float playback_bar_thickness;
+    float text_feather;
+    float text_thickness;
+    char* text_top_status_bar;
+    uint32_t text_top_status_bar_count;
+    char* text_middle_status_bar;
+    uint32_t text_middle_status_bar_count;
+    char* text_bottom_status_bar;
+    uint32_t text_bottom_status_bar_count;
+    uint32_t text_status_bar_start_index;
+    uint32_t text_status_bar_middle_index;
+    uint32_t text_status_bar_end_index;
 } war_window_render_context;
 
 typedef struct war_key_trie_pool {
@@ -515,6 +548,8 @@ typedef struct war_vulkan_context {
     float font_height;
     float cell_height;
     float cell_width;
+    float scale_x;
+    float scale_y;
     void* text_vertex_buffer_mapped;
     void* text_instance_buffer_mapped;
     void* text_index_buffer_mapped;

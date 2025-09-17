@@ -70,12 +70,15 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr) {
         memcpy(ctx_wr->text_middle_status_bar,
                "-- VISUAL --",
                sizeof("-- VISUAL --"));
-    case MODE_VIEWS_SAVED:
+        break;
+    case MODE_VIEWS:
         memcpy(ctx_wr->text_middle_status_bar,
-               "-- VIEWS SAVED --",
-               sizeof("-- VIEWS SAVED --"));
+               "-- VIEWS --",
+               sizeof("-- VIEWS --"));
+        break;
     case MODE_COMMAND:
         memcpy(ctx_wr->text_middle_status_bar, ":", sizeof(":"));
+        break;
     default:
         break;
     }
@@ -379,6 +382,8 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return KEYSYM_SPACE;
     case XKB_KEY_Tab:
         return KEYSYM_TAB;
+    case 65056:
+        return KEYSYM_TAB;
     case XKB_KEY_A:
         return XKB_KEY_a;
     case XKB_KEY_B:
@@ -452,6 +457,7 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     case XKB_KEY_parenright:
         return XKB_KEY_0;
     default:
+        call_carmack("default: %u", ks);
         return KEYSYM_DEFAULT; // fallback / unknown
     }
 }
@@ -1331,7 +1337,7 @@ war_note_quads_under_cursor(war_note_quads* note_quads,
         float note_pos_y_end = note_pos_y + 1;
         bool under_cursor =
             (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x) &&
-            (note_pos_y >= cursor_pos_y && note_pos_y_end <= cursor_pos_y_end);
+            (note_pos_y == cursor_pos_y);
         if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
     }
 }

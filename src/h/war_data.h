@@ -77,14 +77,14 @@ enum war_misc {
     MAX_DIGITS = 10,
     NUM_STATUS_BARS = 3,
     MAX_GRIDLINE_SPLITS = 4,
-    MAX_VIEWS_SAVED = 8,
+    MAX_VIEWS_SAVED = 13,
     atlas_width = 8192,
     atlas_height = 8192,
     MAX_STATUS_BAR_COLS = 200,
 };
 
 enum war_layers {
-    LAYER_COUNT = 9,
+    LAYER_COUNT = 15,
     LAYER_OPAQUE_REGION = 0,
     LAYER_BACKGROUND = 1,
     LAYER_GRIDLINES = 2,
@@ -94,6 +94,12 @@ enum war_layers {
     LAYER_HUD = 6,
     LAYER_HUD_TEXT = 7,
     LAYER_CURSOR = 8,
+    LAYER_POPUP_BACKGROUND = 9,
+    LAYER_POPUP_OUTLINE = 10,
+    LAYER_POPUP_TEXT = 11,
+    LAYER_POPUP_HUD = 12,
+    LAYER_POPUP_HUD_TEXT = 13,
+    LAYER_POPUP_CURSOR = 14,
 };
 
 enum war_hud {
@@ -112,14 +118,14 @@ enum war_modes {
     MODE_COMMAND = 5,
     MODE_M = 6,
     MODE_O = 7,
-    MODE_VIEWS_SAVED = 8,
+    MODE_VIEWS = 8,
 };
 
 enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 118,
+    SEQUENCE_COUNT = 119,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -128,6 +134,12 @@ enum war_pipelines {
     PIPELINE_NONE = 0,
     PIPELINE_QUAD = 1,
     PIPELINE_SDF = 2,
+};
+
+enum war_cursor {
+    CURSOR_BLINK_OFF = 0,
+    CURSOR_BLINK_BPM = 1,
+    CURSOR_BLINK_FPS = 2,
 };
 
 typedef struct war_fsm_state {
@@ -195,18 +207,29 @@ typedef struct war_note_quads {
     uint32_t* mute;
 } war_note_quads;
 
-typedef struct war_views {
-    uint32_t col[MAX_VIEWS_SAVED];
-    uint32_t row[MAX_VIEWS_SAVED];
-    uint32_t left_col[MAX_VIEWS_SAVED];
-    uint32_t right_col[MAX_VIEWS_SAVED];
-    uint32_t bottom_row[MAX_VIEWS_SAVED];
-    uint32_t top_row[MAX_VIEWS_SAVED];
-} war_views;
-
-typedef struct war_warpoon {
-    uint32_t col;
-} war_warpoon;
+typedef struct war_views_context {
+    uint32_t* col;
+    uint32_t* row;
+    uint32_t* left_col;
+    uint32_t* right_col;
+    uint32_t* bottom_row;
+    uint32_t* top_row;
+    uint32_t* indices;
+    uint32_t views_count;
+    // warpoon
+    uint32_t wp_col;
+    uint32_t wp_row;
+    uint32_t wp_left_col;
+    uint32_t wp_right_col;
+    uint32_t wp_bottom_row;
+    uint32_t wp_top_row;
+    uint32_t wp_hud_cols;
+    uint32_t wp_hud_rows;
+    uint32_t wp_color_bg;
+    uint32_t wp_color_outline;
+    uint32_t wp_color_text;
+    uint32_t wp_color_hud_text;
+} war_views_context;
 
 enum war_audio {
     // defaults
@@ -323,8 +346,6 @@ typedef struct war_window_render_context {
     uint32_t mode;
     char input_sequence[MAX_SEQUENCE_LENGTH];
     uint8_t num_chars_in_sequence;
-    war_views views_saved;
-    uint32_t views_saved_count;
     war_note_quads note_quads;
     uint32_t note_quads_count;
     float layers[LAYER_COUNT];
@@ -342,13 +363,9 @@ typedef struct war_window_render_context {
     uint32_t darker_light_gray_hex;
     uint32_t dark_gray_hex;
     uint32_t red_hex;
-    uint32_t red_hex_transparent;
     uint32_t white_hex;
-    uint32_t white_hex_transparent;
-    uint32_t bright_white_hex;
     uint32_t black_hex;
     uint32_t full_white_hex;
-    uint32_t bright_red_hex;
     float horizontal_line_thickness;
     float vertical_line_thickness;
     float outline_thickness;
@@ -356,6 +373,8 @@ typedef struct war_window_render_context {
     float playback_bar_thickness;
     float text_feather;
     float text_thickness;
+    float text_feather_bold;
+    float text_thickness_bold;
     char* text_top_status_bar;
     uint32_t text_top_status_bar_count;
     char* text_middle_status_bar;
@@ -365,6 +384,9 @@ typedef struct war_window_render_context {
     uint32_t text_status_bar_start_index;
     uint32_t text_status_bar_middle_index;
     uint32_t text_status_bar_end_index;
+    uint8_t cursor_blink_state;
+    uint32_t color_note_default;
+    uint32_t color_note_outline_default;
 } war_window_render_context;
 
 typedef struct war_key_trie_pool {

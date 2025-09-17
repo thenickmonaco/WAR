@@ -72,19 +72,15 @@ void* war_window_render(void* args) {
     const uint32_t light_gray_hex = 0xFF454950;
     const uint32_t darker_light_gray_hex = 0xFF36383C; // gutter / line numbers
     const uint32_t dark_gray_hex = 0xFF282828;
-    const uint32_t red_hex = 0xFF011FDD;
-    const uint32_t red_hex_transparent = 0x80011FDD;
+    const uint32_t red_hex = 0xFF0000DE;
     const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
-    const uint32_t white_hex_transparent = 0x80B1D9E9;
-    const uint32_t bright_white_hex = 0xFFEEEEEE; // tmux status text
     const uint32_t black_hex = 0xFF000000;
     const uint32_t full_white_hex = 0xFFFFFFFF;
-    const uint32_t bright_red_hex = 0xFF0000FF;
     const float default_horizontal_line_thickness = 0.018f;
     const float default_vertical_line_thickness = 0.018f; // default: 0.018
     const float default_outline_thickness =
-        0.075f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9,
-                // sub_cursor right outline from disappearing
+        0.04f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9, max = 0.075f
+               // sub_cursor right outline from disappearing
     const float default_alpha_scale = 0.2f;
     const float default_playback_bar_thickness = 0.05f;
     const float default_text_feather = 0.5f;
@@ -123,6 +119,15 @@ void* war_window_render(void* args) {
         .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
     };
+    war_views_context ctx_v;
+    ctx_v.col = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
+    ctx_v.row = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
+    ctx_v.left_col = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
+    ctx_v.right_col = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
+    ctx_v.bottom_row = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
+    ctx_v.top_row = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
+    ctx_v.indices = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
+    ctx_v.views_count = 0;
     war_window_render_context ctx_wr = {
         .trinity = false,
         .fullscreen = false,
@@ -131,6 +136,7 @@ void* war_window_render(void* args) {
         .now = 0,
         .mode = MODE_NORMAL,
         .hud_state = HUD_PIANO,
+        .cursor_blink_state = CURSOR_BLINK_OFF,
         .col = 0,
         .row = 60,
         .sub_col = 0,
@@ -207,13 +213,9 @@ void* war_window_render(void* args) {
         .darker_light_gray_hex = darker_light_gray_hex,
         .dark_gray_hex = dark_gray_hex,
         .red_hex = red_hex,
-        .red_hex_transparent = red_hex_transparent,
         .white_hex = white_hex,
-        .white_hex_transparent = white_hex_transparent,
-        .bright_white_hex = bright_white_hex,
         .black_hex = black_hex,
         .full_white_hex = full_white_hex,
-        .bright_red_hex = bright_red_hex,
         .horizontal_line_thickness = default_horizontal_line_thickness,
         .vertical_line_thickness = default_vertical_line_thickness,
         .outline_thickness = default_outline_thickness,
@@ -221,13 +223,21 @@ void* war_window_render(void* args) {
         .playback_bar_thickness = default_playback_bar_thickness,
         .text_feather = default_text_feather,
         .text_thickness = default_text_thickness,
+        .text_feather_bold = 0.20f,
+        .text_thickness_bold = 0.30f,
         .text_top_status_bar_count = 0,
         .text_middle_status_bar_count = 0,
         .text_bottom_status_bar_count = 0,
+        .color_note_default = red_hex,
+        .color_note_outline_default = white_hex,
     };
     for (int i = 0; i < LAYER_COUNT; i++) {
         ctx_wr.layers[i] = i / ctx_wr.layer_count;
     }
+    ctx_v.wp_color_bg = ctx_wr.darker_light_gray_hex;
+    ctx_v.wp_color_outline = ctx_wr.red_hex;
+    ctx_v.wp_color_text = ctx_wr.white_hex;
+    ctx_v.wp_color_hud_text = ctx_wr.full_white_hex;
 
     const uint64_t repeat_delay_us = 150000;
     const uint64_t repeat_rate_us = 40000;
@@ -1078,7 +1088,7 @@ void* war_window_render(void* args) {
                     }
                 }
                 // draw playback bar
-                uint32_t playback_bar_color = ctx_wr.bright_red_hex;
+                uint32_t playback_bar_color = ctx_wr.red_hex;
                 if (ctx_a.state == AUDIO_CMD_STOP) {
                     float playback_bar_alpha_factor = ctx_wr.alpha_scale;
                     uint8_t playback_bar_color_alpha =
@@ -1112,7 +1122,7 @@ void* war_window_render(void* args) {
                                          ctx_wr.bottom_row,
                                          ctx_wr.layers[LAYER_HUD]},
                               (float[2]){ctx_wr.viewport_cols + 1, 1},
-                              ctx_wr.bright_red_hex,
+                              ctx_wr.red_hex,
                               0,
                               0,
                               (float[2]){0.0f, 0.0f},
@@ -1144,6 +1154,8 @@ void* war_window_render(void* args) {
                               (float[2]){0.0f, 0.0f},
                               0);
                 // draw piano quads
+                float gutter_end_span_inset =
+                    5 * default_vertical_line_thickness;
                 switch (ctx_wr.hud_state) {
                 case HUD_PIANO_AND_LINE_NUMBERS:
                 case HUD_PIANO:
@@ -1156,7 +1168,8 @@ void* war_window_render(void* args) {
                                    ctx_wr.bottom_row +
                                        ctx_wr.num_rows_for_status_bars,
                                    ctx_wr.layers[LAYER_HUD]},
-                        (float[2]){3, ctx_wr.viewport_rows},
+                        (float[2]){3 - gutter_end_span_inset,
+                                   ctx_wr.viewport_rows},
                         ctx_wr.full_white_hex,
                         0,
                         0,
@@ -1177,7 +1190,7 @@ void* war_window_render(void* args) {
                                            row +
                                                ctx_wr.num_rows_for_status_bars,
                                            ctx_wr.layers[LAYER_HUD]},
-                                (float[2]){2, 1},
+                                (float[2]){2 - gutter_end_span_inset, 1},
                                 ctx_wr.black_hex,
                                 0,
                                 0,
@@ -1195,12 +1208,14 @@ void* war_window_render(void* args) {
                         quad_indices,
                         &quad_vertices_count,
                         &quad_indices_count,
-                        (float[3]){ctx_wr.left_col + ln_offset,
+                        (float[3]){ctx_wr.left_col + ln_offset -
+                                       default_vertical_line_thickness,
                                    ctx_wr.bottom_row +
                                        ctx_wr.num_rows_for_status_bars,
                                    ctx_wr.layers[LAYER_HUD]},
-                        (float[2]){3, ctx_wr.viewport_rows},
-                        ctx_wr.bright_red_hex,
+                        (float[2]){3 - gutter_end_span_inset,
+                                   ctx_wr.viewport_rows},
+                        ctx_wr.red_hex,
                         0,
                         0,
                         (float[2]){0.0f, 0.0f},
@@ -1246,7 +1261,7 @@ void* war_window_render(void* args) {
                                 color = ctx_wr.darker_light_gray_hex;
                                 break;
                             case 2:
-                                color = ctx_wr.bright_red_hex;
+                                color = ctx_wr.red_hex;
                                 break;
                             case 3:
                                 color = ctx_wr.black_hex;
@@ -1378,11 +1393,11 @@ void* war_window_render(void* args) {
                                        1 + ctx_wr.bottom_row,
                                        ctx_wr.layers[LAYER_HUD_TEXT]},
                             (float[2]){1, 1},
-                            ctx_wr.bright_red_hex,
+                            ctx_wr.red_hex,
                             &ctx_vk.glyphs[ctx_wr.text_middle_status_bar[(
                                 int)col]],
-                            ctx_wr.text_thickness,
-                            ctx_wr.text_feather,
+                            ctx_wr.text_thickness_bold,
+                            ctx_wr.text_feather_bold,
                             0);
                     }
                     if (ctx_wr.text_bottom_status_bar[(int)col] != 0) {
@@ -1457,7 +1472,7 @@ void* war_window_render(void* args) {
                         ctx_wr.text_feather,
                         0);
                 }
-                // draw line numbers
+                // draw line number text
                 for (uint32_t row = ctx_wr.bottom_row;
                      row <= ctx_wr.top_row && ctx_wr.hud_state != HUD_PIANO;
                      row++) {
@@ -1466,8 +1481,10 @@ void* war_window_render(void* args) {
                     digits[1] = (row / 10) % 10;
                     digits[2] = row % 10;
                     int digit_count = 3;
-                    if (digits[0] == 0) { digit_count--; }
-                    if (digits[1] == 0) { digit_count--; }
+                    if (digits[0] == 0) {
+                        digit_count = (digits[1] == 0) ? (digit_count - 2) :
+                                                         (digit_count - 1);
+                    }
                     for (int col = ln_offset + 2;
                          col > (ln_offset + 2) - digit_count;
                          col--) {
@@ -2919,6 +2936,10 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_a, .mod = 0},
                             {0},
                         },
+                        {
+                            {.keysym = KEYSYM_TAB, .mod = MOD_SHIFT},
+                            {0},
+                        },
                     };
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, visual, visual_line, visual_block, insert,
@@ -3041,6 +3062,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_spacesiw},
                     {&&cmd_normal_spaceuiw},
                     {&&cmd_normal_ga},
+                    {&&cmd_normal_shift_tab},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3111,6 +3133,7 @@ void* war_window_render(void* args) {
                 // MOD_SHIFT and XKB)
                 keysym = war_normalize_keysym(
                     keysym); // normalize to lowercase and prevent out of bounds
+                call_carmack("keysym: %u", keysym);
                 xkb_mod_mask_t mods = xkb_state_serialize_mods(
                     xkb_state, XKB_STATE_MODS_DEPRESSED);
                 uint8_t mod = 0;
@@ -3120,6 +3143,14 @@ void* war_window_render(void* args) {
                 if (mods & (1 << mod_logo)) mod |= MOD_LOGO;
                 if (mods & (1 << mod_caps)) mod |= MOD_CAPS;
                 if (mods & (1 << mod_num)) mod |= MOD_NUM;
+                if (keysym == KEYSYM_DEFAULT) {
+                    // repeats
+                    key_down[repeat_keysym][repeat_mod] = false;
+                    repeat_keysym = 0;
+                    repeat_mod = 0;
+                    repeating = false;
+                    goto cmd_done;
+                }
                 // if (mods & (1 << mod_fn)) mod |= MOD_FN;
                 bool pressed = (wl_key_state == 1);
                 if (!pressed) {
@@ -4110,8 +4141,8 @@ void* war_window_render(void* args) {
                                            &note_quads_count,
                                            pc,
                                            &ctx_wr,
-                                           ctx_wr.bright_red_hex,
-                                           ctx_wr.white_hex,
+                                           ctx_wr.color_note_default,
+                                           ctx_wr.color_note_outline_default,
                                            100.0f,
                                            AUDIO_VOICE_GRAND_PIANO,
                                            false,
@@ -4128,8 +4159,8 @@ void* war_window_render(void* args) {
                                    &note_quads_count,
                                    pc,
                                    &ctx_wr,
-                                   ctx_wr.bright_red_hex,
-                                   ctx_wr.white_hex,
+                                   ctx_wr.color_note_default,
+                                   ctx_wr.color_note_outline_default,
                                    100.0f,
                                    AUDIO_VOICE_GRAND_PIANO,
                                    false,
@@ -4595,149 +4626,68 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_spacea:
                 call_carmack("cmd_normal_spacea");
-                if (ctx_wr.views_saved_count < MAX_VIEWS_SAVED) {
-                    ctx_wr.views_saved.col[ctx_wr.views_saved_count] =
-                        ctx_wr.col;
-                    ctx_wr.views_saved.row[ctx_wr.views_saved_count] =
-                        ctx_wr.row;
-                    ctx_wr.views_saved.left_col[ctx_wr.views_saved_count] =
-                        ctx_wr.left_col;
-                    ctx_wr.views_saved.right_col[ctx_wr.views_saved_count] =
-                        ctx_wr.right_col;
-                    ctx_wr.views_saved.bottom_row[ctx_wr.views_saved_count] =
-                        ctx_wr.bottom_row;
-                    ctx_wr.views_saved.top_row[ctx_wr.views_saved_count] =
-                        ctx_wr.top_row;
-                    ctx_wr.views_saved_count++;
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_spacedspacea:
                 call_carmack("cmd_normal_spacedspacea");
-                ctx_wr.views_saved_count = 0;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_g:
                 call_carmack("cmd_normal_alt_g");
-                if (ctx_wr.views_saved_count > 0) {
-                    ctx_wr.col = ctx_wr.views_saved.col[0];
-                    ctx_wr.row = ctx_wr.views_saved.row[0];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[0];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[0];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[0];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[0];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_t:
                 call_carmack("cmd_normal_alt_t");
-                if (ctx_wr.views_saved_count > 1) {
-                    ctx_wr.col = ctx_wr.views_saved.col[1];
-                    ctx_wr.row = ctx_wr.views_saved.row[1];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[1];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[1];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[1];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[1];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_n:
                 call_carmack("cmd_normal_alt_n");
-                if (ctx_wr.views_saved_count > 2) {
-                    ctx_wr.col = ctx_wr.views_saved.col[2];
-                    ctx_wr.row = ctx_wr.views_saved.row[2];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[2];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[2];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[2];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[2];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_s:
                 call_carmack("cmd_normal_alt_s");
-                if (ctx_wr.views_saved_count > 3) {
-                    ctx_wr.col = ctx_wr.views_saved.col[3];
-                    ctx_wr.row = ctx_wr.views_saved.row[3];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[3];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[3];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[3];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[3];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_m:
                 call_carmack("cmd_normal_alt_m");
-                if (ctx_wr.views_saved_count > 4) {
-                    ctx_wr.col = ctx_wr.views_saved.col[4];
-                    ctx_wr.row = ctx_wr.views_saved.row[4];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[4];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[4];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[4];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[4];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_y:
                 call_carmack("cmd_normal_alt_y");
-                if (ctx_wr.views_saved_count > 5) {
-                    ctx_wr.col = ctx_wr.views_saved.col[5];
-                    ctx_wr.row = ctx_wr.views_saved.row[5];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[5];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[5];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[5];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[5];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_z:
                 call_carmack("cmd_normal_alt_z");
-                if (ctx_wr.views_saved_count > 6) {
-                    ctx_wr.col = ctx_wr.views_saved.col[6];
-                    ctx_wr.row = ctx_wr.views_saved.row[6];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[6];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[6];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[6];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[6];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_q:
                 call_carmack("cmd_normal_alt_q");
-                if (ctx_wr.views_saved_count > 7) {
-                    ctx_wr.col = ctx_wr.views_saved.col[7];
-                    ctx_wr.row = ctx_wr.views_saved.row[7];
-                    ctx_wr.left_col = ctx_wr.views_saved.left_col[7];
-                    ctx_wr.right_col = ctx_wr.views_saved.right_col[7];
-                    ctx_wr.bottom_row = ctx_wr.views_saved.bottom_row[7];
-                    ctx_wr.top_row = ctx_wr.views_saved.top_row[7];
-                }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_e:
                 call_carmack("cmd_normal_alt_e");
-                ctx_wr.mode = (ctx_wr.mode != MODE_VIEWS_SAVED) ?
-                                  MODE_VIEWS_SAVED :
-                                  MODE_NORMAL;
+                ctx_wr.mode =
+                    (ctx_wr.mode != MODE_VIEWS) ? MODE_VIEWS : MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5366,6 +5316,24 @@ void* war_window_render(void* args) {
             }
             cmd_normal_tab: {
                 call_carmack("cmd_normal_tab");
+                switch (ctx_wr.cursor_blink_state) {
+                case CURSOR_BLINK_OFF:
+                    ctx_wr.cursor_blink_state = CURSOR_BLINK_BPM;
+                    break;
+                case CURSOR_BLINK_BPM:
+                    ctx_wr.cursor_blink_state = CURSOR_BLINK_FPS;
+                    break;
+                case CURSOR_BLINK_FPS:
+                    ctx_wr.cursor_blink_state = CURSOR_BLINK_OFF;
+                    break;
+                }
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_normal_shift_tab: {
+                call_carmack("cmd_normal_shift_tab");
                 switch (ctx_wr.hud_state) {
                 case HUD_PIANO:
                     ctx_wr.hud_state = HUD_PIANO_AND_LINE_NUMBERS;

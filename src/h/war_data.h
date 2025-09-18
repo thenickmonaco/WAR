@@ -78,6 +78,7 @@ enum war_misc {
     NUM_STATUS_BARS = 3,
     MAX_GRIDLINE_SPLITS = 4,
     MAX_VIEWS_SAVED = 13,
+    MAX_WARPOON_TEXT_COLS = 25,
     atlas_width = 8192,
     atlas_height = 8192,
     MAX_STATUS_BAR_COLS = 200,
@@ -111,21 +112,21 @@ enum war_hud {
 enum war_modes {
     MODE_COUNT = 9,
     MODE_NORMAL = 0,
-    MODE_VISUAL = 1,
+    MODE_VIEWS = 1,
     MODE_VISUAL_LINE = 2,
     MODE_VISUAL_BLOCK = 3,
     MODE_INSERT = 4,
     MODE_COMMAND = 5,
     MODE_M = 6,
     MODE_O = 7,
-    MODE_VIEWS = 8,
+    MODE_VISUAL = 8,
 };
 
 enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 119,
+    SEQUENCE_COUNT = 124,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -207,29 +208,38 @@ typedef struct war_note_quads {
     uint32_t* mute;
 } war_note_quads;
 
-typedef struct war_views_context {
+typedef struct war_views {
     uint32_t* col;
     uint32_t* row;
     uint32_t* left_col;
     uint32_t* right_col;
     uint32_t* bottom_row;
     uint32_t* top_row;
-    uint32_t* indices;
     uint32_t views_count;
     // warpoon
-    uint32_t wp_col;
-    uint32_t wp_row;
-    uint32_t wp_left_col;
-    uint32_t wp_right_col;
-    uint32_t wp_bottom_row;
-    uint32_t wp_top_row;
-    uint32_t wp_hud_cols;
-    uint32_t wp_hud_rows;
-    uint32_t wp_color_bg;
-    uint32_t wp_color_outline;
-    uint32_t wp_color_text;
-    uint32_t wp_color_hud_text;
-} war_views_context;
+    char** warpoon_text;
+    uint32_t warpoon_mode;
+    uint32_t warpoon_col;
+    uint32_t warpoon_row;
+    uint32_t warpoon_left_col;
+    uint32_t warpoon_right_col;
+    uint32_t warpoon_bottom_row;
+    uint32_t warpoon_top_row;
+    uint32_t warpoon_hud_cols;
+    uint32_t warpoon_hud_rows;
+    uint32_t warpoon_color_bg;
+    uint32_t warpoon_color_outline;
+    uint32_t warpoon_color_text;
+    uint32_t warpoon_color_hud;
+    uint32_t warpoon_color_cursor;
+    uint32_t warpoon_color_hud_text;
+    uint32_t warpoon_viewport_cols;
+    uint32_t warpoon_viewport_rows;
+    uint32_t warpoon_max_col;
+    uint32_t warpoon_min_col;
+    uint32_t warpoon_max_row;
+    uint32_t warpoon_min_row;
+} war_views;
 
 enum war_audio {
     // defaults

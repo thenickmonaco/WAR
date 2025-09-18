@@ -63,7 +63,8 @@ static inline void war_get_top_text(war_window_render_context* ctx_wr) {
            sizeof(ctx_wr->text_top_status_bar));
 }
 
-static inline void war_get_middle_text(war_window_render_context* ctx_wr) {
+static inline void war_get_middle_text(war_window_render_context* ctx_wr,
+                                       war_views* views) {
     memset(ctx_wr->text_middle_status_bar, 0, MAX_STATUS_BAR_COLS);
     switch (ctx_wr->mode) {
     case MODE_VISUAL:
@@ -72,6 +73,12 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr) {
                sizeof("-- VISUAL --"));
         break;
     case MODE_VIEWS:
+        if (views->warpoon_mode == MODE_VISUAL_LINE) {
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- VIEWS -- -- VISUAL LINE --",
+                   sizeof("-- VIEWS -- -- VISUAL LINE --"));
+            break;
+        }
         memcpy(ctx_wr->text_middle_status_bar,
                "-- VIEWS --",
                sizeof("-- VIEWS --"));
@@ -92,6 +99,42 @@ static inline void war_get_bottom_text(war_window_render_context* ctx_wr) {
     memcpy(ctx_wr->text_bottom_status_bar,
            "[WAR] 1:roll*",
            sizeof("[WAR] 1:roll*"));
+}
+
+static inline void war_get_warpoon_text(war_views* views) {
+    for (uint32_t i = 0; i < views->views_count; i++) {
+        memset(views->warpoon_text[i], 0, MAX_WARPOON_TEXT_COLS);
+        snprintf(views->warpoon_text[i],
+                 MAX_WARPOON_TEXT_COLS,
+                 "%d,%d [%d,%d]",
+                 views->row[i],
+                 views->col[i],
+                 views->bottom_row[i],
+                 views->left_col[i]);
+    }
+}
+
+static inline void war_warpoon_delete_at_i(war_views* views,
+                                           uint32_t i_delete) {
+    if (i_delete >= views->views_count) return;
+
+    uint32_t last = views->views_count - 1;
+
+    // Shift all SoA arrays to the left to fill the gap
+    for (uint32_t j = i_delete; j < last; j++) {
+        views->col[j] = views->col[j + 1];
+        views->row[j] = views->row[j + 1];
+        views->left_col[j] = views->left_col[j + 1];
+        views->right_col[j] = views->right_col[j + 1];
+        views->bottom_row[j] = views->bottom_row[j + 1];
+        views->top_row[j] = views->top_row[j + 1];
+
+        if (views->warpoon_text) {
+            views->warpoon_text[j] = views->warpoon_text[j + 1];
+        }
+    }
+
+    views->views_count--;
 }
 
 static inline bool war_pc_to_a(war_producer_consumer* pc,

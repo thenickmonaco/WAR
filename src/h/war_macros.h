@@ -89,6 +89,20 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
     default:
         break;
     }
+    if (ctx_wr->cursor_blink_state) {
+        memcpy(ctx_wr->text_middle_status_bar +
+                   ctx_wr->text_status_bar_end_index,
+               ctx_wr->input_sequence,
+               1);
+        uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ?
+                            sizeof("BLINK") :
+                            sizeof("BPM");
+        memcpy(ctx_wr->text_middle_status_bar +
+                   ctx_wr->text_status_bar_end_index + 2,
+               (size == sizeof("BLINK")) ? "BLINK" : "BPM",
+               size);
+        return;
+    }
     memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index,
            ctx_wr->input_sequence,
            1);

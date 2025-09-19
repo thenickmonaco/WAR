@@ -507,7 +507,9 @@ void* war_window_render(void* args) {
                 call_carmack("from a: PLAY");
                 ctx_a.state = AUDIO_CMD_PLAY;
                 ctx_wr.cursor_blink_previous_us = ctx_wr.now;
-                ctx_wr.cursor_blinking = true;
+                ctx_wr.cursor_blinking = false;
+                ctx_wr.cursor_blink_duration_us = (uint64_t)round(
+                    (60.0 / ((double)ctx_a.BPM)) * microsecond_conversion);
                 break;
             case AUDIO_CMD_PAUSE:
                 call_carmack("from a: PAUSE");
@@ -5633,12 +5635,20 @@ void* war_window_render(void* args) {
                 switch (ctx_wr.cursor_blink_state) {
                 case CURSOR_BLINK:
                     ctx_wr.cursor_blink_state = CURSOR_BLINK_BPM;
+                    ctx_wr.cursor_blinking = false;
+                    ctx_wr.cursor_blink_previous_us = ctx_wr.now;
                     break;
                 case CURSOR_BLINK_BPM:
                     ctx_wr.cursor_blink_state = 0;
+                    ctx_wr.cursor_blinking = false;
+                    ctx_wr.cursor_blink_previous_us = ctx_wr.now;
                     break;
                 case 0:
                     ctx_wr.cursor_blink_state = CURSOR_BLINK;
+                    ctx_wr.cursor_blinking = false;
+                    ctx_wr.cursor_blink_previous_us = ctx_wr.now;
+                    ctx_wr.cursor_blink_duration_us =
+                        DEFAULT_CURSOR_BLINK_DURATION;
                     break;
                 }
                 ctx_wr.numeric_prefix = 0;

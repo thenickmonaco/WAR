@@ -127,7 +127,8 @@ void* war_window_render(void* args) {
         .now = 0,
         .mode = MODE_NORMAL,
         .hud_state = HUD_PIANO,
-        .cursor_blink_state = CURSOR_BLINK_OFF,
+        .cursor_blink_state = 0,
+        .cursor_blink_duration_us = DEFAULT_CURSOR_BLINK_DURATION,
         .col = 0,
         .row = 60,
         .sub_col = 0,
@@ -489,8 +490,10 @@ void* war_window_render(void* args) {
     ctx_wr.frame_duration_us =
         (uint64_t)round((1.0 / (double)ctx_wr.FPS) * microsecond_conversion);
     uint64_t last_frame_time = war_get_monotonic_time_us();
+    ctx_wr.cursor_blink_previous_us = last_frame_time;
+    ctx_wr.cursor_blinking = false;
     //-------------------------------------------------------------------------
-    // window_render loop
+    // LOOP WINDOW RENDER
     //-------------------------------------------------------------------------
     while (!ctx_wr.end_window_render) {
         //---------------------------------------------------------------------
@@ -503,6 +506,8 @@ void* war_window_render(void* args) {
             case AUDIO_CMD_PLAY:
                 call_carmack("from a: PLAY");
                 ctx_a.state = AUDIO_CMD_PLAY;
+                ctx_wr.cursor_blink_previous_us = ctx_wr.now;
+                ctx_wr.cursor_blinking = true;
                 break;
             case AUDIO_CMD_PAUSE:
                 call_carmack("from a: PAUSE");
@@ -550,6 +555,19 @@ void* war_window_render(void* args) {
             if (ctx_a.state == AUDIO_CMD_PLAY) {
                 war_pc_to_a(pc, AUDIO_CMD_GET_FRAMES, 0, NULL);
             }
+        }
+        // cursor blink
+        if (ctx_wr.cursor_blink_state &&
+            ctx_wr.now - ctx_wr.cursor_blink_previous_us >=
+                ctx_wr.cursor_blink_duration_us) {
+            ctx_wr.cursor_blink_duration_us =
+                (ctx_wr.cursor_blink_state == CURSOR_BLINK) ?
+                    DEFAULT_CURSOR_BLINK_DURATION :
+                    (uint64_t)round((60.0 / ((double)ctx_a.BPM)) *
+                                    microsecond_conversion);
+            ;
+            ctx_wr.cursor_blink_previous_us += ctx_wr.cursor_blink_duration_us;
+            ctx_wr.cursor_blinking = !ctx_wr.cursor_blinking;
         }
         //---------------------------------------------------------------------
         // KEY REPEATS
@@ -1048,7 +1066,7 @@ void* war_window_render(void* args) {
                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
                                   ctx_vk.quad_pipeline);
                 // draw cursor quads
-                if (ctx_wr.mode != MODE_VIEWS) {
+                if (ctx_wr.mode == MODE_NORMAL && !ctx_wr.cursor_blinking) {
                     war_make_quad(
                         quad_vertices,
                         quad_indices,
@@ -1068,7 +1086,8 @@ void* war_window_render(void* args) {
                         0,
                         (float[2]){0.0f, 0.0f},
                         QUAD_GRID);
-                } else if (ctx_wr.mode == MODE_VIEWS) {
+                }
+                if (ctx_wr.mode == MODE_VIEWS) {
                     // draw views
                     uint32_t offset_col =
                         ctx_wr.left_col +
@@ -1114,23 +1133,26 @@ void* war_window_render(void* args) {
                                   (float[2]){0.0f, 0.0f},
                                   QUAD_OUTLINE);
                     // draw views cursor
-                    war_make_quad(
-                        quad_vertices,
-                        quad_indices,
-                        &quad_vertices_count,
-                        &quad_indices_count,
-                        (float[3]){
-                            offset_col + views.warpoon_hud_cols +
-                                views.warpoon_col - views.warpoon_left_col,
-                            offset_row + views.warpoon_hud_rows +
-                                views.warpoon_row - views.warpoon_bottom_row,
-                            ctx_wr.layers[LAYER_POPUP_CURSOR]},
-                        (float[2]){1, 1},
-                        views.warpoon_color_cursor,
-                        0,
-                        0,
-                        (float[2]){0.0f, 0.0f},
-                        0);
+                    if (!ctx_wr.cursor_blinking) {
+                        war_make_quad(
+                            quad_vertices,
+                            quad_indices,
+                            &quad_vertices_count,
+                            &quad_indices_count,
+                            (float[3]){offset_col + views.warpoon_hud_cols +
+                                           views.warpoon_col -
+                                           views.warpoon_left_col,
+                                       offset_row + views.warpoon_hud_rows +
+                                           views.warpoon_row -
+                                           views.warpoon_bottom_row,
+                                       ctx_wr.layers[LAYER_POPUP_CURSOR]},
+                            (float[2]){1, 1},
+                            views.warpoon_color_cursor,
+                            0,
+                            0,
+                            (float[2]){0.0f, 0.0f},
+                            0);
+                    }
                     // draw views line numbers text
                     int number = views.warpoon_max_row - views.warpoon_top_row +
                                  views.warpoon_viewport_rows;
@@ -3254,8 +3276,6 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_V, &&cmd_views_V},
                     {&&cmd_normal_K, &&cmd_views_K},
                     {&&cmd_normal_J, &&cmd_views_J},
-                    {&&cmd_normal_H, &&cmd_views_H},
-                    {&&cmd_normal_L, &&cmd_views_L},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3612,18 +3632,6 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_J:
                 call_carmack("cmd_normal_J");
-                ctx_wr.numeric_prefix = 0;
-                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
-                ctx_wr.num_chars_in_sequence = 0;
-                goto cmd_done;
-            cmd_normal_L:
-                call_carmack("cmd_normal_L");
-                ctx_wr.numeric_prefix = 0;
-                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
-                ctx_wr.num_chars_in_sequence = 0;
-                goto cmd_done;
-            cmd_normal_H:
-                call_carmack("cmd_normal_H");
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5623,14 +5631,14 @@ void* war_window_render(void* args) {
             cmd_normal_tab: {
                 call_carmack("cmd_normal_tab");
                 switch (ctx_wr.cursor_blink_state) {
-                case CURSOR_BLINK_OFF:
+                case CURSOR_BLINK:
                     ctx_wr.cursor_blink_state = CURSOR_BLINK_BPM;
                     break;
                 case CURSOR_BLINK_BPM:
-                    ctx_wr.cursor_blink_state = CURSOR_BLINK_FPS;
+                    ctx_wr.cursor_blink_state = 0;
                     break;
-                case CURSOR_BLINK_FPS:
-                    ctx_wr.cursor_blink_state = CURSOR_BLINK_OFF;
+                case 0:
+                    ctx_wr.cursor_blink_state = CURSOR_BLINK;
                     break;
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6035,82 +6043,7 @@ void* war_window_render(void* args) {
                             views.warpoon_top_row, diff, views.warpoon_max_row);
                     }
                 }
-                ctx_wr.numeric_prefix = 0;
-                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
-                ctx_wr.num_chars_in_sequence = 0;
-                goto cmd_done;
-            }
-            cmd_views_H: {
-                call_carmack("cmd_views_H");
-                uint32_t increment = ctx_wr.col_increment;
-                if (ctx_wr.numeric_prefix) {
-                    increment =
-                        war_clamp_multiply_uint32(increment,
-                                                  ctx_wr.numeric_prefix,
-                                                  views.warpoon_max_col);
-                }
-                views.warpoon_col = war_clamp_subtract_uint32(
-                    views.warpoon_col, increment, views.warpoon_min_col);
-                if (views.warpoon_col <
-                    views.warpoon_left_col + ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width =
-                        views.warpoon_right_col - views.warpoon_left_col;
-                    views.warpoon_left_col =
-                        war_clamp_subtract_uint32(views.warpoon_left_col,
-                                                  increment,
-                                                  views.warpoon_min_col);
-                    views.warpoon_right_col =
-                        war_clamp_subtract_uint32(views.warpoon_right_col,
-                                                  increment,
-                                                  views.warpoon_min_col);
-                    uint32_t new_viewport_width =
-                        views.warpoon_right_col - views.warpoon_left_col;
-                    if (new_viewport_width < viewport_width) {
-                        uint32_t diff = viewport_width - new_viewport_width;
-                        views.warpoon_right_col =
-                            war_clamp_add_uint32(views.warpoon_right_col,
-                                                 diff,
-                                                 views.warpoon_max_col);
-                    }
-                }
-                ctx_wr.numeric_prefix = 0;
-                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
-                ctx_wr.num_chars_in_sequence = 0;
-                goto cmd_done;
-            }
-            cmd_views_L: {
-                call_carmack("cmd_views_L");
-                uint32_t increment = ctx_wr.col_increment;
-                if (ctx_wr.numeric_prefix) {
-                    increment =
-                        war_clamp_multiply_uint32(increment,
-                                                  ctx_wr.numeric_prefix,
-                                                  views.warpoon_max_col);
-                }
-                views.warpoon_col = war_clamp_add_uint32(
-                    views.warpoon_col, increment, views.warpoon_max_col);
-                if (views.warpoon_col >
-                    views.warpoon_right_col - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_width =
-                        views.warpoon_right_col - views.warpoon_left_col;
-                    views.warpoon_left_col =
-                        war_clamp_add_uint32(views.warpoon_left_col,
-                                             increment,
-                                             views.warpoon_max_col);
-                    views.warpoon_right_col =
-                        war_clamp_add_uint32(views.warpoon_right_col,
-                                             increment,
-                                             views.warpoon_max_col);
-                    uint32_t new_viewport_width =
-                        views.warpoon_right_col - views.warpoon_left_col;
-                    if (new_viewport_width < viewport_width) {
-                        uint32_t diff = viewport_width - new_viewport_width;
-                        views.warpoon_left_col =
-                            war_clamp_subtract_uint32(views.warpoon_left_col,
-                                                      diff,
-                                                      views.warpoon_min_col);
-                    }
-                }
+
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6213,6 +6146,8 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             }
             cmd_done: {
+                ctx_wr.cursor_blink_previous_us = ctx_wr.now;
+                ctx_wr.cursor_blinking = false;
                 ctx_wr.trinity = true;
                 if (goto_cmd_repeat_done) {
                     goto_cmd_repeat_done = false;
@@ -6292,6 +6227,8 @@ void* war_window_render(void* args) {
                             (uint32_t)((physical_height - ctx_wr.cursor_y) /
                                        ctx_vk.cell_height) -
                             ctx_wr.num_rows_for_status_bars + ctx_wr.bottom_row;
+                        ctx_wr.cursor_blink_previous_us = ctx_wr.now;
+                        ctx_wr.cursor_blinking = false;
                         if (ctx_wr.row > ctx_wr.max_row) {
                             ctx_wr.row = ctx_wr.max_row;
                         }
@@ -6454,6 +6391,7 @@ void* war_window_render(void* args) {
 //-----------------------------------------------------------------------------
 // THREAD AUDIO
 //-----------------------------------------------------------------------------
+// COMMENT REFACTOR: nonblocking
 void* war_audio(void* args) {
     header("war_audio");
     war_producer_consumer* pc = (war_producer_consumer*)args;
@@ -6512,6 +6450,9 @@ void* war_audio(void* args) {
     assert(usec_size == 8);
     float
         sample_buffer[AUDIO_DEFAULT_PERIOD_SIZE * AUDIO_DEFAULT_CHANNEL_COUNT];
+    //-------------------------------------------------------------------------
+    // LOOP AUDIO
+    //-------------------------------------------------------------------------
     while (ctx_a.state != AUDIO_CMD_END_WAR) {
         //----------------------------------------------------------------------
         // PC AUDIO

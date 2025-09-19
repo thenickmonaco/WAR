@@ -138,9 +138,9 @@ enum war_pipelines {
 };
 
 enum war_cursor {
-    CURSOR_BLINK_OFF = 0,
     CURSOR_BLINK_BPM = 1,
-    CURSOR_BLINK_FPS = 2,
+    CURSOR_BLINK = 2,
+    DEFAULT_CURSOR_BLINK_DURATION = 700000,
 };
 
 typedef struct war_fsm_state {
@@ -395,6 +395,9 @@ typedef struct war_window_render_context {
     uint32_t text_status_bar_middle_index;
     uint32_t text_status_bar_end_index;
     uint8_t cursor_blink_state;
+    uint64_t cursor_blink_duration_us;
+    uint64_t cursor_blink_previous_us;
+    bool cursor_blinking;
     uint32_t color_note_default;
     uint32_t color_note_outline_default;
 } war_window_render_context;

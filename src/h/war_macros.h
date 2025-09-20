@@ -117,7 +117,7 @@ static inline void war_get_bottom_text(war_window_render_context* ctx_wr) {
 
 static inline void war_get_warpoon_text(war_views* views) {
     for (uint32_t i = 0; i < views->views_count; i++) {
-        memset(views->warpoon_text[i], 0, MAX_WARPOON_TEXT_COLS);
+        strncpy(views->warpoon_text[i], "", MAX_WARPOON_TEXT_COLS);
         snprintf(views->warpoon_text[i],
                  MAX_WARPOON_TEXT_COLS,
                  "%d,%d [%d,%d]",
@@ -125,6 +125,11 @@ static inline void war_get_warpoon_text(war_views* views) {
                  views->col[i],
                  views->bottom_row[i],
                  views->left_col[i]);
+        call_carmack("i_views: %u", i);
+        call_carmack("views row: %u", views->row[i]);
+        call_carmack("views col: %u", views->col[i]);
+        call_carmack("views bottom_row: %u", views->bottom_row[i]);
+        call_carmack("views left_col: %u", views->left_col[i]);
     }
 }
 
@@ -142,13 +147,64 @@ static inline void war_warpoon_delete_at_i(war_views* views,
         views->right_col[j] = views->right_col[j + 1];
         views->bottom_row[j] = views->bottom_row[j + 1];
         views->top_row[j] = views->top_row[j + 1];
-
-        if (views->warpoon_text) {
-            views->warpoon_text[j] = views->warpoon_text[j + 1];
-        }
     }
 
     views->views_count--;
+}
+
+static inline void war_warpoon_shift_up(war_views* views) {
+    if (views->warpoon_row + 1 > views->warpoon_max_row) { return; }
+
+    uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
+    if ((int)i_views - 1 < 0 || i_views > views->views_count - 1) { return; }
+
+    uint32_t tmp_col = views->col[i_views - 1];
+    uint32_t tmp_row = views->row[i_views - 1];
+    uint32_t tmp_left_col = views->left_col[i_views - 1];
+    uint32_t tmp_bottom_row = views->bottom_row[i_views - 1];
+    uint32_t tmp_right_col = views->right_col[i_views - 1];
+    uint32_t tmp_top_row = views->top_row[i_views - 1];
+    views->col[i_views - 1] = views->col[i_views];
+    views->row[i_views - 1] = views->row[i_views];
+    views->left_col[i_views - 1] = views->left_col[i_views];
+    views->bottom_row[i_views - 1] = views->bottom_row[i_views];
+    views->right_col[i_views - 1] = views->right_col[i_views];
+    views->top_row[i_views - 1] = views->top_row[i_views];
+    views->col[i_views] = tmp_col;
+    views->row[i_views] = tmp_row;
+    views->left_col[i_views] = tmp_left_col;
+    views->bottom_row[i_views] = tmp_bottom_row;
+    views->right_col[i_views] = tmp_right_col;
+    views->top_row[i_views] = tmp_top_row;
+}
+
+static inline void war_warpoon_shift_down(war_views* views) {
+    if (views->warpoon_row == 0)
+        return; // already at bottom in your indexing logic
+
+    uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
+    if (i_views + 1 >= views->views_count) return;
+
+    uint32_t tmp_col = views->col[i_views + 1];
+    uint32_t tmp_row = views->row[i_views + 1];
+    uint32_t tmp_left_col = views->left_col[i_views + 1];
+    uint32_t tmp_bottom_row = views->bottom_row[i_views + 1];
+    uint32_t tmp_right_col = views->right_col[i_views + 1];
+    uint32_t tmp_top_row = views->top_row[i_views + 1];
+
+    views->col[i_views + 1] = views->col[i_views];
+    views->row[i_views + 1] = views->row[i_views];
+    views->left_col[i_views + 1] = views->left_col[i_views];
+    views->bottom_row[i_views + 1] = views->bottom_row[i_views];
+    views->right_col[i_views + 1] = views->right_col[i_views];
+    views->top_row[i_views + 1] = views->top_row[i_views];
+
+    views->col[i_views] = tmp_col;
+    views->row[i_views] = tmp_row;
+    views->left_col[i_views] = tmp_left_col;
+    views->bottom_row[i_views] = tmp_bottom_row;
+    views->right_col[i_views] = tmp_right_col;
+    views->top_row[i_views] = tmp_top_row;
 }
 
 static inline bool war_pc_to_a(war_producer_consumer* pc,
@@ -784,6 +840,74 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     quad_indices[*indices_count + 3] = *vertices_count + 2;
     quad_indices[*indices_count + 4] = *vertices_count + 3;
     quad_indices[*indices_count + 5] = *vertices_count;
+    (*vertices_count) += 4;
+    (*indices_count) += 6;
+}
+
+static inline void
+war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
+                          uint16_t* transparent_quad_indices,
+                          uint32_t* vertices_count,
+                          uint32_t* indices_count,
+                          float bottom_left_pos[3],
+                          float span[2],
+                          uint32_t color,
+                          float outline_thickness,
+                          uint32_t outline_color,
+                          float line_thickness[2],
+                          uint32_t flags) {
+    transparent_quad_vertices[*vertices_count] = (war_quad_vertex){
+        .corner = {0, 0},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_vertices[*vertices_count + 1] = (war_quad_vertex){
+        .corner = {1, 0},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_vertices[*vertices_count + 2] = (war_quad_vertex){
+        .corner = {1, 1},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_vertices[*vertices_count + 3] = (war_quad_vertex){
+        .corner = {0, 1},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_indices[*indices_count] = *vertices_count;
+    transparent_quad_indices[*indices_count + 1] = *vertices_count + 1;
+    transparent_quad_indices[*indices_count + 2] = *vertices_count + 2;
+    transparent_quad_indices[*indices_count + 3] = *vertices_count + 2;
+    transparent_quad_indices[*indices_count + 4] = *vertices_count + 3;
+    transparent_quad_indices[*indices_count + 5] = *vertices_count;
     (*vertices_count) += 4;
     (*indices_count) += 6;
 }

@@ -1852,6 +1852,91 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 0,
                 &text_instance_buffer_mapped);
 
+    VkPipelineDepthStencilStateCreateInfo transparent_depth_stencil = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,   // enable depth testing
+        .depthWriteEnable = VK_FALSE, // enable writing to depth buffer
+        .depthCompareOp = VK_COMPARE_OP_ALWAYS,
+        .stencilTestEnable = VK_FALSE,
+    };
+    VkGraphicsPipelineCreateInfo transparent_quad_pipeline_info = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = 2,
+        .pStages = shader_stages,
+        .pVertexInputState = &quad_vertex_input,
+        .pInputAssemblyState =
+            &(VkPipelineInputAssemblyStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            },
+        .pViewportState =
+            &(VkPipelineViewportStateCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                .viewportCount = 1,
+                .pViewports = &viewport,
+                .scissorCount = 1,
+                .pScissors = &scissor,
+            },
+        .pDepthStencilState = &transparent_depth_stencil,
+        .pRasterizationState =
+            &(VkPipelineRasterizationStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                .polygonMode = VK_POLYGON_MODE_FILL,
+                .cullMode = VK_CULL_MODE_NONE,
+                .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+                .lineWidth = 1.0f,
+            },
+        .pMultisampleState =
+            &(VkPipelineMultisampleStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            },
+        .pColorBlendState =
+            &(VkPipelineColorBlendStateCreateInfo){
+                .sType =
+                    VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                .attachmentCount = 1,
+                .pAttachments =
+                    (VkPipelineColorBlendAttachmentState[]){
+                        {
+                            .blendEnable = VK_TRUE, // enable blending
+                            .srcColorBlendFactor =
+                                VK_BLEND_FACTOR_SRC_ALPHA, // source color
+                                                           // weight
+                            .dstColorBlendFactor =
+                                VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // dest
+                                                                     // color
+                                                                     // weight
+                            .colorBlendOp = VK_BLEND_OP_ADD, // combine src+dst
+                            .srcAlphaBlendFactor =
+                                VK_BLEND_FACTOR_ONE, // source alpha
+                            .dstAlphaBlendFactor =
+                                VK_BLEND_FACTOR_ZERO,        // dest alpha
+                            .alphaBlendOp = VK_BLEND_OP_ADD, // combine alpha
+                            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                              VK_COLOR_COMPONENT_G_BIT |
+                                              VK_COLOR_COMPONENT_B_BIT |
+                                              VK_COLOR_COMPONENT_A_BIT,
+                        },
+                    },
+            },
+        .layout = pipeline_layout,
+        .renderPass = render_pass,
+        .subpass = 0,
+        .pDynamicState = NULL,
+    };
+    VkPipeline transparent_quad_pipeline;
+    result = vkCreateGraphicsPipelines(device,
+                                       VK_NULL_HANDLE,
+                                       1,
+                                       &transparent_quad_pipeline_info,
+                                       NULL,
+                                       &transparent_quad_pipeline);
+    assert(result == VK_SUCCESS);
+
     return (war_vulkan_context){
         //----------------------------------------------------------------------
         // QUAD PIPELINE
@@ -1869,6 +1954,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .render_pass = render_pass,
         .frame_buffer = frame_buffer,
         .quad_pipeline = pipeline,
+        .transparent_quad_pipeline = transparent_quad_pipeline,
         .pipeline_layout = pipeline_layout,
         .image_view = image_view,
         .image_available_semaphore = image_available_semaphore,

@@ -219,6 +219,7 @@ typedef struct war_views {
     // warpoon
     char** warpoon_text;
     uint32_t warpoon_mode;
+    uint32_t warpoon_visual_line_row;
     uint32_t warpoon_col;
     uint32_t warpoon_row;
     uint32_t warpoon_left_col;
@@ -529,6 +530,7 @@ typedef struct war_vulkan_context {
     VkRenderPass render_pass;
     VkFramebuffer frame_buffer;
     VkPipeline quad_pipeline;
+    VkPipeline transparent_quad_pipeline;
     VkPipelineLayout pipeline_layout;
     VkImageView image_view;
     VkSemaphore image_available_semaphore;

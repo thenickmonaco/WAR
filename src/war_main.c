@@ -81,7 +81,7 @@ void* war_window_render(void* args) {
     const float default_outline_thickness =
         0.04f; // 0.027 is minimum for preventing 1/4, 1/7, 1/9, max = 0.075f
                // sub_cursor right outline from disappearing
-    const float default_alpha_scale = 0.2f;
+    const float default_alpha_scale = 0.7f;
     const float default_playback_bar_thickness = 0.05f;
     const float default_text_feather = 0.5f;
     const float default_text_thickness = 0.0f;
@@ -475,6 +475,11 @@ void* war_window_render(void* args) {
     uint32_t quad_vertices_count = 0;
     uint16_t* quad_indices = malloc(sizeof(uint16_t) * max_quads);
     uint32_t quad_indices_count = 0;
+    war_quad_vertex* transparent_quad_vertices =
+        malloc(sizeof(war_quad_vertex) * max_quads);
+    uint32_t transparent_quad_vertices_count = 0;
+    uint16_t* transparent_quad_indices = malloc(sizeof(uint16_t) * max_quads);
+    uint32_t transparent_quad_indices_count = 0;
     war_text_vertex* text_vertices =
         malloc(sizeof(war_text_vertex) * max_text_quads);
     uint32_t text_vertices_count = 0;
@@ -561,7 +566,10 @@ void* war_window_render(void* args) {
         // cursor blink
         if (ctx_wr.cursor_blink_state &&
             ctx_wr.now - ctx_wr.cursor_blink_previous_us >=
-                ctx_wr.cursor_blink_duration_us) {
+                ctx_wr.cursor_blink_duration_us &&
+            (ctx_wr.mode == MODE_NORMAL ||
+             (ctx_wr.mode == MODE_VIEWS &&
+              views.warpoon_mode != MODE_VISUAL_LINE))) {
             ctx_wr.cursor_blink_duration_us =
                 (ctx_wr.cursor_blink_state == CURSOR_BLINK) ?
                     DEFAULT_CURSOR_BLINK_DURATION :
@@ -1059,6 +1067,8 @@ void* war_window_render(void* args) {
                                      VK_SUBPASS_CONTENTS_INLINE);
                 quad_vertices_count = 0;
                 quad_indices_count = 0;
+                transparent_quad_vertices_count = 0;
+                transparent_quad_indices_count = 0;
                 text_vertices_count = 0;
                 text_indices_count = 0;
                 //---------------------------------------------------------
@@ -1068,12 +1078,26 @@ void* war_window_render(void* args) {
                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
                                   ctx_vk.quad_pipeline);
                 // draw cursor quads
+                note_quads_in_x_count = 0;
+                war_note_quads_under_cursor(&note_quads,
+                                            note_quads_count,
+                                            &ctx_wr,
+                                            note_quads_in_x,
+                                            &note_quads_in_x_count);
+                uint32_t cursor_color = ctx_wr.white_hex;
+                if (note_quads_in_x_count) {
+                    float alpha_factor = ctx_wr.alpha_scale;
+                    uint8_t color_alpha = (cursor_color >> 24) & 0xFF;
+                    cursor_color =
+                        ((uint8_t)(color_alpha * alpha_factor) << 24) |
+                        (cursor_color & 0x00FFFFFF);
+                }
                 if (ctx_wr.mode == MODE_NORMAL && !ctx_wr.cursor_blinking) {
-                    war_make_quad(
-                        quad_vertices,
-                        quad_indices,
-                        &quad_vertices_count,
-                        &quad_indices_count,
+                    war_make_transparent_quad(
+                        transparent_quad_vertices,
+                        transparent_quad_indices,
+                        &transparent_quad_vertices_count,
+                        &transparent_quad_indices_count,
                         (float[3]){ctx_wr.col +
                                        (float)ctx_wr.sub_col /
                                            ctx_wr.navigation_sub_cells_col,
@@ -1083,7 +1107,7 @@ void* war_window_render(void* args) {
                                        ctx_wr.cursor_width_sub_col /
                                        ctx_wr.cursor_width_sub_cells,
                                    1},
-                        ctx_wr.white_hex,
+                        cursor_color,
                         0,
                         0,
                         (float[2]){0.0f, 0.0f},
@@ -1136,20 +1160,32 @@ void* war_window_render(void* args) {
                                   QUAD_OUTLINE);
                     // draw views cursor
                     if (!ctx_wr.cursor_blinking) {
+                        uint32_t cursor_span_x = 1;
+                        uint32_t cursor_pos_x = views.warpoon_col;
+                        if (views.warpoon_mode == MODE_VISUAL_LINE) {
+                            cursor_span_x = views.warpoon_viewport_cols -
+                                            views.warpoon_hud_cols;
+                            cursor_pos_x = 0;
+                        }
+                        float alpha_factor = ctx_wr.alpha_scale;
+                        uint8_t color_alpha = (cursor_color >> 24) & 0xFF;
+                        cursor_color =
+                            ((uint8_t)(color_alpha * alpha_factor) << 24) |
+                            (cursor_color & 0x00FFFFFF);
                         war_make_quad(
                             quad_vertices,
                             quad_indices,
                             &quad_vertices_count,
                             &quad_indices_count,
                             (float[3]){offset_col + views.warpoon_hud_cols +
-                                           views.warpoon_col -
+                                           cursor_pos_x -
                                            views.warpoon_left_col,
                                        offset_row + views.warpoon_hud_rows +
                                            views.warpoon_row -
                                            views.warpoon_bottom_row,
                                        ctx_wr.layers[LAYER_POPUP_CURSOR]},
-                            (float[2]){1, 1},
-                            views.warpoon_color_cursor,
+                            (float[2]){cursor_span_x, 1},
+                            cursor_color,
                             0,
                             0,
                             (float[2]){0.0f, 0.0f},
@@ -1187,15 +1223,15 @@ void* war_window_render(void* args) {
                     }
                     // draw views text
                     war_get_warpoon_text(&views);
-                    uint32_t i_views = views.warpoon_max_row -
-                                       views.warpoon_top_row +
-                                       views.warpoon_viewport_rows - 1;
-                    for (uint32_t row = views.warpoon_bottom_row;
-                         row <= views.warpoon_top_row;
-                         row++, i_views--) {
-                        for (uint32_t col = views.warpoon_left_col;
+                    uint32_t row = views.warpoon_max_row;
+                    for (uint32_t i_views = 0; i_views < views.views_count;
+                         i_views++, row--) {
+                        if (row > views.warpoon_top_row ||
+                            row < views.warpoon_bottom_row) {
+                            continue;
+                        }
+                        for (uint32_t col = 0;
                              col <= views.warpoon_right_col &&
-                             i_views < views.views_count &&
                              views.warpoon_text[i_views][col] != '\0';
                              col++) {
                             war_make_text_quad(
@@ -1203,15 +1239,13 @@ void* war_window_render(void* args) {
                                 text_indices,
                                 &text_vertices_count,
                                 &text_indices_count,
-                                (float[3]){offset_col + col +
-                                               views.warpoon_hud_cols -
-                                               views.warpoon_left_col,
-                                           offset_row + row -
-                                               views.warpoon_bottom_row +
-                                               views.warpoon_hud_rows,
-                                           ctx_wr.layers[LAYER_POPUP_HUD_TEXT]},
+                                (float[3]){offset_col + views.warpoon_hud_cols +
+                                               col,
+                                           offset_row + views.warpoon_hud_rows +
+                                               row - views.warpoon_bottom_row,
+                                           ctx_wr.layers[LAYER_POPUP_CURSOR]},
                                 (float[2]){1, 1},
-                                views.warpoon_color_hud_text,
+                                views.warpoon_color_text,
                                 &ctx_vk
                                      .glyphs[views.warpoon_text[i_views][col]],
                                 ctx_wr.text_thickness,
@@ -1535,6 +1569,75 @@ void* war_window_render(void* args) {
                                    &quad_push_constants);
                 vkCmdDrawIndexed(
                     ctx_vk.cmd_buffer, quad_indices_count, 1, 0, 0, 0);
+                // draw transparent quads
+                vkCmdBindPipeline(ctx_vk.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  ctx_vk.transparent_quad_pipeline);
+                memcpy(ctx_vk.quads_vertex_buffer_mapped +
+                           quad_vertices_count * sizeof(war_quad_vertex),
+                       transparent_quad_vertices,
+                       sizeof(war_quad_vertex) *
+                           transparent_quad_vertices_count);
+                memcpy(ctx_vk.quads_index_buffer_mapped +
+                           quad_indices_count * sizeof(uint16_t),
+                       transparent_quad_indices,
+                       sizeof(uint16_t) * transparent_quad_indices_count);
+                VkMappedMemoryRange transparent_quad_flush_ranges[2] = {
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = ctx_vk.quads_vertex_buffer_memory,
+                     .offset = sizeof(war_quad_vertex) * quad_vertices_count,
+                     .size = war_align64(sizeof(war_quad_vertex) *
+                                         transparent_quad_vertices_count)},
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = ctx_vk.quads_index_buffer_memory,
+                     .offset = sizeof(uint16_t) * quad_indices_count,
+                     .size = war_align64(sizeof(uint16_t) *
+                                         transparent_quad_indices_count)}};
+                vkFlushMappedMemoryRanges(
+                    ctx_vk.device, 2, transparent_quad_flush_ranges);
+                VkDeviceSize transparent_quad_vertices_offsets[2] = {
+                    quad_vertices_count * sizeof(war_quad_vertex)};
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       0,
+                                       1,
+                                       &ctx_vk.quads_vertex_buffer,
+                                       transparent_quad_vertices_offsets);
+                VkDeviceSize transparent_quad_instances_offsets[2] = {0};
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       1,
+                                       1,
+                                       &ctx_vk.quads_instance_buffer,
+                                       transparent_quad_instances_offsets);
+                VkDeviceSize transparent_quad_indices_offset =
+                    quad_indices_count * sizeof(uint16_t);
+                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer,
+                                     ctx_vk.quads_index_buffer,
+                                     transparent_quad_indices_offset,
+                                     VK_INDEX_TYPE_UINT16);
+                war_quad_push_constants transparent_quad_push_constants = {
+                    .bottom_left = {ctx_wr.left_col, ctx_wr.bottom_row},
+                    .physical_size = {physical_width, physical_height},
+                    .cell_size = {ctx_wr.cell_width, ctx_wr.cell_height},
+                    .zoom = ctx_wr.zoom_scale,
+                    .cell_offsets = {ctx_wr.num_cols_for_line_numbers,
+                                     ctx_wr.num_rows_for_status_bars},
+                    .scroll_margin = {ctx_wr.scroll_margin_cols,
+                                      ctx_wr.scroll_margin_rows},
+                    .anchor_cell = {ctx_wr.col, ctx_wr.row},
+                    .top_right = {ctx_wr.right_col, ctx_wr.top_row},
+                };
+                vkCmdPushConstants(ctx_vk.cmd_buffer,
+                                   ctx_vk.pipeline_layout,
+                                   VK_SHADER_STAGE_VERTEX_BIT,
+                                   0,
+                                   sizeof(war_quad_push_constants),
+                                   &transparent_quad_push_constants);
+                vkCmdDrawIndexed(ctx_vk.cmd_buffer,
+                                 transparent_quad_indices_count,
+                                 1,
+                                 0,
+                                 0,
+                                 0);
                 //---------------------------------------------------------
                 // TEXT PIPELINE
                 //---------------------------------------------------------
@@ -5759,6 +5862,14 @@ void* war_window_render(void* args) {
             }
             cmd_views_h: {
                 call_carmack("cmd_views_h");
+                if (views.warpoon_mode == MODE_VISUAL_LINE) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
                 uint32_t increment = ctx_wr.col_increment;
                 if (ctx_wr.numeric_prefix) {
                     increment =
@@ -5797,6 +5908,14 @@ void* war_window_render(void* args) {
             }
             cmd_views_l: {
                 call_carmack("cmd_views_l");
+                if (views.warpoon_mode == MODE_VISUAL_LINE) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
                 uint32_t increment = ctx_wr.col_increment;
                 if (ctx_wr.numeric_prefix) {
                     increment =
@@ -5910,6 +6029,14 @@ void* war_window_render(void* args) {
             }
             cmd_views_alt_h: {
                 call_carmack("cmd_views_alt_h");
+                if (views.warpoon_mode == MODE_VISUAL_LINE) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
                 uint32_t increment = ctx_wr.col_leap_increment;
                 if (ctx_wr.numeric_prefix) {
                     increment =
@@ -5948,6 +6075,14 @@ void* war_window_render(void* args) {
             }
             cmd_views_alt_l: {
                 call_carmack("cmd_views_alt_l");
+                if (views.warpoon_mode == MODE_VISUAL_LINE) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
                 uint32_t increment = ctx_wr.col_leap_increment;
                 if (ctx_wr.numeric_prefix) {
                     increment =
@@ -5986,6 +6121,7 @@ void* war_window_render(void* args) {
             }
             cmd_views_K: {
                 call_carmack("cmd_views_K");
+                war_warpoon_shift_up(&views);
                 uint32_t increment = ctx_wr.row_increment;
                 if (ctx_wr.numeric_prefix) {
                     increment =
@@ -6024,6 +6160,7 @@ void* war_window_render(void* args) {
             }
             cmd_views_J: {
                 call_carmack("cmd_views_J");
+                war_warpoon_shift_down(&views);
                 uint32_t increment = ctx_wr.row_increment;
                 if (ctx_wr.numeric_prefix) {
                     increment =
@@ -6081,6 +6218,7 @@ void* war_window_render(void* args) {
                 switch (views.warpoon_mode) {
                 case MODE_NORMAL:
                     views.warpoon_mode = MODE_VISUAL_LINE;
+                    views.warpoon_visual_line_row = views.warpoon_row;
                     break;
                 case MODE_VISUAL_LINE:
                     views.warpoon_mode = MODE_NORMAL;

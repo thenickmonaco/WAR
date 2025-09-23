@@ -41,6 +41,8 @@ int main() {
     war_producer_consumer pc;
     pc.to_a = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
     pc.to_wr = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
+    memset(pc.to_a, 0, PC_BUFFER_SIZE);
+    memset(pc.to_wr, 0, PC_BUFFER_SIZE);
     pc.i_to_a = 0;
     pc.i_to_wr = 0;
     pc.i_from_a = 0;
@@ -121,7 +123,7 @@ void* war_window_render(void* args) {
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
     };
     war_window_render_context ctx_wr = {
-        .octave = 4,
+        .record_octave = 4,
         .trinity = false,
         .fullscreen = false,
         .end_window_render = false,
@@ -502,71 +504,86 @@ void* war_window_render(void* args) {
     uint64_t last_frame_time = war_get_monotonic_time_us();
     ctx_wr.cursor_blink_previous_us = last_frame_time;
     ctx_wr.cursor_blinking = false;
+
+    void* pc_window_render[AUDIO_CMD_COUNT];
+    pc_window_render[AUDIO_CMD_STOP] = &&pc_stop;
+    pc_window_render[AUDIO_CMD_PLAY] = &&pc_play;
+    pc_window_render[AUDIO_CMD_PAUSE] = &&pc_pause;
+    pc_window_render[AUDIO_CMD_GET_FRAMES] = &&pc_get_frames;
+    pc_window_render[AUDIO_CMD_ADD_NOTE] = &&pc_add_note;
+    pc_window_render[AUDIO_CMD_END_WAR] = &&pc_end_war;
+    pc_window_render[AUDIO_CMD_SEEK] = &&pc_seek;
+    pc_window_render[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
+    pc_window_render[AUDIO_CMD_RECORD_CAPTURE] = &&pc_record_capture;
+    pc_window_render[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
+    pc_window_render[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
+    pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
     //-------------------------------------------------------------------------
     // LOOP WINDOW RENDER
     //-------------------------------------------------------------------------
     while (!ctx_wr.end_window_render) {
-        //---------------------------------------------------------------------
-        // PC WINDOW RENDER
-        //---------------------------------------------------------------------
+    pc_window_render:
         uint32_t header;
         uint32_t size;
         uint8_t payload[PC_BUFFER_SIZE];
-        while (war_pc_from_a(pc, &header, &size, payload)) {
-            switch (header) {
-            case AUDIO_CMD_RECORD_WAIT:
-                call_carmack("from a: RECORD_WAIT");
-                ctx_a.state = AUDIO_CMD_RECORD_WAIT;
-                break;
-            case AUDIO_CMD_RECORD_CAPTURE:
-                call_carmack("from a: RECORD_CAPTURE");
-                ctx_a.state = AUDIO_CMD_RECORD_CAPTURE;
-                break;
-            case AUDIO_CMD_RECORD_DONE:
-                call_carmack("from a: RECORD_DONE");
-                ctx_a.state = AUDIO_CMD_RECORD_DONE;
-                break;
-            case AUDIO_CMD_RECORD_MAP:
-                call_carmack("from a: RECORD_MAP");
-                ctx_a.state = AUDIO_CMD_RECORD_MAP;
-                war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
-                break;
-            case AUDIO_CMD_PLAY:
-                call_carmack("from a: PLAY");
-                ctx_a.state = AUDIO_CMD_PLAY;
-                ctx_wr.cursor_blink_previous_us = ctx_wr.now;
-                ctx_wr.cursor_blinking = false;
-                ctx_wr.cursor_blink_duration_us = (uint64_t)round(
-                    (60.0 / ((double)ctx_a.BPM)) * microsecond_conversion);
-                break;
-            case AUDIO_CMD_PAUSE:
-                call_carmack("from a: PAUSE");
-                ctx_a.state = AUDIO_CMD_PAUSE;
-                break;
-            case AUDIO_CMD_STOP:
-                call_carmack("from a: STOP");
-                ctx_a.state = AUDIO_CMD_STOP;
-                break;
-            case AUDIO_CMD_SEEK: {
-                call_carmack("from a: SEEK");
-                uint64_t seek_logical_frames_played;
-                memcpy(&seek_logical_frames_played, payload, size);
-                ctx_a.logical_frames_played = seek_logical_frames_played;
-                break;
-            }
-            case AUDIO_CMD_GET_FRAMES: {
-                // call_carmack("from a: GET_FRAMES");
-                uint64_t logical_frames_played;
-                memcpy(&logical_frames_played, payload, size);
-                ctx_a.logical_frames_played = logical_frames_played;
-                break;
-            }
-            case AUDIO_CMD_END_WAR:
-                call_carmack("from a: END_WAR");
-                ctx_wr.end_window_render = true;
-                break;
-            }
+        if (war_pc_from_a(pc, &header, &size, payload)) {
+            goto* pc_window_render[header];
         }
+        goto pc_window_render_done;
+    pc_stop:
+        call_carmack("from a: STOP");
+        ctx_a.state = AUDIO_CMD_STOP;
+        goto pc_window_render;
+    pc_play:
+        call_carmack("from a: PLAY");
+        ctx_a.state = AUDIO_CMD_PLAY;
+        ctx_wr.cursor_blink_previous_us = ctx_wr.now;
+        ctx_wr.cursor_blinking = false;
+        ctx_wr.cursor_blink_duration_us = (uint64_t)round(
+            (60.0 / ((double)ctx_a.BPM)) * microsecond_conversion);
+        goto pc_window_render;
+    pc_pause:
+        call_carmack("from a: PAUSE");
+        ctx_a.state = AUDIO_CMD_PAUSE;
+        goto pc_window_render;
+    pc_get_frames:
+        // call_carmack("from a: GET_FRAMES");
+        uint64_t logical_frames_played;
+        memcpy(&logical_frames_played, payload, size);
+        ctx_a.logical_frames_played = logical_frames_played;
+        goto pc_window_render;
+    pc_add_note:
+        goto pc_window_render;
+    pc_end_war:
+        call_carmack("from a: END_WAR");
+        ctx_wr.end_window_render = true;
+        goto pc_window_render;
+    pc_seek:
+        call_carmack("from a: SEEK");
+        uint64_t seek_logical_frames_played;
+        memcpy(&seek_logical_frames_played, payload, size);
+        ctx_a.logical_frames_played = seek_logical_frames_played;
+        goto pc_window_render;
+    pc_record_wait:
+        call_carmack("from a: RECORD_WAIT");
+        ctx_a.state = AUDIO_CMD_RECORD_WAIT;
+        goto pc_window_render;
+    pc_record_capture:
+        call_carmack("from a: RECORD_CAPTURE");
+        ctx_a.state = AUDIO_CMD_RECORD_CAPTURE;
+        goto pc_window_render;
+    pc_record_done:
+        call_carmack("from a: RECORD_DONE");
+        ctx_a.state = AUDIO_CMD_RECORD_DONE;
+        goto pc_window_render;
+    pc_record_map:
+        call_carmack("from a: RECORD_MAP");
+        ctx_a.state = AUDIO_CMD_RECORD_MAP;
+        war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
+        goto pc_window_render;
+    pc_set_threshold:
+        goto pc_window_render;
+    pc_window_render_done:
         ctx_wr.now = war_get_monotonic_time_us();
         if (ctx_wr.now - last_frame_time >= ctx_wr.frame_duration_us) {
             war_get_frame_duration_us(&ctx_wr);
@@ -698,14 +715,11 @@ void* war_window_render(void* args) {
                     // call_carmack(
                     //    "invalid object/op: id=%u, op=%u", object_id,
                     //    opcode);
-                    goto done;
+                    goto wayland_done;
                 }
                 size_t idx = obj_op_index(object_id, opcode);
-                if (obj_op[idx]) {
-                    goto* obj_op[idx];
-                } else {
-                    goto wayland_default;
-                }
+                if (obj_op[idx]) { goto* obj_op[idx]; }
+                goto wayland_default;
             wl_registry_global:
                 dump_bytes(
                     "global event", msg_buffer + msg_buffer_offset, size);
@@ -1039,16 +1053,16 @@ void* war_window_render(void* args) {
                     //---------------------------------------------------------
                     war_wayland_wl_surface_commit(fd, wl_surface_id);
                 }
-                goto done;
+                goto wayland_done;
             wl_registry_global_remove:
                 dump_bytes(
                     "global_rm event", msg_buffer + msg_buffer_offset, size);
-                goto done;
+                goto wayland_done;
             wl_callback_done:
                 //-------------------------------------------------------------
                 // RENDERING WITH VULKAN
                 //-------------------------------------------------------------
-                // dump_bytes("wl_callback::done event",
+                // dump_bytes("wl_callback::wayland_done event",
                 //           msg_buffer + msg_buffer_offset,
                 //           size);
 #if DMABUF
@@ -1955,12 +1969,12 @@ void* war_window_render(void* args) {
                 //                          0,
                 //                          physical_width,
                 //                          physical_height);
-                goto done;
+                goto wayland_done;
             wl_display_error:
                 dump_bytes("wl_display::error event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_display_delete_id:
                 // dump_bytes("wl_display::delete_id event",
                 //            msg_buffer + msg_buffer_offset,
@@ -1971,7 +1985,7 @@ void* war_window_render(void* args) {
                     war_wayland_wl_surface_frame(
                         fd, wl_surface_id, wl_callback_id);
                 }
-                goto done;
+                goto wayland_done;
 #if WL_SHM
             wl_shm_format:
                 dump_bytes("wl_shm_format event",
@@ -2040,13 +2054,13 @@ void* war_window_render(void* args) {
                                         0);
                     assert(pixel_buffer != MAP_FAILED);
                 }
-                goto done;
+                goto wayland_done;
 #endif
             wl_buffer_release:
                 dump_bytes("wl_buffer_release event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             xdg_wm_base_ping:
                 dump_bytes("xdg_wm_base_ping event",
                            msg_buffer + msg_buffer_offset,
@@ -2062,7 +2076,7 @@ void* war_window_render(void* args) {
                 dump_bytes("xdg_wm_base_pong request", pong, 12);
                 ssize_t pong_written = write(fd, pong, 12);
                 assert(pong_written == 12);
-                goto done;
+                goto wayland_done;
             xdg_surface_configure:
                 dump_bytes("xdg_surface_configure event",
                            msg_buffer + msg_buffer_offset,
@@ -2137,7 +2151,7 @@ void* war_window_render(void* args) {
                     new_id++;
                 }
                 war_wayland_wl_surface_commit(fd, wl_surface_id);
-                goto done;
+                goto wayland_done;
             xdg_toplevel_configure:
                 dump_bytes("xdg_toplevel_configure event",
                            msg_buffer + msg_buffer_offset,
@@ -2171,7 +2185,7 @@ void* war_window_render(void* args) {
                     ctx_wr.text_feather = windowed_text_feather;
                     ctx_wr.text_thickness = windowed_text_thickness;
                 }
-                goto done;
+                goto wayland_done;
             xdg_toplevel_close:
                 dump_bytes("xdg_toplevel_close event",
                            msg_buffer + msg_buffer_offset,
@@ -2226,40 +2240,40 @@ void* war_window_render(void* args) {
                 assert(wl_surface_destroy_written == 8);
 
                 war_pc_to_a(pc, AUDIO_CMD_END_WAR, 0, NULL);
-                goto done;
+                goto wayland_done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             xdg_toplevel_wm_capabilities:
                 dump_bytes("xdg_toplevel_wm_capabilities event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
 #if DMABUF
             zwp_linux_dmabuf_v1_format:
                 dump_bytes("zwp_linux_dmabuf_v1_format event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_v1_modifier:
                 dump_bytes("zwp_linux_dmabuf_v1_modifier event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_linux_buffer_params_v1_created:
                 dump_bytes(
                     "zwp_linux_buffer_params_v1_created", // COMMENT
                                                           // REFACTOR: to ::
                     msg_buffer + msg_buffer_offset,
                     size);
-                goto done;
+                goto wayland_done;
             zwp_linux_buffer_params_v1_failed:
                 dump_bytes("zwp_linux_buffer_params_v1_failed event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_done:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
                            msg_buffer + msg_buffer_offset,
@@ -2355,59 +2369,59 @@ void* war_window_render(void* args) {
                 dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
                            destroy,
                            8);
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_format_table:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event",
                            msg_buffer + msg_buffer_offset,
                            size); // REFACTOR: event
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_main_device:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_main_device event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_done:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_done event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_target_device:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_target_"
                            "device event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_formats:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_formats event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_flags:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_flags event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
 #endif
             wp_linux_drm_syncobj_manager_v1_jump:
                 dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_compositor_jump:
                 dump_bytes("wl_compositor_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_surface_enter:
                 dump_bytes("wl_surface_enter event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_surface_leave:
                 dump_bytes("wl_surface_leave event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_surface_preferred_buffer_scale:
                 dump_bytes("wl_surface_preferred_buffer_scale event",
                            msg_buffer + msg_buffer_offset,
@@ -2437,7 +2451,7 @@ void* war_window_render(void* args) {
                 //                          0,
                 //                          physical_width,
                 //                          physical_height);
-                goto done;
+                goto wayland_done;
             wl_surface_preferred_buffer_transform:
                 dump_bytes("wl_surface_preferred_buffer_transform event",
                            msg_buffer + msg_buffer_offset,
@@ -2467,22 +2481,22 @@ void* war_window_render(void* args) {
                 //                          0,
                 //                          physical_width,
                 //                          physical_height);
-                goto done;
+                goto wayland_done;
             zwp_idle_inhibit_manager_v1_jump:
                 dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwlr_layer_shell_v1_jump:
                 dump_bytes("zwlr_layer_shell_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zxdg_decoration_manager_v1_jump:
                 dump_bytes("zxdg_decoration_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zxdg_toplevel_decoration_v1_configure: {
                 dump_bytes("zxdg_toplevel_decoration_v1_configure event",
                            msg_buffer + msg_buffer_offset,
@@ -2500,73 +2514,73 @@ void* war_window_render(void* args) {
                            12);
                 ssize_t set_mode_written = write(fd, set_mode, 12);
                 assert(set_mode_written == 12);
-                goto done;
+                goto wayland_done;
             }
             zwp_relative_pointer_manager_v1_jump:
                 dump_bytes("zwp_relative_pointer_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_pointer_constraints_v1_jump:
                 dump_bytes("zwp_pointer_constraints_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wp_presentation_clock_id:
                 dump_bytes("wp_presentation_clock_id event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwlr_output_manager_v1_head:
                 dump_bytes("zwlr_output_manager_v1_head event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwlr_output_manager_v1_done:
                 dump_bytes("zwlr_output_manager_v1_done event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             ext_foreign_toplevel_list_v1_toplevel:
                 dump_bytes("ext_foreign_toplevel_list_v1_toplevel event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwlr_data_control_manager_v1_jump:
                 dump_bytes("zwlr_data_control_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wp_viewporter_jump:
                 dump_bytes("wp_viewporter_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wp_content_type_manager_v1_jump:
                 dump_bytes("wp_content_type_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wp_fractional_scale_manager_v1_jump:
                 dump_bytes("wp_fractional_scale_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             xdg_activation_v1_jump:
                 dump_bytes("xdg_activation_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_virtual_keyboard_manager_v1_jump:
                 dump_bytes("zwp_virtual_keyboard_manager_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             zwp_pointer_gestures_v1_jump:
                 dump_bytes("zwp_pointer_gestures_v1_jump event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_seat_capabilities:
                 dump_bytes("wl_seat_capabilities event",
                            msg_buffer + msg_buffer_offset,
@@ -2662,13 +2676,13 @@ void* war_window_render(void* args) {
                         &&wl_touch_orientation;
                     new_id++;
                 }
-                goto done;
+                goto wayland_done;
             wl_seat_name:
                 dump_bytes(
                     "wl_seat_name event", msg_buffer + msg_buffer_offset, size);
                 call_carmack("seat: %s",
                              (const char*)msg_buffer + msg_buffer_offset + 12);
-                goto done;
+                goto wayland_done;
             wl_keyboard_keymap:
                 dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
                 assert(size == 16);
@@ -3554,22 +3568,22 @@ void* war_window_render(void* args) {
                 close(keymap_fd);
                 xkb_keymap_unref(xkb_keymap);
                 xkb_keymap = NULL;
-                goto done;
+                goto wayland_done;
             wl_keyboard_enter:
                 dump_bytes("wl_keyboard_enter event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_keyboard_leave:
                 dump_bytes("wl_keyboard_leave event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_keyboard_key:
                 dump_bytes("wl_keyboard_key event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                if (ctx_wr.end_window_render) { goto done; }
+                if (ctx_wr.end_window_render) { goto wayland_done; }
                 uint32_t wl_key_state = war_read_le32(
                     msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
                 uint32_t keycode =
@@ -6160,7 +6174,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 0 + 12 * (ctx_wr.octave + 1);
+                float note = 0 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6178,7 +6192,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 1 + 12 * (ctx_wr.octave + 1);
+                float note = 1 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6196,7 +6210,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 2 + 12 * (ctx_wr.octave + 1);
+                float note = 2 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6214,7 +6228,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 3 + 12 * (ctx_wr.octave + 1);
+                float note = 3 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6232,7 +6246,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 4 + 12 * (ctx_wr.octave + 1);
+                float note = 4 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6250,7 +6264,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 5 + 12 * (ctx_wr.octave + 1);
+                float note = 5 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6268,7 +6282,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 6 + 12 * (ctx_wr.octave + 1);
+                float note = 6 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6286,7 +6300,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 7 + 12 * (ctx_wr.octave + 1);
+                float note = 7 + 12 * (ctx_wr.record_octave + 1);
                 war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
@@ -6304,7 +6318,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 8 + 12 * (ctx_wr.octave + 1);
+                float note = 8 + 12 * (ctx_wr.record_octave + 1);
                 if (note > 127) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
@@ -6330,7 +6344,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 9 + 12 * (ctx_wr.octave + 1);
+                float note = 9 + 12 * (ctx_wr.record_octave + 1);
                 if (note > 127) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
@@ -6356,7 +6370,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 10 + 12 * (ctx_wr.octave + 1);
+                float note = 10 + 12 * (ctx_wr.record_octave + 1);
                 if (note > 127) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
@@ -6382,7 +6396,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 11 + 12 * (ctx_wr.octave + 1);
+                float note = 11 + 12 * (ctx_wr.record_octave + 1);
                 if (note > 127) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
@@ -6408,7 +6422,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = -1;
+                ctx_wr.record_octave = -1;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6423,7 +6437,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 0;
+                ctx_wr.record_octave = 0;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6438,7 +6452,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 1;
+                ctx_wr.record_octave = 1;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6453,7 +6467,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 2;
+                ctx_wr.record_octave = 2;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6468,7 +6482,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 3;
+                ctx_wr.record_octave = 3;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6483,7 +6497,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 4;
+                ctx_wr.record_octave = 4;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6498,7 +6512,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 5;
+                ctx_wr.record_octave = 5;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6513,7 +6527,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 6;
+                ctx_wr.record_octave = 6;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6528,7 +6542,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 7;
+                ctx_wr.record_octave = 7;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6543,7 +6557,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 8;
+                ctx_wr.record_octave = 8;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6558,7 +6572,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.octave = 9;
+                ctx_wr.record_octave = 9;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7103,7 +7117,7 @@ void* war_window_render(void* args) {
                     goto_cmd_timeout_done = false;
                     goto cmd_timeout_done;
                 }
-                goto done;
+                goto wayland_done;
             }
             wl_keyboard_modifiers:
                 dump_bytes("wl_keyboard_modifiers event",
@@ -7119,22 +7133,22 @@ void* war_window_render(void* args) {
                                   4 + 4),
                     0,
                     0);
-                goto done;
+                goto wayland_done;
             wl_keyboard_repeat_info:
                 dump_bytes("wl_keyboard_repeat_info event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_enter:
                 dump_bytes("wl_pointer_enter event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_leave:
                 dump_bytes("wl_pointer_leave event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_motion:
                 dump_bytes("wl_pointer_motion event",
                            msg_buffer + msg_buffer_offset,
@@ -7145,7 +7159,7 @@ void* war_window_render(void* args) {
                 ctx_wr.cursor_y = (float)(int32_t)war_read_le32(
                                       msg_buffer + msg_buffer_offset + 16) /
                                   256.0f * scale_factor;
-                goto done;
+                goto wayland_done;
             wl_pointer_button:
                 dump_bytes("wl_pointer_button event",
                            msg_buffer + msg_buffer_offset,
@@ -7195,12 +7209,12 @@ void* war_window_render(void* args) {
                         }
                     }
                 }
-                goto done;
+                goto wayland_done;
             wl_pointer_axis:
                 dump_bytes("wl_pointer_axis event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_frame:
                 dump_bytes("wl_pointer_frame event",
                            msg_buffer + msg_buffer_offset,
@@ -7214,101 +7228,101 @@ void* war_window_render(void* args) {
                 //                          0,
                 //                          physical_width,
                 //                          physical_height);
-                goto done;
+                goto wayland_done;
             wl_pointer_axis_source:
                 dump_bytes("wl_pointer_axis_source event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_axis_stop:
                 dump_bytes("wl_pointer_axis_stop event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_axis_discrete:
                 dump_bytes("wl_pointer_axis_discrete event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_axis_value120:
                 dump_bytes("wl_pointer_axis_value120 event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_pointer_axis_relative_direction:
                 dump_bytes("wl_pointer_axis_relative_direction event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_touch_down:
                 dump_bytes("wl_touch_down event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_touch_up:
                 dump_bytes(
                     "wl_touch_up event", msg_buffer + msg_buffer_offset, size);
-                goto done;
+                goto wayland_done;
             wl_touch_motion:
                 dump_bytes("wl_touch_motion event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_touch_frame:
                 dump_bytes("wl_touch_frame event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_touch_cancel:
                 dump_bytes("wl_touch_cancel event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_touch_shape:
                 dump_bytes("wl_touch_shape event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_touch_orientation:
                 dump_bytes("wl_touch_orientation event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_output_geometry:
                 dump_bytes("wl_output_geometry event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_output_mode:
                 dump_bytes("wl_output_mode event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_output_done:
                 dump_bytes("wl_output_done event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_output_scale:
                 dump_bytes("wl_output_scale event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_output_name:
                 dump_bytes("wl_output_name event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wl_output_description:
                 dump_bytes("wl_output_description event",
                            msg_buffer + msg_buffer_offset,
                            size);
-                goto done;
+                goto wayland_done;
             wayland_default:
                 dump_bytes(
                     "default event", msg_buffer + msg_buffer_offset, size);
-                goto done;
-            done:
+                goto wayland_done;
+            wayland_done:
                 msg_buffer_offset += size;
                 continue;
             }
@@ -7412,121 +7426,166 @@ void* war_audio(void* args) {
         ctx_a.capture_handle, capture_handle_params, &capture_buffer_size);
     snd_pcm_hw_params(ctx_a.capture_handle, capture_handle_params);
     snd_pcm_prepare(ctx_a.capture_handle);
+    void* pc_audio[AUDIO_CMD_COUNT];
+    pc_audio[AUDIO_CMD_STOP] = &&pc_stop;
+    pc_audio[AUDIO_CMD_PLAY] = &&pc_play;
+    pc_audio[AUDIO_CMD_PAUSE] = &&pc_pause;
+    pc_audio[AUDIO_CMD_GET_FRAMES] = &&pc_get_frames;
+    pc_audio[AUDIO_CMD_ADD_NOTE] = &&pc_add_note;
+    pc_audio[AUDIO_CMD_END_WAR] = &&pc_end_war;
+    pc_audio[AUDIO_CMD_SEEK] = &&pc_seek;
+    pc_audio[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
+    pc_audio[AUDIO_CMD_RECORD_CAPTURE] = &&pc_record_capture;
+    pc_audio[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
+    pc_audio[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
+    pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
+    void* cmd_audio[AUDIO_CMD_COUNT];
+    cmd_audio[AUDIO_CMD_STOP] = &&cmd_stop;
+    cmd_audio[AUDIO_CMD_PLAY] = &&cmd_play;
+    cmd_audio[AUDIO_CMD_PAUSE] = &&cmd_pause;
+    cmd_audio[AUDIO_CMD_GET_FRAMES] = &&cmd_get_frames;
+    cmd_audio[AUDIO_CMD_ADD_NOTE] = &&cmd_add_note;
+    cmd_audio[AUDIO_CMD_END_WAR] = &&cmd_end_war;
+    cmd_audio[AUDIO_CMD_SEEK] = &&cmd_seek;
+    cmd_audio[AUDIO_CMD_RECORD_WAIT] = &&cmd_record_wait;
+    cmd_audio[AUDIO_CMD_RECORD_CAPTURE] = &&cmd_record_capture;
+    cmd_audio[AUDIO_CMD_RECORD_DONE] = &&cmd_record_done;
+    cmd_audio[AUDIO_CMD_RECORD_MAP] = &&cmd_record_map;
+    cmd_audio[AUDIO_CMD_SET_THRESHOLD] = &&cmd_set_threshold;
     ctx_a.capture_buffer = malloc(AUDIO_DEFAULT_PERIOD_SIZE *
                                   AUDIO_DEFAULT_CHANNEL_COUNT * sizeof(float));
     ctx_a.playback_buffer = malloc(AUDIO_DEFAULT_PERIOD_SIZE *
                                    AUDIO_DEFAULT_CHANNEL_COUNT * sizeof(float));
     ctx_a.phase = 0.0f;
-    while (ctx_a.state != AUDIO_CMD_END_WAR) {
-        //---------------------------------------------------------------------
-        // PC AUDIO
-        //---------------------------------------------------------------------
-        uint32_t header;
-        uint32_t size;
-        uint8_t payload[PC_BUFFER_SIZE];
-        while (war_pc_from_wr(pc, &header, &size, payload)) {
-            switch (header) {
-            case AUDIO_CMD_RECORD_WAIT:
-                ctx_a.state = AUDIO_CMD_RECORD_WAIT;
-                war_pc_to_wr(pc, AUDIO_CMD_RECORD_WAIT, 0, NULL);
-                break;
-            case AUDIO_CMD_RECORD_CAPTURE:
-                break;
-            case AUDIO_CMD_RECORD_DONE:
-                ctx_a.state = AUDIO_CMD_RECORD_DONE;
-                war_pc_to_wr(pc, AUDIO_CMD_RECORD_DONE, 0, NULL);
-                break;
-            case AUDIO_CMD_RECORD_MAP:
-                ctx_a.state = AUDIO_CMD_RECORD_MAP;
-                war_pc_to_wr(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
-                break;
-            case AUDIO_CMD_PLAY:
-                ctx_a.state = AUDIO_CMD_PLAY;
-                war_pc_to_wr(pc, AUDIO_CMD_PLAY, 0, NULL);
-                break;
-            case AUDIO_CMD_PAUSE:
-                ctx_a.state = AUDIO_CMD_PAUSE;
-                war_pc_to_wr(pc, AUDIO_CMD_PAUSE, 0, NULL);
-                break;
-            case AUDIO_CMD_STOP:
-                ctx_a.state = AUDIO_CMD_STOP;
-                war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-                break;
-            case AUDIO_CMD_SEEK: {
-                uint64_t seek_logical_frames_played;
-                memcpy(&seek_logical_frames_played, payload, size);
-                ctx_a.logical_frames_played = seek_logical_frames_played;
-                ctx_a.total_frames_written = seek_logical_frames_played;
-                war_pc_to_wr(pc,
-                             AUDIO_CMD_SEEK,
-                             sizeof(ctx_a.logical_frames_played),
-                             &ctx_a.logical_frames_played);
-                break;
-            }
-            case AUDIO_CMD_GET_FRAMES:
-                war_pc_to_wr(pc,
-                             AUDIO_CMD_GET_FRAMES,
-                             sizeof(ctx_a.logical_frames_played),
-                             &ctx_a.logical_frames_played);
-                break;
-            case AUDIO_CMD_END_WAR:
-                ctx_a.state = AUDIO_CMD_END_WAR;
-                war_pc_to_wr(pc, AUDIO_CMD_END_WAR, 0, NULL);
-                break;
-            }
+//-----------------------------------------------------------------------------
+// PC AUDIO
+//-----------------------------------------------------------------------------
+pc_audio:
+    uint32_t header;
+    uint32_t size;
+    uint8_t payload[PC_BUFFER_SIZE];
+    if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
+    goto* cmd_audio[ctx_a.state];
+pc_stop:
+    ctx_a.state = AUDIO_CMD_STOP;
+    war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
+    goto pc_audio_done;
+pc_play:
+    ctx_a.state = AUDIO_CMD_PLAY;
+    war_pc_to_wr(pc, AUDIO_CMD_PLAY, 0, NULL);
+    goto pc_audio_done;
+pc_pause:
+    ctx_a.state = AUDIO_CMD_PAUSE;
+    war_pc_to_wr(pc, AUDIO_CMD_PAUSE, 0, NULL);
+    goto pc_audio_done;
+pc_get_frames:
+    war_pc_to_wr(pc,
+                 AUDIO_CMD_GET_FRAMES,
+                 sizeof(ctx_a.logical_frames_played),
+                 &ctx_a.logical_frames_played);
+    goto pc_audio_done;
+pc_add_note:
+    goto pc_audio_done;
+pc_end_war:
+    ctx_a.state = AUDIO_CMD_END_WAR;
+    war_pc_to_wr(pc, AUDIO_CMD_END_WAR, 0, NULL);
+    goto pc_audio_done;
+pc_seek:
+    uint64_t seek_logical_frames_played;
+    memcpy(&seek_logical_frames_played, payload, size);
+    ctx_a.logical_frames_played = seek_logical_frames_played;
+    ctx_a.total_frames_written = seek_logical_frames_played;
+    war_pc_to_wr(pc,
+                 AUDIO_CMD_SEEK,
+                 sizeof(ctx_a.logical_frames_played),
+                 &ctx_a.logical_frames_played);
+    goto pc_audio_done;
+pc_record_wait:
+    ctx_a.state = AUDIO_CMD_RECORD_WAIT;
+    war_pc_to_wr(pc, AUDIO_CMD_RECORD_WAIT, 0, NULL);
+    goto pc_audio_done;
+pc_record_capture:
+    goto pc_audio_done;
+pc_record_done:
+    ctx_a.state = AUDIO_CMD_RECORD_DONE;
+    war_pc_to_wr(pc, AUDIO_CMD_RECORD_DONE, 0, NULL);
+    goto pc_audio_done;
+pc_record_map:
+    ctx_a.state = AUDIO_CMD_RECORD_MAP;
+    war_pc_to_wr(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
+    goto pc_audio_done;
+pc_set_threshold:
+    goto pc_audio_done;
+pc_audio_done:
+    goto pc_audio;
+//-------------------------------------------------------------------------
+// AUDIO COMMANDS
+//-------------------------------------------------------------------------
+cmd_stop:
+    goto cmd_done;
+cmd_play:
+    for (size_t i = 0; i < ctx_a.period_size; i++) {
+        float phase_increment =
+            war_sine_phase_increment(&ctx_a, war_midi_to_frequency(60));
+        ctx_a.phase += phase_increment;
+        if (ctx_a.phase >= 2.0f * M_PI) { ctx_a.phase -= 2.0f * M_PI; }
+        float sample = 0.25f * sinf(ctx_a.phase);
+        for (size_t ch = 0; ch < ctx_a.channel_count; ch++) {
+            ctx_a.playback_buffer[i * ctx_a.channel_count + ch] = sample;
         }
-        switch (ctx_a.state) {
-        case AUDIO_CMD_RECORD_WAIT:
-            break;
-        case AUDIO_CMD_PLAY:
-            for (size_t i = 0; i < ctx_a.period_size; i++) {
-                float phase_increment =
-                    war_sine_phase_increment(&ctx_a, war_midi_to_frequency(60));
-                ctx_a.phase += phase_increment;
-                if (ctx_a.phase >= 2.0f * M_PI) { ctx_a.phase -= 2.0f * M_PI; }
-                float sample = 0.25f * sinf(ctx_a.phase) +
-                               0.125f * sinf(2.0f * ctx_a.phase) +
-                               0.0625f * sinf(3.0f * ctx_a.phase) +
-                               0.03125f * sinf(4.0f * ctx_a.phase) +
-                               0.015625f * sinf(5.0f * ctx_a.phase);
-                for (size_t ch = 0; ch < ctx_a.channel_count; ch++) {
-                    ctx_a.playback_buffer[i * ctx_a.channel_count + ch] =
-                        sample;
-                }
-            }
-            // Non-blocking write
-            snd_pcm_sframes_t frames_written;
-            while ((frames_written = snd_pcm_writei(ctx_a.playback_handle,
-                                                    ctx_a.playback_buffer,
-                                                    ctx_a.period_size)) < 0) {
-                if (frames_written == -EAGAIN) {
-                    // ALSA cannot accept data now; just continue loop
-                    continue;
-                }
-                frames_written =
-                    snd_pcm_recover(ctx_a.playback_handle, frames_written, 0);
-                if (frames_written < 0) {
-                    perror("snd_pcm_writei");
-                    break;
-                }
-            }
-            if (frames_written > 0) {
-                ctx_a.total_frames_written += (uint64_t)frames_written;
-            }
-            // Update logical frames played
-            snd_pcm_sframes_t delay_frames = 0;
-            if (snd_pcm_delay(ctx_a.playback_handle, &delay_frames) < 0) {
-                delay_frames = 0;
-            }
-            if (delay_frames < 0) delay_frames = 0;
-
-            ctx_a.logical_frames_played =
-                ctx_a.total_frames_written - (uint64_t)delay_frames;
-            break;
-        }
-        usleep(500); // tiny sleep to yield CPU
     }
+    // Non-blocking write
+    snd_pcm_sframes_t frames_written;
+    while ((frames_written = snd_pcm_writei(ctx_a.playback_handle,
+                                            ctx_a.playback_buffer,
+                                            ctx_a.period_size)) < 0) {
+        if (frames_written == -EAGAIN) {
+            // ALSA cannot accept data now; just continue loop
+            continue;
+        }
+        frames_written =
+            snd_pcm_recover(ctx_a.playback_handle, frames_written, 0);
+        if (frames_written < 0) {
+            perror("snd_pcm_writei");
+            break;
+        }
+    }
+    if (frames_written > 0) {
+        ctx_a.total_frames_written += (uint64_t)frames_written;
+    }
+    // Update logical frames played
+    snd_pcm_sframes_t delay_frames = 0;
+    if (snd_pcm_delay(ctx_a.playback_handle, &delay_frames) < 0) {
+        delay_frames = 0;
+    }
+    if (delay_frames < 0) delay_frames = 0;
+
+    ctx_a.logical_frames_played =
+        ctx_a.total_frames_written - (uint64_t)delay_frames;
+    goto cmd_done;
+cmd_pause:
+    goto cmd_done;
+cmd_get_frames:
+    goto cmd_done;
+cmd_add_note:
+    goto cmd_done;
+cmd_seek:
+    goto cmd_done;
+cmd_record_wait:
+    goto cmd_done;
+cmd_record_capture:
+    goto cmd_done;
+cmd_record_done:
+    goto cmd_done;
+cmd_record_map:
+    goto cmd_done;
+cmd_set_threshold:
+    goto cmd_done;
+cmd_end_war:
     snd_pcm_close(ctx_a.playback_handle);
     end("war_audio");
     return 0;
+cmd_done:
+    usleep(500);
+    goto pc_audio;
 }

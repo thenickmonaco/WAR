@@ -130,7 +130,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 254,
+    SEQUENCE_COUNT = 135,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -270,6 +270,7 @@ enum war_audio {
     AUDIO_DEFAULT_BPM = 100,
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
     // cmds
+    AUDIO_CMD_COUNT = 13,
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
@@ -283,14 +284,6 @@ enum war_audio {
     AUDIO_CMD_RECORD_MAP = 11,
     AUDIO_CMD_SET_THRESHOLD = 12,
     // cmd sizes (not including header)
-    AUDIO_CMD_STOP_SIZE = 0,
-    AUDIO_CMD_PLAY_SIZE = 0,
-    AUDIO_CMD_PAUSE_SIZE = 0,
-    AUDIO_CMD_GET_FRAMES_SIZE = 8,
-    AUDIO_CMD_ADD_NOTE_SIZE = 0,
-    AUDIO_CMD_END_WAR_SIZE = 0,
-    AUDIO_CMD_TRAVERSE_SIZE = 8,
-    AUDIO_CMD_HEADER_SIZE = 1,
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,
     AUDIO_VOICE_COUNT = 128,
@@ -431,7 +424,7 @@ typedef struct war_window_render_context {
     uint32_t color_note_outline_default;
     uint32_t color_cursor;
     uint32_t color_cursor_transparent;
-    float octave;
+    float record_octave;
 } war_window_render_context;
 
 typedef struct war_key_trie_pool {

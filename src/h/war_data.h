@@ -56,6 +56,9 @@ enum war_keysyms {
     KEYSYM_RETURN = 261,
     KEYSYM_SPACE = 262,
     KEYSYM_TAB = 263,
+    KEYSYM_MINUS = 264,
+    KEYSYM_LEFTBRACKET = 265,
+    KEYSYM_RIGHTBRACKET = 266,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -114,19 +117,20 @@ enum war_modes {
     MODE_NORMAL = 0,
     MODE_VIEWS = 1,
     MODE_VISUAL_LINE = 2,
-    MODE_VISUAL_BLOCK = 3,
-    MODE_INSERT = 4,
-    MODE_COMMAND = 5,
-    MODE_M = 6,
-    MODE_O = 7,
-    MODE_VISUAL = 8,
+    MODE_RECORD = 3,
+    MODE_VISUAL_BLOCK = 4,
+    MODE_INSERT = 5,
+    MODE_COMMAND = 6,
+    MODE_MIDI = 7,
+    MODE_O = 8,
+    MODE_VISUAL = 9,
 };
 
 enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 124,
+    SEQUENCE_COUNT = 254,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -172,23 +176,38 @@ typedef struct war_rgba_t {
     float a;
 } war_rgba_t;
 
-typedef struct war_note {
-    uint32_t id;
-    uint32_t col;
-    uint32_t row;
-    uint32_t sub_col;
-    uint32_t sub_row;
-    uint32_t sub_cells_col;
-    uint32_t cursor_width_whole_number;
-    uint32_t cursor_width_sub_col;
-    uint32_t cursor_width_sub_cells;
-    float float_offset;
-    uint32_t color;
-    float strength;
-    uint32_t voice;
-    uint32_t hidden;
-    uint32_t mute;
-} war_note;
+typedef struct war_notes {
+    uint64_t* start_frames;
+    uint64_t* duration_frames;
+    float* phase_increment;
+    float* velocity; // can be constant if ASR-10 style
+    uint32_t* sample_id;
+    uint32_t* voice_id;
+    // Envelope
+    float* attack;
+    float* decay;
+    float* sustain;
+    float* release;
+    // Optional for multisample instruments
+    uint8_t* key_low;
+    uint8_t* key_high;
+    uint32_t count;
+} war_notes;
+
+typedef struct war_samples {
+    uint32_t* note_index;
+    float* sample_position;
+    float* gain;
+    bool* active;
+    uint32_t* sample_id;
+    uint32_t* loop_start;
+    uint32_t* loop_end;
+    bool* loop_enabled;
+    uint8_t* envelope_stage; // 0=off,1=attack,2=decay,3=sustain,4=release
+    float* envelope_value;   // current amplitude
+    uint32_t count;
+    uint32_t max_voices;
+} war_samples;
 
 typedef struct war_note_quads {
     uint64_t* timestamp;
@@ -258,6 +277,11 @@ enum war_audio {
     AUDIO_CMD_ADD_NOTE = 5,
     AUDIO_CMD_END_WAR = 6,
     AUDIO_CMD_SEEK = 7,
+    AUDIO_CMD_RECORD_WAIT = 8,
+    AUDIO_CMD_RECORD_CAPTURE = 9,
+    AUDIO_CMD_RECORD_DONE = 10,
+    AUDIO_CMD_RECORD_MAP = 11,
+    AUDIO_CMD_SET_THRESHOLD = 12,
     // cmd sizes (not including header)
     AUDIO_CMD_STOP_SIZE = 0,
     AUDIO_CMD_PLAY_SIZE = 0,
@@ -282,10 +306,13 @@ typedef struct war_audio_context {
     snd_timestamp_t timestamp;
     uint64_t logical_frames_played;
     uint64_t total_frames_written;
+    snd_pcm_t* playback_handle;
+    snd_pcm_t* capture_handle;
+    float record_threshold;
+    float* playback_buffer;
+    float* capture_buffer;
+    float phase;
 } war_audio_context;
-
-typedef struct war_voice {
-} war_voice;
 
 typedef struct war_window_render_context {
     uint64_t now;
@@ -381,6 +408,7 @@ typedef struct war_window_render_context {
     float vertical_line_thickness;
     float outline_thickness;
     float alpha_scale;
+    float alpha_scale_cursor;
     float playback_bar_thickness;
     float text_feather;
     float text_thickness;
@@ -401,6 +429,9 @@ typedef struct war_window_render_context {
     bool cursor_blinking;
     uint32_t color_note_default;
     uint32_t color_note_outline_default;
+    uint32_t color_cursor;
+    uint32_t color_cursor_transparent;
+    float octave;
 } war_window_render_context;
 
 typedef struct war_key_trie_pool {

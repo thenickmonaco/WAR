@@ -86,6 +86,15 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
     case MODE_COMMAND:
         memcpy(ctx_wr->text_middle_status_bar, ":", sizeof(":"));
         break;
+    case MODE_MIDI:
+        memcpy(
+            ctx_wr->text_middle_status_bar, "-- MIDI --", sizeof("-- MIDI --"));
+        break;
+    case MODE_RECORD:
+        memcpy(ctx_wr->text_middle_status_bar,
+               "-- RECORD --",
+               sizeof("-- RECORD --"));
+        break;
     default:
         break;
     }
@@ -495,6 +504,12 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return KEYSYM_SPACE;
     case XKB_KEY_Tab:
         return KEYSYM_TAB;
+    case XKB_KEY_minus:
+        return KEYSYM_MINUS;
+    case XKB_KEY_bracketleft:
+        return KEYSYM_LEFTBRACKET;
+    case XKB_KEY_bracketright:
+        return KEYSYM_RIGHTBRACKET;
     case 65056:
         return KEYSYM_TAB;
     case XKB_KEY_A:
@@ -582,7 +597,7 @@ war_get_frame_duration_us(war_window_render_context* ctx_wr) {
         (uint64_t)round((1.0 / (double)ctx_wr->FPS) * microsecond_conversion);
 }
 
-static inline char war_keysym_to_key(xkb_keysym_t ks, uint8_t mod) {
+static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
     char lowercase = ks;
     int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
     // Letters a-z or A-Z -> always lowercase
@@ -1563,6 +1578,15 @@ static inline void war_note_quads_in_col(war_note_quads* note_quads,
             (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x);
         if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
     }
+}
+
+static inline float war_midi_to_frequency(float midi_note) {
+    return 440.0f * pow(2.0f, (midi_note - 69) / 12.0f);
+}
+
+static inline float war_sine_phase_increment(war_audio_context* ctx_a,
+                                             float frequency) {
+    return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
 
 #endif // WAR_MACROS_H

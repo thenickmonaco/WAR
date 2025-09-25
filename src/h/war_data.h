@@ -262,7 +262,7 @@ typedef struct war_views {
 
 enum war_audio {
     // defaults
-    AUDIO_DEFAULT_SAMPLE_RATE = 48000,
+    AUDIO_DEFAULT_SAMPLE_RATE = 32000,
     AUDIO_DEFAULT_PERIOD_SIZE = 512,
     AUDIO_DEFAULT_SUB_PERIOD_FACTOR = 20,
     AUDIO_DEFAULT_CHANNEL_COUNT = 2,

@@ -3342,7 +3342,9 @@ void* war_window_render(void* args) {
                             {.keysym = KEYSYM_MINUS, .mod = 0},
                             {0},
                         },
-                    };
+                        {
+                            {0},
+                        }};
                 void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, views, visual_line, visual_block, insert,
                     // command, mode_m, mode_o, visual
@@ -3527,11 +3529,16 @@ void* war_window_render(void* args) {
                         &&cmd_record_rightbracket,
                     },
                     {NULL, NULL, NULL, &&cmd_record_minus},
+                    {&&cmd_void},
                 };
                 // default to normal mode command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
                     for (size_t m = 0; m < MODE_COUNT; m++) {
                         if (key_labels[s][m] == NULL) {
+                            if (key_labels[s][MODE_NORMAL] == NULL) {
+                                key_labels[s][m] = &&cmd_void;
+                                continue;
+                            }
                             key_labels[s][m] = key_labels[s][MODE_NORMAL];
                         }
                     }
@@ -7107,6 +7114,8 @@ void* war_window_render(void* args) {
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            cmd_void:
                 goto cmd_done;
             cmd_done: {
                 ctx_wr.cursor_blink_previous_us = ctx_wr.now;

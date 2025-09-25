@@ -34,9 +34,16 @@
 #include <pipewire-0.3/pipewire/stream.h>
 #include <pthread.h>
 #include <sched.h>
+#include <spa-0.2/spa/param/audio/format-utils.h>
 #include <spa-0.2/spa/param/audio/format.h>
+#include <spa-0.2/spa/param/audio/raw.h>
+#include <spa-0.2/spa/param/latency-utils.h>
 #include <spa-0.2/spa/pod/builder.h>
 #include <spa-0.2/spa/pod/pod.h>
+#include <spa-0.2/spa/utils/hook.h>
+#include <spa-0.2/spa/utils/list.h>
+#include <spa-0.2/spa/utils/result.h>
+#include <spa-0.2/spa/utils/string.h>
 #include <stdint.h>
 #include <time.h>
 #include <unistd.h>
@@ -519,7 +526,7 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_END_WAR] = &&pc_end_war;
     pc_window_render[AUDIO_CMD_SEEK] = &&pc_seek;
     pc_window_render[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
-    pc_window_render[AUDIO_CMD_RECORD_CAPTURE] = &&pc_record_capture;
+    pc_window_render[AUDIO_CMD_RECORD] = &&pc_record_capture;
     pc_window_render[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_window_render[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
     pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
@@ -535,6 +542,7 @@ void* war_window_render(void* args) {
     pc_stop:
         call_carmack("from a: STOP");
         ctx_a.state = AUDIO_CMD_STOP;
+        ctx_a.play_frames = 0;
         goto pc_window_render;
     pc_play:
         call_carmack("from a: PLAY");
@@ -572,7 +580,7 @@ void* war_window_render(void* args) {
         goto pc_window_render;
     pc_record_capture:
         call_carmack("from a: RECORD_CAPTURE");
-        ctx_a.state = AUDIO_CMD_RECORD_CAPTURE;
+        ctx_a.state = AUDIO_CMD_RECORD;
         goto pc_window_render;
     pc_record_done:
         call_carmack("from a: RECORD_DONE");
@@ -6155,7 +6163,7 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_normal_Q");
                 ctx_wr.mode = MODE_RECORD;
                 if (ctx_a.state != AUDIO_CMD_RECORD_WAIT &&
-                    ctx_a.state != AUDIO_CMD_RECORD_CAPTURE) {
+                    ctx_a.state != AUDIO_CMD_RECORD) {
                     war_pc_to_a(pc, AUDIO_CMD_RECORD_WAIT, 0, NULL);
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
@@ -7360,6 +7368,90 @@ void* war_window_render(void* args) {
     return 0;
 }
 
+static void war_play(void* userdata) {
+    war_audio_context* ctx = userdata;
+
+    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx->play_stream);
+    if (!b) return;
+
+    struct spa_buffer* buf = b->buffer;
+    if (!buf || !buf->datas[0].data) {
+        static int16_t silent[AUDIO_DEFAULT_PERIOD_SIZE *
+                              AUDIO_DEFAULT_CHANNEL_COUNT] = {0};
+        if (buf && buf->datas[0].maxsize >= sizeof(silent)) {
+            memcpy(buf->datas[0].data, silent, sizeof(silent));
+            if (buf->datas[0].chunk) {
+                buf->datas[0].chunk->offset = 0;
+                buf->datas[0].chunk->stride =
+                    sizeof(int16_t) * ctx->channel_count;
+                buf->datas[0].chunk->size = sizeof(silent);
+            }
+        }
+        pw_stream_queue_buffer(ctx->play_stream, b);
+        return;
+    }
+
+    // Fill actual audio
+    size_t stride = sizeof(int16_t) * ctx->channel_count;
+    uint32_t n_frames = buf->datas[0].maxsize / stride;
+    if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
+
+    int16_t* dst = (int16_t*)buf->datas[0].data;
+    for (uint32_t f = 0; f < n_frames; ++f) {
+        int16_t sample = (ctx->play) ? (int16_t)(sin(ctx->phase) * 3000) : 0;
+        for (uint32_t c = 0; c < ctx->channel_count; c++) *dst++ = sample;
+
+        ctx->phase += 2.0 * M_PI * 440 / ctx->sample_rate;
+        if (ctx->phase > 2.0 * M_PI) ctx->phase -= 2.0 * M_PI;
+    }
+
+    if (buf->datas[0].chunk) {
+        buf->datas[0].chunk->offset = 0;
+        buf->datas[0].chunk->stride = stride;
+        buf->datas[0].chunk->size = n_frames * stride;
+    }
+
+    pw_stream_queue_buffer(ctx->play_stream, b);
+
+    // Update play_frames for pc_audio
+    ctx->play_frames += (ctx->play) ? n_frames : 0;
+    ctx->play_frames_count += (ctx->play) ? n_frames : 0;
+}
+
+static void war_record(void* userdata) {
+    war_audio_context* ctx = userdata;
+    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx->record_stream);
+    if (!b) return;
+
+    struct spa_buffer* buf = b->buffer;
+    if (!buf || !buf->datas[0].data) {
+        pw_stream_queue_buffer(ctx->record_stream, b);
+        return;
+    }
+
+    // Example: just copy capture directly to playback (monitoring)
+    if (ctx->play_stream) {
+        struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx->play_stream);
+        if (out_b && out_b->buffer && out_b->buffer->datas[0].data) {
+            size_t stride = sizeof(int16_t) * ctx->channel_count;
+            uint32_t n_frames =
+                SPA_MIN(buf->datas[0].chunk->size / stride,
+                        out_b->buffer->datas[0].maxsize / stride);
+            memcpy(out_b->buffer->datas[0].data,
+                   buf->datas[0].data,
+                   n_frames * stride);
+            if (out_b->buffer->datas[0].chunk) {
+                out_b->buffer->datas[0].chunk->offset = 0;
+                out_b->buffer->datas[0].chunk->stride = stride;
+                out_b->buffer->datas[0].chunk->size = n_frames * stride;
+            }
+            pw_stream_queue_buffer(ctx->play_stream, out_b);
+        }
+    }
+
+    pw_stream_queue_buffer(ctx->record_stream, b);
+}
+
 //-----------------------------------------------------------------------------
 // THREAD AUDIO
 //-----------------------------------------------------------------------------
@@ -7381,8 +7473,8 @@ void* war_audio(void* args) {
         .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
         .play_frames = 0,
         .play_frames_count = 0,
-        .capture_frames = 0,
-        .capture_frames_count = 0,
+        .record_frames = 0,
+        .record_frames_count = 0,
         .phase = 0.0f,
     };
     void* pc_audio[AUDIO_CMD_COUNT];
@@ -7394,38 +7486,67 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_END_WAR] = &&pc_end_war;
     pc_audio[AUDIO_CMD_SEEK] = &&pc_seek;
     pc_audio[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
-    pc_audio[AUDIO_CMD_RECORD_CAPTURE] = &&pc_record_capture;
+    pc_audio[AUDIO_CMD_RECORD] = &&pc_record_capture;
     pc_audio[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_audio[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
     pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
-    ctx_a.capture_buffer =
-        malloc(AUDIO_DEFAULT_PERIOD_SIZE * AUDIO_DEFAULT_CHANNEL_COUNT *
-               sizeof(int16_t));
-    ctx_a.play_buffer = malloc(AUDIO_DEFAULT_PERIOD_SIZE *
-                               AUDIO_DEFAULT_CHANNEL_COUNT * sizeof(int16_t));
+    //-------------------------------------------------------------------------
+    // PIPEWIRE
+    //-------------------------------------------------------------------------
     pw_init(NULL, NULL);
     ctx_a.pw_loop = pw_loop_new(NULL);
-    assert(ctx_a.pw_loop);
-    ctx_a.pw_ctx = pw_context_new(ctx_a.pw_loop, NULL, 0);
-    assert(ctx_a.pw_ctx);
-    ctx_a.pw_core = pw_context_connect(ctx_a.pw_ctx, NULL, 0);
-    assert(ctx_a.pw_core);
-    ctx_a.play_stream = pw_stream_new(ctx_a.pw_core, "war_play", NULL);
+    struct spa_audio_info_raw play_info = {
+        .format = SPA_AUDIO_FORMAT_S16,
+        .rate = ctx_a.sample_rate,
+        .channels = ctx_a.channel_count,
+        .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
+    };
+    uint8_t play_buffer[1024];
+    struct spa_pod_builder play_builder;
+    spa_pod_builder_init(&play_builder, play_buffer, sizeof(play_buffer));
+    const struct spa_pod* play_params[1];
+    play_params[0] = spa_format_audio_raw_build(
+        &play_builder, SPA_PARAM_EnumFormat, &play_info);
+    struct pw_stream_events play_events = {
+        .version = PW_VERSION_STREAM_EVENTS,
+        .process = war_play,
+    };
+    ctx_a.play_stream = pw_stream_new_simple(
+        ctx_a.pw_loop, "WAR_play", NULL, &play_events, &ctx_a);
+    uint32_t sink_id = PW_ID_ANY;
     pw_stream_connect(ctx_a.play_stream,
                       PW_DIRECTION_OUTPUT,
-                      PW_ID_ANY,
-                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
-                      NULL,
-                      0);
-    ctx_a.capture_stream = pw_stream_new(ctx_a.pw_core, "war_capture", NULL);
-    pw_stream_connect(ctx_a.capture_stream,
+                      sink_id,
+                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
+                          PW_STREAM_FLAG_RT_PROCESS,
+                      play_params,
+                      1);
+    struct spa_audio_info_raw record_info = {
+        .format = SPA_AUDIO_FORMAT_S16,
+        .rate = ctx_a.sample_rate,
+        .channels = ctx_a.channel_count,
+        .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
+    };
+    uint8_t record_buffer[1024];
+    struct spa_pod_builder record_builder;
+    spa_pod_builder_init(&record_builder, record_buffer, sizeof(record_buffer));
+    const struct spa_pod* record_params[1];
+    record_params[0] = spa_format_audio_raw_build(
+        &record_builder, SPA_PARAM_EnumFormat, &record_info);
+    struct pw_stream_events record_events = {
+        .version = PW_VERSION_STREAM_EVENTS,
+        .process = war_record,
+    };
+    ctx_a.record_stream = pw_stream_new_simple(
+        ctx_a.pw_loop, "WAR_record", NULL, &record_events, &ctx_a);
+    uint32_t source_id = PW_ID_ANY;
+    pw_stream_connect(ctx_a.record_stream,
                       PW_DIRECTION_INPUT,
-                      PW_ID_ANY,
-                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
-                      NULL,
-                      0);
-    ctx_a.fd = pw_loop_get_fd(ctx_a.pw_loop);
-    assert(ctx_a.fd);
+                      source_id,
+                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
+                          PW_STREAM_FLAG_RT_PROCESS,
+                      record_params,
+                      1);
 //-----------------------------------------------------------------------------
 // PC AUDIO
 //-----------------------------------------------------------------------------
@@ -7436,15 +7557,17 @@ pc_audio:
     if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
     goto pc_audio_done;
 pc_stop:
-    ctx_a.state = AUDIO_CMD_STOP;
+    ctx_a.play = false;
+    ctx_a.play_frames = 0;
+    ctx_a.play_frames_count = 0;
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
     goto pc_audio_done;
 pc_play:
-    ctx_a.state = AUDIO_CMD_PLAY;
+    ctx_a.play = true;
     war_pc_to_wr(pc, AUDIO_CMD_PLAY, 0, NULL);
     goto pc_audio_done;
 pc_pause:
-    ctx_a.state = AUDIO_CMD_PAUSE;
+    ctx_a.play = false;
     war_pc_to_wr(pc, AUDIO_CMD_PAUSE, 0, NULL);
     goto pc_audio_done;
 pc_get_frames:
@@ -7482,44 +7605,13 @@ pc_record_map:
 pc_set_threshold:
     goto pc_audio_done;
 pc_audio_done:
-    // audio loop
-    struct pollfd pfd = {.fd = ctx_a.fd, .events = POLLIN};
-    int ret = poll(&pfd, 1, 0);
-    // if (ret > 0) { pw_loop_iterate(ctx_a.pw_loop, 0); }
-
-    /// struct pw_buffer* play_read =
-    /// pw_stream_dequeue_buffer(ctx_a.play_stream); if (play_read &&
-    /// play_read->buffer->datas[0].data) {
-    ///     memcpy(play_read->buffer->datas[0].data,
-    ///            &ctx_a.play_buffer[ctx_a.play_frames * ctx_a.channel_count],
-    ///            ctx_a.period_size * ctx_a.channel_count * sizeof(int16_t));
-
-    ///    // submit buffer to PipeWire
-    ///    pw_stream_queue_buffer(ctx_a.play_stream, play_read);
-
-    ///    // advance logical counters
-    ///    ctx_a.play_frames += ctx_a.period_size;
-    ///    ctx_a.play_frames_count += ctx_a.period_size;
-    ///}
-
-    /// struct pw_buffer* capture_read =
-    ///     pw_stream_dequeue_buffer(ctx_a.capture_stream);
-    /// if (capture_read && capture_read->buffer->datas[0].data) {
-    ///     memcpy(capture_read->buffer->datas[0].data,
-    ///            &ctx_a.capture_buffer[ctx_a.play_frames *
-    ///            ctx_a.channel_count], ctx_a.period_size * ctx_a.channel_count
-    ///            * sizeof(int16_t));
-
-    ///    // submit buffer to PipeWire
-    ///    pw_stream_return_buffer(ctx_a.capture_stream, capture_read);
-
-    ///    // advance logical counters
-    ///    ctx_a.capture_frames += ctx_a.period_size;
-    ///    ctx_a.capture_frames_count += ctx_a.period_size;
-    ///}
-
+    pw_loop_iterate(ctx_a.pw_loop, 0);
     goto pc_audio;
 end_audio:
+    pw_stream_destroy(ctx_a.play_stream);
+    pw_stream_destroy(ctx_a.record_stream);
+    pw_loop_destroy(ctx_a.pw_loop);
+    pw_deinit();
     end("war_audio");
     return 0;
 }

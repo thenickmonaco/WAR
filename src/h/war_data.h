@@ -278,7 +278,7 @@ enum war_audio {
     AUDIO_CMD_END_WAR = 6,
     AUDIO_CMD_SEEK = 7,
     AUDIO_CMD_RECORD_WAIT = 8,
-    AUDIO_CMD_RECORD_CAPTURE = 9,
+    AUDIO_CMD_RECORD = 9,
     AUDIO_CMD_RECORD_DONE = 10,
     AUDIO_CMD_RECORD_MAP = 11,
     AUDIO_CMD_SET_THRESHOLD = 12,
@@ -296,19 +296,18 @@ typedef struct war_audio_context {
     uint32_t channel_count;
     uint8_t state;
     // PipeWire
-    int fd;
-    struct pw_context* pw_ctx;
-    struct pw_core* pw_core;
     struct pw_loop* pw_loop;
     struct pw_stream* play_stream;
-    struct pw_stream* capture_stream;
+    struct pw_stream* record_stream;
     int16_t* play_buffer;
-    int16_t* capture_buffer;
+    int16_t* record_buffer;
     uint64_t play_frames;
     uint64_t play_frames_count;
-    uint64_t capture_frames;
-    uint64_t capture_frames_count;
+    uint64_t record_frames;
+    uint64_t record_frames_count;
     float phase;
+    bool play;
+    bool record;
 } war_audio_context;
 
 typedef struct war_window_render_context {

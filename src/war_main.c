@@ -526,7 +526,7 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_END_WAR] = &&pc_end_war;
     pc_window_render[AUDIO_CMD_SEEK] = &&pc_seek;
     pc_window_render[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
-    pc_window_render[AUDIO_CMD_RECORD] = &&pc_record_capture;
+    pc_window_render[AUDIO_CMD_RECORD] = &&pc_record;
     pc_window_render[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_window_render[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
     pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
@@ -578,8 +578,8 @@ void* war_window_render(void* args) {
         call_carmack("from a: RECORD_WAIT");
         ctx_a.state = AUDIO_CMD_RECORD_WAIT;
         goto pc_window_render;
-    pc_record_capture:
-        call_carmack("from a: RECORD_CAPTURE");
+    pc_record:
+        call_carmack("from a: RECORD");
         ctx_a.state = AUDIO_CMD_RECORD;
         goto pc_window_render;
     pc_record_done:
@@ -7476,6 +7476,8 @@ void* war_audio(void* args) {
         .record_frames = 0,
         .record_frames_count = 0,
         .phase = 0.0f,
+        .play = false,
+        .record = false,
     };
     void* pc_audio[AUDIO_CMD_COUNT];
     pc_audio[AUDIO_CMD_STOP] = &&pc_stop;
@@ -7486,7 +7488,7 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_END_WAR] = &&pc_end_war;
     pc_audio[AUDIO_CMD_SEEK] = &&pc_seek;
     pc_audio[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
-    pc_audio[AUDIO_CMD_RECORD] = &&pc_record_capture;
+    pc_audio[AUDIO_CMD_RECORD] = &&pc_record;
     pc_audio[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_audio[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
     pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
@@ -7592,7 +7594,7 @@ pc_record_wait:
     ctx_a.state = AUDIO_CMD_RECORD_WAIT;
     war_pc_to_wr(pc, AUDIO_CMD_RECORD_WAIT, 0, NULL);
     goto pc_audio_done;
-pc_record_capture:
+pc_record:
     goto pc_audio_done;
 pc_record_done:
     ctx_a.state = AUDIO_CMD_RECORD_DONE;
@@ -7606,6 +7608,7 @@ pc_set_threshold:
     goto pc_audio_done;
 pc_audio_done:
     pw_loop_iterate(ctx_a.pw_loop, 0);
+    usleep(3000);
     goto pc_audio;
 end_audio:
     pw_stream_destroy(ctx_a.play_stream);

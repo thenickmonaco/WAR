@@ -28,10 +28,15 @@
 #include "h/war_macros.h"
 #include "h/war_main.h"
 
-#include <alsa/asoundlib.h>
-#include <alsa/timer.h>
+#include <pipewire-0.3/pipewire/context.h>
+#include <pipewire-0.3/pipewire/core.h>
+#include <pipewire-0.3/pipewire/pipewire.h>
+#include <pipewire-0.3/pipewire/stream.h>
 #include <pthread.h>
 #include <sched.h>
+#include <spa-0.2/spa/param/audio/format.h>
+#include <spa-0.2/spa/pod/builder.h>
+#include <spa-0.2/spa/pod/pod.h>
 #include <stdint.h>
 #include <time.h>
 #include <unistd.h>
@@ -117,7 +122,7 @@ void* war_window_render(void* args) {
     war_audio_context ctx_a = {
         .state = AUDIO_CMD_STOP,
         .sample_rate = AUDIO_DEFAULT_SAMPLE_RATE,
-        .logical_frames_played = 0,
+        .play_frames = 0,
         .BPM = AUDIO_DEFAULT_BPM,
         .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
@@ -518,9 +523,6 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_window_render[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
     pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
-    //-------------------------------------------------------------------------
-    // LOOP WINDOW RENDER
-    //-------------------------------------------------------------------------
     while (!ctx_wr.end_window_render) {
     pc_window_render:
         uint32_t header;
@@ -548,9 +550,9 @@ void* war_window_render(void* args) {
         goto pc_window_render;
     pc_get_frames:
         // call_carmack("from a: GET_FRAMES");
-        uint64_t logical_frames_played;
-        memcpy(&logical_frames_played, payload, size);
-        ctx_a.logical_frames_played = logical_frames_played;
+        uint64_t play_frames;
+        memcpy(&play_frames, payload, size);
+        ctx_a.play_frames = play_frames;
         goto pc_window_render;
     pc_add_note:
         goto pc_window_render;
@@ -562,7 +564,7 @@ void* war_window_render(void* args) {
         call_carmack("from a: SEEK");
         uint64_t seek_logical_frames_played;
         memcpy(&seek_logical_frames_played, payload, size);
-        ctx_a.logical_frames_played = seek_logical_frames_played;
+        ctx_a.play_frames = seek_logical_frames_played;
         goto pc_window_render;
     pc_record_wait:
         call_carmack("from a: RECORD_WAIT");
@@ -1365,21 +1367,21 @@ void* war_window_render(void* args) {
                                           << 24) |
                                          (playback_bar_color & 0x00FFFFFF);
                 }
-                war_make_quad(quad_vertices,
-                              quad_indices,
-                              &quad_vertices_count,
-                              &quad_indices_count,
-                              (float[3]){((float)ctx_a.logical_frames_played /
-                                          ctx_a.sample_rate) /
-                                             ((60.0f / ctx_a.BPM) / 4.0f),
-                                         ctx_wr.bottom_row,
-                                         ctx_wr.layers[LAYER_PLAYBACK_BAR]},
-                              (float[2]){0, ctx_wr.viewport_rows},
-                              playback_bar_color,
-                              0,
-                              0,
-                              (float[2]){default_playback_bar_thickness, 0.0f},
-                              QUAD_LINE | QUAD_GRID);
+                war_make_quad(
+                    quad_vertices,
+                    quad_indices,
+                    &quad_vertices_count,
+                    &quad_indices_count,
+                    (float[3]){((float)ctx_a.play_frames / ctx_a.sample_rate) /
+                                   ((60.0f / ctx_a.BPM) / 4.0f),
+                               ctx_wr.bottom_row,
+                               ctx_wr.layers[LAYER_PLAYBACK_BAR]},
+                    (float[2]){0, ctx_wr.viewport_rows},
+                    playback_bar_color,
+                    0,
+                    0,
+                    (float[2]){default_playback_bar_thickness, 0.0f},
+                    QUAD_LINE | QUAD_GRID);
                 // draw status bar quads
                 war_make_quad(quad_vertices,
                               quad_indices,
@@ -3475,7 +3477,7 @@ void* war_window_render(void* args) {
                     {&&cmd_normal_spacem},
                     {&&cmd_normal_B},
                     {&&cmd_normal_q, NULL, NULL, &&cmd_record_q},
-                    {&&cmd_normal_Q},
+                    {&&cmd_normal_Q, NULL, NULL, &&cmd_normal_Q},
                     {
                         NULL,
                         NULL,
@@ -4137,9 +4139,8 @@ void* war_window_render(void* args) {
             }
             cmd_normal_ga: {
                 call_carmack("cmd_normal_$");
-                uint32_t col =
-                    ((float)ctx_a.logical_frames_played / ctx_a.sample_rate) /
-                    ((60.0f / ctx_a.BPM) / 4.0f);
+                uint32_t col = ((float)ctx_a.play_frames / ctx_a.sample_rate) /
+                               ((60.0f / ctx_a.BPM) / 4.0f);
                 ctx_wr.col =
                     war_clamp_uint32(col, ctx_wr.min_col, ctx_wr.max_col);
                 ctx_wr.sub_col = 0;
@@ -6146,7 +6147,8 @@ void* war_window_render(void* args) {
             cmd_normal_Q: {
                 call_carmack("cmd_normal_Q");
                 ctx_wr.mode = MODE_RECORD;
-                if (ctx_a.state != AUDIO_CMD_RECORD_WAIT) {
+                if (ctx_a.state != AUDIO_CMD_RECORD_WAIT &&
+                    ctx_a.state != AUDIO_CMD_RECORD_CAPTURE) {
                     war_pc_to_a(pc, AUDIO_CMD_RECORD_WAIT, 0, NULL);
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
@@ -6582,7 +6584,8 @@ void* war_window_render(void* args) {
                 if (ctx_a.state == AUDIO_CMD_RECORD_DONE) {
                     // map to defualt key or break, send map to audio
                 }
-                // ...
+                ctx_wr.mode = MODE_NORMAL;
+                war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7354,7 +7357,6 @@ void* war_window_render(void* args) {
 void* war_audio(void* args) {
     header("war_audio");
     war_producer_consumer* pc = (war_producer_consumer*)args;
-    // SCHED_FIFO
     struct sched_param param = {.sched_priority = 10};
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
         call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
@@ -7368,64 +7370,12 @@ void* war_audio(void* args) {
             AUDIO_DEFAULT_PERIOD_SIZE / AUDIO_DEFAULT_SUB_PERIOD_FACTOR,
         .BPM = AUDIO_DEFAULT_BPM,
         .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
-        .logical_frames_played = 0,
+        .play_frames = 0,
+        .play_frames_count = 0,
+        .capture_frames = 0,
+        .capture_frames_count = 0,
+        .phase = 0.0f,
     };
-    int result = snd_pcm_open(&ctx_a.playback_handle,
-                              "default",
-                              SND_PCM_STREAM_PLAYBACK,
-                              SND_PCM_NONBLOCK);
-    assert(result >= 0);
-    // Set hardware parameters
-    snd_pcm_hw_params_t* playback_handle_params;
-    snd_pcm_hw_params_alloca(&playback_handle_params);
-    snd_pcm_hw_params_any(ctx_a.playback_handle, playback_handle_params);
-    snd_pcm_hw_params_set_access(ctx_a.playback_handle,
-                                 playback_handle_params,
-                                 SND_PCM_ACCESS_RW_INTERLEAVED);
-    snd_pcm_hw_params_set_format(
-        ctx_a.playback_handle, playback_handle_params, SND_PCM_FORMAT_FLOAT_LE);
-    snd_pcm_hw_params_set_rate_near(
-        ctx_a.playback_handle, playback_handle_params, &ctx_a.sample_rate, 0);
-    snd_pcm_hw_params_set_channels(
-        ctx_a.playback_handle, playback_handle_params, ctx_a.channel_count);
-    snd_pcm_hw_params_set_period_size_near(
-        ctx_a.playback_handle, playback_handle_params, &ctx_a.period_size, 0);
-    snd_pcm_uframes_t playback_buffer_size =
-        ctx_a.period_size * AUDIO_DEFAULT_PERIOD_COUNT;
-    snd_pcm_hw_params_set_buffer_size_near(
-        ctx_a.playback_handle, playback_handle_params, &playback_buffer_size);
-    result = snd_pcm_hw_params(ctx_a.playback_handle, playback_handle_params);
-    assert(result >= 0);
-    result = snd_pcm_prepare(ctx_a.playback_handle);
-    assert(result >= 0);
-    snd_pcm_hw_params_t* capture_handle_params;
-    snd_pcm_open(&ctx_a.capture_handle,
-                 "default",
-                 SND_PCM_STREAM_CAPTURE,
-                 SND_PCM_NONBLOCK);
-    snd_pcm_hw_params_alloca(&capture_handle_params);
-    snd_pcm_hw_params_any(ctx_a.capture_handle, capture_handle_params);
-    snd_pcm_hw_params_set_access(ctx_a.capture_handle,
-                                 capture_handle_params,
-                                 SND_PCM_ACCESS_RW_INTERLEAVED);
-    snd_pcm_hw_params_set_format(ctx_a.capture_handle,
-                                 capture_handle_params,
-                                 SND_PCM_FORMAT_FLOAT_LE); // same as playback
-    snd_pcm_hw_params_set_rate_near(ctx_a.capture_handle,
-                                    capture_handle_params,
-                                    &ctx_a.sample_rate,
-                                    0); // same rate
-    snd_pcm_hw_params_set_channels(ctx_a.capture_handle,
-                                   capture_handle_params,
-                                   ctx_a.channel_count); // same channel count
-    snd_pcm_hw_params_set_period_size_near(
-        ctx_a.capture_handle, capture_handle_params, &ctx_a.period_size, 0);
-    snd_pcm_uframes_t capture_buffer_size =
-        ctx_a.period_size * AUDIO_DEFAULT_PERIOD_COUNT;
-    snd_pcm_hw_params_set_buffer_size_near(
-        ctx_a.capture_handle, capture_handle_params, &capture_buffer_size);
-    snd_pcm_hw_params(ctx_a.capture_handle, capture_handle_params);
-    snd_pcm_prepare(ctx_a.capture_handle);
     void* pc_audio[AUDIO_CMD_COUNT];
     pc_audio[AUDIO_CMD_STOP] = &&pc_stop;
     pc_audio[AUDIO_CMD_PLAY] = &&pc_play;
@@ -7439,24 +7389,34 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_audio[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
     pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
-    void* cmd_audio[AUDIO_CMD_COUNT];
-    cmd_audio[AUDIO_CMD_STOP] = &&cmd_stop;
-    cmd_audio[AUDIO_CMD_PLAY] = &&cmd_play;
-    cmd_audio[AUDIO_CMD_PAUSE] = &&cmd_pause;
-    cmd_audio[AUDIO_CMD_GET_FRAMES] = &&cmd_get_frames;
-    cmd_audio[AUDIO_CMD_ADD_NOTE] = &&cmd_add_note;
-    cmd_audio[AUDIO_CMD_END_WAR] = &&cmd_end_war;
-    cmd_audio[AUDIO_CMD_SEEK] = &&cmd_seek;
-    cmd_audio[AUDIO_CMD_RECORD_WAIT] = &&cmd_record_wait;
-    cmd_audio[AUDIO_CMD_RECORD_CAPTURE] = &&cmd_record_capture;
-    cmd_audio[AUDIO_CMD_RECORD_DONE] = &&cmd_record_done;
-    cmd_audio[AUDIO_CMD_RECORD_MAP] = &&cmd_record_map;
-    cmd_audio[AUDIO_CMD_SET_THRESHOLD] = &&cmd_set_threshold;
-    ctx_a.capture_buffer = malloc(AUDIO_DEFAULT_PERIOD_SIZE *
-                                  AUDIO_DEFAULT_CHANNEL_COUNT * sizeof(float));
-    ctx_a.playback_buffer = malloc(AUDIO_DEFAULT_PERIOD_SIZE *
-                                   AUDIO_DEFAULT_CHANNEL_COUNT * sizeof(float));
-    ctx_a.phase = 0.0f;
+    ctx_a.capture_buffer =
+        malloc(AUDIO_DEFAULT_PERIOD_SIZE * AUDIO_DEFAULT_CHANNEL_COUNT *
+               sizeof(int16_t));
+    ctx_a.play_buffer = malloc(AUDIO_DEFAULT_PERIOD_SIZE *
+                               AUDIO_DEFAULT_CHANNEL_COUNT * sizeof(int16_t));
+    pw_init(NULL, NULL);
+    ctx_a.pw_loop = pw_loop_new(NULL);
+    assert(ctx_a.pw_loop);
+    ctx_a.pw_ctx = pw_context_new(ctx_a.pw_loop, NULL, 0);
+    assert(ctx_a.pw_ctx);
+    ctx_a.pw_core = pw_context_connect(ctx_a.pw_ctx, NULL, 0);
+    assert(ctx_a.pw_core);
+    ctx_a.play_stream = pw_stream_new(ctx_a.pw_core, "war_play", NULL);
+    pw_stream_connect(ctx_a.play_stream,
+                      PW_DIRECTION_OUTPUT,
+                      PW_ID_ANY,
+                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
+                      NULL,
+                      0);
+    ctx_a.capture_stream = pw_stream_new(ctx_a.pw_core, "war_capture", NULL);
+    pw_stream_connect(ctx_a.capture_stream,
+                      PW_DIRECTION_INPUT,
+                      PW_ID_ANY,
+                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
+                      NULL,
+                      0);
+    ctx_a.fd = pw_loop_get_fd(ctx_a.pw_loop);
+    assert(ctx_a.fd);
 //-----------------------------------------------------------------------------
 // PC AUDIO
 //-----------------------------------------------------------------------------
@@ -7465,7 +7425,7 @@ pc_audio:
     uint32_t size;
     uint8_t payload[PC_BUFFER_SIZE];
     if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
-    goto* cmd_audio[ctx_a.state];
+    goto pc_audio_done;
 pc_stop:
     ctx_a.state = AUDIO_CMD_STOP;
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
@@ -7481,24 +7441,20 @@ pc_pause:
 pc_get_frames:
     war_pc_to_wr(pc,
                  AUDIO_CMD_GET_FRAMES,
-                 sizeof(ctx_a.logical_frames_played),
-                 &ctx_a.logical_frames_played);
+                 sizeof(ctx_a.play_frames),
+                 &ctx_a.play_frames);
     goto pc_audio_done;
 pc_add_note:
     goto pc_audio_done;
 pc_end_war:
-    ctx_a.state = AUDIO_CMD_END_WAR;
-    war_pc_to_wr(pc, AUDIO_CMD_END_WAR, 0, NULL);
-    goto pc_audio_done;
+    goto end_audio;
 pc_seek:
     uint64_t seek_logical_frames_played;
     memcpy(&seek_logical_frames_played, payload, size);
-    ctx_a.logical_frames_played = seek_logical_frames_played;
-    ctx_a.total_frames_written = seek_logical_frames_played;
-    war_pc_to_wr(pc,
-                 AUDIO_CMD_SEEK,
-                 sizeof(ctx_a.logical_frames_played),
-                 &ctx_a.logical_frames_played);
+    ctx_a.play_frames = seek_logical_frames_played;
+    ctx_a.play_frames_count = seek_logical_frames_played;
+    war_pc_to_wr(
+        pc, AUDIO_CMD_SEEK, sizeof(ctx_a.play_frames), &ctx_a.play_frames);
     goto pc_audio_done;
 pc_record_wait:
     ctx_a.state = AUDIO_CMD_RECORD_WAIT;
@@ -7517,75 +7473,44 @@ pc_record_map:
 pc_set_threshold:
     goto pc_audio_done;
 pc_audio_done:
-    goto pc_audio;
-//-------------------------------------------------------------------------
-// AUDIO COMMANDS
-//-------------------------------------------------------------------------
-cmd_stop:
-    goto cmd_done;
-cmd_play:
-    for (size_t i = 0; i < ctx_a.period_size; i++) {
-        float phase_increment =
-            war_sine_phase_increment(&ctx_a, war_midi_to_frequency(60));
-        ctx_a.phase += phase_increment;
-        if (ctx_a.phase >= 2.0f * M_PI) { ctx_a.phase -= 2.0f * M_PI; }
-        float sample = 0.25f * sinf(ctx_a.phase);
-        for (size_t ch = 0; ch < ctx_a.channel_count; ch++) {
-            ctx_a.playback_buffer[i * ctx_a.channel_count + ch] = sample;
-        }
-    }
-    // Non-blocking write
-    snd_pcm_sframes_t frames_written;
-    while ((frames_written = snd_pcm_writei(ctx_a.playback_handle,
-                                            ctx_a.playback_buffer,
-                                            ctx_a.period_size)) < 0) {
-        if (frames_written == -EAGAIN) {
-            // ALSA cannot accept data now; just continue loop
-            continue;
-        }
-        frames_written =
-            snd_pcm_recover(ctx_a.playback_handle, frames_written, 0);
-        if (frames_written < 0) {
-            perror("snd_pcm_writei");
-            break;
-        }
-    }
-    if (frames_written > 0) {
-        ctx_a.total_frames_written += (uint64_t)frames_written;
-    }
-    // Update logical frames played
-    snd_pcm_sframes_t delay_frames = 0;
-    if (snd_pcm_delay(ctx_a.playback_handle, &delay_frames) < 0) {
-        delay_frames = 0;
-    }
-    if (delay_frames < 0) delay_frames = 0;
+    // audio loop
+    struct pollfd pfd = {.fd = ctx_a.fd, .events = POLLIN};
+    int ret = poll(&pfd, 1, 0);
+    // if (ret > 0) { pw_loop_iterate(ctx_a.pw_loop, 0); }
 
-    ctx_a.logical_frames_played =
-        ctx_a.total_frames_written - (uint64_t)delay_frames;
-    goto cmd_done;
-cmd_pause:
-    goto cmd_done;
-cmd_get_frames:
-    goto cmd_done;
-cmd_add_note:
-    goto cmd_done;
-cmd_seek:
-    goto cmd_done;
-cmd_record_wait:
-    goto cmd_done;
-cmd_record_capture:
-    goto cmd_done;
-cmd_record_done:
-    goto cmd_done;
-cmd_record_map:
-    goto cmd_done;
-cmd_set_threshold:
-    goto cmd_done;
-cmd_end_war:
-    snd_pcm_close(ctx_a.playback_handle);
+    /// struct pw_buffer* play_read =
+    /// pw_stream_dequeue_buffer(ctx_a.play_stream); if (play_read &&
+    /// play_read->buffer->datas[0].data) {
+    ///     memcpy(play_read->buffer->datas[0].data,
+    ///            &ctx_a.play_buffer[ctx_a.play_frames * ctx_a.channel_count],
+    ///            ctx_a.period_size * ctx_a.channel_count * sizeof(int16_t));
+
+    ///    // submit buffer to PipeWire
+    ///    pw_stream_queue_buffer(ctx_a.play_stream, play_read);
+
+    ///    // advance logical counters
+    ///    ctx_a.play_frames += ctx_a.period_size;
+    ///    ctx_a.play_frames_count += ctx_a.period_size;
+    ///}
+
+    /// struct pw_buffer* capture_read =
+    ///     pw_stream_dequeue_buffer(ctx_a.capture_stream);
+    /// if (capture_read && capture_read->buffer->datas[0].data) {
+    ///     memcpy(capture_read->buffer->datas[0].data,
+    ///            &ctx_a.capture_buffer[ctx_a.play_frames *
+    ///            ctx_a.channel_count], ctx_a.period_size * ctx_a.channel_count
+    ///            * sizeof(int16_t));
+
+    ///    // submit buffer to PipeWire
+    ///    pw_stream_return_buffer(ctx_a.capture_stream, capture_read);
+
+    ///    // advance logical counters
+    ///    ctx_a.capture_frames += ctx_a.period_size;
+    ///    ctx_a.capture_frames_count += ctx_a.period_size;
+    ///}
+
+    goto pc_audio;
+end_audio:
     end("war_audio");
     return 0;
-cmd_done:
-    usleep(500);
-    goto pc_audio;
 }

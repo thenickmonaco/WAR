@@ -10,8 +10,10 @@ CompileFlags:
     -Wno-error=unused-variable,
     -I src,
     -I include,
-    -I /usr/include/libdrm,
+    -I /usr/include/pipewire-0.3,
+    -I /usr/include/spa-0.2,
     -DDMABUF=1,
     -DWL_SHM=1,
+    -D_REENTRANT,
   ]
 

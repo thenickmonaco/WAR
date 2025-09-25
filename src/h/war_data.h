@@ -23,7 +23,6 @@
 #ifndef WAR_DATA_H
 #define WAR_DATA_H
 
-#include <alsa/asoundlib.h>
 #include <ft2build.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -263,7 +262,7 @@ typedef struct war_views {
 
 enum war_audio {
     // defaults
-    AUDIO_DEFAULT_SAMPLE_RATE = 48000,
+    AUDIO_DEFAULT_SAMPLE_RATE = 32000,
     AUDIO_DEFAULT_PERIOD_SIZE = 512,
     AUDIO_DEFAULT_SUB_PERIOD_FACTOR = 20,
     AUDIO_DEFAULT_CHANNEL_COUNT = 2,
@@ -292,18 +291,23 @@ enum war_audio {
 typedef struct war_audio_context {
     float BPM;
     uint32_t sample_rate;
-    snd_pcm_uframes_t period_size;
-    snd_pcm_uframes_t sub_period_size;
+    uint32_t period_size;
+    uint32_t sub_period_size;
     uint32_t channel_count;
     uint8_t state;
-    snd_timestamp_t timestamp;
-    uint64_t logical_frames_played;
-    uint64_t total_frames_written;
-    snd_pcm_t* playback_handle;
-    snd_pcm_t* capture_handle;
-    float record_threshold;
-    float* playback_buffer;
-    float* capture_buffer;
+    // PipeWire
+    int fd;
+    struct pw_context* pw_ctx;
+    struct pw_core* pw_core;
+    struct pw_loop* pw_loop;
+    struct pw_stream* play_stream;
+    struct pw_stream* capture_stream;
+    int16_t* play_buffer;
+    int16_t* capture_buffer;
+    uint64_t play_frames;
+    uint64_t play_frames_count;
+    uint64_t capture_frames;
+    uint64_t capture_frames_count;
     float phase;
 } war_audio_context;
 

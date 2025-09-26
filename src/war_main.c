@@ -59,10 +59,20 @@ int main() {
     pc.i_to_wr = 0;
     pc.i_from_a = 0;
     pc.i_from_wr = 0;
+    war_atomics atomics = {
+        .play_frames = 0,
+        .play = false,
+        .record_frames = 0,
+        .record = false,
+    };
     pthread_t war_window_render_thread;
     pthread_t war_audio_thread;
-    pthread_create(&war_window_render_thread, NULL, war_window_render, &pc);
-    pthread_create(&war_audio_thread, NULL, war_audio, &pc);
+    pthread_create(&war_window_render_thread,
+                   NULL,
+                   war_window_render,
+                   (void* [2]){&pc, &atomics});
+    pthread_create(
+        &war_audio_thread, NULL, war_audio, (void* [2]){&pc, &atomics});
     pthread_join(war_window_render_thread, NULL);
     pthread_join(war_audio_thread, NULL);
     END("main");
@@ -74,7 +84,9 @@ int main() {
 //-----------------------------------------------------------------------------
 void* war_window_render(void* args) {
     header("war_window_render");
-    war_producer_consumer* pc = (war_producer_consumer*)args;
+    void** args_ptrs = (void**)args;
+    war_producer_consumer* pc = args_ptrs[0];
+    war_atomics* atomics = args_ptrs[1];
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
@@ -530,7 +542,7 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_window_render[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
     pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
-    while (!ctx_wr.end_window_render) {
+    while (!atomics->end_war) {
     pc_window_render:
         uint32_t header;
         uint32_t size;
@@ -609,8 +621,8 @@ void* war_window_render(void* args) {
                                          physical_width,
                                          physical_height);
             }
-            if (ctx_a.state == AUDIO_CMD_PLAY) {
-                war_pc_to_a(pc, AUDIO_CMD_GET_FRAMES, 0, NULL);
+            if (atomic_load(&atomics->play)) {
+                ctx_a.play_frames = atomic_load(&atomics->play_frames);
             }
         }
         // cursor blink
@@ -2249,7 +2261,7 @@ void* war_window_render(void* args) {
                     "wl_surface::destroy request", wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
-                war_pc_to_a(pc, AUDIO_CMD_END_WAR, 0, NULL);
+                atomic_store(&atomics->end_war, true);
                 goto wayland_done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
@@ -5309,11 +5321,8 @@ void* war_window_render(void* args) {
             //-----------------------------------------------------------------
             cmd_normal_a: {
                 call_carmack("cmd_normal_a");
-                war_pc_to_a(pc,
-                            (ctx_a.state == AUDIO_CMD_PLAY) ? AUDIO_CMD_PAUSE :
-                                                              AUDIO_CMD_PLAY,
-                            0,
-                            NULL);
+                atomic_fetch_xor(&atomics->play, true);
+                ctx_a.state = AUDIO_CMD_PLAY;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7369,9 +7378,14 @@ void* war_window_render(void* args) {
 }
 
 static void war_play(void* userdata) {
-    war_audio_context* ctx = userdata;
+    void** userdata_ptrs = (void**)userdata;
+    war_audio_context* ctx_a = userdata_ptrs[0];
+    war_producer_consumer* pc = userdata_ptrs[1];
+    war_atomics* atomics = userdata_ptrs[2];
 
-    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx->play_stream);
+    ctx_a->play = atomic_load(&atomics->play);
+
+    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->play_stream);
     if (!b) return;
 
     struct spa_buffer* buf = b->buffer;
@@ -7383,26 +7397,27 @@ static void war_play(void* userdata) {
             if (buf->datas[0].chunk) {
                 buf->datas[0].chunk->offset = 0;
                 buf->datas[0].chunk->stride =
-                    sizeof(int16_t) * ctx->channel_count;
+                    sizeof(int16_t) * ctx_a->channel_count;
                 buf->datas[0].chunk->size = sizeof(silent);
             }
         }
-        pw_stream_queue_buffer(ctx->play_stream, b);
+        pw_stream_queue_buffer(ctx_a->play_stream, b);
         return;
     }
 
     // Fill actual audio
-    size_t stride = sizeof(int16_t) * ctx->channel_count;
+    size_t stride = sizeof(int16_t) * ctx_a->channel_count;
     uint32_t n_frames = buf->datas[0].maxsize / stride;
     if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
 
     int16_t* dst = (int16_t*)buf->datas[0].data;
     for (uint32_t f = 0; f < n_frames; ++f) {
-        int16_t sample = (ctx->play) ? (int16_t)(sin(ctx->phase) * 3000) : 0;
-        for (uint32_t c = 0; c < ctx->channel_count; c++) *dst++ = sample;
+        int16_t sample =
+            (ctx_a->play) ? (int16_t)(sin(ctx_a->phase) * 3000) : 0;
+        for (uint32_t c = 0; c < ctx_a->channel_count; c++) *dst++ = sample;
 
-        ctx->phase += 2.0 * M_PI * 440 / ctx->sample_rate;
-        if (ctx->phase > 2.0 * M_PI) ctx->phase -= 2.0 * M_PI;
+        ctx_a->phase += 2.0 * M_PI * 440 / ctx_a->sample_rate;
+        if (ctx_a->phase > 2.0 * M_PI) ctx_a->phase -= 2.0 * M_PI;
     }
 
     if (buf->datas[0].chunk) {
@@ -7411,29 +7426,30 @@ static void war_play(void* userdata) {
         buf->datas[0].chunk->size = n_frames * stride;
     }
 
-    pw_stream_queue_buffer(ctx->play_stream, b);
+    pw_stream_queue_buffer(ctx_a->play_stream, b);
 
-    // Update play_frames for pc_audio
-    ctx->play_frames += (ctx->play) ? n_frames : 0;
-    ctx->play_frames_count += (ctx->play) ? n_frames : 0;
+    if (ctx_a->play) { atomic_fetch_add(&atomics->play_frames, n_frames); }
 }
 
 static void war_record(void* userdata) {
-    war_audio_context* ctx = userdata;
-    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx->record_stream);
+    void** userdata_ptrs = (void**)userdata;
+    war_audio_context* ctx_a = userdata_ptrs[0];
+    war_producer_consumer* pc = userdata_ptrs[1];
+    war_atomics* atomics = userdata_ptrs[2];
+    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->record_stream);
     if (!b) return;
 
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
-        pw_stream_queue_buffer(ctx->record_stream, b);
+        pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
 
     // Example: just copy capture directly to playback (monitoring)
-    if (ctx->play_stream) {
-        struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx->play_stream);
+    if (ctx_a->play_stream) {
+        struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx_a->play_stream);
         if (out_b && out_b->buffer && out_b->buffer->datas[0].data) {
-            size_t stride = sizeof(int16_t) * ctx->channel_count;
+            size_t stride = sizeof(int16_t) * ctx_a->channel_count;
             uint32_t n_frames =
                 SPA_MIN(buf->datas[0].chunk->size / stride,
                         out_b->buffer->datas[0].maxsize / stride);
@@ -7445,11 +7461,11 @@ static void war_record(void* userdata) {
                 out_b->buffer->datas[0].chunk->stride = stride;
                 out_b->buffer->datas[0].chunk->size = n_frames * stride;
             }
-            pw_stream_queue_buffer(ctx->play_stream, out_b);
+            pw_stream_queue_buffer(ctx_a->play_stream, out_b);
         }
     }
 
-    pw_stream_queue_buffer(ctx->record_stream, b);
+    pw_stream_queue_buffer(ctx_a->record_stream, b);
 }
 
 //-----------------------------------------------------------------------------
@@ -7457,7 +7473,9 @@ static void war_record(void* userdata) {
 //-----------------------------------------------------------------------------
 void* war_audio(void* args) {
     header("war_audio");
-    war_producer_consumer* pc = (war_producer_consumer*)args;
+    void** args_ptrs = (void**)args;
+    war_producer_consumer* pc = args_ptrs[0];
+    war_atomics* atomics = args_ptrs[1];
     struct sched_param param = {.sched_priority = 10};
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
         call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
@@ -7472,26 +7490,11 @@ void* war_audio(void* args) {
         .BPM = AUDIO_DEFAULT_BPM,
         .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
         .play_frames = 0,
-        .play_frames_count = 0,
         .record_frames = 0,
-        .record_frames_count = 0,
         .phase = 0.0f,
         .play = false,
         .record = false,
     };
-    void* pc_audio[AUDIO_CMD_COUNT];
-    pc_audio[AUDIO_CMD_STOP] = &&pc_stop;
-    pc_audio[AUDIO_CMD_PLAY] = &&pc_play;
-    pc_audio[AUDIO_CMD_PAUSE] = &&pc_pause;
-    pc_audio[AUDIO_CMD_GET_FRAMES] = &&pc_get_frames;
-    pc_audio[AUDIO_CMD_ADD_NOTE] = &&pc_add_note;
-    pc_audio[AUDIO_CMD_END_WAR] = &&pc_end_war;
-    pc_audio[AUDIO_CMD_SEEK] = &&pc_seek;
-    pc_audio[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
-    pc_audio[AUDIO_CMD_RECORD] = &&pc_record;
-    pc_audio[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
-    pc_audio[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
-    pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
     //-------------------------------------------------------------------------
     // PIPEWIRE
     //-------------------------------------------------------------------------
@@ -7512,9 +7515,13 @@ void* war_audio(void* args) {
     struct pw_stream_events play_events = {
         .version = PW_VERSION_STREAM_EVENTS,
         .process = war_play,
+        .destroy = (void*)&atomics->end_war,
     };
-    ctx_a.play_stream = pw_stream_new_simple(
-        ctx_a.pw_loop, "WAR_play", NULL, &play_events, &ctx_a);
+    ctx_a.play_stream = pw_stream_new_simple(ctx_a.pw_loop,
+                                             "WAR_play",
+                                             NULL,
+                                             &play_events,
+                                             (void* [3]){&ctx_a, pc, atomics});
     uint32_t sink_id = PW_ID_ANY;
     pw_stream_connect(ctx_a.play_stream,
                       PW_DIRECTION_OUTPUT,
@@ -7539,8 +7546,12 @@ void* war_audio(void* args) {
         .version = PW_VERSION_STREAM_EVENTS,
         .process = war_record,
     };
-    ctx_a.record_stream = pw_stream_new_simple(
-        ctx_a.pw_loop, "WAR_record", NULL, &record_events, &ctx_a);
+    ctx_a.record_stream =
+        pw_stream_new_simple(ctx_a.pw_loop,
+                             "WAR_record",
+                             NULL,
+                             &record_events,
+                             (void* [3]){&ctx_a, pc, atomics});
     uint32_t source_id = PW_ID_ANY;
     pw_stream_connect(ctx_a.record_stream,
                       PW_DIRECTION_INPUT,
@@ -7549,67 +7560,9 @@ void* war_audio(void* args) {
                           PW_STREAM_FLAG_RT_PROCESS,
                       record_params,
                       1);
-//-----------------------------------------------------------------------------
-// PC AUDIO
-//-----------------------------------------------------------------------------
-pc_audio:
-    uint32_t header;
-    uint32_t size;
-    uint8_t payload[PC_BUFFER_SIZE];
-    if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
-    goto pc_audio_done;
-pc_stop:
-    ctx_a.play = false;
-    ctx_a.play_frames = 0;
-    ctx_a.play_frames_count = 0;
-    war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-    goto pc_audio_done;
-pc_play:
-    ctx_a.play = true;
-    war_pc_to_wr(pc, AUDIO_CMD_PLAY, 0, NULL);
-    goto pc_audio_done;
-pc_pause:
-    ctx_a.play = false;
-    war_pc_to_wr(pc, AUDIO_CMD_PAUSE, 0, NULL);
-    goto pc_audio_done;
-pc_get_frames:
-    war_pc_to_wr(pc,
-                 AUDIO_CMD_GET_FRAMES,
-                 sizeof(ctx_a.play_frames),
-                 &ctx_a.play_frames);
-    goto pc_audio_done;
-pc_add_note:
-    goto pc_audio_done;
-pc_end_war:
-    goto end_audio;
-pc_seek:
-    uint64_t seek_logical_frames_played;
-    memcpy(&seek_logical_frames_played, payload, size);
-    ctx_a.play_frames = seek_logical_frames_played;
-    ctx_a.play_frames_count = seek_logical_frames_played;
-    war_pc_to_wr(
-        pc, AUDIO_CMD_SEEK, sizeof(ctx_a.play_frames), &ctx_a.play_frames);
-    goto pc_audio_done;
-pc_record_wait:
-    ctx_a.state = AUDIO_CMD_RECORD_WAIT;
-    war_pc_to_wr(pc, AUDIO_CMD_RECORD_WAIT, 0, NULL);
-    goto pc_audio_done;
-pc_record:
-    goto pc_audio_done;
-pc_record_done:
-    ctx_a.state = AUDIO_CMD_RECORD_DONE;
-    war_pc_to_wr(pc, AUDIO_CMD_RECORD_DONE, 0, NULL);
-    goto pc_audio_done;
-pc_record_map:
-    ctx_a.state = AUDIO_CMD_RECORD_MAP;
-    war_pc_to_wr(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
-    goto pc_audio_done;
-pc_set_threshold:
-    goto pc_audio_done;
-pc_audio_done:
-    pw_loop_iterate(ctx_a.pw_loop, 0);
-    usleep(3000);
-    goto pc_audio;
+start_audio:
+    pw_loop_iterate(ctx_a.pw_loop, -1);
+    goto start_audio;
 end_audio:
     pw_stream_destroy(ctx_a.play_stream);
     pw_stream_destroy(ctx_a.record_stream);

@@ -288,6 +288,23 @@ enum war_audio {
     AUDIO_VOICE_COUNT = 128,
 };
 
+typedef struct war_atomics {
+    atomic_uint_fast64_t play_frames;
+    atomic_uint_fast64_t record_frames;
+    atomic_uint_fast8_t play;
+    atomic_uint_fast8_t record;
+    atomic_uint_fast8_t end_war;
+} war_atomics;
+
+typedef struct war_producer_consumer {
+    uint8_t* to_a;
+    uint8_t* to_wr;
+    uint32_t i_to_a;
+    uint32_t i_to_wr;
+    uint32_t i_from_a;
+    uint32_t i_from_wr;
+} war_producer_consumer;
+
 typedef struct war_audio_context {
     float BPM;
     uint32_t sample_rate;
@@ -302,9 +319,7 @@ typedef struct war_audio_context {
     int16_t* play_buffer;
     int16_t* record_buffer;
     uint64_t play_frames;
-    uint64_t play_frames_count;
     uint64_t record_frames;
-    uint64_t record_frames_count;
     float phase;
     bool play;
     bool record;
@@ -438,15 +453,6 @@ typedef struct war_key_trie_pool {
 enum war_producer_consumer_enum {
     PC_BUFFER_SIZE = 4096,
 };
-
-typedef struct war_producer_consumer {
-    uint8_t* to_a;
-    uint8_t* to_wr;
-    uint32_t i_to_a;
-    uint32_t i_to_wr;
-    uint32_t i_from_a;
-    uint32_t i_from_wr;
-} war_producer_consumer;
 
 typedef struct war_glyph_info {
     float advance_x;

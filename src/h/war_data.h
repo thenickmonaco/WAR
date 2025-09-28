@@ -268,6 +268,7 @@ enum war_audio {
     AUDIO_DEFAULT_CHANNEL_COUNT = 2,
     AUDIO_DEFAULT_BPM = 100,
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
+    AUDIO_DEFAULT_SAMPLE_DURATION = 30,
     // cmds
     AUDIO_CMD_COUNT = 13,
     AUDIO_CMD_STOP = 1,
@@ -279,8 +280,8 @@ enum war_audio {
     AUDIO_CMD_SEEK = 7,
     AUDIO_CMD_RECORD_WAIT = 8,
     AUDIO_CMD_RECORD = 9,
-    AUDIO_CMD_RECORD_DONE = 10,
-    AUDIO_CMD_RECORD_MAP = 11,
+    AUDIO_CMD_RECORD_MAP = 10,
+    AUDIO_CMD_RECORD_MAP_DONE = 11,
     AUDIO_CMD_SET_THRESHOLD = 12,
     // cmd sizes (not including header)
     // voices
@@ -289,11 +290,12 @@ enum war_audio {
 };
 
 typedef struct war_atomics {
-    atomic_uint_fast64_t play_frames;
-    atomic_uint_fast64_t record_frames;
-    atomic_uint_fast8_t play;
-    atomic_uint_fast8_t record;
-    atomic_uint_fast8_t end_war;
+    _Atomic uint64_t play_frames;
+    _Atomic uint64_t record_frames;
+    _Atomic uint8_t state;
+    _Atomic float record_threshold;
+    _Atomic float bpm;
+    _Atomic float map_note;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -311,18 +313,13 @@ typedef struct war_audio_context {
     uint32_t period_size;
     uint32_t sub_period_size;
     uint32_t channel_count;
-    uint8_t state;
     // PipeWire
     struct pw_loop* pw_loop;
     struct pw_stream* play_stream;
     struct pw_stream* record_stream;
-    int16_t* play_buffer;
     int16_t* record_buffer;
-    uint64_t play_frames;
-    uint64_t record_frames;
+    int16_t* sample_pool;
     float phase;
-    bool play;
-    bool record;
 } war_audio_context;
 
 typedef struct war_window_render_context {

@@ -65,7 +65,8 @@ static inline void war_get_top_text(war_window_render_context* ctx_wr) {
 }
 
 static inline void war_get_middle_text(war_window_render_context* ctx_wr,
-                                       war_views* views) {
+                                       war_views* views,
+                                       war_atomics* atomics) {
     memset(ctx_wr->text_middle_status_bar, 0, MAX_STATUS_BAR_COLS);
     switch (ctx_wr->mode) {
     case MODE_VISUAL:
@@ -92,9 +93,23 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
             ctx_wr->text_middle_status_bar, "-- MIDI --", sizeof("-- MIDI --"));
         break;
     case MODE_RECORD:
-        memcpy(ctx_wr->text_middle_status_bar,
-               "-- RECORD --",
-               sizeof("-- RECORD --"));
+        switch (atomic_load(&atomics->state)) {
+        case AUDIO_CMD_RECORD_WAIT:
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- RECORD WAIT --",
+                   sizeof("-- RECORD WAIT --"));
+            break;
+        case AUDIO_CMD_RECORD:
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- RECORD CAPTURING --",
+                   sizeof("-- RECORD CAPTURING --"));
+            break;
+        case AUDIO_CMD_RECORD_MAP:
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- RECORD MAP --",
+                   sizeof("-- RECORD MAP --"));
+            break;
+        }
         break;
     default:
         break;
@@ -1589,5 +1604,8 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a,
                                              float frequency) {
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
+
+static inline int16_t* war_sample_buffer(war_audio_context* ctx_a,
+                                         float midi_note) {}
 
 #endif // WAR_MACROS_H

@@ -51,26 +51,29 @@
 int main() {
     CALL_CARMACK("main");
     war_producer_consumer pc;
-    pc.to_a = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
-    pc.to_wr = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
-    memset(pc.to_a, 0, PC_BUFFER_SIZE);
-    memset(pc.to_wr, 0, PC_BUFFER_SIZE);
-    pc.i_to_a = 0;
-    pc.i_to_wr = 0;
-    pc.i_from_a = 0;
-    pc.i_from_wr = 0;
+    {
+        pc.to_a = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
+        assert(pc.to_a);
+        memset(pc.to_a, 0, PC_BUFFER_SIZE);
+        pc.to_wr = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
+        assert(pc.to_wr);
+        memset(pc.to_wr, 0, PC_BUFFER_SIZE);
+        pc.i_to_a = 0;
+        pc.i_to_wr = 0;
+        pc.i_from_a = 0;
+        pc.i_from_wr = 0;
+    }
     war_atomics atomics = {
+        .state = AUDIO_CMD_STOP,
         .play_frames = 0,
-        .play = false,
         .record_frames = 0,
-        .record = false,
     };
     pthread_t war_window_render_thread;
-    pthread_t war_audio_thread;
     pthread_create(&war_window_render_thread,
                    NULL,
                    war_window_render,
                    (void* [2]){&pc, &atomics});
+    pthread_t war_audio_thread;
     pthread_create(
         &war_audio_thread, NULL, war_audio, (void* [2]){&pc, &atomics});
     pthread_join(war_window_render_thread, NULL);
@@ -78,7 +81,6 @@ int main() {
     END("main");
     return 0;
 }
-
 //-----------------------------------------------------------------------------
 // THREAD WINDOW RENDER
 //-----------------------------------------------------------------------------
@@ -139,9 +141,7 @@ void* war_window_render(void* args) {
                     ((float)num_rows_for_status_bars * ctx_vk.cell_height)) /
                    ctx_vk.cell_height);
     war_audio_context ctx_a = {
-        .state = AUDIO_CMD_STOP,
         .sample_rate = AUDIO_DEFAULT_SAMPLE_RATE,
-        .play_frames = 0,
         .BPM = AUDIO_DEFAULT_BPM,
         .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
@@ -539,10 +539,10 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_SEEK] = &&pc_seek;
     pc_window_render[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
     pc_window_render[AUDIO_CMD_RECORD] = &&pc_record;
-    pc_window_render[AUDIO_CMD_RECORD_DONE] = &&pc_record_done;
     pc_window_render[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
+    pc_window_render[AUDIO_CMD_RECORD_MAP_DONE] = &&pc_record_map_done;
     pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
-    while (!atomics->end_war) {
+    while (atomics->state != AUDIO_CMD_END_WAR) {
     pc_window_render:
         uint32_t header;
         uint32_t size;
@@ -553,12 +553,9 @@ void* war_window_render(void* args) {
         goto pc_window_render_done;
     pc_stop:
         call_carmack("from a: STOP");
-        ctx_a.state = AUDIO_CMD_STOP;
-        ctx_a.play_frames = 0;
         goto pc_window_render;
     pc_play:
         call_carmack("from a: PLAY");
-        ctx_a.state = AUDIO_CMD_PLAY;
         ctx_wr.cursor_blink_previous_us = ctx_wr.now;
         ctx_wr.cursor_blinking = false;
         ctx_wr.cursor_blink_duration_us = (uint64_t)round(
@@ -566,42 +563,30 @@ void* war_window_render(void* args) {
         goto pc_window_render;
     pc_pause:
         call_carmack("from a: PAUSE");
-        ctx_a.state = AUDIO_CMD_PAUSE;
         goto pc_window_render;
     pc_get_frames:
-        // call_carmack("from a: GET_FRAMES");
-        uint64_t play_frames;
-        memcpy(&play_frames, payload, size);
-        ctx_a.play_frames = play_frames;
         goto pc_window_render;
     pc_add_note:
         goto pc_window_render;
     pc_end_war:
         call_carmack("from a: END_WAR");
-        ctx_wr.end_window_render = true;
         goto pc_window_render;
     pc_seek:
-        call_carmack("from a: SEEK");
-        uint64_t seek_logical_frames_played;
-        memcpy(&seek_logical_frames_played, payload, size);
-        ctx_a.play_frames = seek_logical_frames_played;
         goto pc_window_render;
     pc_record_wait:
         call_carmack("from a: RECORD_WAIT");
-        ctx_a.state = AUDIO_CMD_RECORD_WAIT;
         goto pc_window_render;
     pc_record:
         call_carmack("from a: RECORD");
-        ctx_a.state = AUDIO_CMD_RECORD;
-        goto pc_window_render;
-    pc_record_done:
-        call_carmack("from a: RECORD_DONE");
-        ctx_a.state = AUDIO_CMD_RECORD_DONE;
+        atomic_store(&atomics->state, AUDIO_CMD_RECORD);
         goto pc_window_render;
     pc_record_map:
         call_carmack("from a: RECORD_MAP");
-        ctx_a.state = AUDIO_CMD_RECORD_MAP;
-        war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
+        atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP);
+        goto pc_window_render;
+    pc_record_map_done:
+        call_carmack("from a: RECORD_MAP_DONE");
+        ctx_wr.mode = MODE_NORMAL;
         goto pc_window_render;
     pc_set_threshold:
         goto pc_window_render;
@@ -620,9 +605,6 @@ void* war_window_render(void* args) {
                                          0,
                                          physical_width,
                                          physical_height);
-            }
-            if (atomic_load(&atomics->play)) {
-                ctx_a.play_frames = atomic_load(&atomics->play_frames);
             }
         }
         // cursor blink
@@ -1378,7 +1360,7 @@ void* war_window_render(void* args) {
                 }
                 // draw playback bar
                 uint32_t playback_bar_color = ctx_wr.red_hex;
-                if (ctx_a.state == AUDIO_CMD_STOP) {
+                if (atomic_load(&atomics->state) == AUDIO_CMD_STOP) {
                     float playback_bar_alpha_factor = ctx_wr.alpha_scale;
                     uint8_t playback_bar_color_alpha =
                         (playback_bar_color >> 24) & 0xFF;
@@ -1392,7 +1374,8 @@ void* war_window_render(void* args) {
                     quad_indices,
                     &quad_vertices_count,
                     &quad_indices_count,
-                    (float[3]){((float)ctx_a.play_frames / ctx_a.sample_rate) /
+                    (float[3]){((float)atomic_load(&atomics->play_frames) /
+                                ctx_a.sample_rate) /
                                    ((60.0f / ctx_a.BPM) / 4.0f),
                                ctx_wr.bottom_row,
                                ctx_wr.layers[LAYER_PLAYBACK_BAR]},
@@ -1721,7 +1704,7 @@ void* war_window_render(void* args) {
                 ctx_wr.text_status_bar_end_index =
                     (ctx_wr.viewport_cols * 3) / 4;
                 war_get_top_text(&ctx_wr);
-                war_get_middle_text(&ctx_wr, &views);
+                war_get_middle_text(&ctx_wr, &views, atomics);
                 war_get_bottom_text(&ctx_wr);
                 for (float col = 0; col < ctx_wr.viewport_cols; col++) {
                     if (ctx_wr.text_top_status_bar[(int)col] != 0) {
@@ -2261,7 +2244,8 @@ void* war_window_render(void* args) {
                     "wl_surface::destroy request", wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
-                atomic_store(&atomics->end_war, true);
+                atomic_store(&atomics->state, AUDIO_CMD_END_WAR);
+                usleep(500000);
                 goto wayland_done;
             xdg_toplevel_configure_bounds:
                 dump_bytes("xdg_toplevel_configure_bounds event",
@@ -4166,7 +4150,8 @@ void* war_window_render(void* args) {
             }
             cmd_normal_ga: {
                 call_carmack("cmd_normal_$");
-                uint32_t col = ((float)ctx_a.play_frames / ctx_a.sample_rate) /
+                uint32_t col = ((float)atomic_load(&atomics->play_frames) /
+                                ctx_a.sample_rate) /
                                ((60.0f / ctx_a.BPM) / 4.0f);
                 ctx_wr.col =
                     war_clamp_uint32(col, ctx_wr.min_col, ctx_wr.max_col);
@@ -4461,6 +4446,7 @@ void* war_window_render(void* args) {
                     timeout_state_index = 0;
                     goto cmd_done;
                 }
+                if (atomic_load(&atomics->state) == AUDIO_CMD_RECORD) {}
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -5321,8 +5307,10 @@ void* war_window_render(void* args) {
             //-----------------------------------------------------------------
             cmd_normal_a: {
                 call_carmack("cmd_normal_a");
-                atomic_fetch_xor(&atomics->play, true);
-                ctx_a.state = AUDIO_CMD_PLAY;
+                atomic_store(&atomics->state,
+                             (atomic_load(&atomics->state) != AUDIO_CMD_PLAY) ?
+                                 AUDIO_CMD_PLAY :
+                                 AUDIO_CMD_PAUSE);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5366,9 +5354,7 @@ void* war_window_render(void* args) {
             }
             cmd_normal_alt_esc: {
                 call_carmack("cmd_normal_alt_esc");
-                if (ctx_a.state != AUDIO_CMD_STOP) {
-                    war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
-                }
+                atomic_store(&atomics->state, AUDIO_CMD_STOP);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6171,9 +6157,9 @@ void* war_window_render(void* args) {
             cmd_normal_Q: {
                 call_carmack("cmd_normal_Q");
                 ctx_wr.mode = MODE_RECORD;
-                if (ctx_a.state != AUDIO_CMD_RECORD_WAIT &&
-                    ctx_a.state != AUDIO_CMD_RECORD) {
-                    war_pc_to_a(pc, AUDIO_CMD_RECORD_WAIT, 0, NULL);
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_WAIT &&
+                    atomic_load(&atomics->state) != AUDIO_CMD_RECORD) {
+                    atomic_store(&atomics->state, AUDIO_CMD_RECORD_WAIT);
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6181,7 +6167,7 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_DONE, 0, NULL);
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6192,7 +6178,7 @@ void* war_window_render(void* args) {
             //-----------------------------------------------------------------
             cmd_record_q: {
                 call_carmack("cmd_record_q");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6200,8 +6186,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 0 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             0 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6210,7 +6197,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_w: {
                 call_carmack("cmd_record_w");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6218,8 +6205,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 1 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             1 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6228,7 +6216,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_e: {
                 call_carmack("cmd_record_e");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6236,8 +6224,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 2 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             2 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6246,7 +6235,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_r: {
                 call_carmack("cmd_record_r");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6254,8 +6243,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 3 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             3 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6264,7 +6254,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_t: {
                 call_carmack("cmd_record_t");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6272,8 +6262,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 4 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             4 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6282,7 +6273,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_y: {
                 call_carmack("cmd_record_y");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6290,8 +6281,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 5 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             5 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6300,7 +6292,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_u: {
                 call_carmack("cmd_record_u");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6308,8 +6300,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 6 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             6 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6318,7 +6311,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_i: {
                 call_carmack("cmd_record_i");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6326,8 +6319,9 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                float note = 7 + 12 * (ctx_wr.record_octave + 1);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note,
+                             7 + 12 * (ctx_wr.record_octave + 1));
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6336,7 +6330,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_o: {
                 call_carmack("cmd_record_o");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6353,7 +6347,8 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note, note);
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6362,7 +6357,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_p: {
                 call_carmack("cmd_record_p");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6379,7 +6374,8 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note, note);
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6388,7 +6384,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_leftbracket: {
                 call_carmack("cmd_record_leftbracket");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6405,7 +6401,8 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note, note);
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6414,7 +6411,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_rightbracket: {
                 call_carmack("cmd_record_rightbracket");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6431,7 +6428,8 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, sizeof(float), &note);
+                atomic_store(&atomics->map_note, note);
+                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP_DONE);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -6440,7 +6438,7 @@ void* war_window_render(void* args) {
             }
             cmd_record_minus:
                 call_carmack("cmd_record_minus");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6455,7 +6453,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_0:
                 call_carmack("cmd_record_0");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6470,7 +6468,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_1:
                 call_carmack("cmd_record_1");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6485,7 +6483,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_2:
                 call_carmack("cmd_record_2");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6500,7 +6498,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_3:
                 call_carmack("cmd_record_3");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6515,7 +6513,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_4:
                 call_carmack("cmd_record_4");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6530,7 +6528,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_5:
                 call_carmack("cmd_record_5");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6545,7 +6543,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_6:
                 call_carmack("cmd_record_6");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6560,7 +6558,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_7:
                 call_carmack("cmd_record_7");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6575,7 +6573,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_8:
                 call_carmack("cmd_record_8");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6590,7 +6588,7 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_9:
                 call_carmack("cmd_record_9");
-                if (ctx_a.state != AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_MAP) {
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
                            0,
@@ -6605,11 +6603,11 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_record_esc:
                 call_carmack("cmd_record_esc");
-                if (ctx_a.state == AUDIO_CMD_RECORD_DONE) {
+                if (atomic_load(&atomics->state) == AUDIO_CMD_RECORD_MAP) {
                     // map to defualt key or break, send map to audio
                 }
                 ctx_wr.mode = MODE_NORMAL;
-                war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
+                // war_pc_to_a(pc, AUDIO_CMD_STOP, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7372,22 +7370,16 @@ void* war_window_render(void* args) {
 #endif
     xkb_state_unref(xkb_state);
     xkb_context_unref(xkb_context);
-
     end("war_window_render");
     return 0;
 }
-
 static void war_play(void* userdata) {
     void** userdata_ptrs = (void**)userdata;
     war_audio_context* ctx_a = userdata_ptrs[0];
     war_producer_consumer* pc = userdata_ptrs[1];
     war_atomics* atomics = userdata_ptrs[2];
-
-    ctx_a->play = atomic_load(&atomics->play);
-
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->play_stream);
     if (!b) return;
-
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
         static int16_t silent[AUDIO_DEFAULT_PERIOD_SIZE *
@@ -7404,33 +7396,29 @@ static void war_play(void* userdata) {
         pw_stream_queue_buffer(ctx_a->play_stream, b);
         return;
     }
-
-    // Fill actual audio
     size_t stride = sizeof(int16_t) * ctx_a->channel_count;
     uint32_t n_frames = buf->datas[0].maxsize / stride;
     if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
-
     int16_t* dst = (int16_t*)buf->datas[0].data;
     for (uint32_t f = 0; f < n_frames; ++f) {
-        int16_t sample =
-            (ctx_a->play) ? (int16_t)(sin(ctx_a->phase) * 3000) : 0;
+        int16_t sample = (atomic_load(&atomics->state) == AUDIO_CMD_PLAY) ?
+                             (int16_t)(sin(ctx_a->phase) * 3000) :
+                             0;
         for (uint32_t c = 0; c < ctx_a->channel_count; c++) *dst++ = sample;
 
         ctx_a->phase += 2.0 * M_PI * 440 / ctx_a->sample_rate;
         if (ctx_a->phase > 2.0 * M_PI) ctx_a->phase -= 2.0 * M_PI;
     }
-
     if (buf->datas[0].chunk) {
         buf->datas[0].chunk->offset = 0;
         buf->datas[0].chunk->stride = stride;
         buf->datas[0].chunk->size = n_frames * stride;
     }
-
     pw_stream_queue_buffer(ctx_a->play_stream, b);
-
-    if (ctx_a->play) { atomic_fetch_add(&atomics->play_frames, n_frames); }
+    if (atomic_load(&atomics->state) == AUDIO_CMD_PLAY) {
+        atomic_fetch_add(&atomics->play_frames, n_frames);
+    }
 }
-
 static void war_record(void* userdata) {
     void** userdata_ptrs = (void**)userdata;
     war_audio_context* ctx_a = userdata_ptrs[0];
@@ -7438,36 +7426,29 @@ static void war_record(void* userdata) {
     war_atomics* atomics = userdata_ptrs[2];
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->record_stream);
     if (!b) return;
-
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
         pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
-
-    // Example: just copy capture directly to playback (monitoring)
-    if (ctx_a->play_stream) {
-        struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx_a->play_stream);
-        if (out_b && out_b->buffer && out_b->buffer->datas[0].data) {
-            size_t stride = sizeof(int16_t) * ctx_a->channel_count;
-            uint32_t n_frames =
-                SPA_MIN(buf->datas[0].chunk->size / stride,
-                        out_b->buffer->datas[0].maxsize / stride);
-            memcpy(out_b->buffer->datas[0].data,
-                   buf->datas[0].data,
-                   n_frames * stride);
-            if (out_b->buffer->datas[0].chunk) {
-                out_b->buffer->datas[0].chunk->offset = 0;
-                out_b->buffer->datas[0].chunk->stride = stride;
-                out_b->buffer->datas[0].chunk->size = n_frames * stride;
-            }
-            pw_stream_queue_buffer(ctx_a->play_stream, out_b);
+    if (!ctx_a->play_stream) { return; }
+    struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx_a->play_stream);
+    if (out_b && out_b->buffer && out_b->buffer->datas[0].data) {
+        size_t stride = sizeof(int16_t) * ctx_a->channel_count;
+        uint32_t n_frames = SPA_MIN(buf->datas[0].chunk->size / stride,
+                                    out_b->buffer->datas[0].maxsize / stride);
+        memcpy(out_b->buffer->datas[0].data,
+               buf->datas[0].data,
+               n_frames * stride);
+        if (out_b->buffer->datas[0].chunk) {
+            out_b->buffer->datas[0].chunk->offset = 0;
+            out_b->buffer->datas[0].chunk->stride = stride;
+            out_b->buffer->datas[0].chunk->size = n_frames * stride;
         }
+        pw_stream_queue_buffer(ctx_a->play_stream, out_b);
     }
-
     pw_stream_queue_buffer(ctx_a->record_stream, b);
 }
-
 //-----------------------------------------------------------------------------
 // THREAD AUDIO
 //-----------------------------------------------------------------------------
@@ -7481,29 +7462,42 @@ void* war_audio(void* args) {
         call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
         perror("pthread_setschedparam");
     }
-    war_audio_context ctx_a = {
-        .state = AUDIO_CMD_STOP,
-        .sample_rate = AUDIO_DEFAULT_SAMPLE_RATE,
-        .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
-        .sub_period_size =
-            AUDIO_DEFAULT_PERIOD_SIZE / AUDIO_DEFAULT_SUB_PERIOD_FACTOR,
-        .BPM = AUDIO_DEFAULT_BPM,
-        .channel_count = AUDIO_DEFAULT_CHANNEL_COUNT,
-        .play_frames = 0,
-        .record_frames = 0,
-        .phase = 0.0f,
-        .play = false,
-        .record = false,
-    };
+    war_audio_context* ctx_a = malloc(sizeof(war_audio_context));
+    assert(ctx_a);
+    {
+        ctx_a->sample_rate = AUDIO_DEFAULT_SAMPLE_RATE;
+        ctx_a->period_size = AUDIO_DEFAULT_PERIOD_SIZE;
+        ctx_a->sub_period_size =
+            AUDIO_DEFAULT_PERIOD_SIZE / AUDIO_DEFAULT_SUB_PERIOD_FACTOR;
+        ctx_a->BPM = AUDIO_DEFAULT_BPM;
+        ctx_a->channel_count = AUDIO_DEFAULT_CHANNEL_COUNT;
+        ctx_a->phase = 0.0f;
+        ctx_a->sample_pool = calloc(MAX_MIDI_NOTES * AUDIO_DEFAULT_SAMPLE_RATE *
+                                        AUDIO_DEFAULT_SAMPLE_DURATION *
+                                        AUDIO_DEFAULT_CHANNEL_COUNT,
+                                    sizeof(int16_t));
+        assert(ctx_a->sample_pool);
+        ctx_a->record_buffer =
+            calloc(AUDIO_DEFAULT_SAMPLE_RATE * AUDIO_DEFAULT_SAMPLE_DURATION *
+                       AUDIO_DEFAULT_CHANNEL_COUNT,
+                   sizeof(int16_t));
+        assert(ctx_a->record_buffer);
+    }
+    void** userdata = malloc(sizeof(void*) * 3);
+    {
+        userdata[0] = ctx_a;
+        userdata[1] = pc;
+        userdata[2] = atomics;
+    }
     //-------------------------------------------------------------------------
     // PIPEWIRE
     //-------------------------------------------------------------------------
     pw_init(NULL, NULL);
-    ctx_a.pw_loop = pw_loop_new(NULL);
+    ctx_a->pw_loop = pw_loop_new(NULL);
     struct spa_audio_info_raw play_info = {
         .format = SPA_AUDIO_FORMAT_S16,
-        .rate = ctx_a.sample_rate,
-        .channels = ctx_a.channel_count,
+        .rate = ctx_a->sample_rate,
+        .channels = ctx_a->channel_count,
         .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
     };
     uint8_t play_buffer[1024];
@@ -7515,15 +7509,11 @@ void* war_audio(void* args) {
     struct pw_stream_events play_events = {
         .version = PW_VERSION_STREAM_EVENTS,
         .process = war_play,
-        .destroy = (void*)&atomics->end_war,
     };
-    ctx_a.play_stream = pw_stream_new_simple(ctx_a.pw_loop,
-                                             "WAR_play",
-                                             NULL,
-                                             &play_events,
-                                             (void* [3]){&ctx_a, pc, atomics});
+    ctx_a->play_stream = pw_stream_new_simple(
+        ctx_a->pw_loop, "WAR_play", NULL, &play_events, userdata);
     uint32_t sink_id = PW_ID_ANY;
-    pw_stream_connect(ctx_a.play_stream,
+    pw_stream_connect(ctx_a->play_stream,
                       PW_DIRECTION_OUTPUT,
                       sink_id,
                       PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
@@ -7532,8 +7522,8 @@ void* war_audio(void* args) {
                       1);
     struct spa_audio_info_raw record_info = {
         .format = SPA_AUDIO_FORMAT_S16,
-        .rate = ctx_a.sample_rate,
-        .channels = ctx_a.channel_count,
+        .rate = ctx_a->sample_rate,
+        .channels = ctx_a->channel_count,
         .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
     };
     uint8_t record_buffer[1024];
@@ -7546,27 +7536,76 @@ void* war_audio(void* args) {
         .version = PW_VERSION_STREAM_EVENTS,
         .process = war_record,
     };
-    ctx_a.record_stream =
-        pw_stream_new_simple(ctx_a.pw_loop,
-                             "WAR_record",
-                             NULL,
-                             &record_events,
-                             (void* [3]){&ctx_a, pc, atomics});
+    ctx_a->record_stream = pw_stream_new_simple(
+        ctx_a->pw_loop, "WAR_record", NULL, &record_events, userdata);
     uint32_t source_id = PW_ID_ANY;
-    pw_stream_connect(ctx_a.record_stream,
+    pw_stream_connect(ctx_a->record_stream,
                       PW_DIRECTION_INPUT,
                       source_id,
                       PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
                           PW_STREAM_FLAG_RT_PROCESS,
                       record_params,
                       1);
-start_audio:
-    pw_loop_iterate(ctx_a.pw_loop, -1);
-    goto start_audio;
+    //-------------------------------------------------------------------------
+    // PC AUDIO
+    //-------------------------------------------------------------------------
+    uint32_t header;
+    uint32_t size;
+    uint8_t payload[PC_BUFFER_SIZE];
+    void* pc_audio[AUDIO_CMD_COUNT];
+    pc_audio[AUDIO_CMD_STOP] = &&pc_stop;
+    pc_audio[AUDIO_CMD_PLAY] = &&pc_play;
+    pc_audio[AUDIO_CMD_PAUSE] = &&pc_pause;
+    pc_audio[AUDIO_CMD_GET_FRAMES] = &&pc_get_frames;
+    pc_audio[AUDIO_CMD_ADD_NOTE] = &&pc_add_note;
+    pc_audio[AUDIO_CMD_END_WAR] = &&pc_end_war;
+    pc_audio[AUDIO_CMD_SEEK] = &&pc_seek;
+    pc_audio[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
+    pc_audio[AUDIO_CMD_RECORD] = &&pc_record;
+    pc_audio[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
+    pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
+pc_audio:
+    if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
+    goto pc_audio_done;
+pc_stop:
+    goto pc_audio_done;
+pc_play:
+    goto pc_audio_done;
+pc_pause:
+    goto pc_audio_done;
+pc_get_frames:
+    goto pc_audio_done;
+pc_add_note:
+    goto pc_audio_done;
+pc_end_war:
+    goto pc_audio_done;
+pc_seek:
+    uint64_t seek_frames;
+    memcpy(&seek_frames, payload, size);
+    atomic_store(&atomics->play_frames, seek_frames);
+    goto pc_audio_done;
+pc_record_wait:
+    goto pc_audio_done;
+pc_record:
+    goto pc_audio_done;
+pc_record_map:
+    goto pc_audio_done;
+pc_set_threshold:
+    goto pc_audio_done;
+pc_audio_done:
+    pw_loop_iterate(ctx_a->pw_loop, 0);
+    switch (atomics->state) {
+    case AUDIO_CMD_END_WAR:
+        goto end_audio;
+    case AUDIO_CMD_RECORD_MAP_DONE:
+        war_pc_to_wr(pc, AUDIO_CMD_RECORD_MAP_DONE, 0, NULL);
+        goto pc_audio;
+    }
+    goto pc_audio;
 end_audio:
-    pw_stream_destroy(ctx_a.play_stream);
-    pw_stream_destroy(ctx_a.record_stream);
-    pw_loop_destroy(ctx_a.pw_loop);
+    pw_stream_destroy(ctx_a->play_stream);
+    pw_stream_destroy(ctx_a->record_stream);
+    pw_loop_destroy(ctx_a->pw_loop);
     pw_deinit();
     end("war_audio");
     return 0;

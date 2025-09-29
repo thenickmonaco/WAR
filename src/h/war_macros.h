@@ -101,8 +101,8 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
             break;
         case AUDIO_CMD_RECORD:
             memcpy(ctx_wr->text_middle_status_bar,
-                   "-- RECORD CAPTURING --",
-                   sizeof("-- RECORD CAPTURING --"));
+                   "-- RECORD --",
+                   sizeof("-- RECORD --"));
             break;
         case AUDIO_CMD_RECORD_MAP:
             memcpy(ctx_wr->text_middle_status_bar,

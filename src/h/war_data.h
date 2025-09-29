@@ -112,15 +112,15 @@ enum war_hud {
 };
 
 enum war_modes {
-    MODE_COUNT = 9,
+    MODE_COUNT = 10,
     MODE_NORMAL = 0,
     MODE_VIEWS = 1,
     MODE_VISUAL_LINE = 2,
     MODE_RECORD = 3,
-    MODE_VISUAL_BLOCK = 4,
-    MODE_INSERT = 5,
+    MODE_MIDI = 4,
+    MODE_VISUAL_BLOCK = 5,
     MODE_COMMAND = 6,
-    MODE_MIDI = 7,
+    MODE_INSERT = 7,
     MODE_O = 8,
     MODE_VISUAL = 9,
 };
@@ -129,7 +129,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 136,
+    SEQUENCE_COUNT = 138,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -270,7 +270,7 @@ enum war_audio {
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
     AUDIO_DEFAULT_SAMPLE_DURATION = 30,
     // cmds
-    AUDIO_CMD_COUNT = 13,
+    AUDIO_CMD_COUNT = 15,
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
@@ -281,8 +281,10 @@ enum war_audio {
     AUDIO_CMD_RECORD_WAIT = 8,
     AUDIO_CMD_RECORD = 9,
     AUDIO_CMD_RECORD_MAP = 10,
-    AUDIO_CMD_RECORD_MAP_DONE = 11,
-    AUDIO_CMD_SET_THRESHOLD = 12,
+    AUDIO_CMD_SET_THRESHOLD = 11,
+    AUDIO_CMD_NOTE_ON = 12,
+    AUDIO_CMD_NOTE_OFF = 13,
+    AUDIO_CMD_RESET_MAPPINGS = 14,
     // cmd sizes (not including header)
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,
@@ -294,8 +296,16 @@ typedef struct war_atomics {
     _Atomic uint64_t record_frames;
     _Atomic uint8_t state;
     _Atomic float record_threshold;
+    _Atomic uint8_t record;
+    _Atomic uint8_t play;
     _Atomic float bpm;
-    _Atomic float map_note;
+    _Atomic int16_t map_note;
+    _Atomic uint8_t map;
+    _Atomic uint8_t record_monitor;
+    _Atomic float play_gain;
+    _Atomic float record_gain;
+    _Atomic uint8_t* notes;
+    _Atomic uint8_t loop;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -313,6 +323,7 @@ typedef struct war_audio_context {
     uint32_t period_size;
     uint32_t sub_period_size;
     uint32_t channel_count;
+    uint32_t sample_duration_seconds;
     // PipeWire
     struct pw_loop* pw_loop;
     struct pw_stream* play_stream;
@@ -320,6 +331,11 @@ typedef struct war_audio_context {
     int16_t* record_buffer;
     int16_t* sample_pool;
     float phase;
+    uint8_t over_threshold;
+    uint64_t* sample_frames;
+    uint64_t* sample_frames_duration;
+    uint64_t warmup_frames;
+    float* sample_phase;
 } war_audio_context;
 
 typedef struct war_window_render_context {
@@ -440,6 +456,9 @@ typedef struct war_window_render_context {
     uint32_t color_cursor;
     uint32_t color_cursor_transparent;
     float record_octave;
+    float gain_increment;
+    float midi_octave;
+    float midi_note;
 } war_window_render_context;
 
 typedef struct war_key_trie_pool {

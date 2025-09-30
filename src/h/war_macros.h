@@ -91,6 +91,24 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
     case MODE_MIDI:
         memcpy(
             ctx_wr->text_middle_status_bar, "-- MIDI --", sizeof("-- MIDI --"));
+        uint8_t loop = atomic_load(&atomics->loop);
+        uint8_t trigger = ctx_wr->trigger;
+        if (loop && trigger) {
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_middle_index,
+                   "LOOP TRIGGER",
+                   sizeof("LOOP TRIGGER"));
+        } else if (loop && !trigger) {
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_middle_index,
+                   "LOOP",
+                   sizeof("LOOP"));
+        } else if (!loop && trigger) {
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_middle_index,
+                   "TRIGGER",
+                   sizeof("TRIGGER"));
+        }
         break;
     case MODE_RECORD:
         switch (atomic_load(&atomics->state)) {

@@ -148,9 +148,15 @@ enum war_cursor {
 
 typedef struct war_fsm_state {
     bool is_terminal;
+    uint8_t handle_release[MODE_COUNT];
     void* command[MODE_COUNT];
     uint16_t next_state[512][16];
 } war_fsm_state;
+
+typedef struct war_label {
+    void* command;
+    uint8_t handle_release;
+} war_label;
 
 typedef struct war_key_event {
     uint32_t keysym;
@@ -269,6 +275,7 @@ enum war_audio {
     AUDIO_DEFAULT_BPM = 100,
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
     AUDIO_DEFAULT_SAMPLE_DURATION = 30,
+    AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
     AUDIO_CMD_COUNT = 15,
     AUDIO_CMD_STOP = 1,
@@ -289,6 +296,7 @@ enum war_audio {
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,
     AUDIO_VOICE_COUNT = 128,
+    AUDIO_SINE_TABLE_SIZE = 1024,
 };
 
 typedef struct war_atomics {
@@ -306,6 +314,7 @@ typedef struct war_atomics {
     _Atomic float record_gain;
     _Atomic uint8_t* notes;
     _Atomic uint8_t loop;
+    _Atomic uint8_t start_war;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -459,6 +468,8 @@ typedef struct war_window_render_context {
     float gain_increment;
     float midi_octave;
     float midi_note;
+    bool trigger;
+    bool skip_release;
 } war_window_render_context;
 
 typedef struct war_key_trie_pool {

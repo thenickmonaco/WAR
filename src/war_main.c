@@ -28,6 +28,8 @@
 #include "h/war_macros.h"
 #include "h/war_main.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <pipewire-0.3/pipewire/context.h>
 #include <pipewire-0.3/pipewire/core.h>
 #include <pipewire-0.3/pipewire/pipewire.h>
@@ -45,6 +47,7 @@
 #include <spa-0.2/spa/utils/result.h>
 #include <spa-0.2/spa/utils/string.h>
 #include <stdint.h>
+#include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -76,6 +79,7 @@ int main() {
         .map = 0,
         .map_note = -1,
         .loop = 0,
+        .start_war = 0,
     };
     pthread_t war_window_render_thread;
     pthread_create(&war_window_render_thread,
@@ -156,6 +160,9 @@ void* war_window_render(void* args) {
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
     };
     war_window_render_context ctx_wr = {
+        .skip_release = 0,
+        .trigger = 0,
+        .midi_octave = 4,
         .record_octave = 4,
         .gain_increment = 0.05f,
         .trinity = false,
@@ -553,6 +560,7 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
     pc_window_render[AUDIO_CMD_NOTE_ON] = &&pc_note_on;
     pc_window_render[AUDIO_CMD_NOTE_OFF] = &&pc_note_off;
+    while (!atomic_load(&atomics->start_war)) { usleep(1000); }
     while (atomics->state != AUDIO_CMD_END_WAR) {
     pc_window_render:
         uint32_t header;
@@ -604,6 +612,7 @@ void* war_window_render(void* args) {
         int note;
         memcpy(&note, payload, size);
         atomic_store(&atomics->notes[note], 0);
+        ctx_wr.skip_release = 1;
         goto pc_window_render;
     pc_window_render_done:
         ctx_wr.now = war_get_monotonic_time_us();
@@ -3369,212 +3378,567 @@ void* war_window_render(void* args) {
                             {.keysym = XKB_KEY_c, .mod = 0},
                             {0},
                         }};
-                void* key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
+                war_label key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, views, visual_line, visual_block, insert,
                     // command, mode_m, mode_o, visual
-                    {&&cmd_normal_k, &&cmd_views_k, NULL, &&cmd_record_k},
-                    {&&cmd_normal_j, &&cmd_views_j, NULL, &&cmd_record_j},
-                    {&&cmd_normal_h, &&cmd_views_h},
-                    {&&cmd_normal_l, &&cmd_views_l, NULL, NULL, &&cmd_midi_l},
-                    {&&cmd_normal_alt_k, &&cmd_views_alt_k},
-                    {&&cmd_normal_alt_j, &&cmd_views_alt_j},
-                    {&&cmd_normal_alt_h, &&cmd_views_alt_h},
-                    {&&cmd_normal_alt_l, &&cmd_views_alt_l},
-                    {&&cmd_normal_0, NULL, NULL, &&cmd_record_0},
-                    {&&cmd_normal_$},
-                    {&&cmd_normal_G},
-                    {&&cmd_normal_gg},
-                    {&&cmd_normal_1, NULL, NULL, &&cmd_record_1, &&cmd_midi_1},
-                    {&&cmd_normal_2, NULL, NULL, &&cmd_record_2, &&cmd_midi_2},
-                    {&&cmd_normal_3, NULL, NULL, &&cmd_record_3, &&cmd_midi_3},
-                    {&&cmd_normal_4, NULL, NULL, &&cmd_record_4, &&cmd_midi_4},
-                    {&&cmd_normal_5, NULL, NULL, &&cmd_record_5, &&cmd_midi_5},
-                    {&&cmd_normal_6, NULL, NULL, &&cmd_record_6, &&cmd_midi_6},
-                    {&&cmd_normal_7, NULL, NULL, &&cmd_record_7, &&cmd_midi_7},
-                    {&&cmd_normal_8, NULL, NULL, &&cmd_record_8, &&cmd_midi_8},
-                    {&&cmd_normal_9, NULL, NULL, &&cmd_record_9, &&cmd_midi_9},
-                    {&&cmd_normal_ctrl_equal},
-                    {&&cmd_normal_ctrl_minus},
-                    {&&cmd_normal_ctrl_alt_equal},
-                    {&&cmd_normal_ctrl_alt_minus},
-                    {&&cmd_normal_ctrl_0},
-                    {&&cmd_normal_esc,
-                     &&cmd_views_esc,
-                     NULL,
-                     &&cmd_record_esc,
-                     &&cmd_midi_esc},
-                    {&&cmd_normal_f},
-                    {&&cmd_normal_t, NULL, NULL, &&cmd_record_t, &&cmd_midi_t},
-                    {&&cmd_normal_x, NULL, NULL, NULL, &&cmd_midi_x},
-                    {&&cmd_normal_T},
-                    {&&cmd_normal_F},
-                    {&&cmd_normal_gb},
-                    {&&cmd_normal_gt},
-                    {&&cmd_normal_gm},
-                    {&&cmd_normal_s},
-                    {&&cmd_normal_z, &&cmd_views_z},
-                    {&&cmd_normal_return, &&cmd_views_return},
-                    {&&cmd_normal_spacediv},
-                    {&&cmd_normal_spacedov},
-                    {&&cmd_normal_spacediw},
-                    {&&cmd_normal_spaceda},
-                    {&&cmd_normal_spacehov},
-                    {&&cmd_normal_spacehiv},
-                    {&&cmd_normal_spaceha},
-                    {&&cmd_normal_spacesov},
-                    {&&cmd_normal_spacesiv},
-                    {&&cmd_normal_spacesa},
-                    {&&cmd_normal_spacemov},
-                    {&&cmd_normal_spacemiv},
-                    {&&cmd_normal_spacema},
-                    {&&cmd_normal_spaceuov},
-                    {&&cmd_normal_spaceuiv},
-                    {&&cmd_normal_spaceua},
-                    {&&cmd_normal_spacea},
-                    {&&cmd_normal_alt_g},
-                    {&&cmd_normal_alt_t},
-                    {&&cmd_normal_alt_n},
-                    {&&cmd_normal_alt_s},
-                    {&&cmd_normal_alt_m},
-                    {&&cmd_normal_alt_y},
-                    {&&cmd_normal_alt_z},
-                    {&&cmd_normal_alt_q},
-                    {&&cmd_normal_alt_e},
-                    {&&cmd_normal_a},
-                    {&&cmd_normal_space1},
-                    {&&cmd_normal_space2},
-                    {&&cmd_normal_space3},
-                    {&&cmd_normal_space4},
-                    {&&cmd_normal_space5},
-                    {&&cmd_normal_space6},
-                    {&&cmd_normal_space7},
-                    {&&cmd_normal_space8},
-                    {&&cmd_normal_space9},
-                    {&&cmd_normal_space0},
-                    {&&cmd_normal_alt_1},
-                    {&&cmd_normal_alt_2},
-                    {&&cmd_normal_alt_3},
-                    {&&cmd_normal_alt_4},
-                    {&&cmd_normal_alt_5},
-                    {&&cmd_normal_alt_6},
-                    {&&cmd_normal_alt_7},
-                    {&&cmd_normal_alt_8},
-                    {&&cmd_normal_alt_9},
-                    {&&cmd_normal_alt_0},
-                    {&&cmd_normal_spacedspacea},
-                    {&&cmd_normal_alt_K},
-                    {&&cmd_normal_alt_J},
-                    {&&cmd_normal_alt_H},
-                    {&&cmd_normal_alt_L},
-                    {&&cmd_normal_d, &&cmd_views_d},
-                    {&&cmd_normal_m, NULL, NULL, NULL, &&cmd_midi_m},
-                    {&&cmd_normal_X},
-                    {&&cmd_normal_w, NULL, NULL, &&cmd_record_w, &&cmd_midi_w},
-                    {&&cmd_normal_W},
-                    {&&cmd_normal_e, NULL, NULL, &&cmd_record_e, &&cmd_midi_e},
-                    {&&cmd_normal_E},
-                    {&&cmd_normal_b},
-                    {&&cmd_normal_k, &&cmd_views_k},
-                    {&&cmd_normal_j, &&cmd_views_j},
-                    {&&cmd_normal_h, &&cmd_views_h},
-                    {&&cmd_normal_l, &&cmd_views_l},
-                    {&&cmd_normal_alt_k},
-                    {&&cmd_normal_alt_j},
-                    {&&cmd_normal_alt_h},
-                    {&&cmd_normal_alt_l},
-                    {&&cmd_normal_alt_u},
-                    {&&cmd_normal_alt_d},
-                    {&&cmd_normal_A},
-                    {&&cmd_normal_alt_a},
-                    {&&cmd_normal_alt_esc},
-                    {&&cmd_normal_alt_A},
-                    {&&cmd_normal_ctrl_a},
-                    {&&cmd_normal_tab, NULL, NULL, &&cmd_record_tab},
-                    {&&cmd_normal_spacehiw},
-                    {&&cmd_normal_spacesiw},
-                    {&&cmd_normal_spaceuiw},
-                    {&&cmd_normal_ga},
-                    {&&cmd_normal_shift_tab},
-                    {&&cmd_normal_V, &&cmd_views_V},
-                    {&&cmd_normal_K,
-                     &&cmd_views_K,
-                     &&cmd_midi_K,
-                     &&cmd_record_K,
-                     &&cmd_midi_K},
-                    {&&cmd_normal_J,
-                     &&cmd_views_J,
-                     NULL,
-                     &&cmd_record_J,
-                     &&cmd_midi_J},
-                    {&&cmd_normal_spacem},
-                    {&&cmd_normal_B},
-                    {&&cmd_normal_q, NULL, NULL, &&cmd_record_q, &&cmd_midi_q},
-                    {&&cmd_normal_Q, NULL, NULL, &&cmd_record_Q},
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_r,
-                        &&cmd_midi_r,
+                        {&&cmd_normal_k, 0},
+                        {&&cmd_views_k, 0},
+                        {NULL, 0},
+                        {&&cmd_record_k, 0},
                     },
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_y,
-                        &&cmd_midi_y,
+                        {&&cmd_normal_j, 0},
+                        {&&cmd_views_j, 0},
+                        {NULL, 0},
+                        {&&cmd_record_j, 0},
                     },
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_u,
-                        &&cmd_midi_u,
+                        {&&cmd_normal_h, 0},
+                        {&&cmd_views_h, 0},
                     },
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_i,
-                        &&cmd_midi_i,
+                        {&&cmd_normal_l, 0},
+                        {&&cmd_views_l, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_midi_l, 0},
                     },
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_o,
-                        &&cmd_midi_o,
+                        {&&cmd_normal_alt_k, 0},
+                        {&&cmd_views_alt_k, 0},
                     },
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_p,
-                        &&cmd_midi_p,
+                        {&&cmd_normal_alt_j, 0},
+                        {&&cmd_views_alt_j, 0},
+                    },
+                    {{&&cmd_normal_alt_h, 0}, {&&cmd_views_alt_h, 0}},
+                    {{&&cmd_normal_alt_l, 0}, {&&cmd_views_alt_l, 0}},
+                    {{&&cmd_normal_0, 0},
+                     {NULL, 0},
+                     {NULL, 0},
+
+                     {&&cmd_record_0, 0}},
+                    {
+                        {&&cmd_normal_$, 0},
                     },
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_leftbracket,
-                        &&cmd_midi_leftbracket,
+                        {&&cmd_normal_G, 0},
                     },
                     {
-                        NULL,
-                        NULL,
-                        NULL,
-                        &&cmd_record_rightbracket,
-                        &&cmd_midi_rightbracket,
+                        {&&cmd_normal_gg, 0},
                     },
-                    {NULL, NULL, NULL, &&cmd_record_minus, &&cmd_midi_minus},
-                    {&&cmd_void},
-                    {NULL, NULL, NULL, NULL, &&cmd_midi_c},
+                    {
+                        {&&cmd_normal_1, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_1, 0},
+                        {&&cmd_midi_1, 0},
+                    },
+                    {
+                        {&&cmd_normal_2, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_2, 0},
+                        {&&cmd_midi_2, 0},
+                    },
+                    {
+                        {&&cmd_normal_3, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_3, 0},
+                        {&&cmd_midi_3, 0},
+                    },
+                    {
+                        {&&cmd_normal_4, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_4, 0},
+                        {&&cmd_midi_4, 0},
+                    },
+                    {
+                        {&&cmd_normal_5, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_5, 0},
+                        {&&cmd_midi_5, 0},
+                    },
+                    {
+                        {&&cmd_normal_6, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_6, 0},
+                        {&&cmd_midi_6, 0},
+                    },
+                    {
+                        {&&cmd_normal_7, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_7, 0},
+                        {&&cmd_midi_7, 0},
+                    },
+                    {
+                        {&&cmd_normal_8, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_8, 0},
+                        {&&cmd_midi_8, 0},
+                    },
+                    {
+                        {&&cmd_normal_9, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_9, 0},
+                        {&&cmd_midi_9, 0},
+                    },
+                    {
+                        {&&cmd_normal_ctrl_equal, 0},
+                    },
+                    {
+                        {&&cmd_normal_ctrl_minus, 0},
+                    },
+                    {
+                        {&&cmd_normal_ctrl_alt_equal, 0},
+                    },
+                    {
+                        {&&cmd_normal_ctrl_alt_minus, 0},
+                    },
+                    {
+                        {&&cmd_normal_ctrl_0, 0},
+                    },
+                    {
+                        {&&cmd_normal_esc, 0},
+                        {&&cmd_views_esc, 0},
+                        {NULL, 0},
+                        {&&cmd_record_esc, 0},
+                        {&&cmd_midi_esc, 0},
+                    },
+                    {
+                        {&&cmd_normal_f, 0},
+                    },
+                    {
+                        {&&cmd_normal_t, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_t, 0},
+                        {&&cmd_midi_t, 1},
+                    },
+                    {
+                        {&&cmd_normal_x, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_midi_x, 0},
+                    },
+                    {
+                        {&&cmd_normal_T, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_midi_T, 0},
+                    },
+                    {
+                        {&&cmd_normal_F, 0},
+                    },
+                    {
+                        {&&cmd_normal_gb, 0},
+                    },
+                    {
+                        {&&cmd_normal_gt, 0},
+                    },
+                    {
+                        {&&cmd_normal_gm, 0},
+                    },
+                    {
+                        {&&cmd_normal_s, 0},
+                    },
+                    {
+                        {&&cmd_normal_z, 0},
+                        {&&cmd_views_z, 0},
+                    },
+                    {
+                        {&&cmd_normal_return, 0},
+                        {&&cmd_views_return, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacediv, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacedov, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacediw, 0},
+                    },
+                    {
+                        {&&cmd_normal_spaceda, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacehov, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacehiv, 0},
+                    },
+                    {
+                        {&&cmd_normal_spaceha, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacesov, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacesiv, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacesa, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacemov, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacemiv, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacema, 0},
+                    },
+                    {
+                        {&&cmd_normal_spaceuov, 0},
+                    },
+                    {
+                        {&&cmd_normal_spaceuiv, 0},
+                    },
+                    {
+                        {&&cmd_normal_spaceua, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacea, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_g, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_t, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_n, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_s, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_m, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_y, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_z, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_q, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_e, 0},
+                    },
+                    {
+                        {&&cmd_normal_a, 0},
+                    },
+                    {
+                        {&&cmd_normal_space1, 0},
+                    },
+                    {
+                        {&&cmd_normal_space2, 0},
+                    },
+                    {
+                        {&&cmd_normal_space3, 0},
+                    },
+                    {
+                        {&&cmd_normal_space4, 0},
+                    },
+                    {
+                        {&&cmd_normal_space5, 0},
+                    },
+                    {
+                        {&&cmd_normal_space6, 0},
+                    },
+                    {
+                        {&&cmd_normal_space7, 0},
+                    },
+                    {
+                        {&&cmd_normal_space8, 0},
+                    },
+                    {
+                        {&&cmd_normal_space9, 0},
+                    },
+                    {
+                        {&&cmd_normal_space0, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_1, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_2, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_3, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_4, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_5, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_6, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_7, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_8, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_9, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_0, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacedspacea, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_K, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_J, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_H, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_L, 0},
+                    },
+                    {
+                        {&&cmd_normal_d, 0},
+                        {&&cmd_views_d, 0},
+                    },
+                    {
+                        {&&cmd_normal_m, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_midi_m, 0},
+                    },
+                    {
+                        {&&cmd_normal_X, 0},
+                    },
+                    {
+                        {&&cmd_normal_w, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_w, 0},
+                        {&&cmd_midi_w, 1},
+                    },
+                    {
+                        {&&cmd_normal_W, 0},
+                    },
+                    {
+                        {&&cmd_normal_e, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_e, 0},
+                        {&&cmd_midi_e, 1},
+                    },
+                    {
+                        {&&cmd_normal_E, 0},
+                    },
+                    {
+                        {&&cmd_normal_b, 0},
+                    },
+                    {
+                        {&&cmd_normal_k, 0},
+                        {&&cmd_views_k, 0},
+                    },
+                    {
+                        {&&cmd_normal_j, 0},
+                        {&&cmd_views_j, 0},
+                    },
+                    {
+                        {&&cmd_normal_h, 0},
+                        {&&cmd_views_h, 0},
+                    },
+                    {
+                        {&&cmd_normal_l, 0},
+                        {&&cmd_views_l, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_k, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_j, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_h, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_l, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_u, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_d, 0},
+                    },
+                    {
+                        {&&cmd_normal_A, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_a, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_esc, 0},
+                    },
+                    {
+                        {&&cmd_normal_alt_A, 0},
+                    },
+                    {
+                        {&&cmd_normal_ctrl_a, 0},
+                    },
+                    {
+                        {&&cmd_normal_tab, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_tab, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacehiw, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacesiw, 0},
+                    },
+                    {
+                        {&&cmd_normal_spaceuiw, 0},
+                    },
+                    {
+                        {&&cmd_normal_ga, 0},
+                    },
+                    {
+                        {&&cmd_normal_shift_tab, 0},
+                    },
+                    {
+                        {&&cmd_normal_V, 0},
+                        {&&cmd_views_V, 0},
+                    },
+                    {
+                        {&&cmd_normal_K, 0},
+                        {&&cmd_views_K, 0},
+                        {&&cmd_midi_K, 0},
+                        {&&cmd_record_K, 0},
+                        {&&cmd_midi_K, 0},
+                    },
+                    {
+                        {&&cmd_normal_J, 0},
+                        {&&cmd_views_J, 0},
+                        {NULL, 0},
+                        {&&cmd_record_J, 0},
+                        {&&cmd_midi_J, 0},
+                    },
+                    {
+                        {&&cmd_normal_spacem, 0},
+                    },
+                    {
+                        {&&cmd_normal_B, 0},
+                    },
+                    {
+                        {&&cmd_normal_q, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_q, 0},
+                        {&&cmd_midi_q, 1},
+                    },
+                    {
+                        {&&cmd_normal_Q, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_Q, 0},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_r, 0},
+                        {&&cmd_midi_r, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_y, 0},
+                        {&&cmd_midi_y, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_u, 0},
+                        {&&cmd_midi_u, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_i, 0},
+                        {&&cmd_midi_i, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_o, 0},
+                        {&&cmd_midi_o, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_p, 0},
+                        {&&cmd_midi_p, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_leftbracket, 0},
+                        {&&cmd_midi_leftbracket, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_rightbracket, 0},
+                        {&&cmd_midi_rightbracket, 1},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_record_minus, 0},
+                        {&&cmd_midi_minus, 0},
+                    },
+                    {
+                        {&&cmd_void, 0},
+                    },
+                    {
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {NULL, 0},
+                        {&&cmd_midi_c, 0},
+                    },
                 };
                 // default to void command if unset
                 for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
                     for (size_t m = 0; m < MODE_COUNT; m++) {
-                        if (key_labels[s][m] == NULL) {
-                            key_labels[s][m] = &&cmd_void;
+                        if (key_labels[s][m].command == NULL) {
+                            key_labels[s][m].command = &&cmd_void;
                         }
                     }
                 }
@@ -3603,9 +3967,11 @@ void* war_window_render(void* args) {
                         parent = next;
                     }
                     fsm[parent].is_terminal = true;
-                    memcpy(fsm[parent].command,
-                           key_labels[seq_idx],
-                           sizeof(void*) * MODE_COUNT);
+                    for (size_t m = 0; m < MODE_COUNT; m++) {
+                        fsm[parent].command[m] = key_labels[seq_idx][m].command;
+                        fsm[parent].handle_release[m] =
+                            key_labels[seq_idx][m].handle_release;
+                    }
                 }
                 assert(state_counter < MAX_STATES);
                 munmap(keymap_map, keymap_size);
@@ -3671,6 +4037,16 @@ void* war_window_render(void* args) {
                         timeout_state_index = 0;
                         timeout_start_us = 0;
                     }
+                    if (ctx_wr.skip_release) {
+                        ctx_wr.skip_release = 0;
+                        goto cmd_done;
+                    }
+                    uint16_t idx =
+                        fsm[current_state_index].next_state[keysym][mod];
+                    if (fsm[idx].handle_release[ctx_wr.mode] &&
+                        !ctx_wr.trigger) {
+                        goto* fsm[idx].command[ctx_wr.mode];
+                    }
                     goto cmd_done;
                 }
                 if (ctx_wr.num_chars_in_sequence < MAX_SEQUENCE_LENGTH) {
@@ -3703,9 +4079,11 @@ void* war_window_render(void* args) {
                     uint16_t temp = current_state_index;
                     current_state_index = 0;
                     // repeats
-                    repeat_keysym = keysym;
-                    repeat_mod = mod;
-                    repeating = false;
+                    if (ctx_wr.trigger) {
+                        repeat_keysym = keysym;
+                        repeat_mod = mod;
+                        repeating = false;
+                    }
                     // timeouts
                     if (keysym != KEYSYM_ESCAPE && mod != 0) {
                         timeout_state_index = 0;
@@ -7231,6 +7609,14 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
+            cmd_midi_T: {
+                call_carmack("cmd_midi_T");
+                ctx_wr.trigger ^= 1;
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_midi_x: {
                 call_carmack("cmd_midi_x");
                 war_pc_to_a(pc, AUDIO_CMD_RESET_MAPPINGS, 0, NULL);
@@ -7805,14 +8191,9 @@ static void war_record(void* userdata) {
     war_producer_consumer* pc = userdata_ptrs[1];
     war_atomics* atomics = userdata_ptrs[2];
 
-    if (!atomic_load(&atomics->record)) {
-        ctx_a->over_threshold = 0;
-        ctx_a->warmup_frames = 0; // reset warmup if recording disabled
-        return;
-    }
-
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->record_stream);
     if (!b) return;
+
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
         pw_stream_queue_buffer(ctx_a->record_stream, b);
@@ -7823,23 +8204,39 @@ static void war_record(void* userdata) {
     uint32_t n_frames = buf->datas[0].chunk->size / stride;
     int16_t* src = (int16_t*)buf->datas[0].data;
 
+    // --- Check if recording is enabled ---
+    if (!atomic_load(&atomics->record)) {
+        ctx_a->over_threshold = 0;
+        ctx_a->warmup_frames =
+            ctx_a->sample_rate /
+            AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR; // reset warmup for next session
+        pw_stream_queue_buffer(ctx_a->record_stream, b);
+        return;
+    }
+
     // --- WARMUP: skip initial buffers ---
-    // if (ctx_a->warmup_frames < ctx_a->sample_rate / 10) { // ~100ms
-    //    ctx_a->warmup_frames += n_frames;
-    //    pw_stream_queue_buffer(ctx_a->record_stream, b);
-    //    return;
-    //}
+    if (ctx_a->warmup_frames > 0) {
+        uint32_t frames_to_consume = n_frames;
+        if (frames_to_consume > ctx_a->warmup_frames)
+            frames_to_consume = (uint32_t)ctx_a->warmup_frames;
+
+        ctx_a->warmup_frames -= frames_to_consume;
+        pw_stream_queue_buffer(ctx_a->record_stream, b);
+        return;
+    }
 
     // --- RMS threshold detection ---
     uint64_t total_samples = (uint64_t)n_frames * ctx_a->channel_count;
-    float threshold = atomic_load(&atomics->record_threshold); // e.g. 0.02f
+    float threshold = atomic_load(&atomics->record_threshold); // e.g., 0.02f
     float sum_sq = 0.0f;
+
     for (uint64_t i = 0; i < total_samples; i++) {
         float s = (float)src[i] / 32767.0f;
         sum_sq += s * s;
     }
+
     float rms = sqrtf(sum_sq / total_samples);
-    printf("[DEBUG] RMS=%.4f threshold=%.4f\n", rms, threshold);
+    call_carmack("[DEBUG] RMS=%.4f threshold=%.4f\n", rms, threshold);
 
     if (rms >= threshold && !ctx_a->over_threshold) {
         ctx_a->over_threshold = 1;
@@ -7855,18 +8252,21 @@ static void war_record(void* userdata) {
     uint64_t buffer_capacity = (uint64_t)ctx_a->sample_rate *
                                ctx_a->sample_duration_seconds *
                                ctx_a->channel_count;
+
     uint64_t frame_offset = atomic_fetch_add(&atomics->record_frames, n_frames);
     uint64_t write_offset =
         (frame_offset * ctx_a->channel_count) % buffer_capacity;
+
     float gain = atomic_load(&atomics->record_gain);
+
     for (uint64_t i = 0; i < total_samples; i++) {
         ctx_a->record_buffer[(write_offset + i) % buffer_capacity] =
             (int16_t)(src[i] * gain);
     }
 
-    // --- Optional debug ---
+    // --- Optional debug: first few samples ---
     for (uint64_t i = 0; i < 10 && i < total_samples; i++) {
-        printf("record_buffer[%llu] = %d\n", i, ctx_a->record_buffer[i]);
+        call_carmack("record_buffer[%llu] = %d\n", i, ctx_a->record_buffer[i]);
     }
 
     // --- Monitor playback if enabled ---
@@ -7876,15 +8276,18 @@ static void war_record(void* userdata) {
             uint32_t max_frames_out = out_b->buffer->datas[0].maxsize / stride;
             uint32_t copy_frames = SPA_MIN(n_frames, max_frames_out);
             memcpy(out_b->buffer->datas[0].data, src, copy_frames * stride);
+
             if (out_b->buffer->datas[0].chunk) {
                 out_b->buffer->datas[0].chunk->offset = 0;
                 out_b->buffer->datas[0].chunk->stride = stride;
                 out_b->buffer->datas[0].chunk->size = copy_frames * stride;
             }
+
             pw_stream_queue_buffer(ctx_a->play_stream, out_b);
         }
     }
 
+    // --- Requeue record buffer ---
     pw_stream_queue_buffer(ctx_a->record_stream, b);
 }
 //-----------------------------------------------------------------------------
@@ -7933,27 +8336,30 @@ void* war_audio(void* args) {
                        ctx_a->sample_duration_seconds * ctx_a->channel_count,
                    sizeof(int16_t));
         assert(ctx_a->sample_pool);
-        // TEST
+        float sine_table[AUDIO_SINE_TABLE_SIZE];
+        for (int i = 0; i < AUDIO_SINE_TABLE_SIZE; i++) {
+            sine_table[i] = sinf(2.0f * M_PI * i / AUDIO_SINE_TABLE_SIZE);
+        }
         for (int note = 0; note < MAX_MIDI_NOTES; note++) {
             int16_t* note_sample =
                 ctx_a->sample_pool + note * ctx_a->sample_rate *
                                          ctx_a->sample_duration_seconds *
                                          ctx_a->channel_count;
-
             float freq = 440.0f * powf(2.0f, (note - 69) / 12.0f); // MIDI to Hz
             uint32_t n_samples =
                 ctx_a->sample_rate * ctx_a->sample_duration_seconds;
-
-            // Find closest integer number of cycles that fits in n_samples
-            uint32_t n_cycles =
-                (uint32_t)(freq * ctx_a->sample_duration_seconds + 0.5f);
-            float phase_inc = (2.0f * M_PI * n_cycles) / n_samples;
-
+            float table_phase_inc =
+                (freq * AUDIO_SINE_TABLE_SIZE) / ctx_a->sample_rate;
+            float table_phase = 0.0f;
             for (uint32_t i = 0; i < n_samples; i++) {
-                float phase = i * phase_inc;
-                int16_t sample = (int16_t)(sinf(phase) * 3000);
-                for (int c = 0; c < ctx_a->channel_count; c++)
+                int index = (int)table_phase % AUDIO_SINE_TABLE_SIZE;
+                int16_t sample = (int16_t)(sine_table[index] * 3000);
+                for (uint64_t c = 0; c < ctx_a->channel_count; c++) {
                     note_sample[i * ctx_a->channel_count + c] = sample;
+                }
+                table_phase += table_phase_inc;
+                if (table_phase >= AUDIO_SINE_TABLE_SIZE)
+                    table_phase -= AUDIO_SINE_TABLE_SIZE;
             }
             ctx_a->sample_frames_duration[note] = n_samples;
         }
@@ -8048,6 +8454,7 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_NOTE_ON] = &&pc_note_on;
     pc_audio[AUDIO_CMD_NOTE_OFF] = &&pc_note_off;
     pc_audio[AUDIO_CMD_RESET_MAPPINGS] = &&pc_reset_mappings;
+    atomic_store(&atomics->start_war, 1);
 pc_audio:
     if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
     goto pc_audio_done;
@@ -8075,6 +8482,7 @@ pc_record:
 pc_record_map:
     uint64_t record_frames = atomic_exchange(&atomics->record_frames, 0);
     int16_t map_note = atomic_exchange(&atomics->map_note, -1);
+    ctx_a->over_threshold = 0;
     if (map_note != -1) {
         memcpy(ctx_a->sample_pool + map_note * ctx_a->sample_rate *
                                         ctx_a->sample_duration_seconds *
@@ -8083,19 +8491,23 @@ pc_record_map:
                record_frames * ctx_a->channel_count * sizeof(int16_t));
         ctx_a->sample_frames_duration[map_note] = record_frames;
         uint32_t frames_to_print = SPA_MIN(10, (uint32_t)record_frames);
-        printf("Mapped note %d first %u frames: ", map_note, frames_to_print);
+        call_carmack(
+            "Mapped note %d first %u frames: ", map_note, frames_to_print);
         for (uint32_t i = 0; i < frames_to_print * ctx_a->channel_count; i++) {
-            printf("%d ",
-                   ctx_a->sample_pool + map_note * ctx_a->sample_rate *
-                                            ctx_a->sample_duration_seconds *
-                                            ctx_a->channel_count);
+            call_carmack("%d ",
+                         ctx_a->sample_pool +
+                             map_note * ctx_a->sample_rate *
+                                 ctx_a->sample_duration_seconds *
+                                 ctx_a->channel_count);
         }
         printf("\n");
         call_carmack("mapped to %i", map_note);
     }
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-    goto pc_audio_done;
-pc_record_map_done:
+    memset(ctx_a->record_buffer,
+           0,
+           ctx_a->sample_rate * ctx_a->sample_duration_seconds *
+               ctx_a->channel_count * sizeof(int16_t));
     goto pc_audio_done;
 pc_set_threshold:
     goto pc_audio_done;

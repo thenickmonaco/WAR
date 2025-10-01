@@ -199,7 +199,7 @@ typedef struct war_notes {
     uint32_t count;
 } war_notes;
 
-typedef struct war_samples {
+typedef struct war_samples_old {
     uint32_t* note_index;
     float* sample_position;
     float* gain;
@@ -212,7 +212,7 @@ typedef struct war_samples {
     float* envelope_value;   // current amplitude
     uint32_t count;
     uint32_t max_voices;
-} war_samples;
+} war_samples_old;
 
 typedef struct war_note_quads {
     uint64_t* timestamp;
@@ -274,7 +274,7 @@ enum war_audio {
     AUDIO_DEFAULT_CHANNEL_COUNT = 2,
     AUDIO_DEFAULT_BPM = 100,
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
-    AUDIO_DEFAULT_SAMPLE_DURATION = 30,
+    AUDIO_DEFAULT_SAMPLE_DURATION = 15,
     AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
     AUDIO_CMD_COUNT = 15,
@@ -315,6 +315,7 @@ typedef struct war_atomics {
     _Atomic uint8_t* notes;
     _Atomic uint8_t loop;
     _Atomic uint8_t start_war;
+    _Atomic uint8_t resample;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -326,9 +327,17 @@ typedef struct war_producer_consumer {
     uint32_t i_from_wr;
 } war_producer_consumer;
 
+typedef struct war_samples {
+    int16_t** ptrs;
+    uint64_t* ptrs_frames_start;
+    uint64_t* ptrs_frames_duration;
+    uint32_t ptrs_count;
+} war_samples;
+
 typedef struct war_audio_context {
     float BPM;
     uint32_t sample_rate;
+    uint32_t record_rate;
     uint32_t period_size;
     uint32_t sub_period_size;
     uint32_t channel_count;

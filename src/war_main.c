@@ -80,6 +80,7 @@ int main() {
         .map_note = -1,
         .loop = 0,
         .start_war = 0,
+        .resample = 1,
     };
     pthread_t war_window_render_thread;
     pthread_create(&war_window_render_thread,
@@ -4079,7 +4080,8 @@ void* war_window_render(void* args) {
                     uint16_t temp = current_state_index;
                     current_state_index = 0;
                     // repeats
-                    if (ctx_wr.trigger) {
+                    if (ctx_wr.mode != MODE_MIDI ||
+                        (ctx_wr.mode == MODE_MIDI && ctx_wr.trigger)) {
                         repeat_keysym = keysym;
                         repeat_mod = mod;
                         repeating = false;
@@ -8122,8 +8124,11 @@ static void war_play(void* userdata) {
     war_audio_context* ctx_a = userdata_ptrs[0];
     war_producer_consumer* pc = userdata_ptrs[1];
     war_atomics* atomics = userdata_ptrs[2];
+    war_samples* samples = userdata_ptrs[3]; // your new sample meta
+
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->play_stream);
     if (!b) return;
+
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
         if (buf && buf->datas[0].maxsize > 0) {
@@ -8138,51 +8143,70 @@ static void war_play(void* userdata) {
         pw_stream_queue_buffer(ctx_a->play_stream, b);
         return;
     }
+
     size_t stride = sizeof(int16_t) * ctx_a->channel_count;
     uint32_t n_frames = buf->datas[0].maxsize / stride;
     if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
+
     int16_t* dst = (int16_t*)buf->datas[0].data;
+    memset(dst, 0, n_frames * stride);
+
     float gain = atomic_load(&atomics->play_gain);
     uint8_t play = atomic_load(&atomics->play);
-    memset(dst, 0, n_frames * stride);
+
     for (int note = 0; note < MAX_MIDI_NOTES; note++) {
         if (!atomic_load(&atomics->notes[note])) {
             ctx_a->sample_frames[note] = 0;
             continue;
         }
-        int16_t* note_sample =
-            ctx_a->sample_pool + note * ctx_a->sample_rate *
-                                     ctx_a->sample_duration_seconds *
-                                     ctx_a->channel_count;
-        uint64_t pos = ctx_a->sample_frames[note];
-        uint64_t note_length = ctx_a->sample_frames_duration[note];
-        uint8_t loop = atomic_load(&atomics->loop);
-        if (note_length == 0) continue;
-        for (uint32_t f = 0; f < n_frames; f++) {
-            for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
-                uint64_t idx = pos * ctx_a->channel_count + c;
-                int32_t mixed = dst[f * ctx_a->channel_count + c] +
-                                (int32_t)(note_sample[idx] * gain);
-                if (mixed > 32767) mixed = 32767;
-                if (mixed < -32768) mixed = -32768;
-                dst[f * ctx_a->channel_count + c] = (int16_t)mixed;
-            }
-            pos++;
-            if (pos >= note_length) {
-                pos = 0;
-                if (!loop) {
-                    war_pc_to_wr(pc, AUDIO_CMD_NOTE_OFF, sizeof(int), &note);
+
+        war_samples* note_samples = &samples[note];
+
+        if (note_samples->ptrs_count == 0) continue;
+
+        // Iterate over all sample pointers for this note
+        for (uint32_t s = 0; s < note_samples->ptrs_count; s++) {
+            int16_t* sample_ptr = note_samples->ptrs[s];
+            uint64_t start_frame = note_samples->ptrs_frames_start[s];
+            uint64_t duration = note_samples->ptrs_frames_duration[s];
+
+            if (!sample_ptr || duration == 0) continue;
+
+            uint64_t pos =
+                ctx_a->sample_frames[note]; // per-note playback position
+
+            for (uint32_t f = 0; f < n_frames; f++) {
+                for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
+                    uint64_t idx = pos * ctx_a->channel_count + c;
+                    int32_t mixed = dst[f * ctx_a->channel_count + c] +
+                                    (int32_t)(sample_ptr[idx] * gain);
+                    if (mixed > 32767) mixed = 32767;
+                    if (mixed < -32768) mixed = -32768;
+                    dst[f * ctx_a->channel_count + c] = (int16_t)mixed;
+                }
+
+                pos++;
+                if (pos >= duration) {
+                    pos = 0;
+                    if (!atomic_load(&atomics->loop)) {
+                        war_pc_to_wr(
+                            pc, AUDIO_CMD_NOTE_OFF, sizeof(int), &note);
+                    }
                 }
             }
+
+            ctx_a->sample_frames[note] = pos;
         }
-        ctx_a->sample_frames[note] = pos;
     }
+
     if (buf->datas[0].chunk) {
         buf->datas[0].chunk->offset = 0;
         buf->datas[0].chunk->stride = stride;
         buf->datas[0].chunk->size = n_frames * stride;
     }
+
     pw_stream_queue_buffer(ctx_a->play_stream, b);
+
     if (play) { atomic_fetch_add(&atomics->play_frames, n_frames); }
 }
 static void war_record(void* userdata) {
@@ -8190,6 +8214,7 @@ static void war_record(void* userdata) {
     war_audio_context* ctx_a = userdata_ptrs[0];
     war_producer_consumer* pc = userdata_ptrs[1];
     war_atomics* atomics = userdata_ptrs[2];
+    war_samples* samples = userdata_ptrs[3];
 
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->record_stream);
     if (!b) return;
@@ -8201,40 +8226,34 @@ static void war_record(void* userdata) {
     }
 
     size_t stride = sizeof(int16_t) * ctx_a->channel_count;
-    uint32_t n_frames = buf->datas[0].chunk->size / stride;
+    uint32_t n_frames_in = buf->datas[0].chunk->size / stride;
     int16_t* src = (int16_t*)buf->datas[0].data;
 
-    // --- Check if recording is enabled ---
     if (!atomic_load(&atomics->record)) {
         ctx_a->over_threshold = 0;
         ctx_a->warmup_frames =
-            ctx_a->sample_rate /
-            AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR; // reset warmup for next session
+            ctx_a->sample_rate / AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR;
         pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
 
-    // --- WARMUP: skip initial buffers ---
+    // --- WARMUP ---
     if (ctx_a->warmup_frames > 0) {
-        uint32_t frames_to_consume = n_frames;
-        if (frames_to_consume > ctx_a->warmup_frames)
-            frames_to_consume = (uint32_t)ctx_a->warmup_frames;
-
+        uint32_t frames_to_consume =
+            SPA_MIN(n_frames_in, (uint32_t)ctx_a->warmup_frames);
         ctx_a->warmup_frames -= frames_to_consume;
         pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
 
-    // --- RMS threshold detection ---
-    uint64_t total_samples = (uint64_t)n_frames * ctx_a->channel_count;
-    float threshold = atomic_load(&atomics->record_threshold); // e.g., 0.02f
+    // --- RMS detection ---
+    uint64_t total_samples = (uint64_t)n_frames_in * ctx_a->channel_count;
+    float threshold = atomic_load(&atomics->record_threshold);
     float sum_sq = 0.0f;
-
     for (uint64_t i = 0; i < total_samples; i++) {
         float s = (float)src[i] / 32767.0f;
         sum_sq += s * s;
     }
-
     float rms = sqrtf(sum_sq / total_samples);
     call_carmack("[DEBUG] RMS=%.4f threshold=%.4f\n", rms, threshold);
 
@@ -8248,46 +8267,73 @@ static void war_record(void* userdata) {
         return;
     }
 
-    // --- Write audio to record buffer ---
+    // --- Determine frame offset in internal buffer ---
+    uint64_t frame_offset =
+        atomic_fetch_add(&atomics->record_frames, n_frames_in);
     uint64_t buffer_capacity = (uint64_t)ctx_a->sample_rate *
                                ctx_a->sample_duration_seconds *
                                ctx_a->channel_count;
 
-    uint64_t frame_offset = atomic_fetch_add(&atomics->record_frames, n_frames);
-    uint64_t write_offset =
-        (frame_offset * ctx_a->channel_count) % buffer_capacity;
-
     float gain = atomic_load(&atomics->record_gain);
+    int do_resample = atomic_load(&atomics->resample);
+    float input_rate =
+        (float)
+            ctx_a->record_rate; // assume you set ctx_a->record_rate somewhere
+    float output_rate = (float)ctx_a->sample_rate;
 
-    for (uint64_t i = 0; i < total_samples; i++) {
-        ctx_a->record_buffer[(write_offset + i) % buffer_capacity] =
-            (int16_t)(src[i] * gain);
+    if (do_resample && input_rate != output_rate) {
+        // --- Resample with linear interpolation ---
+        uint32_t n_frames_out =
+            (uint32_t)(n_frames_in * output_rate / input_rate);
+        int16_t* temp =
+            malloc(n_frames_out * ctx_a->channel_count * sizeof(int16_t));
+        for (uint32_t f = 0; f < n_frames_out; f++) {
+            float src_pos = f * (input_rate / output_rate);
+            uint32_t idx0 = (uint32_t)src_pos;
+            uint32_t idx1 = SPA_MIN(idx0 + 1, n_frames_in - 1);
+            float frac = src_pos - (float)idx0;
+            for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
+                float s0 = src[idx0 * ctx_a->channel_count + c] * gain;
+                float s1 = src[idx1 * ctx_a->channel_count + c] * gain;
+                float val = s0 + frac * (s1 - s0);
+                if (val > 32767.f) val = 32767.f;
+                if (val < -32768.f) val = -32768.f;
+                temp[f * ctx_a->channel_count + c] = (int16_t)val;
+            }
+        }
+
+        // --- Copy resampled data into circular record buffer ---
+        for (uint64_t i = 0; i < (uint64_t)n_frames_out * ctx_a->channel_count;
+             i++) {
+            ctx_a->record_buffer[(frame_offset * ctx_a->channel_count + i) %
+                                 buffer_capacity] = temp[i];
+        }
+        free(temp);
+
+    } else {
+        // --- No resample: copy directly ---
+        for (uint64_t i = 0; i < total_samples; i++) {
+            ctx_a->record_buffer[(frame_offset * ctx_a->channel_count + i) %
+                                 buffer_capacity] = (int16_t)(src[i] * gain);
+        }
     }
 
-    // --- Optional debug: first few samples ---
-    for (uint64_t i = 0; i < 10 && i < total_samples; i++) {
-        call_carmack("record_buffer[%llu] = %d\n", i, ctx_a->record_buffer[i]);
-    }
-
-    // --- Monitor playback if enabled ---
+    // --- Monitor playback ---
     if (ctx_a->play_stream && atomic_load(&atomics->record_monitor)) {
         struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx_a->play_stream);
         if (out_b && out_b->buffer && out_b->buffer->datas[0].data) {
             uint32_t max_frames_out = out_b->buffer->datas[0].maxsize / stride;
-            uint32_t copy_frames = SPA_MIN(n_frames, max_frames_out);
+            uint32_t copy_frames = SPA_MIN(n_frames_in, max_frames_out);
             memcpy(out_b->buffer->datas[0].data, src, copy_frames * stride);
-
             if (out_b->buffer->datas[0].chunk) {
                 out_b->buffer->datas[0].chunk->offset = 0;
                 out_b->buffer->datas[0].chunk->stride = stride;
                 out_b->buffer->datas[0].chunk->size = copy_frames * stride;
             }
-
             pw_stream_queue_buffer(ctx_a->play_stream, out_b);
         }
     }
 
-    // --- Requeue record buffer ---
     pw_stream_queue_buffer(ctx_a->record_stream, b);
 }
 //-----------------------------------------------------------------------------
@@ -8312,6 +8358,24 @@ void* war_audio(void* args) {
     //-------------------------------------------------------------------------
     // AUDIO CONTEXT
     //-------------------------------------------------------------------------
+    float sine_table[AUDIO_SINE_TABLE_SIZE];
+    for (int i = 0; i < AUDIO_SINE_TABLE_SIZE; i++) {
+        sine_table[i] = sinf(2.0f * M_PI * i / AUDIO_SINE_TABLE_SIZE);
+    }
+    war_samples* samples;
+    {
+        samples = calloc(MAX_MIDI_NOTES, sizeof(war_samples));
+        assert(samples);
+        for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+            samples[i].ptrs = calloc(MAX_MIDI_NOTES, sizeof(int16_t*));
+            assert(samples[i].ptrs);
+            samples[i].ptrs_count = 0;
+            samples[i].ptrs_frames_start =
+                calloc(MAX_MIDI_NOTES, sizeof(uint64_t));
+            samples[i].ptrs_frames_duration =
+                calloc(MAX_MIDI_NOTES, sizeof(uint64_t));
+        }
+    }
     war_audio_context* ctx_a = malloc(sizeof(war_audio_context));
     {
         assert(ctx_a);
@@ -8336,10 +8400,6 @@ void* war_audio(void* args) {
                        ctx_a->sample_duration_seconds * ctx_a->channel_count,
                    sizeof(int16_t));
         assert(ctx_a->sample_pool);
-        float sine_table[AUDIO_SINE_TABLE_SIZE];
-        for (int i = 0; i < AUDIO_SINE_TABLE_SIZE; i++) {
-            sine_table[i] = sinf(2.0f * M_PI * i / AUDIO_SINE_TABLE_SIZE);
-        }
         for (int note = 0; note < MAX_MIDI_NOTES; note++) {
             int16_t* note_sample =
                 ctx_a->sample_pool + note * ctx_a->sample_rate *
@@ -8361,7 +8421,11 @@ void* war_audio(void* args) {
                 if (table_phase >= AUDIO_SINE_TABLE_SIZE)
                     table_phase -= AUDIO_SINE_TABLE_SIZE;
             }
-            ctx_a->sample_frames_duration[note] = n_samples;
+            samples[note].ptrs[samples[note].ptrs_count] = note_sample;
+            samples[note].ptrs_frames_duration[samples[note].ptrs_count] =
+                n_samples;
+            samples[note].ptrs_frames_start[samples[note].ptrs_count] = 0;
+            samples[note].ptrs_count++;
         }
         ctx_a->record_buffer =
             calloc(ctx_a->sample_rate * ctx_a->sample_duration_seconds *
@@ -8369,12 +8433,14 @@ void* war_audio(void* args) {
                    sizeof(int16_t));
         assert(ctx_a->record_buffer);
         ctx_a->warmup_frames = 0;
+        ctx_a->record_rate = ctx_a->sample_rate;
     }
-    void** userdata = malloc(sizeof(void*) * 3);
+    void** userdata = malloc(sizeof(void*) * 4);
     {
         userdata[0] = ctx_a;
         userdata[1] = pc;
         userdata[2] = atomics;
+        userdata[3] = samples;
     }
     //-------------------------------------------------------------------------
     // PIPEWIRE
@@ -8433,6 +8499,12 @@ void* war_audio(void* args) {
                           PW_STREAM_FLAG_RT_PROCESS,
                       record_params,
                       1);
+    while (pw_stream_get_state(ctx_a->record_stream, NULL) !=
+           PW_STREAM_STATE_PAUSED) {
+        pw_loop_iterate(ctx_a->pw_loop, 1);
+        struct timespec ts = {0, 500000};
+        nanosleep(&ts, NULL);
+    }
     //-------------------------------------------------------------------------
     // PC AUDIO
     //-------------------------------------------------------------------------
@@ -8455,6 +8527,7 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_NOTE_OFF] = &&pc_note_off;
     pc_audio[AUDIO_CMD_RESET_MAPPINGS] = &&pc_reset_mappings;
     atomic_store(&atomics->start_war, 1);
+    struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
     if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
     goto pc_audio_done;
@@ -8484,23 +8557,17 @@ pc_record_map:
     int16_t map_note = atomic_exchange(&atomics->map_note, -1);
     ctx_a->over_threshold = 0;
     if (map_note != -1) {
-        memcpy(ctx_a->sample_pool + map_note * ctx_a->sample_rate *
-                                        ctx_a->sample_duration_seconds *
-                                        ctx_a->channel_count,
+        int16_t* note_sample =
+            ctx_a->sample_pool + map_note * ctx_a->sample_rate *
+                                     ctx_a->sample_duration_seconds *
+                                     ctx_a->channel_count;
+        memcpy(note_sample,
                ctx_a->record_buffer,
                record_frames * ctx_a->channel_count * sizeof(int16_t));
-        ctx_a->sample_frames_duration[map_note] = record_frames;
-        uint32_t frames_to_print = SPA_MIN(10, (uint32_t)record_frames);
-        call_carmack(
-            "Mapped note %d first %u frames: ", map_note, frames_to_print);
-        for (uint32_t i = 0; i < frames_to_print * ctx_a->channel_count; i++) {
-            call_carmack("%d ",
-                         ctx_a->sample_pool +
-                             map_note * ctx_a->sample_rate *
-                                 ctx_a->sample_duration_seconds *
-                                 ctx_a->channel_count);
-        }
-        printf("\n");
+        samples[map_note].ptrs[0] = note_sample;
+        samples[map_note].ptrs_frames_duration[0] = record_frames;
+        samples[map_note].ptrs_frames_start[0] = 0;
+        samples[map_note].ptrs_count = 1;
         call_carmack("mapped to %i", map_note);
     }
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
@@ -8524,26 +8591,34 @@ pc_reset_mappings:
         float freq = 440.0f * powf(2.0f, (note - 69) / 12.0f); // MIDI to Hz
         uint32_t n_samples =
             ctx_a->sample_rate * ctx_a->sample_duration_seconds;
-        uint32_t n_cycles =
-            (uint32_t)(freq * ctx_a->sample_duration_seconds + 0.5f);
-        float phase_inc = (2.0f * M_PI * n_cycles) / n_samples;
+        float table_phase_inc =
+            (freq * AUDIO_SINE_TABLE_SIZE) / ctx_a->sample_rate;
+        float table_phase = 0.0f;
         for (uint32_t i = 0; i < n_samples; i++) {
-            float phase = i * phase_inc;
-            int16_t sample = (int16_t)(sinf(phase) * 3000);
-            for (int c = 0; c < ctx_a->channel_count; c++)
+            int index = (int)table_phase % AUDIO_SINE_TABLE_SIZE;
+            int16_t sample = (int16_t)(sine_table[index] * 3000);
+            for (uint64_t c = 0; c < ctx_a->channel_count; c++) {
                 note_sample[i * ctx_a->channel_count + c] = sample;
+            }
+            table_phase += table_phase_inc;
+            if (table_phase >= AUDIO_SINE_TABLE_SIZE)
+                table_phase -= AUDIO_SINE_TABLE_SIZE;
         }
-        ctx_a->sample_frames_duration[note] = n_samples;
-        ctx_a->sample_frames[note] = 0;
+        samples[note].ptrs[samples[note].ptrs_count] = note_sample;
+        samples[note].ptrs_frames_duration[samples[note].ptrs_count] =
+            n_samples;
+        samples[note].ptrs_frames_start[samples[note].ptrs_count] = 0;
+        samples[note].ptrs_count = 1;
     }
     goto pc_audio_done;
 pc_audio_done:
-    pw_loop_iterate(ctx_a->pw_loop, 0);
+    pw_loop_iterate(ctx_a->pw_loop, 1);
     switch (atomics->state) {
     case AUDIO_CMD_END_WAR: {
         goto end_audio;
     }
     }
+    nanosleep(&ts, NULL);
     goto pc_audio;
 end_audio:
     pw_stream_destroy(ctx_a->play_stream);

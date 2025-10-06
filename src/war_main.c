@@ -81,6 +81,7 @@ int main() {
         .loop = 0,
         .start_war = 0,
         .resample = 1,
+        .midi_record_frames = 0,
     };
     pthread_t war_window_render_thread;
     pthread_create(&war_window_render_thread,
@@ -561,6 +562,10 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
     pc_window_render[AUDIO_CMD_NOTE_ON] = &&pc_note_on;
     pc_window_render[AUDIO_CMD_NOTE_OFF] = &&pc_note_off;
+    pc_window_render[AUDIO_CMD_RESET_MAPPINGS] = &&pc_reset_mappings;
+    pc_window_render[AUDIO_CMD_MIDI_RECORD_WAIT] = &&pc_midi_record_wait;
+    pc_window_render[AUDIO_CMD_MIDI_RECORD] = &&pc_midi_record;
+    pc_window_render[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
     while (atomics->state != AUDIO_CMD_END_WAR) {
     pc_window_render:
@@ -573,6 +578,7 @@ void* war_window_render(void* args) {
         goto pc_window_render_done;
     pc_stop:
         call_carmack("from a: STOP");
+        atomic_store(&atomics->state, AUDIO_CMD_STOP);
         goto pc_window_render;
     pc_play:
         call_carmack("from a: PLAY");
@@ -608,12 +614,25 @@ void* war_window_render(void* args) {
         goto pc_window_render;
     pc_note_on:
         goto pc_window_render;
-    pc_note_off:
+    pc_note_off: {
         call_carmack("from a: NOTE_OFF");
         int note;
         memcpy(&note, payload, size);
-        atomic_store(&atomics->notes[note], 0);
         ctx_wr.skip_release = 1;
+        goto pc_window_render;
+    }
+    pc_reset_mappings:
+        call_carmack("from a: RESET_MAPPINGS");
+        goto pc_window_render;
+    pc_midi_record:
+        call_carmack("from a: MIDI_RECORD");
+        atomic_store(&atomics->state, AUDIO_CMD_MIDI_RECORD);
+        goto pc_window_render;
+    pc_midi_record_wait:
+        call_carmack("from a: MIDI_RECORD_WAIT");
+        goto pc_window_render;
+    pc_midi_record_map:
+        call_carmack("from a: MIDI_RECORD_MAP");
         goto pc_window_render;
     pc_window_render_done:
         ctx_wr.now = war_get_monotonic_time_us();
@@ -3860,6 +3879,7 @@ void* war_window_render(void* args) {
                         {NULL, 0},
                         {NULL, 0},
                         {&&cmd_record_Q, 0},
+                        {&&cmd_midi_Q, 0},
                     },
                     {
                         {NULL, 0},
@@ -7629,9 +7649,7 @@ void* war_window_render(void* args) {
             }
             cmd_midi_c: {
                 call_carmack("cmd_midi_c");
-                for (int i = 0; i < MAX_MIDI_NOTES; i++) {
-                    atomic_store(&atomics->notes[i], 0);
-                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF_ALL, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7659,10 +7677,48 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
+            cmd_midi_Q: {
+                call_carmack("cmd_midi_Q");
+                uint8_t previous = atomic_fetch_xor(&atomics->midi_record, 1);
+                if (previous) {
+                    atomic_store(&atomics->state, AUDIO_CMD_MIDI_RECORD_MAP);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                atomic_store(&atomics->state, AUDIO_CMD_MIDI_RECORD_WAIT);
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_midi_q: {
                 call_carmack("cmd_midi_q");
-                atomic_fetch_xor(
-                    &atomics->notes[0 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 0 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7670,8 +7726,28 @@ void* war_window_render(void* args) {
             }
             cmd_midi_w: {
                 call_carmack("cmd_midi_w");
-                atomic_fetch_xor(
-                    &atomics->notes[1 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 1 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7679,8 +7755,28 @@ void* war_window_render(void* args) {
             }
             cmd_midi_e: {
                 call_carmack("cmd_midi_e");
-                atomic_fetch_xor(
-                    &atomics->notes[2 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 2 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7688,8 +7784,28 @@ void* war_window_render(void* args) {
             }
             cmd_midi_r: {
                 call_carmack("cmd_midi_r");
-                atomic_fetch_xor(
-                    &atomics->notes[3 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 3 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7697,8 +7813,28 @@ void* war_window_render(void* args) {
             }
             cmd_midi_t: {
                 call_carmack("cmd_midi_t");
-                atomic_fetch_xor(
-                    &atomics->notes[4 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 4 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7706,8 +7842,28 @@ void* war_window_render(void* args) {
             }
             cmd_midi_y: {
                 call_carmack("cmd_midi_y");
-                atomic_fetch_xor(
-                    &atomics->notes[5 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 5 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7715,8 +7871,28 @@ void* war_window_render(void* args) {
             }
             cmd_midi_u: {
                 call_carmack("cmd_midi_u");
-                atomic_fetch_xor(
-                    &atomics->notes[6 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 6 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7724,8 +7900,28 @@ void* war_window_render(void* args) {
             }
             cmd_midi_i: {
                 call_carmack("cmd_midi_i");
-                atomic_fetch_xor(
-                    &atomics->notes[7 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 7 + 12 * ((int)ctx_wr.midi_octave + 1);
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7733,8 +7929,36 @@ void* war_window_render(void* args) {
             }
             cmd_midi_o: {
                 call_carmack("cmd_midi_o");
-                atomic_fetch_xor(
-                    &atomics->notes[8 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 8 + 12 * (ctx_wr.midi_octave + 1);
+                if (note > 127) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7742,8 +7966,36 @@ void* war_window_render(void* args) {
             }
             cmd_midi_p: {
                 call_carmack("cmd_midi_p");
-                atomic_fetch_xor(
-                    &atomics->notes[9 + 12 * ((int)ctx_wr.midi_octave + 1)], 1);
+                int note = 9 + 12 * (ctx_wr.midi_octave + 1);
+                if (note > 127) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7751,9 +8003,36 @@ void* war_window_render(void* args) {
             }
             cmd_midi_leftbracket: {
                 call_carmack("cmd_midi_leftbracket");
-                atomic_fetch_xor(
-                    &atomics->notes[10 + 12 * ((int)ctx_wr.midi_octave + 1)],
-                    1);
+                int note = 10 + 12 * (ctx_wr.midi_octave + 1);
+                if (note > 127) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7761,9 +8040,36 @@ void* war_window_render(void* args) {
             }
             cmd_midi_rightbracket: {
                 call_carmack("cmd_midi_rightbracket");
-                atomic_fetch_xor(
-                    &atomics->notes[11 + 12 * ((int)ctx_wr.midi_octave + 1)],
-                    1);
+                int note = 11 + 12 * (ctx_wr.midi_octave + 1);
+                if (note > 127) {
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
+                    atomic_store(&atomics->map_note, note);
+                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                    ctx_wr.mode = MODE_NORMAL;
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                if (atomic_load(&atomics->notes_on[note])) {
+                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
+                    ctx_wr.numeric_prefix = 0;
+                    memset(ctx_wr.input_sequence,
+                           0,
+                           sizeof(ctx_wr.input_sequence));
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7788,9 +8094,11 @@ void* war_window_render(void* args) {
             cmd_midi_esc: {
                 call_carmack("cmd_midi_esc");
                 ctx_wr.mode = MODE_NORMAL;
-                for (int i = 0; i < MAX_MIDI_NOTES; i++) {
-                    atomic_store(&atomics->notes[i], 0);
-                }
+                war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF_ALL, 0, NULL);
+                atomic_store(&atomics->midi_record, 0);
+                atomic_store(&atomics->map_note, -1);
+                atomic_store(&atomics->state, AUDIO_CMD_STOP);
+                // war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -8120,15 +8428,15 @@ void* war_window_render(void* args) {
     return 0;
 }
 static void war_play(void* userdata) {
-    void** userdata_ptrs = (void**)userdata;
-    war_audio_context* ctx_a = userdata_ptrs[0];
-    war_producer_consumer* pc = userdata_ptrs[1];
-    war_atomics* atomics = userdata_ptrs[2];
-    war_samples* samples = userdata_ptrs[3]; // your new sample meta
-
+    void** data = (void**)userdata;
+    war_audio_context* ctx_a = data[0];
+    war_producer_consumer* pc = data[1];
+    war_atomics* atomics = data[2];
+    war_samples* samples = data[3];
+    war_samples* record_samples = data[4];
+    int16_t* sample_pool = data[5];
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->play_stream);
     if (!b) return;
-
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
         if (buf && buf->datas[0].maxsize > 0) {
@@ -8143,38 +8451,26 @@ static void war_play(void* userdata) {
         pw_stream_queue_buffer(ctx_a->play_stream, b);
         return;
     }
-
     size_t stride = sizeof(int16_t) * ctx_a->channel_count;
     uint32_t n_frames = buf->datas[0].maxsize / stride;
     if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
-
     int16_t* dst = (int16_t*)buf->datas[0].data;
     memset(dst, 0, n_frames * stride);
-
     float gain = atomic_load(&atomics->play_gain);
     uint8_t play = atomic_load(&atomics->play);
-
+    uint8_t midi_record = atomic_load(&atomics->midi_record);
     for (int note = 0; note < MAX_MIDI_NOTES; note++) {
-        if (!atomic_load(&atomics->notes[note])) {
-            ctx_a->sample_frames[note] = 0;
+        if (!atomic_load(&atomics->notes_on[note]) ||
+            samples->samples_count[note] == 0) {
             continue;
         }
-
-        war_samples* note_samples = &samples[note];
-
-        if (note_samples->ptrs_count == 0) continue;
-
-        // Iterate over all sample pointers for this note
-        for (uint32_t s = 0; s < note_samples->ptrs_count; s++) {
-            int16_t* sample_ptr = note_samples->ptrs[s];
-            uint64_t start_frame = note_samples->ptrs_frames_start[s];
-            uint64_t duration = note_samples->ptrs_frames_duration[s];
-
-            if (!sample_ptr || duration == 0) continue;
-
-            uint64_t pos =
-                ctx_a->sample_frames[note]; // per-note playback position
-
+        for (uint32_t s = 0; s < samples->samples_count[note]; s++) {
+            int samples_i = note * MAX_SAMPLES_PER_NOTE + s;
+            int16_t* sample_ptr = samples->samples[samples_i];
+            uint64_t start_frame = samples->samples_frames_start[samples_i];
+            uint64_t duration = samples->samples_frames_duration[samples_i];
+            uint64_t pos = ctx_a->sample_frames[note];
+            if (!sample_ptr || duration == 0 || pos < start_frame) { continue; }
             for (uint32_t f = 0; f < n_frames; f++) {
                 for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
                     uint64_t idx = pos * ctx_a->channel_count + c;
@@ -8184,51 +8480,51 @@ static void war_play(void* userdata) {
                     if (mixed < -32768) mixed = -32768;
                     dst[f * ctx_a->channel_count + c] = (int16_t)mixed;
                 }
-
                 pos++;
-                if (pos >= duration) {
+                if (pos >= duration + start_frame) {
                     pos = 0;
                     if (!atomic_load(&atomics->loop)) {
-                        war_pc_to_wr(
-                            pc, AUDIO_CMD_NOTE_OFF, sizeof(int), &note);
+                        ctx_a->previous_note_states[note] =
+                            atomic_load(&atomics->notes_on[note]);
+                        atomic_store(&atomics->notes_on[note], 0);
+                        war_pc_to_wr(pc, AUDIO_CMD_NOTE_OFF, 0, NULL);
                     }
                 }
             }
-
             ctx_a->sample_frames[note] = pos;
         }
     }
-
     if (buf->datas[0].chunk) {
         buf->datas[0].chunk->offset = 0;
         buf->datas[0].chunk->stride = stride;
         buf->datas[0].chunk->size = n_frames * stride;
     }
-
     pw_stream_queue_buffer(ctx_a->play_stream, b);
-
     if (play) { atomic_fetch_add(&atomics->play_frames, n_frames); }
+    if (midi_record && record_samples->samples_count > 0) {
+        atomic_fetch_add(&atomics->midi_record_frames, n_frames);
+    } else if (!midi_record) {
+        atomic_store(&atomics->midi_record_frames, 0);
+    }
 }
 static void war_record(void* userdata) {
-    void** userdata_ptrs = (void**)userdata;
-    war_audio_context* ctx_a = userdata_ptrs[0];
-    war_producer_consumer* pc = userdata_ptrs[1];
-    war_atomics* atomics = userdata_ptrs[2];
-    war_samples* samples = userdata_ptrs[3];
-
+    void** data = (void**)userdata;
+    war_audio_context* ctx_a = data[0];
+    war_producer_consumer* pc = data[1];
+    war_atomics* atomics = data[2];
+    war_samples* samples = data[3];
+    war_samples* record_samples = data[4];
+    int16_t* sample_pool = data[5];
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->record_stream);
     if (!b) return;
-
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
         pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
-
     size_t stride = sizeof(int16_t) * ctx_a->channel_count;
     uint32_t n_frames_in = buf->datas[0].chunk->size / stride;
     int16_t* src = (int16_t*)buf->datas[0].data;
-
     if (!atomic_load(&atomics->record)) {
         ctx_a->over_threshold = 0;
         ctx_a->warmup_frames =
@@ -8236,8 +8532,6 @@ static void war_record(void* userdata) {
         pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
-
-    // --- WARMUP ---
     if (ctx_a->warmup_frames > 0) {
         uint32_t frames_to_consume =
             SPA_MIN(n_frames_in, (uint32_t)ctx_a->warmup_frames);
@@ -8245,8 +8539,6 @@ static void war_record(void* userdata) {
         pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
-
-    // --- RMS detection ---
     uint64_t total_samples = (uint64_t)n_frames_in * ctx_a->channel_count;
     float threshold = atomic_load(&atomics->record_threshold);
     float sum_sq = 0.0f;
@@ -8255,71 +8547,32 @@ static void war_record(void* userdata) {
         sum_sq += s * s;
     }
     float rms = sqrtf(sum_sq / total_samples);
-    call_carmack("[DEBUG] RMS=%.4f threshold=%.4f\n", rms, threshold);
-
     if (rms >= threshold && !ctx_a->over_threshold) {
         ctx_a->over_threshold = 1;
         war_pc_to_wr(pc, AUDIO_CMD_RECORD, 0, NULL);
     }
-
     if (!ctx_a->over_threshold) {
         pw_stream_queue_buffer(ctx_a->record_stream, b);
         return;
     }
-
-    // --- Determine frame offset in internal buffer ---
     uint64_t frame_offset =
         atomic_fetch_add(&atomics->record_frames, n_frames_in);
-    uint64_t buffer_capacity = (uint64_t)ctx_a->sample_rate *
-                               ctx_a->sample_duration_seconds *
-                               ctx_a->channel_count;
-
+    uint64_t buffer_frames =
+        (ctx_a->sample_rate * ctx_a->sample_duration_seconds);
+    uint64_t start_frame = frame_offset % buffer_frames;
     float gain = atomic_load(&atomics->record_gain);
-    int do_resample = atomic_load(&atomics->resample);
-    float input_rate =
-        (float)
-            ctx_a->record_rate; // assume you set ctx_a->record_rate somewhere
-    float output_rate = (float)ctx_a->sample_rate;
-
-    if (do_resample && input_rate != output_rate) {
-        // --- Resample with linear interpolation ---
-        uint32_t n_frames_out =
-            (uint32_t)(n_frames_in * output_rate / input_rate);
-        int16_t* temp =
-            malloc(n_frames_out * ctx_a->channel_count * sizeof(int16_t));
-        for (uint32_t f = 0; f < n_frames_out; f++) {
-            float src_pos = f * (input_rate / output_rate);
-            uint32_t idx0 = (uint32_t)src_pos;
-            uint32_t idx1 = SPA_MIN(idx0 + 1, n_frames_in - 1);
-            float frac = src_pos - (float)idx0;
-            for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
-                float s0 = src[idx0 * ctx_a->channel_count + c] * gain;
-                float s1 = src[idx1 * ctx_a->channel_count + c] * gain;
-                float val = s0 + frac * (s1 - s0);
-                if (val > 32767.f) val = 32767.f;
-                if (val < -32768.f) val = -32768.f;
-                temp[f * ctx_a->channel_count + c] = (int16_t)val;
-            }
-        }
-
-        // --- Copy resampled data into circular record buffer ---
-        for (uint64_t i = 0; i < (uint64_t)n_frames_out * ctx_a->channel_count;
-             i++) {
-            ctx_a->record_buffer[(frame_offset * ctx_a->channel_count + i) %
-                                 buffer_capacity] = temp[i];
-        }
-        free(temp);
-
-    } else {
-        // --- No resample: copy directly ---
-        for (uint64_t i = 0; i < total_samples; i++) {
-            ctx_a->record_buffer[(frame_offset * ctx_a->channel_count + i) %
-                                 buffer_capacity] = (int16_t)(src[i] * gain);
-        }
+    uint64_t first_part = buffer_frames - start_frame;
+    if (first_part > n_frames_in) first_part = n_frames_in;
+    uint64_t second_part = n_frames_in - first_part;
+    for (uint64_t i = 0; i < first_part * ctx_a->channel_count; i++) {
+        ctx_a->record_buffer[start_frame * ctx_a->channel_count + i] =
+            (int16_t)(src[i] * gain);
     }
-
-    // --- Monitor playback ---
-    if (ctx_a->play_stream && atomic_load(&atomics->record_monitor)) {
+    for (uint64_t i = 0; i < second_part * ctx_a->channel_count; i++) {
+        ctx_a->record_buffer[i] =
+            (int16_t)(src[first_part * ctx_a->channel_count + i] * gain);
+    }
+    if (atomic_load(&atomics->record_monitor) && ctx_a->play_stream) {
         struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx_a->play_stream);
         if (out_b && out_b->buffer && out_b->buffer->datas[0].data) {
             uint32_t max_frames_out = out_b->buffer->datas[0].maxsize / stride;
@@ -8333,7 +8586,6 @@ static void war_record(void* userdata) {
             pw_stream_queue_buffer(ctx_a->play_stream, out_b);
         }
     }
-
     pw_stream_queue_buffer(ctx_a->record_stream, b);
 }
 //-----------------------------------------------------------------------------
@@ -8344,11 +8596,9 @@ void* war_audio(void* args) {
     void** args_ptrs = (void**)args;
     war_producer_consumer* pc = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
-    {
-        atomics->notes = calloc(MAX_MIDI_NOTES, sizeof(uint8_t));
-        for (int i = 0; i < MAX_MIDI_NOTES; i++) {
-            atomic_init(&atomics->notes[i], 0);
-        }
+    atomics->notes_on = malloc(sizeof(uint8_t) * MAX_MIDI_NOTES);
+    for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+        atomic_init(&atomics->notes_on[i], 0);
     }
     struct sched_param param = {.sched_priority = 10};
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
@@ -8358,90 +8608,258 @@ void* war_audio(void* args) {
     //-------------------------------------------------------------------------
     // AUDIO CONTEXT
     //-------------------------------------------------------------------------
+    war_audio_context* ctx_a = malloc(sizeof(war_audio_context));
+    assert(ctx_a);
+    ctx_a->sample_frames = malloc(MAX_MIDI_NOTES * sizeof(uint64_t));
+    memset(ctx_a->sample_frames, 0, sizeof(uint64_t) * MAX_MIDI_NOTES);
+    assert(ctx_a->sample_frames);
+    ctx_a->sample_frames_duration = malloc(MAX_MIDI_NOTES * sizeof(uint64_t));
+    memset(ctx_a->sample_frames_duration, 0, sizeof(uint64_t) * MAX_MIDI_NOTES);
+    assert(ctx_a->sample_frames_duration);
+    ctx_a->sample_phase = malloc(MAX_MIDI_NOTES * sizeof(float));
+    memset(ctx_a->sample_phase, 0, sizeof(float) * MAX_MIDI_NOTES);
+    assert(ctx_a->sample_phase);
+    ctx_a->sample_rate = AUDIO_DEFAULT_SAMPLE_RATE;
+    ctx_a->period_size = AUDIO_DEFAULT_PERIOD_SIZE;
+    ctx_a->sub_period_size =
+        AUDIO_DEFAULT_PERIOD_SIZE / AUDIO_DEFAULT_SUB_PERIOD_FACTOR;
+    ctx_a->BPM = AUDIO_DEFAULT_BPM;
+    ctx_a->channel_count = AUDIO_DEFAULT_CHANNEL_COUNT;
+    ctx_a->phase = 0.0f;
+    ctx_a->sample_duration_seconds = AUDIO_DEFAULT_SAMPLE_DURATION;
+    ctx_a->over_threshold = 0;
+    ctx_a->record_buffer =
+        malloc(ctx_a->sample_rate * ctx_a->sample_duration_seconds *
+               ctx_a->channel_count * sizeof(int16_t));
+    memset(ctx_a->record_buffer,
+           0,
+           ctx_a->sample_rate * ctx_a->sample_duration_seconds *
+               ctx_a->channel_count * sizeof(int16_t));
+    assert(ctx_a->record_buffer);
+    ctx_a->warmup_frames = 0;
+    ctx_a->default_attack = 0.0f;
+    ctx_a->default_sustain = 1.0f;
+    ctx_a->default_release = 0.0f;
+    ctx_a->default_gain = 1.0f;
+    ctx_a->resample_buffer =
+        malloc(ctx_a->sample_rate * ctx_a->sample_duration_seconds *
+               ctx_a->channel_count * sizeof(int16_t));
+    memset(ctx_a->resample_buffer,
+           0,
+           ctx_a->sample_rate * ctx_a->sample_duration_seconds *
+               ctx_a->channel_count * sizeof(int16_t));
+    assert(ctx_a->resample_buffer);
+    ctx_a->previous_note_states = malloc(sizeof(uint8_t) * MAX_MIDI_NOTES);
+    assert(ctx_a->previous_note_states);
+    ctx_a->note_play_start =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_MIDI_NOTES); // 2D
+    assert(ctx_a->note_play_start);
+    memset(ctx_a->note_play_start,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_MIDI_NOTES);
+    //-------------------------------------------------------------------------
+    // SAMPLE POOL ~338 MB.
+    //-------------------------------------------------------------------------
+    int16_t* sample_pool = malloc(MAX_MIDI_NOTES * ctx_a->sample_rate *
+                                  ctx_a->sample_duration_seconds *
+                                  ctx_a->channel_count * sizeof(int16_t));
+    memset(sample_pool,
+           0,
+           MAX_MIDI_NOTES * ctx_a->sample_rate *
+               ctx_a->sample_duration_seconds * ctx_a->channel_count *
+               sizeof(int16_t));
+    assert(sample_pool);
+    //-------------------------------------------------------------------------
+    // SAMPLES 1 MB.
+    //-------------------------------------------------------------------------
+    war_samples* samples;
+    samples = malloc(sizeof(war_samples));
+    assert(samples);
+    samples->samples =
+        malloc(sizeof(int16_t*) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_frames_start =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_frames_duration =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_frames =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_attack =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_sustain =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_release =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_gain =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->notes_attack = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    samples->notes_sustain = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    samples->notes_release = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    samples->notes_gain = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    samples->samples_count = malloc(sizeof(uint32_t) * MAX_MIDI_NOTES);
+    memset(samples->samples,
+           0,
+           sizeof(int16_t*) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_frames_start,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_frames_duration,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_frames,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_attack,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_sustain,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_release,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_gain,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->notes_attack, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(samples->notes_sustain, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(samples->notes_release, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(samples->notes_gain, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(samples->samples_count, 0, sizeof(uint32_t) * MAX_MIDI_NOTES);
+    for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+        samples->notes_attack[i] = ctx_a->default_attack;
+        samples->notes_sustain[i] = ctx_a->default_sustain;
+        samples->notes_release[i] = ctx_a->default_release;
+        samples->notes_gain[i] = ctx_a->default_gain;
+        for (int k = 0; k < MAX_SAMPLES_PER_NOTE; k++) {
+            int samples_i = i * MAX_SAMPLES_PER_NOTE + k;
+            samples->samples_attack[samples_i] = ctx_a->default_attack;
+            samples->samples_sustain[samples_i] = ctx_a->default_sustain;
+            samples->samples_release[samples_i] = ctx_a->default_release;
+            samples->samples_gain[samples_i] = ctx_a->default_gain;
+        }
+    }
+    //    typedef struct war_samples {
+    //    int16_t** samples;
+    //    uint64_t* samples_frames_start;
+    //    uint64_t* samples_frames_duration;
+    //    uint64_t* samples_frames;
+    //    float* samples_attack;
+    //    float* samples_sustain;
+    //    float* samples_release;
+    //    float* samples_gain;
+    //    float* notes_attack;
+    //    float* notes_sustain;
+    //    float* notes_release;
+    //    float* notes_gain;
+    //    uint32_t* samples_count;
+    //} war_samples;
+    war_samples* record_samples = malloc(sizeof(war_samples));
+    assert(record_samples);
+    record_samples->samples =
+        malloc(sizeof(int16_t*) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_frames_start =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_frames_duration =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_frames =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_attack =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_sustain =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_release =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_gain =
+        malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->notes_attack = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    record_samples->notes_sustain = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    record_samples->notes_release = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    record_samples->notes_gain = malloc(sizeof(float) * MAX_MIDI_NOTES);
+    record_samples->samples_count = malloc(sizeof(uint32_t) * MAX_MIDI_NOTES);
+    memset(record_samples->samples,
+           0,
+           sizeof(int16_t*) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_frames_start,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_frames_duration,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_frames,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_attack,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_sustain,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_release,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_gain,
+           0,
+           sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->notes_attack, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(record_samples->notes_sustain, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(record_samples->notes_release, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(record_samples->notes_gain, 0, sizeof(float) * MAX_MIDI_NOTES);
+    memset(record_samples->samples_count, 0, sizeof(uint32_t) * MAX_MIDI_NOTES);
+    for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+        record_samples->notes_attack[i] = ctx_a->default_attack;
+        record_samples->notes_sustain[i] = ctx_a->default_sustain;
+        record_samples->notes_release[i] = ctx_a->default_release;
+        record_samples->notes_gain[i] = ctx_a->default_gain;
+        for (int k = 0; k < MAX_SAMPLES_PER_NOTE; k++) {
+            int samples_i = i * MAX_SAMPLES_PER_NOTE + k;
+            record_samples->samples_attack[samples_i] = ctx_a->default_attack;
+            record_samples->samples_sustain[samples_i] = ctx_a->default_sustain;
+            record_samples->samples_release[samples_i] = ctx_a->default_release;
+            record_samples->samples_gain[samples_i] = ctx_a->default_gain;
+        }
+    }
+    //-------------------------------------------------------------------------
+    // SINE PER NOTE FOR TESTING
+    //-------------------------------------------------------------------------
     float sine_table[AUDIO_SINE_TABLE_SIZE];
     for (int i = 0; i < AUDIO_SINE_TABLE_SIZE; i++) {
         sine_table[i] = sinf(2.0f * M_PI * i / AUDIO_SINE_TABLE_SIZE);
     }
-    war_samples* samples;
-    {
-        samples = calloc(MAX_MIDI_NOTES, sizeof(war_samples));
-        assert(samples);
-        for (int i = 0; i < MAX_MIDI_NOTES; i++) {
-            samples[i].ptrs = calloc(MAX_MIDI_NOTES, sizeof(int16_t*));
-            assert(samples[i].ptrs);
-            samples[i].ptrs_count = 0;
-            samples[i].ptrs_frames_start =
-                calloc(MAX_MIDI_NOTES, sizeof(uint64_t));
-            samples[i].ptrs_frames_duration =
-                calloc(MAX_MIDI_NOTES, sizeof(uint64_t));
-        }
-    }
-    war_audio_context* ctx_a = malloc(sizeof(war_audio_context));
-    {
-        assert(ctx_a);
-        ctx_a->sample_frames = calloc(MAX_MIDI_NOTES, sizeof(uint64_t));
-        assert(ctx_a->sample_frames);
-        ctx_a->sample_frames_duration =
-            calloc(MAX_MIDI_NOTES, sizeof(uint64_t));
-        assert(ctx_a->sample_frames_duration);
-        ctx_a->sample_phase = calloc(MAX_MIDI_NOTES, sizeof(float));
-        assert(ctx_a->sample_phase);
-        ctx_a->sample_rate = AUDIO_DEFAULT_SAMPLE_RATE;
-        ctx_a->period_size = AUDIO_DEFAULT_PERIOD_SIZE;
-        ctx_a->sub_period_size =
-            AUDIO_DEFAULT_PERIOD_SIZE / AUDIO_DEFAULT_SUB_PERIOD_FACTOR;
-        ctx_a->BPM = AUDIO_DEFAULT_BPM;
-        ctx_a->channel_count = AUDIO_DEFAULT_CHANNEL_COUNT;
-        ctx_a->phase = 0.0f;
-        ctx_a->sample_duration_seconds = AUDIO_DEFAULT_SAMPLE_DURATION;
-        ctx_a->over_threshold = 0;
-        ctx_a->sample_pool =
-            calloc(MAX_MIDI_NOTES * ctx_a->sample_rate *
-                       ctx_a->sample_duration_seconds * ctx_a->channel_count,
-                   sizeof(int16_t));
-        assert(ctx_a->sample_pool);
-        for (int note = 0; note < MAX_MIDI_NOTES; note++) {
-            int16_t* note_sample =
-                ctx_a->sample_pool + note * ctx_a->sample_rate *
-                                         ctx_a->sample_duration_seconds *
-                                         ctx_a->channel_count;
-            float freq = 440.0f * powf(2.0f, (note - 69) / 12.0f); // MIDI to Hz
-            uint32_t n_samples =
-                ctx_a->sample_rate * ctx_a->sample_duration_seconds;
-            float table_phase_inc =
-                (freq * AUDIO_SINE_TABLE_SIZE) / ctx_a->sample_rate;
-            float table_phase = 0.0f;
-            for (uint32_t i = 0; i < n_samples; i++) {
-                int index = (int)table_phase % AUDIO_SINE_TABLE_SIZE;
-                int16_t sample = (int16_t)(sine_table[index] * 3000);
-                for (uint64_t c = 0; c < ctx_a->channel_count; c++) {
-                    note_sample[i * ctx_a->channel_count + c] = sample;
-                }
-                table_phase += table_phase_inc;
-                if (table_phase >= AUDIO_SINE_TABLE_SIZE)
-                    table_phase -= AUDIO_SINE_TABLE_SIZE;
+    for (int note = 0; note < MAX_MIDI_NOTES; note++) {
+        int16_t* note_sample =
+            sample_pool + note * ctx_a->sample_rate *
+                              ctx_a->sample_duration_seconds *
+                              ctx_a->channel_count;
+        float freq = 440.0f * powf(2.0f, (note - 69) / 12.0f); // MIDI to Hz
+        uint32_t n_samples =
+            ctx_a->sample_rate * ctx_a->sample_duration_seconds;
+        float table_phase_inc =
+            (freq * AUDIO_SINE_TABLE_SIZE) / ctx_a->sample_rate;
+        float table_phase = 0.0f;
+        for (uint32_t i = 0; i < n_samples; i++) {
+            int index = (int)table_phase % AUDIO_SINE_TABLE_SIZE;
+            int16_t sample = (int16_t)(sine_table[index] * 3000);
+            for (uint64_t c = 0; c < ctx_a->channel_count; c++) {
+                note_sample[i * ctx_a->channel_count + c] = sample;
             }
-            samples[note].ptrs[samples[note].ptrs_count] = note_sample;
-            samples[note].ptrs_frames_duration[samples[note].ptrs_count] =
-                n_samples;
-            samples[note].ptrs_frames_start[samples[note].ptrs_count] = 0;
-            samples[note].ptrs_count++;
+            table_phase += table_phase_inc;
+            if (table_phase >= AUDIO_SINE_TABLE_SIZE)
+                table_phase -= AUDIO_SINE_TABLE_SIZE;
         }
-        ctx_a->record_buffer =
-            calloc(ctx_a->sample_rate * ctx_a->sample_duration_seconds *
-                       ctx_a->channel_count,
-                   sizeof(int16_t));
-        assert(ctx_a->record_buffer);
-        ctx_a->warmup_frames = 0;
-        ctx_a->record_rate = ctx_a->sample_rate;
+        // samples[note].samples[samples[note].samples_count] = note_sample;
+        // samples[note].samples_frames_duration[samples[note].samples_count] =
+        //     n_samples;
+        // samples[note].samples_frames_start[samples[note].samples_count] = 0;
+        // samples[note].samples_count++;
     }
-    void** userdata = malloc(sizeof(void*) * 4);
-    {
-        userdata[0] = ctx_a;
-        userdata[1] = pc;
-        userdata[2] = atomics;
-        userdata[3] = samples;
-    }
+    void** userdata = malloc(sizeof(void*) * 6);
+    assert(userdata);
+    userdata[0] = ctx_a;
+    userdata[1] = pc;
+    userdata[2] = atomics;
+    userdata[3] = samples;
+    userdata[4] = record_samples;
+    userdata[5] = sample_pool;
     //-------------------------------------------------------------------------
     // PIPEWIRE
     //-------------------------------------------------------------------------
@@ -8525,7 +8943,11 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
     pc_audio[AUDIO_CMD_NOTE_ON] = &&pc_note_on;
     pc_audio[AUDIO_CMD_NOTE_OFF] = &&pc_note_off;
+    pc_audio[AUDIO_CMD_NOTE_OFF_ALL] = &&pc_note_off_all;
     pc_audio[AUDIO_CMD_RESET_MAPPINGS] = &&pc_reset_mappings;
+    pc_audio[AUDIO_CMD_MIDI_RECORD] = &&pc_midi_record;
+    pc_audio[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
+    pc_audio[AUDIO_CMD_MIDI_RECORD_WAIT] = &&pc_midi_record_wait;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -8553,23 +8975,32 @@ pc_record_wait:
 pc_record:
     goto pc_audio_done;
 pc_record_map:
-    uint64_t record_frames = atomic_exchange(&atomics->record_frames, 0);
     int16_t map_note = atomic_exchange(&atomics->map_note, -1);
     ctx_a->over_threshold = 0;
-    if (map_note != -1) {
-        int16_t* note_sample =
-            ctx_a->sample_pool + map_note * ctx_a->sample_rate *
-                                     ctx_a->sample_duration_seconds *
-                                     ctx_a->channel_count;
-        memcpy(note_sample,
-               ctx_a->record_buffer,
-               record_frames * ctx_a->channel_count * sizeof(int16_t));
-        samples[map_note].ptrs[0] = note_sample;
-        samples[map_note].ptrs_frames_duration[0] = record_frames;
-        samples[map_note].ptrs_frames_start[0] = 0;
-        samples[map_note].ptrs_count = 1;
-        call_carmack("mapped to %i", map_note);
+    if (map_note == -1) {
+        war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
+        memset(ctx_a->record_buffer,
+               0,
+               ctx_a->sample_rate * ctx_a->sample_duration_seconds *
+                   ctx_a->channel_count * sizeof(int16_t));
+        goto pc_audio_done;
     }
+    int16_t* note_sample = sample_pool + map_note * ctx_a->sample_rate *
+                                             ctx_a->sample_duration_seconds *
+                                             ctx_a->channel_count;
+    uint64_t record_frames = atomic_exchange(&atomics->record_frames, 0);
+    if (record_frames > ctx_a->sample_rate * ctx_a->sample_duration_seconds) {
+        record_frames = ctx_a->sample_rate * ctx_a->sample_duration_seconds;
+    }
+    memcpy(note_sample,
+           ctx_a->record_buffer,
+           record_frames * ctx_a->channel_count * sizeof(int16_t));
+    samples->samples[map_note * MAX_SAMPLES_PER_NOTE + 0] = note_sample;
+    samples->samples_frames_duration[map_note * MAX_SAMPLES_PER_NOTE + 0] =
+        record_frames;
+    samples->samples_frames_start[map_note * MAX_SAMPLES_PER_NOTE + 0] = 0;
+    samples->samples_count[map_note] = 1;
+    call_carmack("mapped to %i", map_note);
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
     memset(ctx_a->record_buffer,
            0,
@@ -8578,16 +9009,31 @@ pc_record_map:
     goto pc_audio_done;
 pc_set_threshold:
     goto pc_audio_done;
-pc_note_on:
+pc_note_on: {
+    int note;
+    memcpy(&note, payload, size);
+    atomic_store(&atomics->notes_on[note], 1);
+    ctx_a->sample_frames[note] = 0;
     goto pc_audio_done;
-pc_note_off:
+}
+pc_note_off: {
+    int note;
+    memcpy(&note, payload, size);
+    atomic_store(&atomics->notes_on[note], 0);
     goto pc_audio_done;
+}
+pc_note_off_all: {
+    for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+        atomic_store(&atomics->notes_on[i], 0);
+    }
+    goto pc_audio_done;
+}
 pc_reset_mappings:
     for (int note = 0; note < MAX_MIDI_NOTES; note++) {
         int16_t* note_sample =
-            ctx_a->sample_pool + note * ctx_a->sample_rate *
-                                     ctx_a->sample_duration_seconds *
-                                     ctx_a->channel_count;
+            sample_pool + note * ctx_a->sample_rate *
+                              ctx_a->sample_duration_seconds *
+                              ctx_a->channel_count;
         float freq = 440.0f * powf(2.0f, (note - 69) / 12.0f); // MIDI to Hz
         uint32_t n_samples =
             ctx_a->sample_rate * ctx_a->sample_duration_seconds;
@@ -8604,13 +9050,26 @@ pc_reset_mappings:
             if (table_phase >= AUDIO_SINE_TABLE_SIZE)
                 table_phase -= AUDIO_SINE_TABLE_SIZE;
         }
-        samples[note].ptrs[samples[note].ptrs_count] = note_sample;
-        samples[note].ptrs_frames_duration[samples[note].ptrs_count] =
-            n_samples;
-        samples[note].ptrs_frames_start[samples[note].ptrs_count] = 0;
-        samples[note].ptrs_count = 1;
+        // samples[note].samples[samples[note].samples_count] = note_sample;
+        // samples[note].samples_frames_duration[samples[note].samples_count] =
+        //     n_samples;
+        // samples[note].samples_frames_start[samples[note].samples_count] = 0;
+        // samples[note].samples_count = 1;
     }
     goto pc_audio_done;
+pc_midi_record: { goto pc_audio_done; }
+pc_midi_record_wait: { goto pc_audio_done; }
+pc_midi_record_map: {
+    int16_t map_note = atomic_exchange(&atomics->map_note, -1);
+    if (map_note == -1) {
+        war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
+        record_samples->samples_count = 0;
+        goto pc_audio_done;
+    }
+    for (uint32_t i = 0; i < record_samples->samples_count[0]; i++) {}
+    war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
+    goto pc_audio_done;
+}
 pc_audio_done:
     pw_loop_iterate(ctx_a->pw_loop, 1);
     switch (atomics->state) {

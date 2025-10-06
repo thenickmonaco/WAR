@@ -75,6 +75,7 @@ enum war_misc {
     max_fds = 50,
     OLED_MODE = 0,
     MAX_MIDI_NOTES = 128,
+    MAX_SAMPLES_PER_NOTE = 128,
     UNSET = 0,
     MAX_DIGITS = 10,
     NUM_STATUS_BARS = 3,
@@ -163,17 +164,6 @@ typedef struct war_key_event {
     uint8_t mod;
 } war_key_event;
 
-typedef struct war_key_trie_node {
-    uint32_t keysym;
-    uint8_t mod;
-    bool pressed;
-    bool is_terminal;
-    void* command[MODE_COUNT];
-    struct war_key_trie_node* children[32];
-    size_t child_count;
-    uint64_t last_event_us;
-} war_key_trie_node;
-
 typedef struct war_rgba_t {
     float r;
     float g;
@@ -198,21 +188,6 @@ typedef struct war_notes {
     uint8_t* key_high;
     uint32_t count;
 } war_notes;
-
-typedef struct war_samples_old {
-    uint32_t* note_index;
-    float* sample_position;
-    float* gain;
-    bool* active;
-    uint32_t* sample_id;
-    uint32_t* loop_start;
-    uint32_t* loop_end;
-    bool* loop_enabled;
-    uint8_t* envelope_stage; // 0=off,1=attack,2=decay,3=sustain,4=release
-    float* envelope_value;   // current amplitude
-    uint32_t count;
-    uint32_t max_voices;
-} war_samples_old;
 
 typedef struct war_note_quads {
     uint64_t* timestamp;
@@ -268,7 +243,7 @@ typedef struct war_views {
 
 enum war_audio {
     // defaults
-    AUDIO_DEFAULT_SAMPLE_RATE = 32000,
+    AUDIO_DEFAULT_SAMPLE_RATE = 44100,
     AUDIO_DEFAULT_PERIOD_SIZE = 512,
     AUDIO_DEFAULT_SUB_PERIOD_FACTOR = 20,
     AUDIO_DEFAULT_CHANNEL_COUNT = 2,
@@ -277,7 +252,7 @@ enum war_audio {
     AUDIO_DEFAULT_SAMPLE_DURATION = 15,
     AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
-    AUDIO_CMD_COUNT = 15,
+    AUDIO_CMD_COUNT = 19,
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
@@ -291,7 +266,11 @@ enum war_audio {
     AUDIO_CMD_SET_THRESHOLD = 11,
     AUDIO_CMD_NOTE_ON = 12,
     AUDIO_CMD_NOTE_OFF = 13,
-    AUDIO_CMD_RESET_MAPPINGS = 14,
+    AUDIO_CMD_NOTE_OFF_ALL = 14,
+    AUDIO_CMD_RESET_MAPPINGS = 15,
+    AUDIO_CMD_MIDI_RECORD_WAIT = 16,
+    AUDIO_CMD_MIDI_RECORD = 17,
+    AUDIO_CMD_MIDI_RECORD_MAP = 18,
     // cmd sizes (not including header)
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,
@@ -305,6 +284,8 @@ typedef struct war_atomics {
     _Atomic uint8_t state;
     _Atomic float record_threshold;
     _Atomic uint8_t record;
+    _Atomic uint8_t midi_record;
+    _Atomic uint64_t midi_record_frames;
     _Atomic uint8_t play;
     _Atomic float bpm;
     _Atomic int16_t map_note;
@@ -312,7 +293,7 @@ typedef struct war_atomics {
     _Atomic uint8_t record_monitor;
     _Atomic float play_gain;
     _Atomic float record_gain;
-    _Atomic uint8_t* notes;
+    _Atomic uint8_t* notes_on;
     _Atomic uint8_t loop;
     _Atomic uint8_t start_war;
     _Atomic uint8_t resample;
@@ -328,32 +309,46 @@ typedef struct war_producer_consumer {
 } war_producer_consumer;
 
 typedef struct war_samples {
-    int16_t** ptrs;
-    uint64_t* ptrs_frames_start;
-    uint64_t* ptrs_frames_duration;
-    uint32_t ptrs_count;
+    int16_t** samples;
+    uint64_t* samples_frames_start;
+    uint64_t* samples_frames_duration;
+    uint64_t* samples_frames;
+    float* samples_attack;
+    float* samples_sustain;
+    float* samples_release;
+    float* samples_gain;
+    float* notes_attack;
+    float* notes_sustain;
+    float* notes_release;
+    float* notes_gain;
+    uint32_t* samples_count;
 } war_samples;
 
 typedef struct war_audio_context {
     float BPM;
     uint32_t sample_rate;
-    uint32_t record_rate;
     uint32_t period_size;
     uint32_t sub_period_size;
     uint32_t channel_count;
     uint32_t sample_duration_seconds;
+    float default_attack;
+    float default_sustain;
+    float default_release;
+    float default_gain;
     // PipeWire
     struct pw_loop* pw_loop;
     struct pw_stream* play_stream;
     struct pw_stream* record_stream;
     int16_t* record_buffer;
-    int16_t* sample_pool;
+    int16_t* resample_buffer;
     float phase;
     uint8_t over_threshold;
     uint64_t* sample_frames;
     uint64_t* sample_frames_duration;
     uint64_t warmup_frames;
     float* sample_phase;
+    uint8_t* previous_note_states;
+    uint64_t* note_play_start;
 } war_audio_context;
 
 typedef struct war_window_render_context {
@@ -480,11 +475,6 @@ typedef struct war_window_render_context {
     bool trigger;
     bool skip_release;
 } war_window_render_context;
-
-typedef struct war_key_trie_pool {
-    war_key_trie_node nodes[MAX_NODES];
-    size_t node_count;
-} war_key_trie_pool;
 
 enum war_producer_consumer_enum {
     PC_BUFFER_SIZE = 4096,

@@ -88,9 +88,29 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
     case MODE_COMMAND:
         memcpy(ctx_wr->text_middle_status_bar, ":", sizeof(":"));
         break;
-    case MODE_MIDI:
-        memcpy(
-            ctx_wr->text_middle_status_bar, "-- MIDI --", sizeof("-- MIDI --"));
+    case MODE_MIDI: {
+        switch (atomic_load(&atomics->state)) {
+        case AUDIO_CMD_MIDI_RECORD_WAIT:
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- MIDI RECORD WAIT --",
+                   sizeof("-- MIDI RECORD WAIT --"));
+            break;
+        case AUDIO_CMD_MIDI_RECORD:
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- MIDI RECORD --",
+                   sizeof("-- MIDI RECORD --"));
+            break;
+        case AUDIO_CMD_MIDI_RECORD_MAP:
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- MIDI RECORD MAP --",
+                   sizeof("-- MIDI RECORD MAP --"));
+            break;
+        default:
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- MIDI --",
+                   sizeof("-- MIDI --"));
+            break;
+        }
         uint8_t loop = atomic_load(&atomics->loop);
         uint8_t trigger = ctx_wr->trigger;
         if (loop && trigger) {
@@ -110,6 +130,7 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
                    sizeof("TRIGGER"));
         }
         break;
+    }
     case MODE_RECORD:
         switch (atomic_load(&atomics->state)) {
         case AUDIO_CMD_RECORD_WAIT:

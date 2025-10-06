@@ -279,6 +279,7 @@ enum war_audio {
 };
 
 typedef struct war_atomics {
+    _Atomic uint64_t play_clock;
     _Atomic uint64_t play_frames;
     _Atomic uint64_t record_frames;
     _Atomic uint8_t state;
@@ -294,6 +295,7 @@ typedef struct war_atomics {
     _Atomic float play_gain;
     _Atomic float record_gain;
     _Atomic uint8_t* notes_on;
+    _Atomic uint8_t* notes_on_previous;
     _Atomic uint8_t loop;
     _Atomic uint8_t start_war;
     _Atomic uint8_t resample;
@@ -321,6 +323,8 @@ typedef struct war_samples {
     float* notes_sustain;
     float* notes_release;
     float* notes_gain;
+    uint64_t* notes_frames_start;
+    uint64_t* notes_frames_duration;
     uint32_t* samples_count;
 } war_samples;
 

@@ -148,7 +148,7 @@ enum war_cursor {
 };
 
 typedef struct war_fsm_state {
-    bool is_terminal;
+    uint8_t is_terminal[MODE_COUNT];
     uint8_t handle_release[MODE_COUNT];
     void* command[MODE_COUNT];
     uint16_t next_state[512][16];
@@ -201,7 +201,7 @@ typedef struct war_note_quads {
     uint32_t* cursor_width_sub_cells;
     uint32_t* color;
     uint32_t* outline_color;
-    float* strength;
+    float* gain;
     uint32_t* voice;
     uint32_t* hidden;
     uint32_t* mute;

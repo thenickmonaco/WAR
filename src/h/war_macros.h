@@ -523,11 +523,13 @@ war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
     return a;
 }
 
-static inline bool war_state_is_prefix(uint16_t state_index,
+static inline bool war_state_is_prefix(war_window_render_context* ctx_wr,
+                                       uint16_t state_index,
                                        war_fsm_state* fsm) {
     for (int k = 0; k < 256; k++) {
         for (int m = 0; m < 16; m++) {
-            if (fsm[state_index].next_state[k][m] != 0) { return true; }
+            uint32_t next_state_index = fsm[state_index].next_state[k][m];
+            if (next_state_index) { return true; }
         }
     }
     return false;
@@ -697,7 +699,8 @@ static inline void war_wl_surface_set_opaque_region(int fd,
     war_write_le16(set_opaque_region + 4, 4);
     war_write_le16(set_opaque_region + 6, 12);
     war_write_le32(set_opaque_region + 8, wl_region_id);
-    dump_bytes("wl_surface::set_opaque_region request", set_opaque_region, 12);
+    // dump_bytes("wl_surface::set_opaque_region request", set_opaque_region,
+    // 12);
     ssize_t set_opaque_region_written = write(fd, set_opaque_region, 12);
     assert(set_opaque_region_written == 12);
 }
@@ -1071,7 +1074,7 @@ static inline void war_note_quads_add(war_note_quads* note_quads,
                                       war_window_render_context* ctx_wr,
                                       uint32_t color,
                                       uint32_t outline_color,
-                                      float strength,
+                                      float gain,
                                       uint32_t voice,
                                       uint32_t hidden,
                                       uint32_t mute) {
@@ -1090,7 +1093,7 @@ static inline void war_note_quads_add(war_note_quads* note_quads,
         ctx_wr->cursor_width_sub_cells;
     note_quads->color[*note_quads_count] = color;
     note_quads->outline_color[*note_quads_count] = outline_color;
-    note_quads->strength[*note_quads_count] = strength;
+    note_quads->gain[*note_quads_count] = gain;
     note_quads->voice[*note_quads_count] = voice;
     note_quads->hidden[*note_quads_count] = hidden;
     note_quads->mute[*note_quads_count] = mute;
@@ -1138,7 +1141,7 @@ static inline void war_note_quads_delete(war_note_quads* note_quads,
         note_quads->color[freshest_index] = note_quads->color[last];
         note_quads->outline_color[freshest_index] =
             note_quads->outline_color[last];
-        note_quads->strength[freshest_index] = note_quads->strength[last];
+        note_quads->gain[freshest_index] = note_quads->gain[last];
         note_quads->voice[freshest_index] = note_quads->voice[last];
         note_quads->hidden[freshest_index] = note_quads->hidden[last];
         note_quads->mute[freshest_index] = note_quads->mute[last];
@@ -1173,7 +1176,7 @@ static inline void war_note_quads_delete_at_i(war_note_quads* note_quads,
         note_quads->cursor_width_sub_cells[last];
     note_quads->color[i_delete] = note_quads->color[last];
     note_quads->outline_color[i_delete] = note_quads->outline_color[last];
-    note_quads->strength[i_delete] = note_quads->strength[last];
+    note_quads->gain[i_delete] = note_quads->gain[last];
     note_quads->voice[i_delete] = note_quads->voice[last];
     note_quads->hidden[i_delete] = note_quads->hidden[last];
     note_quads->mute[i_delete] = note_quads->mute[last];
@@ -1227,9 +1230,9 @@ static inline void war_note_quads_delete_at_i(war_note_quads* note_quads,
         note_quads->outline_color[i - 1] = note_quads->outline_color[i];
         note_quads->outline_color[i] = tmp_outline;
 
-        uint8_t tmp_strength = note_quads->strength[i - 1];
-        note_quads->strength[i - 1] = note_quads->strength[i];
-        note_quads->strength[i] = tmp_strength;
+        uint8_t tmp_strength = note_quads->gain[i - 1];
+        note_quads->gain[i - 1] = note_quads->gain[i];
+        note_quads->gain[i] = tmp_strength;
 
         uint8_t tmp_voice = note_quads->voice[i - 1];
         note_quads->voice[i - 1] = note_quads->voice[i];
@@ -1294,9 +1297,9 @@ static inline void war_note_quads_delete_at_i(war_note_quads* note_quads,
         note_quads->outline_color[i + 1] = note_quads->outline_color[i];
         note_quads->outline_color[i] = tmp_outline;
 
-        uint8_t tmp_strength = note_quads->strength[i + 1];
-        note_quads->strength[i + 1] = note_quads->strength[i];
-        note_quads->strength[i] = tmp_strength;
+        uint8_t tmp_strength = note_quads->gain[i + 1];
+        note_quads->gain[i + 1] = note_quads->gain[i];
+        note_quads->gain[i] = tmp_strength;
 
         uint8_t tmp_voice = note_quads->voice[i + 1];
         note_quads->voice[i + 1] = note_quads->voice[i];

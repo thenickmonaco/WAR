@@ -24,6 +24,10 @@ build.zig
 *.un~
 alsa_output.pci-*
 
+# valgrind
+vgcore.*
+valgrind.*
+
 # session files
 Session.vim
 

@@ -150,6 +150,7 @@ enum war_cursor {
 typedef struct war_fsm_state {
     uint8_t is_terminal[MODE_COUNT];
     uint8_t handle_release[MODE_COUNT];
+    uint8_t handle_timeout[MODE_COUNT];
     void* command[MODE_COUNT];
     uint16_t next_state[512][16];
 } war_fsm_state;
@@ -157,6 +158,7 @@ typedef struct war_fsm_state {
 typedef struct war_label {
     void* command;
     uint8_t handle_release;
+    uint8_t handle_timeout;
 } war_label;
 
 typedef struct war_key_event {

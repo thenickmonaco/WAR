@@ -3408,569 +3408,570 @@ void* war_window_render(void* args) {
                 war_label key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
                     // normal, views, visual_line, visual_block, insert,
                     // command, mode_m, mode_o, visual
+                    // cmd, handle_release, handle_timeout
                     {
-                        {&&cmd_normal_k, 0},
-                        {&&cmd_views_k, 0},
-                        {NULL, 0},
-                        {&&cmd_record_k, 0},
+                        {&&cmd_normal_k, 0, 1},
+                        {&&cmd_views_k, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_k, 0, 1},
                     },
                     {
-                        {&&cmd_normal_j, 0},
-                        {&&cmd_views_j, 0},
-                        {NULL, 0},
-                        {&&cmd_record_j, 0},
+                        {&&cmd_normal_j, 0, 1},
+                        {&&cmd_views_j, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_j, 0, 1},
                     },
                     {
-                        {&&cmd_normal_h, 0},
-                        {&&cmd_views_h, 0},
+                        {&&cmd_normal_h, 0, 1},
+                        {&&cmd_views_h, 0, 1},
                     },
                     {
-                        {&&cmd_normal_l, 0},
-                        {&&cmd_views_l, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_midi_l, 0},
+                        {&&cmd_normal_l, 0, 1},
+                        {&&cmd_views_l, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_midi_l, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_k, 0},
-                        {&&cmd_views_alt_k, 0},
+                        {&&cmd_normal_alt_k, 0, 1},
+                        {&&cmd_views_alt_k, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_j, 0},
-                        {&&cmd_views_alt_j, 0},
+                        {&&cmd_normal_alt_j, 0, 1},
+                        {&&cmd_views_alt_j, 0, 1},
                     },
-                    {{&&cmd_normal_alt_h, 0}, {&&cmd_views_alt_h, 0}},
-                    {{&&cmd_normal_alt_l, 0}, {&&cmd_views_alt_l, 0}},
-                    {{&&cmd_normal_0, 0},
-                     {NULL, 0},
-                     {NULL, 0},
+                    {{&&cmd_normal_alt_h, 0, 1}, {&&cmd_views_alt_h, 0, 1}},
+                    {{&&cmd_normal_alt_l, 0, 1}, {&&cmd_views_alt_l, 0, 1}},
+                    {{&&cmd_normal_0, 0, 1},
+                     {NULL, 0, 1},
+                     {NULL, 0, 1},
 
-                     {&&cmd_record_0, 0}},
+                     {&&cmd_record_0, 0, 1}},
                     {
-                        {&&cmd_normal_$, 0},
+                        {&&cmd_normal_$, 0, 1},
                     },
                     {
-                        {&&cmd_normal_G, 0},
+                        {&&cmd_normal_G, 0, 1},
                     },
                     {
-                        {&&cmd_normal_gg, 0},
+                        {&&cmd_normal_gg, 0, 1},
                     },
                     {
-                        {&&cmd_normal_1, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_1, 0},
-                        {&&cmd_midi_1, 0},
+                        {&&cmd_normal_1, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_1, 0, 1},
+                        {&&cmd_midi_1, 0, 1},
                     },
                     {
-                        {&&cmd_normal_2, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_2, 0},
-                        {&&cmd_midi_2, 0},
+                        {&&cmd_normal_2, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_2, 0, 1},
+                        {&&cmd_midi_2, 0, 1},
                     },
                     {
-                        {&&cmd_normal_3, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_3, 0},
-                        {&&cmd_midi_3, 0},
+                        {&&cmd_normal_3, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_3, 0, 1},
+                        {&&cmd_midi_3, 0, 1},
                     },
                     {
-                        {&&cmd_normal_4, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_4, 0},
-                        {&&cmd_midi_4, 0},
+                        {&&cmd_normal_4, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_4, 0, 1},
+                        {&&cmd_midi_4, 0, 1},
                     },
                     {
-                        {&&cmd_normal_5, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_5, 0},
-                        {&&cmd_midi_5, 0},
+                        {&&cmd_normal_5, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_5, 0, 1},
+                        {&&cmd_midi_5, 0, 1},
                     },
                     {
-                        {&&cmd_normal_6, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_6, 0},
-                        {&&cmd_midi_6, 0},
+                        {&&cmd_normal_6, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_6, 0, 1},
+                        {&&cmd_midi_6, 0, 1},
                     },
                     {
-                        {&&cmd_normal_7, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_7, 0},
-                        {&&cmd_midi_7, 0},
+                        {&&cmd_normal_7, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_7, 0, 1},
+                        {&&cmd_midi_7, 0, 1},
                     },
                     {
-                        {&&cmd_normal_8, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_8, 0},
-                        {&&cmd_midi_8, 0},
+                        {&&cmd_normal_8, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_8, 0, 1},
+                        {&&cmd_midi_8, 0, 1},
                     },
                     {
-                        {&&cmd_normal_9, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_9, 0},
-                        {&&cmd_midi_9, 0},
+                        {&&cmd_normal_9, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_9, 0, 1},
+                        {&&cmd_midi_9, 0, 1},
                     },
                     {
-                        {&&cmd_normal_ctrl_equal, 0},
+                        {&&cmd_normal_ctrl_equal, 0, 1},
                     },
                     {
-                        {&&cmd_normal_ctrl_minus, 0},
+                        {&&cmd_normal_ctrl_minus, 0, 1},
                     },
                     {
-                        {&&cmd_normal_ctrl_alt_equal, 0},
+                        {&&cmd_normal_ctrl_alt_equal, 0, 1},
                     },
                     {
-                        {&&cmd_normal_ctrl_alt_minus, 0},
+                        {&&cmd_normal_ctrl_alt_minus, 0, 1},
                     },
                     {
-                        {&&cmd_normal_ctrl_0, 0},
+                        {&&cmd_normal_ctrl_0, 0, 1},
                     },
                     {
-                        {&&cmd_normal_esc, 0},
-                        {&&cmd_views_esc, 0},
-                        {NULL, 0},
-                        {&&cmd_record_esc, 0},
-                        {&&cmd_midi_esc, 0},
+                        {&&cmd_normal_esc, 0, 1},
+                        {&&cmd_views_esc, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_esc, 0, 1},
+                        {&&cmd_midi_esc, 0, 1},
                     },
                     {
-                        {&&cmd_normal_f, 0},
+                        {&&cmd_normal_f, 0, 1},
                     },
                     {
-                        {&&cmd_normal_t, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_t, 0},
-                        {&&cmd_midi_t, 1},
+                        {&&cmd_normal_t, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_t, 0, 1},
+                        {&&cmd_midi_t, 1, 1},
                     },
                     {
-                        {&&cmd_normal_x, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_midi_x, 0},
+                        {&&cmd_normal_x, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_midi_x, 0, 1},
                     },
                     {
-                        {&&cmd_normal_T, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_midi_T, 0},
+                        {&&cmd_normal_T, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_midi_T, 0, 1},
                     },
                     {
-                        {&&cmd_normal_F, 0},
+                        {&&cmd_normal_F, 0, 1},
                     },
                     {
-                        {&&cmd_normal_gb, 0},
+                        {&&cmd_normal_gb, 0, 1},
                     },
                     {
-                        {&&cmd_normal_gt, 0},
+                        {&&cmd_normal_gt, 0, 1},
                     },
                     {
-                        {&&cmd_normal_gm, 0},
+                        {&&cmd_normal_gm, 0, 1},
                     },
                     {
-                        {&&cmd_normal_s, 0},
+                        {&&cmd_normal_s, 0, 1},
                     },
                     {
-                        {&&cmd_normal_z, 0},
-                        {&&cmd_views_z, 0},
+                        {&&cmd_normal_z, 0, 1},
+                        {&&cmd_views_z, 0, 1},
                     },
                     {
-                        {&&cmd_normal_return, 0},
-                        {&&cmd_views_return, 0},
+                        {&&cmd_normal_return, 0, 1},
+                        {&&cmd_views_return, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacediv, 0},
+                        {&&cmd_normal_spacediv, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacedov, 0},
+                        {&&cmd_normal_spacedov, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacediw, 0},
+                        {&&cmd_normal_spacediw, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spaceda, 0},
+                        {&&cmd_normal_spaceda, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacehov, 0},
+                        {&&cmd_normal_spacehov, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacehiv, 0},
+                        {&&cmd_normal_spacehiv, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spaceha, 0},
+                        {&&cmd_normal_spaceha, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacesov, 0},
+                        {&&cmd_normal_spacesov, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacesiv, 0},
+                        {&&cmd_normal_spacesiv, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacesa, 0},
+                        {&&cmd_normal_spacesa, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacemov, 0},
+                        {&&cmd_normal_spacemov, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacemiv, 0},
+                        {&&cmd_normal_spacemiv, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacema, 0},
+                        {&&cmd_normal_spacema, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spaceuov, 0},
+                        {&&cmd_normal_spaceuov, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spaceuiv, 0},
+                        {&&cmd_normal_spaceuiv, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spaceua, 0},
+                        {&&cmd_normal_spaceua, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacea, 0},
+                        {&&cmd_normal_spacea, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_g, 0},
+                        {&&cmd_normal_alt_g, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_t, 0},
+                        {&&cmd_normal_alt_t, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_n, 0},
+                        {&&cmd_normal_alt_n, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_s, 0},
+                        {&&cmd_normal_alt_s, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_m, 0},
+                        {&&cmd_normal_alt_m, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_y, 0},
+                        {&&cmd_normal_alt_y, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_z, 0},
+                        {&&cmd_normal_alt_z, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_q, 0},
+                        {&&cmd_normal_alt_q, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_e, 0},
+                        {&&cmd_normal_alt_e, 0, 1},
                     },
                     {
-                        {&&cmd_normal_a, 0},
+                        {&&cmd_normal_a, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space1, 0},
+                        {&&cmd_normal_space1, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space2, 0},
+                        {&&cmd_normal_space2, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space3, 0},
+                        {&&cmd_normal_space3, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space4, 0},
+                        {&&cmd_normal_space4, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space5, 0},
+                        {&&cmd_normal_space5, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space6, 0},
+                        {&&cmd_normal_space6, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space7, 0},
+                        {&&cmd_normal_space7, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space8, 0},
+                        {&&cmd_normal_space8, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space9, 0},
+                        {&&cmd_normal_space9, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space0, 0},
+                        {&&cmd_normal_space0, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_1, 0},
+                        {&&cmd_normal_alt_1, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_2, 0},
+                        {&&cmd_normal_alt_2, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_3, 0},
+                        {&&cmd_normal_alt_3, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_4, 0},
+                        {&&cmd_normal_alt_4, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_5, 0},
+                        {&&cmd_normal_alt_5, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_6, 0},
+                        {&&cmd_normal_alt_6, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_7, 0},
+                        {&&cmd_normal_alt_7, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_8, 0},
+                        {&&cmd_normal_alt_8, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_9, 0},
+                        {&&cmd_normal_alt_9, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_0, 0},
+                        {&&cmd_normal_alt_0, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacedspacea, 0},
+                        {&&cmd_normal_spacedspacea, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_K, 0},
+                        {&&cmd_normal_alt_K, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_J, 0},
+                        {&&cmd_normal_alt_J, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_H, 0},
+                        {&&cmd_normal_alt_H, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_L, 0},
+                        {&&cmd_normal_alt_L, 0, 1},
                     },
                     {
-                        {&&cmd_normal_d, 0},
-                        {&&cmd_views_d, 0},
+                        {&&cmd_normal_d, 0, 1},
+                        {&&cmd_views_d, 0, 1},
                     },
                     {
-                        {&&cmd_normal_m, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_midi_m, 0},
+                        {&&cmd_normal_m, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_midi_m, 0, 1},
                     },
                     {
-                        {&&cmd_normal_X, 0},
+                        {&&cmd_normal_X, 0, 1},
                     },
                     {
-                        {&&cmd_normal_w, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_w, 0},
-                        {&&cmd_midi_w, 1},
+                        {&&cmd_normal_w, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_w, 0, 1},
+                        {&&cmd_midi_w, 1, 1},
                     },
                     {
-                        {&&cmd_normal_W, 0},
+                        {&&cmd_normal_W, 0, 1},
                     },
                     {
-                        {&&cmd_normal_e, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_e, 0},
-                        {&&cmd_midi_e, 1},
+                        {&&cmd_normal_e, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_e, 0, 1},
+                        {&&cmd_midi_e, 1, 1},
                     },
                     {
-                        {&&cmd_normal_E, 0},
+                        {&&cmd_normal_E, 0, 1},
                     },
                     {
-                        {&&cmd_normal_b, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_midi_b, 0},
+                        {&&cmd_normal_b, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_midi_b, 0, 1},
                     },
                     {
-                        {&&cmd_normal_k, 0},
-                        {&&cmd_views_k, 0},
+                        {&&cmd_normal_k, 0, 1},
+                        {&&cmd_views_k, 0, 1},
                     },
                     {
-                        {&&cmd_normal_j, 0},
-                        {&&cmd_views_j, 0},
+                        {&&cmd_normal_j, 0, 1},
+                        {&&cmd_views_j, 0, 1},
                     },
                     {
-                        {&&cmd_normal_h, 0},
-                        {&&cmd_views_h, 0},
+                        {&&cmd_normal_h, 0, 1},
+                        {&&cmd_views_h, 0, 1},
                     },
                     {
-                        {&&cmd_normal_l, 0},
-                        {&&cmd_views_l, 0},
+                        {&&cmd_normal_l, 0, 1},
+                        {&&cmd_views_l, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_k, 0},
+                        {&&cmd_normal_alt_k, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_j, 0},
+                        {&&cmd_normal_alt_j, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_h, 0},
+                        {&&cmd_normal_alt_h, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_l, 0},
+                        {&&cmd_normal_alt_l, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_u, 0},
+                        {&&cmd_normal_alt_u, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_d, 0},
+                        {&&cmd_normal_alt_d, 0, 1},
                     },
                     {
-                        {&&cmd_normal_A, 0},
+                        {&&cmd_normal_A, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_a, 0},
+                        {&&cmd_normal_alt_a, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_esc, 0},
+                        {&&cmd_normal_alt_esc, 0, 1},
                     },
                     {
-                        {&&cmd_normal_alt_A, 0},
+                        {&&cmd_normal_alt_A, 0, 1},
                     },
                     {
-                        {&&cmd_normal_ctrl_a, 0},
+                        {&&cmd_normal_ctrl_a, 0, 1},
                     },
                     {
-                        {&&cmd_normal_tab, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_tab, 0},
+                        {&&cmd_normal_tab, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_tab, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacehiw, 0},
+                        {&&cmd_normal_spacehiw, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacesiw, 0},
+                        {&&cmd_normal_spacesiw, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spaceuiw, 0},
+                        {&&cmd_normal_spaceuiw, 0, 1},
                     },
                     {
-                        {&&cmd_normal_ga, 0},
+                        {&&cmd_normal_ga, 0, 1},
                     },
                     {
-                        {&&cmd_normal_shift_tab, 0},
+                        {&&cmd_normal_shift_tab, 0, 1},
                     },
                     {
-                        {&&cmd_normal_V, 0},
-                        {&&cmd_views_V, 0},
+                        {&&cmd_normal_V, 0, 1},
+                        {&&cmd_views_V, 0, 1},
                     },
                     {
-                        {&&cmd_normal_K, 0},
-                        {&&cmd_views_K, 0},
-                        {&&cmd_midi_K, 0},
-                        {&&cmd_record_K, 0},
-                        {&&cmd_midi_K, 0},
+                        {&&cmd_normal_K, 0, 1},
+                        {&&cmd_views_K, 0, 1},
+                        {&&cmd_midi_K, 0, 1},
+                        {&&cmd_record_K, 0, 1},
+                        {&&cmd_midi_K, 0, 1},
                     },
                     {
-                        {&&cmd_normal_J, 0},
-                        {&&cmd_views_J, 0},
-                        {NULL, 0},
-                        {&&cmd_record_J, 0},
-                        {&&cmd_midi_J, 0},
+                        {&&cmd_normal_J, 0, 1},
+                        {&&cmd_views_J, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_J, 0, 1},
+                        {&&cmd_midi_J, 0, 1},
                     },
                     {
-                        {&&cmd_normal_spacem, 0},
+                        {&&cmd_normal_spacem, 0, 1},
                     },
                     {
-                        {&&cmd_normal_B, 0},
+                        {&&cmd_normal_B, 0, 1},
                     },
                     {
-                        {&&cmd_normal_q, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_q, 0},
-                        {&&cmd_midi_q, 1},
+                        {&&cmd_normal_q, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_q, 0, 1},
+                        {&&cmd_midi_q, 1, 1},
                     },
                     {
-                        {&&cmd_normal_Q, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_Q, 0},
-                        {&&cmd_midi_Q, 0},
+                        {&&cmd_normal_Q, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_Q, 0, 1},
+                        {&&cmd_midi_Q, 0, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_r, 0},
-                        {&&cmd_midi_r, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_r, 0, 1},
+                        {&&cmd_midi_r, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_y, 0},
-                        {&&cmd_midi_y, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_y, 0, 1},
+                        {&&cmd_midi_y, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_u, 0},
-                        {&&cmd_midi_u, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_u, 0, 1},
+                        {&&cmd_midi_u, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_i, 0},
-                        {&&cmd_midi_i, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_i, 0, 1},
+                        {&&cmd_midi_i, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_o, 0},
-                        {&&cmd_midi_o, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_o, 0, 1},
+                        {&&cmd_midi_o, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_p, 0},
-                        {&&cmd_midi_p, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_p, 0, 1},
+                        {&&cmd_midi_p, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_leftbracket, 0},
-                        {&&cmd_midi_leftbracket, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_leftbracket, 0, 1},
+                        {&&cmd_midi_leftbracket, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_rightbracket, 0},
-                        {&&cmd_midi_rightbracket, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_rightbracket, 0, 1},
+                        {&&cmd_midi_rightbracket, 1, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_minus, 0},
-                        {&&cmd_midi_minus, 0},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_minus, 0, 1},
+                        {&&cmd_midi_minus, 0, 1},
                     },
                     {
-                        {&&cmd_void, 0},
+                        {&&cmd_void, 0, 1},
                     },
                     {
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_midi_c, 0},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_midi_c, 0, 1},
                     },
                     {
-                        {&&cmd_normal_space, 0},
-                        {NULL, 0},
-                        {NULL, 0},
-                        {&&cmd_record_space, 0},
-                        {&&cmd_midi_space, 0},
+                        {&&cmd_normal_space, 0, 0},
+                        {NULL, 0, 1},
+                        {NULL, 0, 1},
+                        {&&cmd_record_space, 0, 0},
+                        {&&cmd_midi_space, 0, 0},
                     },
                 };
                 // default to void command if unset
@@ -4020,6 +4021,8 @@ void* war_window_render(void* args) {
                         fsm[parent].command[m] = key_labels[seq_idx][m].command;
                         fsm[parent].handle_release[m] =
                             key_labels[seq_idx][m].handle_release;
+                        fsm[parent].handle_timeout[m] =
+                            key_labels[seq_idx][m].handle_timeout;
                     }
                 }
                 assert(state_counter < MAX_STATES);
@@ -4144,15 +4147,34 @@ void* war_window_render(void* args) {
                 } else if (fsm[current_state_index].is_terminal[ctx_wr.mode] &&
                            war_state_is_prefix(
                                &ctx_wr, current_state_index, fsm)) {
-                    // repeats
-                    repeat_keysym = 0;
-                    repeat_mod = 0;
-                    repeating = false;
-                    // timeouts
-                    timeout_state_index = current_state_index;
-                    timeout_start_us = ctx_wr.now;
-                    timeout = true;
+                    if (fsm[current_state_index].handle_timeout[ctx_wr.mode]) {
+                        // repeats
+                        repeat_keysym = 0;
+                        repeat_mod = 0;
+                        repeating = false;
+                        // timeouts
+                        timeout_state_index = current_state_index;
+                        timeout_start_us = ctx_wr.now;
+                        timeout = true;
+                        current_state_index = 0;
+                        goto cmd_done;
+                    }
+                    uint16_t temp = current_state_index;
                     current_state_index = 0;
+                    // repeats
+                    if (ctx_wr.mode != MODE_MIDI ||
+                        (ctx_wr.mode == MODE_MIDI && ctx_wr.trigger)) {
+                        repeat_keysym = keysym;
+                        repeat_mod = mod;
+                        repeating = false;
+                    }
+                    // timeouts
+                    if (keysym != KEYSYM_ESCAPE && mod != 0) {
+                        timeout_state_index = 0;
+                    }
+                    timeout_start_us = 0;
+                    timeout = false;
+                    goto* fsm[temp].command[ctx_wr.mode];
                 }
                 goto cmd_done;
             cmd_normal_k:

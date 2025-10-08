@@ -23,6 +23,7 @@ build.zig
 *.tmp
 *.un~
 alsa_output.pci-*
+alsa_input.*
 
 # valgrind
 vgcore.*

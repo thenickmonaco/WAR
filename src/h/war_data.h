@@ -151,6 +151,7 @@ typedef struct war_fsm_state {
     uint8_t is_terminal[MODE_COUNT];
     uint8_t handle_release[MODE_COUNT];
     uint8_t handle_timeout[MODE_COUNT];
+    uint8_t handle_repeat[MODE_COUNT];
     void* command[MODE_COUNT];
     uint16_t next_state[512][16];
 } war_fsm_state;
@@ -159,6 +160,7 @@ typedef struct war_label {
     void* command;
     uint8_t handle_release;
     uint8_t handle_timeout;
+    uint8_t handle_repeat;
 } war_label;
 
 typedef struct war_key_event {
@@ -251,7 +253,7 @@ enum war_audio {
     AUDIO_DEFAULT_CHANNEL_COUNT = 2,
     AUDIO_DEFAULT_BPM = 100,
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
-    AUDIO_DEFAULT_SAMPLE_DURATION = 15,
+    AUDIO_DEFAULT_SAMPLE_DURATION = 30,
     AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
     AUDIO_CMD_COUNT = 19,

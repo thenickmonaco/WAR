@@ -8214,7 +8214,7 @@ void* war_window_render(void* args) {
                 atomic_store(&atomics->midi_record, 0);
                 atomic_store(&atomics->map_note, -1);
                 atomic_store(&atomics->state, AUDIO_CMD_STOP);
-                // war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
+                war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -8617,11 +8617,13 @@ static void war_play(void* userdata) {
                     samples->samples_release[samples_i];
                 record_samples->samples_gain[rec_i] =
                     samples->samples_gain[samples_i];
+                record_samples->samples_active[rec_i] = 1;
 
                 record_samples->notes_attack[0] = samples->notes_attack[note];
                 record_samples->notes_sustain[0] = samples->notes_sustain[note];
                 record_samples->notes_release[0] = samples->notes_release[note];
                 record_samples->notes_gain[0] = samples->notes_gain[note];
+                record_samples->notes_frames_start[0] = record_start;
 
                 record_samples->samples_count[0] = rec_i + 1;
 
@@ -8632,16 +8634,35 @@ static void war_play(void* userdata) {
 
         // --- MIDI recording: note just released
         if (midi_record && !note_on && prev_state) {
-            int32_t rec_i = record_samples_notes_indices[note];
-            if (rec_i >= 0 &&
-                rec_i < (int32_t)(MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE)) {
-                record_samples->samples_frames_duration[rec_i] =
-                    atomic_load(&atomics->midi_record_frames) -
-                    record_samples->samples_frames_start[rec_i];
+            uint64_t now = atomic_load(&atomics->midi_record_frames);
 
-                // Reset note index
-                record_samples_notes_indices[note] = -1;
+            // Iterate through all recorded samples in [0] and fix those that
+            // belong to this note
+            for (uint32_t i = 0; i < record_samples->samples_count[0]; i++) {
+                // Match by pointer (same sample pointer from this note)
+                int16_t* ptr = record_samples->samples[i];
+                call_carmack("record_samples_count %u",
+                             record_samples->samples_count[0]);
+
+                for (uint32_t s = 0; s < samples->samples_count[note]; s++) {
+                    int samples_i = note * MAX_SAMPLES_PER_NOTE + s;
+                    if (samples->samples[samples_i] == ptr) {
+                        if (record_samples->samples_frames_duration[i] == 0 &&
+                            samples->samples_count[note] == 1) {
+                            record_samples->samples_frames_duration[i] =
+                                now - record_samples->samples_frames_start[i];
+                        } else if (samples->samples_count[note] > 1) {
+                            record_samples->samples_frames_duration[i] =
+                                samples->samples_frames_duration[samples_i];
+                            record_samples->samples_frames_start[i] =
+                                samples->samples_frames_start[samples_i];
+                        }
+                    }
+                }
             }
+
+            // Reset the note's tracking index
+            record_samples_notes_indices[note] = -1;
         }
 
         // --- Skip notes that are off or have no samples
@@ -8664,7 +8685,8 @@ static void war_play(void* userdata) {
             for (uint32_t s = 0; s < samples->samples_count[note]; s++) {
                 int samples_i = note * MAX_SAMPLES_PER_NOTE + s;
                 int16_t* sample_ptr = samples->samples[samples_i];
-                if (!sample_ptr) continue;
+                if (!sample_ptr || !samples->samples_active[samples_i])
+                    continue;
 
                 uint64_t sample_start =
                     samples->samples_frames_start[samples_i];
@@ -8889,6 +8911,8 @@ void* war_audio(void* args) {
         malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     samples->samples_gain =
         malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_active =
+        malloc(sizeof(uint8_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     samples->notes_attack = malloc(sizeof(float) * MAX_MIDI_NOTES);
     samples->notes_sustain = malloc(sizeof(float) * MAX_MIDI_NOTES);
     samples->notes_release = malloc(sizeof(float) * MAX_MIDI_NOTES);
@@ -8920,6 +8944,9 @@ void* war_audio(void* args) {
     memset(samples->samples_gain,
            0,
            sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_active,
+           0,
+           sizeof(uint8_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     memset(samples->notes_attack, 0, sizeof(float) * MAX_MIDI_NOTES);
     memset(samples->notes_sustain, 0, sizeof(float) * MAX_MIDI_NOTES);
     memset(samples->notes_release, 0, sizeof(float) * MAX_MIDI_NOTES);
@@ -8961,6 +8988,8 @@ void* war_audio(void* args) {
         malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     record_samples->samples_gain =
         malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_active =
+        malloc(sizeof(uint8_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     record_samples->notes_attack = malloc(sizeof(float) * MAX_MIDI_NOTES);
     record_samples->notes_sustain = malloc(sizeof(float) * MAX_MIDI_NOTES);
     record_samples->notes_release = malloc(sizeof(float) * MAX_MIDI_NOTES);
@@ -8994,6 +9023,9 @@ void* war_audio(void* args) {
     memset(record_samples->samples_gain,
            0,
            sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_active,
+           0,
+           sizeof(uint8_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     memset(record_samples->notes_attack, 0, sizeof(float) * MAX_MIDI_NOTES);
     memset(record_samples->notes_sustain, 0, sizeof(float) * MAX_MIDI_NOTES);
     memset(record_samples->notes_release, 0, sizeof(float) * MAX_MIDI_NOTES);
@@ -9056,15 +9088,8 @@ void* war_audio(void* args) {
         samples->samples_count[note] = 1;
         samples->notes_frames_start[note] = 0;
         samples->notes_frames_duration[note] = n_samples;
+        samples->samples_active[samples_i] = 1;
     }
-    // TEST FOR MULTIPLE SAMPLES PER NOTE AT NOTE 60
-    // samples->samples[60 * MAX_SAMPLES_PER_NOTE + 1] =
-    //     samples->samples[64 * MAX_SAMPLES_PER_NOTE + 0];
-    // samples->samples_frames_duration[60 * MAX_SAMPLES_PER_NOTE + 1] =
-    //     ctx_a->sample_rate * ctx_a->sample_duration_seconds;
-    // samples->samples_frames_start[60 * MAX_SAMPLES_PER_NOTE + 1] = 0;
-    // samples->samples_frames[60 * MAX_SAMPLES_PER_NOTE + 1] = 0;
-    // samples->samples_count[60] = 2;
     int32_t* record_samples_notes_indices =
         malloc(sizeof(uint32_t) * MAX_MIDI_NOTES);
     for (int i = 0; i < MAX_MIDI_NOTES; i++) {
@@ -9222,6 +9247,7 @@ pc_record_map:
     samples->samples_count[map_note] = 1;
     samples->notes_frames_start[map_note] = 0;
     samples->notes_frames_duration[map_note] = record_frames;
+    samples->samples_active[map_note] = 1;
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
     memset(ctx_a->record_buffer,
            0,
@@ -9282,20 +9308,40 @@ pc_reset_mappings:
         samples->samples_frames_start[samples_i] = 0;
         samples->samples_frames[samples_i] = 0;
         samples->samples_count[note] = 1;
+        samples->samples_active[samples_i] = 1;
     }
     goto pc_audio_done;
 pc_midi_record: { goto pc_audio_done; }
 pc_midi_record_wait: { goto pc_audio_done; }
 pc_midi_record_map: {
     int16_t map_note = atomic_exchange(&atomics->map_note, -1);
+    war_pc_to_wr(pc, AUDIO_CMD_NOTE_OFF, sizeof(map_note), &map_note);
     if (map_note == -1) {
         war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
+        for (int i = 0; i < MAX_MIDI_NOTES; i++) {
+            record_samples_notes_indices[i] = -1;
+        }
+        memset(record_samples->samples,
+               0,
+               sizeof(int16_t*) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+        memset(record_samples->samples_frames_start,
+               0,
+               sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+        memset(record_samples->samples_frames_duration,
+               0,
+               sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+        memset(record_samples->samples_count,
+               0,
+               sizeof(uint32_t) * MAX_MIDI_NOTES);
+        memset(
+            record_samples_notes_indices, -1, sizeof(int32_t) * MAX_MIDI_NOTES);
         record_samples->samples_count[0] = 0;
         goto pc_audio_done;
     }
     uint64_t notes_frames_duration = 0;
+    int samples_i = map_note * MAX_SAMPLES_PER_NOTE;
     for (uint32_t i = 0; i < record_samples->samples_count[0]; i++) {
-        int samples_i = map_note * MAX_SAMPLES_PER_NOTE + i;
+        if (!record_samples->samples_active[i]) { continue; }
         samples->samples[samples_i] = record_samples->samples[i];
         samples->samples_frames_start[samples_i] =
             record_samples->samples_frames_start[i];
@@ -9308,12 +9354,20 @@ pc_midi_record_map: {
         samples->samples_release[samples_i] =
             record_samples->samples_release[i];
         samples->samples_gain[samples_i] = record_samples->samples_gain[i];
+        samples->samples_active[samples_i] = 1;
         if (samples->samples_frames_start[samples_i] +
                 samples->samples_frames_duration[samples_i] >=
             notes_frames_duration) {
             notes_frames_duration = samples->samples_frames_start[samples_i] +
                                     samples->samples_frames_duration[samples_i];
         }
+        samples->samples_count[map_note]++;
+        samples_i++;
+        call_carmack("sample: %u", samples->samples[samples_i]);
+        call_carmack("samples_frames_start: %u",
+                     samples->samples_frames_start[samples_i]);
+        call_carmack("samples_frames_duration: %u",
+                     samples->samples_frames_duration[samples_i]);
     }
     samples->notes_attack[map_note] = record_samples->notes_attack[0];
     samples->notes_sustain[map_note] = record_samples->notes_sustain[0];
@@ -9321,11 +9375,21 @@ pc_midi_record_map: {
     samples->notes_gain[map_note] = record_samples->notes_gain[0];
     samples->notes_frames_start[map_note] = 0;
     samples->notes_frames_duration[map_note] = notes_frames_duration;
-    samples->samples_count[map_note] = record_samples->samples_count[0];
-    record_samples->samples_count[0] = 0;
     for (int i = 0; i < MAX_MIDI_NOTES; i++) {
         record_samples_notes_indices[i] = -1;
     }
+    memset(record_samples->samples,
+           0,
+           sizeof(int16_t*) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_frames_start,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_frames_duration,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_count, 0, sizeof(uint32_t) * MAX_MIDI_NOTES);
+    memset(record_samples_notes_indices, -1, sizeof(int32_t) * MAX_MIDI_NOTES);
+    record_samples->samples_count[0] = 0;
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
     goto pc_audio_done;
 }

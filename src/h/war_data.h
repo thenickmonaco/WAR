@@ -319,6 +319,7 @@ typedef struct war_samples {
     uint64_t* samples_frames_start;
     uint64_t* samples_frames_duration;
     uint64_t* samples_frames;
+    uint8_t* samples_active;
     float* samples_attack;
     float* samples_sustain;
     float* samples_release;

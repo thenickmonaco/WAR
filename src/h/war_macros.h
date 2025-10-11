@@ -29,18 +29,18 @@
 #include <assert.h>
 #include <ctype.h>
 #include <float.h>
+#include <luajit-2.1/lauxlib.h>
+#include <luajit-2.1/lua.h>
+#include <luajit-2.1/lualib.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
-
-#include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
 
 // COMMENT OPTIMIZE: Duff's Device + SIMD (intrinsics)
 
@@ -51,6 +51,44 @@
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
 #define STR(x) #x
+
+static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+
+    if (luaL_dofile(L, lua_file) != LUA_OK) {
+        fprintf(stderr, "Lua error: %s\n", lua_tostring(L, -1));
+        lua_close(L);
+        return -1;
+    }
+
+    lua_getglobal(L, "ctx_lua");
+    if (!lua_istable(L, -1)) {
+        fprintf(stderr, "ctx_lua not a table\n");
+        lua_close(L);
+        return -1;
+    }
+
+#define LOAD_INT(field)                                                        \
+    lua_getfield(L, -1, #field);                                               \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
+        ctx_lua->field = (int)lua_tointeger(L, -1);                            \
+        call_carmack("lua loaded %s = %d", #field, ctx_lua->field);            \
+    }                                                                          \
+    lua_pop(L, 1);
+
+    LOAD_INT(AUDIO_SAMPLE_RATE)
+    LOAD_INT(AUDIO_SAMPLE_DURATION)
+    LOAD_INT(AUDIO_CHANNEL_COUNT)
+    LOAD_INT(AUDIO_NOTE_COUNT)
+    LOAD_INT(AUDIO_SAMPLES_PER_NOTE)
+    LOAD_INT(POOL_ALIGNMENT)
+
+#undef LOAD_INT
+
+    lua_close(L);
+    return 0;
+}
 
 static inline void war_get_top_text(war_window_render_context* ctx_wr) {
     memset(ctx_wr->text_top_status_bar, 0, MAX_STATUS_BAR_COLS);

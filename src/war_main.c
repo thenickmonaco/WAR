@@ -30,6 +30,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <luajit-2.1/lauxlib.h>
+#include <luajit-2.1/lua.h>
+#include <luajit-2.1/lualib.h>
 #include <pipewire-0.3/pipewire/context.h>
 #include <pipewire-0.3/pipewire/core.h>
 #include <pipewire-0.3/pipewire/pipewire.h>
@@ -53,6 +56,15 @@
 
 int main() {
     CALL_CARMACK("main");
+    war_lua_context ctx_lua = {
+        .AUDIO_CHANNEL_COUNT = 2,
+        .AUDIO_SAMPLE_DURATION = 30,
+        .AUDIO_NOTE_COUNT = 128,
+        .AUDIO_SAMPLES_PER_NOTE = 128,
+        .AUDIO_SAMPLE_RATE = 44100,
+        .POOL_ALIGNMENT = 256,
+    };
+    war_load_lua(&ctx_lua, "src/lua/monaco/set.lua");
     war_producer_consumer pc;
     {
         pc.to_a = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
@@ -90,12 +102,12 @@ int main() {
     pthread_create(&war_window_render_thread,
                    NULL,
                    war_window_render,
-                   (void* [3]){&pc, &atomics, &pool_wr});
+                   (void* [4]){&pc, &atomics, &pool_wr, &ctx_lua});
     pthread_t war_audio_thread;
     pthread_create(&war_audio_thread,
                    NULL,
                    war_audio,
-                   (void* [3]){&pc, &atomics, &pool_a});
+                   (void* [4]){&pc, &atomics, &pool_a, &ctx_lua});
     pthread_join(war_window_render_thread, NULL);
     pthread_join(war_audio_thread, NULL);
     END("main");
@@ -119,6 +131,7 @@ void* war_window_render(void* args) {
 reload_window_render:
     war_producer_consumer* pc = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
+    war_lua_context* ctx_lua = args_ptrs[3];
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
@@ -8965,6 +8978,7 @@ void* war_audio(void* args) {
 reload_audio:
     war_producer_consumer* pc = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
+    war_lua_context* ctx_lua = args_ptrs[3];
     atomics->notes_on = malloc(sizeof(uint8_t) * MAX_MIDI_NOTES);
     for (int i = 0; i < MAX_MIDI_NOTES; i++) {
         atomic_init(&atomics->notes_on[i], 0);

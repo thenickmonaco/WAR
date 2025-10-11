@@ -148,6 +148,15 @@ enum war_cursor {
     DEFAULT_CURSOR_BLINK_DURATION = 700000,
 };
 
+typedef struct war_lua_context {
+    _Atomic int AUDIO_SAMPLE_RATE;
+    _Atomic int AUDIO_SAMPLE_DURATION;
+    _Atomic int AUDIO_CHANNEL_COUNT;
+    _Atomic int AUDIO_NOTE_COUNT;
+    _Atomic int AUDIO_SAMPLES_PER_NOTE;
+    _Atomic int POOL_ALIGNMENT;
+} war_lua_context;
+
 typedef struct war_fsm_state {
     uint8_t* is_terminal;
     uint8_t* handle_release;

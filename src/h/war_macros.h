@@ -46,6 +46,8 @@
 
 #define ALIGN32(p) (uint8_t*)(((uintptr_t)(p) + 31) & ~((uintptr_t)31))
 
+#define ALIGN_UP(x, align) (((x) + ((align) - 1)) & ~((align) - 1))
+
 #define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
 
 #define STR(x) #x
@@ -523,18 +525,6 @@ war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
     return a;
 }
 
-static inline bool war_state_is_prefix(war_window_render_context* ctx_wr,
-                                       uint16_t state_index,
-                                       war_fsm_state* fsm) {
-    for (int k = 0; k < 256; k++) {
-        for (int m = 0; m < 16; m++) {
-            uint32_t next_state_index = fsm[state_index].next_state[k][m];
-            if (next_state_index) { return true; }
-        }
-    }
-    return false;
-}
-
 static inline uint64_t war_align64(uint64_t value) {
     return (value + 63) & ~63ULL;
 }
@@ -567,6 +557,8 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return KEYSYM_LEFTBRACKET;
     case XKB_KEY_bracketright:
         return KEYSYM_RIGHTBRACKET;
+    case XKB_KEY_colon:
+        return KEYSYM_SEMICOLON;
     case 65056:
         return KEYSYM_TAB;
     case XKB_KEY_A:

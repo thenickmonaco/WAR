@@ -58,6 +58,7 @@ enum war_keysyms {
     KEYSYM_MINUS = 264,
     KEYSYM_LEFTBRACKET = 265,
     KEYSYM_RIGHTBRACKET = 266,
+    KEYSYM_SEMICOLON = 267,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -119,8 +120,8 @@ enum war_modes {
     MODE_VISUAL_LINE = 2,
     MODE_RECORD = 3,
     MODE_MIDI = 4,
-    MODE_VISUAL_BLOCK = 5,
-    MODE_COMMAND = 6,
+    MODE_COMMAND = 5,
+    MODE_VISUAL_BLOCK = 6,
     MODE_INSERT = 7,
     MODE_O = 8,
     MODE_VISUAL = 9,
@@ -130,7 +131,7 @@ enum war_fsm {
     MAX_NODES = 1024,
     MAX_SEQUENCE_LENGTH = 7,
     MAX_CHILDREN = 32,
-    SEQUENCE_COUNT = 138,
+    SEQUENCE_COUNT = 140,
     MAX_STATES = 256,
     MAX_COMMAND_BUFFER_LENGTH = 128,
 };
@@ -148,12 +149,13 @@ enum war_cursor {
 };
 
 typedef struct war_fsm_state {
-    uint8_t is_terminal[MODE_COUNT];
-    uint8_t handle_release[MODE_COUNT];
-    uint8_t handle_timeout[MODE_COUNT];
-    uint8_t handle_repeat[MODE_COUNT];
-    void* command[MODE_COUNT];
-    uint16_t next_state[512][16];
+    uint8_t* is_terminal;
+    uint8_t* handle_release;
+    uint8_t* handle_timeout;
+    uint8_t* handle_repeat;
+    uint8_t* is_prefix;
+    void** command;
+    uint16_t* next_state;
 } war_fsm_state;
 
 typedef struct war_label {
@@ -256,7 +258,7 @@ enum war_audio {
     AUDIO_DEFAULT_SAMPLE_DURATION = 30,
     AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
-    AUDIO_CMD_COUNT = 19,
+    AUDIO_CMD_COUNT = 20,
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
@@ -275,6 +277,7 @@ enum war_audio {
     AUDIO_CMD_MIDI_RECORD_WAIT = 16,
     AUDIO_CMD_MIDI_RECORD = 17,
     AUDIO_CMD_MIDI_RECORD_MAP = 18,
+    AUDIO_CMD_SAVE = 19,
     // cmd sizes (not including header)
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,
@@ -314,11 +317,20 @@ typedef struct war_producer_consumer {
     uint32_t i_from_wr;
 } war_producer_consumer;
 
+typedef struct war_pool {
+    void* pool;
+    uint8_t* pool_ptr;
+    size_t pool_size;
+    size_t pool_alignment;
+} war_pool;
+
 typedef struct war_samples {
     int16_t** samples;
     uint64_t* samples_frames_start;
     uint64_t* samples_frames_duration;
     uint64_t* samples_frames;
+    uint64_t* samples_frames_trim_start;
+    uint64_t* samples_frames_trim_end;
     uint8_t* samples_active;
     float* samples_attack;
     float* samples_sustain;
@@ -330,6 +342,8 @@ typedef struct war_samples {
     float* notes_gain;
     uint64_t* notes_frames_start;
     uint64_t* notes_frames_duration;
+    uint64_t* notes_frames_trim_start;
+    uint64_t* notes_frames_trim_end;
     uint32_t* samples_count;
 } war_samples;
 

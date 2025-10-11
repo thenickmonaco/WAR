@@ -84,14 +84,18 @@ int main() {
         .resample = 1,
         .midi_record_frames = 0,
     };
+    war_pool pool_wr;
+    war_pool pool_a;
     pthread_t war_window_render_thread;
     pthread_create(&war_window_render_thread,
                    NULL,
                    war_window_render,
-                   (void* [2]){&pc, &atomics});
+                   (void* [3]){&pc, &atomics, &pool_wr});
     pthread_t war_audio_thread;
-    pthread_create(
-        &war_audio_thread, NULL, war_audio, (void* [2]){&pc, &atomics});
+    pthread_create(&war_audio_thread,
+                   NULL,
+                   war_audio,
+                   (void* [3]){&pc, &atomics, &pool_a});
     pthread_join(war_window_render_thread, NULL);
     pthread_join(war_audio_thread, NULL);
     END("main");
@@ -103,6 +107,16 @@ int main() {
 void* war_window_render(void* args) {
     header("war_window_render");
     void** args_ptrs = (void**)args;
+    war_pool* pool_wr = args_ptrs[2];
+    pool_wr->pool_alignment = 256;
+    pool_wr->pool_size = 8;
+    pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
+    int pool_result = posix_memalign(
+        &pool_wr->pool, pool_wr->pool_alignment, pool_wr->pool_size);
+    memset(pool_wr->pool, 0, pool_wr->pool_size);
+    assert(pool_result == 0 && pool_wr->pool);
+    pool_wr->pool_ptr = (uint8_t*)pool_wr->pool;
+reload_window_render:
     war_producer_consumer* pc = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
 
@@ -340,16 +354,24 @@ void* war_window_render(void* args) {
     uint64_t timeout_start_us = 0;
     bool timeout = false;
     bool goto_cmd_timeout_done = false;
-    war_fsm_state fsm[MAX_STATES];
-    uint16_t current_state_index = 0;
+    war_fsm_state* fsm = malloc(sizeof(war_fsm_state) * MAX_STATES);
     for (int i = 0; i < MAX_STATES; i++) {
-        memset(fsm[i].is_terminal, 0, sizeof(fsm[i].is_terminal));
-        memset(fsm[i].handle_release, 0, sizeof(fsm[i].handle_release));
-        memset(fsm[i].handle_repeat, 0, sizeof(fsm[i].handle_repeat));
-        memset(fsm[i].handle_timeout, 0, sizeof(fsm[i].handle_timeout));
-        memset(fsm[i].command, 0, sizeof(fsm[i].command));
-        memset(fsm[i].next_state, 0, sizeof(fsm[i].next_state));
+        fsm[i].is_terminal = malloc(sizeof(uint8_t) * MODE_COUNT);
+        memset(fsm[i].is_terminal, 0, sizeof(uint8_t) * MODE_COUNT);
+        fsm[i].is_prefix = malloc(sizeof(uint8_t) * MODE_COUNT);
+        memset(fsm[i].is_prefix, 0, sizeof(uint8_t) * MODE_COUNT);
+        fsm[i].handle_release = malloc(sizeof(uint8_t) * MODE_COUNT);
+        memset(fsm[i].handle_release, 0, sizeof(uint8_t) * MODE_COUNT);
+        fsm[i].handle_repeat = malloc(sizeof(uint8_t) * MODE_COUNT);
+        memset(fsm[i].handle_repeat, 0, sizeof(uint8_t) * MODE_COUNT);
+        fsm[i].handle_timeout = malloc(sizeof(uint8_t) * MODE_COUNT);
+        memset(fsm[i].handle_timeout, 0, sizeof(uint8_t) * MODE_COUNT);
+        fsm[i].command = malloc(sizeof(void*) * MODE_COUNT);
+        memset(fsm[i].command, 0, sizeof(void*) * MODE_COUNT);
+        fsm[i].next_state = malloc(sizeof(uint16_t) * MAX_KEYSYM * MAX_MOD);
+        memset(fsm[i].next_state, 0, sizeof(uint16_t) * MAX_KEYSYM * MAX_MOD);
     }
+    uint16_t current_state_index = 0;
     bool key_down[MAX_KEYSYM][MAX_MOD];
     uint64_t key_last_event_us[MAX_KEYSYM][MAX_MOD];
     uint64_t fsm_state_last_event_us = 0;
@@ -472,7 +494,7 @@ void* war_window_render(void* args) {
     void* note_quads_block = NULL;
     int note_quads_res =
         posix_memalign(&note_quads_block, 32, note_quads_total_size);
-    assert(note_quads_res == 0 && note_quads_block != NULL);
+    assert(note_quads_res == 0 && note_quads_block);
     uint8_t* note_quads_p = (uint8_t*)note_quads_block;
     war_note_quads note_quads;
     note_quads_p = ALIGN32(note_quads_p);
@@ -690,14 +712,15 @@ void* war_window_render(void* args) {
                     if (elapsed >= repeat_rate_us) {
                         key_last_event_us[k][m] = ctx_wr.now;
                         uint16_t next_state_index =
-                            fsm[current_state_index].next_state[k][m];
+                            fsm[current_state_index]
+                                .next_state[k * MAX_MOD + m];
                         if (next_state_index != 0) {
                             current_state_index = next_state_index;
                             fsm_state_last_event_us = ctx_wr.now;
                             if (fsm[current_state_index]
                                     .is_terminal[ctx_wr.mode] &&
-                                !war_state_is_prefix(
-                                    &ctx_wr, current_state_index, fsm) &&
+                                !fsm[current_state_index]
+                                     .is_prefix[ctx_wr.mode] &&
                                 fsm[current_state_index]
                                     .handle_repeat[ctx_wr.mode]) {
                                 uint16_t temp = current_state_index;
@@ -2746,7 +2769,7 @@ void* war_window_render(void* args) {
                 call_carmack("seat: %s",
                              (const char*)msg_buffer + msg_buffer_offset + 12);
                 goto wayland_done;
-            wl_keyboard_keymap:
+            wl_keyboard_keymap: {
                 dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
                 assert(size == 16);
                 int keymap_fd = -1;
@@ -3413,10 +3436,27 @@ void* war_window_render(void* args) {
                         {
                             {.keysym = KEYSYM_SPACE, .mod = 0},
                             {0},
+                        },
+                        {
+                            {.keysym = XKB_KEY_w, .mod = 0},
+                            {.keysym = KEYSYM_RETURN, .mod = 0},
+                            {0},
+                        },
+                        {
+                            {.keysym = KEYSYM_SEMICOLON, .mod = MOD_SHIFT},
+                            {0},
                         }};
                 war_label key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
-                    // normal, views, visual_line, visual_block, insert,
-                    // command, mode_m, mode_o, visual
+                    // MODE_NORMAL = 0,
+                    // MODE_VIEWS = 1,
+                    // MODE_VISUAL_LINE = 2,
+                    // MODE_RECORD = 3,
+                    // MODE_MIDI = 4,
+                    // MODE_COMMAND = 5,
+                    // MODE_VISUAL_BLOCK = 6,
+                    // MODE_INSERT = 7,
+                    // MODE_O = 8,
+                    // MODE_VISUAL = 9,
                     // cmd, handle_release, handle_timeout, handle_repeat
                     {
                         {&&cmd_normal_k, 0, 1, 1},
@@ -3551,6 +3591,7 @@ void* war_window_render(void* args) {
                         {NULL, 0, 1, 1},
                         {&&cmd_record_esc, 0, 1, 1},
                         {&&cmd_midi_esc, 0, 1, 1},
+                        {&&cmd_command_esc, 0, 1, 1},
                     },
                     {
                         {&&cmd_normal_f, 0, 1, 1},
@@ -3984,6 +4025,22 @@ void* war_window_render(void* args) {
                         {&&cmd_record_space, 0, 0, 1},
                         {&&cmd_midi_space, 0, 0, 1},
                     },
+                    {
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {&&cmd_command_w, 0, 1, 1},
+                    },
+                    {
+                        {&&cmd_normal_colon, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                        {NULL, 0, 1, 1},
+                    },
                 };
                 //// default to void command if unset
                 // for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
@@ -3993,7 +4050,7 @@ void* war_window_render(void* args) {
                 //         }
                 //     }
                 // }
-                size_t state_counter = 1; // 0 = root
+                size_t state_counter = 1; // root = 0
                 for (size_t seq_idx = 0; seq_idx < SEQUENCE_COUNT; seq_idx++) {
                     size_t parent = 0; // start at root
 
@@ -4006,44 +4063,83 @@ void* war_window_render(void* args) {
                     for (size_t key_idx = 0; key_idx < len; key_idx++) {
                         war_key_event* ev = &key_sequences[seq_idx][key_idx];
                         uint16_t next =
-                            fsm[parent].next_state[ev->keysym][ev->mod];
+                            fsm[parent]
+                                .next_state[ev->keysym * MAX_MOD + ev->mod];
+
                         if (next == 0) {
                             next = state_counter++;
-                            fsm[parent].next_state[ev->keysym][ev->mod] = next;
+                            fsm[parent]
+                                .next_state[ev->keysym * MAX_MOD + ev->mod] =
+                                next;
 
-                            // Initialize per-mode terminal flag
+                            // initialize all modes
                             for (size_t m = 0; m < MODE_COUNT; m++) {
                                 fsm[next].is_terminal[m] = false;
+                                fsm[next].is_prefix[m] = false;
+                                fsm[next].command[m] = NULL;
+                                fsm[next].handle_release[m] = 0;
+                                fsm[next].handle_timeout[m] = 0;
+                                fsm[next].handle_repeat[m] = 0;
                             }
-
-                            memset(fsm[next].command,
-                                   0,
-                                   sizeof(fsm[next].command));
                             memset(fsm[next].next_state,
                                    0,
-                                   sizeof(fsm[next].next_state));
+                                   sizeof(uint16_t) * MAX_MOD * MAX_KEYSYM);
                         }
+
+                        // mark intermediate nodes as prefix only for modes that
+                        // have a command in this sequence
+                        if (key_idx != len - 1) {
+                            for (size_t m = 0; m < MODE_COUNT; m++) {
+                                if (key_labels[seq_idx][m].command != NULL) {
+                                    fsm[next].is_prefix[m] = true;
+                                }
+                            }
+                        }
+
                         parent = next;
                     }
 
-                    // Set terminal & commands for each mode
+                    // terminal node
                     for (size_t m = 0; m < MODE_COUNT; m++) {
-                        fsm[parent].is_terminal[m] = true;
-                        fsm[parent].command[m] = key_labels[seq_idx][m].command;
-                        fsm[parent].handle_release[m] =
-                            key_labels[seq_idx][m].handle_release;
-                        fsm[parent].handle_timeout[m] =
-                            key_labels[seq_idx][m].handle_timeout;
-                        fsm[parent].handle_repeat[m] =
-                            key_labels[seq_idx][m].handle_repeat;
+                        if (key_labels[seq_idx][m].command != NULL) {
+                            fsm[parent].is_terminal[m] = true;
+                            fsm[parent].command[m] =
+                                key_labels[seq_idx][m].command;
+                            fsm[parent].handle_release[m] =
+                                key_labels[seq_idx][m].handle_release;
+                            fsm[parent].handle_timeout[m] =
+                                key_labels[seq_idx][m].handle_timeout;
+                            fsm[parent].handle_repeat[m] =
+                                key_labels[seq_idx][m].handle_repeat;
+                        } else {
+                            fsm[parent].is_terminal[m] = false;
+                            fsm[parent].command[m] = NULL;
+                            fsm[parent].handle_release[m] = 0;
+                            fsm[parent].handle_timeout[m] = 0;
+                            fsm[parent].handle_repeat[m] = 0;
+                        }
+
+                        // debug print for command mode
+                        if (m == MODE_COMMAND) {
+                            call_carmack("Assigned terminal node for "
+                                         "seq_idx=%zu mode=%zu: "
+                                         "terminal=%d, prefix=%d, command=%p",
+                                         seq_idx,
+                                         m,
+                                         fsm[parent].is_terminal[m],
+                                         fsm[parent].is_prefix[m],
+                                         fsm[parent].command[m]);
+                        }
                     }
                 }
+
                 assert(state_counter < MAX_STATES);
                 munmap(keymap_map, keymap_size);
                 close(keymap_fd);
                 xkb_keymap_unref(xkb_keymap);
                 xkb_keymap = NULL;
                 goto wayland_done;
+            }
             wl_keyboard_enter:
                 // dump_bytes("wl_keyboard_enter event",
                 //            msg_buffer + msg_buffer_offset,
@@ -4054,7 +4150,7 @@ void* war_window_render(void* args) {
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
                 goto wayland_done;
-            wl_keyboard_key:
+            wl_keyboard_key: {
                 // dump_bytes("wl_keyboard_key event",
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
@@ -4107,8 +4203,8 @@ void* war_window_render(void* args) {
                         ctx_wr.skip_release = 0;
                         goto cmd_done;
                     }
-                    uint16_t idx =
-                        fsm[current_state_index].next_state[keysym][mod];
+                    uint16_t idx = fsm[current_state_index]
+                                       .next_state[keysym * MAX_MOD + mod];
                     if (fsm[idx].handle_release[ctx_wr.mode] &&
                         !ctx_wr.trigger && fsm[idx].command[ctx_wr.mode]) {
                         goto* fsm[idx].command[ctx_wr.mode];
@@ -4124,11 +4220,11 @@ void* war_window_render(void* args) {
                     key_last_event_us[keysym][mod] = ctx_wr.now;
                 }
                 uint16_t next_state_index =
-                    fsm[current_state_index].next_state[keysym][mod];
-                if (timeout &&
-                    fsm[timeout_state_index].next_state[keysym][mod]) {
-                    next_state_index =
-                        fsm[timeout_state_index].next_state[keysym][mod];
+                    fsm[current_state_index].next_state[keysym * MAX_MOD + mod];
+                if (timeout && fsm[timeout_state_index]
+                                   .next_state[keysym * MAX_MOD + mod]) {
+                    next_state_index = fsm[timeout_state_index]
+                                           .next_state[keysym * MAX_MOD + mod];
                 }
                 if (next_state_index == 0) {
                     current_state_index = 0;
@@ -4141,7 +4237,7 @@ void* war_window_render(void* args) {
                 current_state_index = next_state_index;
                 fsm_state_last_event_us = ctx_wr.now;
                 if (fsm[current_state_index].is_terminal[ctx_wr.mode] &&
-                    !war_state_is_prefix(&ctx_wr, current_state_index, fsm)) {
+                    !fsm[current_state_index].is_prefix[ctx_wr.mode]) {
                     uint16_t temp = current_state_index;
                     current_state_index = 0;
                     // repeats
@@ -4162,8 +4258,7 @@ void* war_window_render(void* args) {
                         goto* fsm[temp].command[ctx_wr.mode];
                     }
                 } else if (fsm[current_state_index].is_terminal[ctx_wr.mode] &&
-                           war_state_is_prefix(
-                               &ctx_wr, current_state_index, fsm)) {
+                           fsm[current_state_index].is_prefix[ctx_wr.mode]) {
                     if (fsm[current_state_index].handle_timeout[ctx_wr.mode]) {
                         // repeats
                         repeat_keysym = 0;
@@ -4197,6 +4292,7 @@ void* war_window_render(void* args) {
                     }
                 }
                 goto cmd_done;
+            }
             cmd_normal_k:
                 call_carmack("cmd_normal_k");
                 uint32_t increment = ctx_wr.row_increment;
@@ -6705,6 +6801,14 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
+            cmd_normal_colon: {
+                call_carmack("cmd_normal_colon");
+                ctx_wr.mode = MODE_COMMAND;
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             //------------------------------------------------------------------
             // RECORD COMMANDS
             //------------------------------------------------------------------
@@ -8300,6 +8404,26 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
+                //-----------------------------------------------------------------
+                // COMMAND MODE
+                //-----------------------------------------------------------------
+            cmd_command_esc: {
+                call_carmack("cmd_command_esc");
+                ctx_wr.mode = MODE_NORMAL;
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_command_w: {
+                call_carmack("cmd_command_w");
+                war_pc_to_a(pc, AUDIO_CMD_SAVE, 0, NULL);
+                ctx_wr.mode = MODE_NORMAL;
+                ctx_wr.numeric_prefix = 0;
+                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_void:
                 goto cmd_done;
             cmd_done: {
@@ -8656,6 +8780,11 @@ static void war_play(void* userdata) {
                                 samples->samples_frames_duration[samples_i];
                             record_samples->samples_frames_start[i] =
                                 samples->samples_frames_start[samples_i];
+                            if (now <
+                                record_samples->notes_frames_start[0] +
+                                    record_samples->samples_frames_start[i]) {
+                                record_samples->samples_active[i] = 0;
+                            }
                         }
                     }
                 }
@@ -8685,8 +8814,9 @@ static void war_play(void* userdata) {
             for (uint32_t s = 0; s < samples->samples_count[note]; s++) {
                 int samples_i = note * MAX_SAMPLES_PER_NOTE + s;
                 int16_t* sample_ptr = samples->samples[samples_i];
-                if (!sample_ptr || !samples->samples_active[samples_i])
+                if (!sample_ptr || !samples->samples_active[samples_i]) {
                     continue;
+                }
 
                 uint64_t sample_start =
                     samples->samples_frames_start[samples_i];
@@ -8694,10 +8824,15 @@ static void war_play(void* userdata) {
                     samples->samples_frames_duration[samples_i];
 
                 if (note_elapsed < sample_start ||
-                    note_elapsed >= sample_start + sample_duration)
+                    note_elapsed >=
+                        sample_start + sample_duration -
+                            samples->samples_frames_trim_end[samples_i]) {
                     continue;
+                }
 
-                uint64_t sample_phase = note_elapsed - sample_start;
+                uint64_t sample_phase =
+                    note_elapsed - sample_start +
+                    samples->samples_frames_trim_start[samples_i];
 
                 for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
                     uint64_t idx = sample_phase * ctx_a->channel_count + c;
@@ -8818,6 +8953,16 @@ static void war_record(void* userdata) {
 void* war_audio(void* args) {
     header("war_audio");
     void** args_ptrs = (void**)args;
+    war_pool* pool_a = args_ptrs[2];
+    pool_a->pool_alignment = 256;
+    pool_a->pool_size = 8;
+    pool_a->pool_size = ALIGN_UP(pool_a->pool_size, pool_a->pool_alignment);
+    int pool_result = posix_memalign(
+        &pool_a->pool, pool_a->pool_alignment, pool_a->pool_size);
+    memset(pool_a->pool, 0, pool_a->pool_size);
+    assert(pool_result == 0 && pool_a->pool);
+    pool_a->pool_ptr = (uint8_t*)pool_a->pool;
+reload_audio:
     war_producer_consumer* pc = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
     atomics->notes_on = malloc(sizeof(uint8_t) * MAX_MIDI_NOTES);
@@ -8903,6 +9048,10 @@ void* war_audio(void* args) {
         malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     samples->samples_frames =
         malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_frames_trim_start =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    samples->samples_frames_trim_end =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     samples->samples_attack =
         malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     samples->samples_sustain =
@@ -8919,6 +9068,9 @@ void* war_audio(void* args) {
     samples->notes_gain = malloc(sizeof(float) * MAX_MIDI_NOTES);
     samples->notes_frames_start = malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
     samples->notes_frames_duration = malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
+    samples->notes_frames_trim_start =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
+    samples->notes_frames_trim_end = malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
     samples->samples_count = malloc(sizeof(uint32_t) * MAX_MIDI_NOTES);
     memset(samples->samples,
            0,
@@ -8930,6 +9082,12 @@ void* war_audio(void* args) {
            0,
            sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     memset(samples->samples_frames,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_frames_trim_start,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(samples->samples_frames_trim_end,
            0,
            sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     memset(samples->samples_attack,
@@ -8954,6 +9112,10 @@ void* war_audio(void* args) {
     memset(samples->notes_frames_start, 0, sizeof(uint64_t) * MAX_MIDI_NOTES);
     memset(
         samples->notes_frames_duration, 0, sizeof(uint64_t) * MAX_MIDI_NOTES);
+    memset(
+        samples->notes_frames_trim_start, 0, sizeof(uint64_t) * MAX_MIDI_NOTES);
+    memset(
+        samples->notes_frames_trim_end, 0, sizeof(uint64_t) * MAX_MIDI_NOTES);
     memset(samples->samples_count, 0, sizeof(uint32_t) * MAX_MIDI_NOTES);
     for (int i = 0; i < MAX_MIDI_NOTES; i++) {
         samples->notes_attack[i] = ctx_a->default_attack;
@@ -8980,6 +9142,10 @@ void* war_audio(void* args) {
         malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     record_samples->samples_frames =
         malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_frames_trim_start =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    record_samples->samples_frames_trim_end =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     record_samples->samples_attack =
         malloc(sizeof(float) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     record_samples->samples_sustain =
@@ -8998,6 +9164,10 @@ void* war_audio(void* args) {
         malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
     record_samples->notes_frames_duration =
         malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
+    record_samples->notes_frames_trim_start =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
+    record_samples->notes_frames_trim_end =
+        malloc(sizeof(uint64_t) * MAX_MIDI_NOTES);
     record_samples->samples_count = malloc(sizeof(uint32_t) * MAX_MIDI_NOTES);
     memset(record_samples->samples,
            0,
@@ -9009,6 +9179,12 @@ void* war_audio(void* args) {
            0,
            sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     memset(record_samples->samples_frames,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_frames_trim_start,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
+    memset(record_samples->samples_frames_trim_end,
            0,
            sizeof(uint64_t) * MAX_MIDI_NOTES * MAX_SAMPLES_PER_NOTE);
     memset(record_samples->samples_attack,
@@ -9034,6 +9210,12 @@ void* war_audio(void* args) {
            0,
            sizeof(uint64_t) * MAX_MIDI_NOTES);
     memset(record_samples->notes_frames_duration,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES);
+    memset(record_samples->notes_frames_trim_start,
+           0,
+           sizeof(uint64_t) * MAX_MIDI_NOTES);
+    memset(record_samples->notes_frames_trim_end,
            0,
            sizeof(uint64_t) * MAX_MIDI_NOTES);
     memset(record_samples->samples_count, 0, sizeof(uint32_t) * MAX_MIDI_NOTES);
@@ -9096,7 +9278,7 @@ void* war_audio(void* args) {
         record_samples_notes_indices[i] = -1;
     }
     assert(record_samples_notes_indices);
-    void** userdata = malloc(sizeof(void*) * 6);
+    void** userdata = malloc(sizeof(void*) * 7);
     assert(userdata);
     userdata[0] = ctx_a;
     userdata[1] = pc;
@@ -9193,6 +9375,7 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_MIDI_RECORD] = &&pc_midi_record;
     pc_audio[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
     pc_audio[AUDIO_CMD_MIDI_RECORD_WAIT] = &&pc_midi_record_wait;
+    pc_audio[AUDIO_CMD_SAVE] = &&pc_save;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -9309,6 +9492,8 @@ pc_reset_mappings:
         samples->samples_frames[samples_i] = 0;
         samples->samples_count[note] = 1;
         samples->samples_active[samples_i] = 1;
+        samples->samples_frames_trim_start[samples_i] = 0;
+        samples->samples_frames_trim_end[samples_i] = 0;
     }
     goto pc_audio_done;
 pc_midi_record: { goto pc_audio_done; }
@@ -9391,6 +9576,10 @@ pc_midi_record_map: {
     memset(record_samples_notes_indices, -1, sizeof(int32_t) * MAX_MIDI_NOTES);
     record_samples->samples_count[0] = 0;
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
+    goto pc_audio_done;
+}
+pc_save: {
+    call_carmack("saving");
     goto pc_audio_done;
 }
 pc_audio_done:

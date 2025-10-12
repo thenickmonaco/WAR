@@ -155,6 +155,10 @@ typedef struct war_lua_context {
     _Atomic int AUDIO_NOTE_COUNT;
     _Atomic int AUDIO_SAMPLES_PER_NOTE;
     _Atomic int POOL_ALIGNMENT;
+    _Atomic int AUDIO_BPM;
+    _Atomic int AUDIO_BASE_FREQUENCY;
+    _Atomic int AUDIO_BASE_NOTE;
+    _Atomic int AUDIO_EDO;
 } war_lua_context;
 
 typedef struct war_fsm_state {

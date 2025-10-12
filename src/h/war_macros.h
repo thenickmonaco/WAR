@@ -73,7 +73,7 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     lua_getfield(L, -1, #field);                                               \
     if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
         ctx_lua->field = (int)lua_tointeger(L, -1);                            \
-        call_carmack("lua loaded %s = %d", #field, ctx_lua->field);            \
+        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field);              \
     }                                                                          \
     lua_pop(L, 1);
 
@@ -83,11 +83,107 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(AUDIO_NOTE_COUNT)
     LOAD_INT(AUDIO_SAMPLES_PER_NOTE)
     LOAD_INT(POOL_ALIGNMENT)
+    LOAD_INT(AUDIO_BPM)
+    LOAD_INT(AUDIO_BASE_FREQUENCY)
+    LOAD_INT(AUDIO_BASE_NOTE)
+    LOAD_INT(AUDIO_EDO)
 
 #undef LOAD_INT
 
     lua_close(L);
     return 0;
+}
+
+static inline size_t war_get_audio_pool_size(war_pool* pool,
+                                             war_lua_context* ctx_lua,
+                                             const char* lua_file) {
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+
+    if (luaL_dofile(L, lua_file) != LUA_OK) {
+        fprintf(stderr, "Lua error: %s\n", lua_tostring(L, -1));
+        lua_close(L);
+        return 0;
+    }
+
+    lua_getglobal(L, "pool_a");
+    if (!lua_istable(L, -1)) {
+        fprintf(stderr, "pool_a not a table\n");
+        lua_close(L);
+        return 0;
+    }
+
+    size_t total_size = 0;
+
+    lua_pushnil(L);
+    while (lua_next(L, -2) != 0) { // iterate pool_a entries
+        if (lua_istable(L, -1)) {
+            lua_getfield(L, -1, "type");
+            const char* type = lua_tostring(L, -1);
+            lua_pop(L, 1);
+
+            lua_getfield(L, -1, "count");
+            size_t count = (size_t)lua_tointeger(L, -1);
+            lua_pop(L, 1);
+
+            size_t type_size = 0;
+
+            if (strcmp(type, "uint8_t") == 0)
+                type_size = sizeof(uint8_t);
+            else if (strcmp(type, "uint64_t") == 0)
+                type_size = sizeof(uint64_t);
+            else if (strcmp(type, "int16_t") == 0)
+                type_size = sizeof(int16_t);
+            else if (strcmp(type, "int16_t*") == 0)
+                type_size = sizeof(int16_t*);
+            else if (strcmp(type, "float") == 0)
+                type_size = sizeof(float);
+            else if (strcmp(type, "uint32_t") == 0)
+                type_size = sizeof(uint32_t);
+            else if (strcmp(type, "int32_t") == 0)
+                type_size = sizeof(int32_t);
+            else if (strcmp(type, "void*") == 0)
+                type_size = sizeof(void*);
+            else if (strcmp(type, "war_audio_context") == 0)
+                type_size = sizeof(war_audio_context);
+            else if (strcmp(type, "war_samples") == 0)
+                type_size = sizeof(war_samples);
+            else {
+                fprintf(stderr, "Unknown pool_a type: %s\n", type);
+                type_size = 0;
+            }
+
+            total_size += type_size * count;
+        }
+        lua_pop(L, 1); // pop value
+    }
+
+    // align total_size to pool alignment
+    size_t alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
+    total_size = (total_size + alignment - 1) & ~(alignment - 1);
+
+    pool->pool_alignment = alignment;
+    pool->pool_size = total_size;
+
+    int result = posix_memalign(&pool->pool, alignment, total_size);
+    assert(result == 0);
+    memset(pool->pool, 0, total_size);
+    pool->pool_ptr = (uint8_t*)pool->pool;
+
+    lua_close(L);
+    call_carmack("pool_a size: %zu", total_size);
+    return total_size;
+}
+
+static inline void* war_pool_alloc(war_pool* pool, size_t size) {
+    size = ALIGN_UP(size, pool->pool_alignment);
+    if (pool->pool_ptr + size > (uint8_t*)pool->pool + pool->pool_size) {
+        call_carmack("war_pool_alloc not big enough! %zu bytes", size);
+        abort();
+    }
+    void* ptr = pool->pool_ptr;
+    pool->pool_ptr += size;
+    return ptr;
 }
 
 static inline void war_get_top_text(war_window_render_context* ctx_wr) {
@@ -311,56 +407,163 @@ static inline void war_warpoon_shift_down(war_views* views) {
     views->top_row[i_views] = tmp_top_row;
 }
 
+// --------------------------
+// Writer: WR -> Audio (to_a)
 static inline bool war_pc_to_a(war_producer_consumer* pc,
                                uint32_t header,
                                uint32_t payload_size,
-                               void* payload) {
-    uint32_t total_size =
-        8 + payload_size; // 4 bytes header + 4 bytes size + payload
+                               const void* payload) {
+    uint32_t total_size = 8 + payload_size; // header(4) + size(4) + payload
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
+
+    // free bytes calculation (circular buffer)
     uint32_t free_bytes =
         (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
     if (free_bytes < total_size) return false;
 
+    // --- write header (4) + size (4) allowing split ---
+    uint8_t tmp_hdr[8];
+    memcpy(tmp_hdr, &header, 4);
+    memcpy(tmp_hdr + 4, &payload_size, 4);
+
     uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
 
-    if (cont_bytes >= total_size) {
-        // contiguous write
-        memcpy(pc->to_a + write_index, &header, 4);
-        memcpy(pc->to_a + write_index + 4, &payload_size, 4);
-        if (payload_size)
-            memcpy(pc->to_a + write_index + 8, payload, payload_size);
+    if (cont_bytes >= 8) {
+        // contiguous place for header+size
+        memcpy(pc->to_a + write_index, tmp_hdr, 8);
     } else {
-        // wrap-around write
-        // header+size never split
-        if (cont_bytes < 8) return false; // must always fit header+size
-        memcpy(pc->to_a + write_index, &header, 4);
-        memcpy(pc->to_a + write_index + 4, &payload_size, 4);
-
-        uint32_t first_payload = cont_bytes - 8;
-        if (first_payload)
-            memcpy(pc->to_a + write_index + 8, payload, first_payload);
-        memcpy(pc->to_a,
-               (uint8_t*)payload + first_payload,
-               payload_size - first_payload);
+        // split header+size across end -> wrap
+        memcpy(pc->to_a + write_index, tmp_hdr, cont_bytes);
+        memcpy(pc->to_a, tmp_hdr + cont_bytes, 8 - cont_bytes);
     }
 
+    // --- write payload (may be zero length) allowing split ---
+    if (payload_size) {
+        uint32_t payload_write_pos = (write_index + 8) & (PC_BUFFER_SIZE - 1);
+        uint32_t first_chunk = PC_BUFFER_SIZE - payload_write_pos;
+        if (first_chunk >= payload_size) {
+            memcpy(pc->to_a + payload_write_pos, payload, payload_size);
+        } else {
+            // wrap
+            memcpy(pc->to_a + payload_write_pos, payload, first_chunk);
+            memcpy(pc->to_a,
+                   (const uint8_t*)payload + first_chunk,
+                   payload_size - first_chunk);
+        }
+    }
+
+    // commit write index
     pc->i_to_a = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
     return true;
 }
 
+// --------------------------
+// Reader: Audio <- WR (from_wr)
+static inline bool war_pc_from_wr(war_producer_consumer* pc,
+                                  uint32_t* out_header,
+                                  uint32_t* out_size,
+                                  void* out_payload) {
+    uint32_t write_index = pc->i_to_a;
+    uint32_t read_index = pc->i_from_wr;
+
+    uint32_t used_bytes =
+        (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
+    if (used_bytes < 8) return false; // need at least header+size
+
+    // read header+size (handle split)
+    uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
+    if (cont_bytes >= 8) {
+        memcpy(out_header, pc->to_a + read_index, 4);
+        memcpy(out_size, pc->to_a + read_index + 4, 4);
+    } else {
+        uint8_t tmp[8];
+        memcpy(tmp, pc->to_a + read_index, cont_bytes);
+        memcpy(tmp + cont_bytes, pc->to_a, 8 - cont_bytes);
+        memcpy(out_header, tmp, 4);
+        memcpy(out_size, tmp + 4, 4);
+    }
+
+    uint32_t total_size = 8 + *out_size;
+    if (used_bytes < total_size) return false; // not all payload present yet
+
+    // read payload (if any)
+    if (*out_size) {
+        uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
+        uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
+        if (first_chunk >= *out_size) {
+            memcpy(out_payload, pc->to_a + payload_start, *out_size);
+        } else {
+            memcpy(out_payload, pc->to_a + payload_start, first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk,
+                   pc->to_a,
+                   *out_size - first_chunk);
+        }
+    }
+
+    // commit read index
+    pc->i_from_wr = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
+    return true;
+}
+
+// --------------------------
+// Writer: Main -> WR (to_wr)
+static inline bool war_pc_to_wr(war_producer_consumer* pc,
+                                uint32_t header,
+                                uint32_t payload_size,
+                                const void* payload) {
+    uint32_t total_size = 8 + payload_size;
+    uint32_t write_index = pc->i_to_wr;
+    uint32_t read_index = pc->i_from_a;
+
+    uint32_t free_bytes =
+        (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
+    if (free_bytes < total_size) return false;
+
+    // header+size
+    uint8_t tmp_hdr[8];
+    memcpy(tmp_hdr, &header, 4);
+    memcpy(tmp_hdr + 4, &payload_size, 4);
+
+    uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
+    if (cont_bytes >= 8) {
+        memcpy(pc->to_wr + write_index, tmp_hdr, 8);
+    } else {
+        memcpy(pc->to_wr + write_index, tmp_hdr, cont_bytes);
+        memcpy(pc->to_wr, tmp_hdr + cont_bytes, 8 - cont_bytes);
+    }
+
+    // payload
+    if (payload_size) {
+        uint32_t payload_write_pos = (write_index + 8) & (PC_BUFFER_SIZE - 1);
+        uint32_t first_chunk = PC_BUFFER_SIZE - payload_write_pos;
+        if (first_chunk >= payload_size) {
+            memcpy(pc->to_wr + payload_write_pos, payload, payload_size);
+        } else {
+            memcpy(pc->to_wr + payload_write_pos, payload, first_chunk);
+            memcpy(pc->to_wr,
+                   (const uint8_t*)payload + first_chunk,
+                   payload_size - first_chunk);
+        }
+    }
+
+    pc->i_to_wr = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
+    return true;
+}
+
+// --------------------------
+// Reader: WR <- Main (from_a)
 static inline bool war_pc_from_a(war_producer_consumer* pc,
                                  uint32_t* out_header,
                                  uint32_t* out_size,
                                  void* out_payload) {
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
+
     uint32_t used_bytes =
         (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
     if (used_bytes < 8) return false;
 
-    // read header
     uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
     if (cont_bytes >= 8) {
         memcpy(out_header, pc->to_wr + read_index, 4);
@@ -376,7 +579,6 @@ static inline bool war_pc_from_a(war_producer_consumer* pc,
     uint32_t total_size = 8 + *out_size;
     if (used_bytes < total_size) return false;
 
-    // read payload
     if (*out_size) {
         uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
         uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
@@ -391,83 +593,6 @@ static inline bool war_pc_from_a(war_producer_consumer* pc,
     }
 
     pc->i_from_a = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
-    return true;
-}
-
-static inline bool war_pc_to_wr(war_producer_consumer* pc,
-                                uint32_t header,
-                                uint32_t payload_size,
-                                void* payload) {
-    uint32_t total_size = 8 + payload_size;
-    uint32_t write_index = pc->i_to_wr;
-    uint32_t read_index = pc->i_from_a;
-    uint32_t free_bytes =
-        (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
-    if (free_bytes < total_size) return false;
-
-    uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
-
-    if (cont_bytes >= total_size) {
-        memcpy(pc->to_wr + write_index, &header, 4);
-        memcpy(pc->to_wr + write_index + 4, &payload_size, 4);
-        if (payload_size)
-            memcpy(pc->to_wr + write_index + 8, payload, payload_size);
-    } else {
-        if (cont_bytes < 8) return false;
-        memcpy(pc->to_wr + write_index, &header, 4);
-        memcpy(pc->to_wr + write_index + 4, &payload_size, 4);
-
-        uint32_t first_payload = cont_bytes - 8;
-        if (first_payload)
-            memcpy(pc->to_wr + write_index + 8, payload, first_payload);
-        memcpy(pc->to_wr,
-               (uint8_t*)payload + first_payload,
-               payload_size - first_payload);
-    }
-
-    pc->i_to_wr = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
-    return true;
-}
-
-static inline bool war_pc_from_wr(war_producer_consumer* pc,
-                                  uint32_t* out_header,
-                                  uint32_t* out_size,
-                                  void* out_payload) {
-    uint32_t write_index = pc->i_to_a;
-    uint32_t read_index = pc->i_from_wr;
-    uint32_t used_bytes =
-        (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
-    if (used_bytes < 8) return false;
-
-    uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
-    if (cont_bytes >= 8) {
-        memcpy(out_header, pc->to_a + read_index, 4);
-        memcpy(out_size, pc->to_a + read_index + 4, 4);
-    } else {
-        uint8_t tmp[8];
-        memcpy(tmp, pc->to_a + read_index, cont_bytes);
-        memcpy(tmp + cont_bytes, pc->to_a, 8 - cont_bytes);
-        memcpy(out_header, tmp, 4);
-        memcpy(out_size, tmp + 4, 4);
-    }
-
-    uint32_t total_size = 8 + *out_size;
-    if (used_bytes < total_size) return false;
-
-    if (*out_size) {
-        uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
-        uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
-        if (first_chunk >= *out_size) {
-            memcpy(out_payload, pc->to_a + payload_start, *out_size);
-        } else {
-            memcpy(out_payload, pc->to_a + payload_start, first_chunk);
-            memcpy((uint8_t*)out_payload + first_chunk,
-                   pc->to_a,
-                   *out_size - first_chunk);
-        }
-    }
-
-    pc->i_from_wr = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
     return true;
 }
 

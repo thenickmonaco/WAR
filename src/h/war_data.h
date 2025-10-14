@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //
 // WAR - make music with vim motions
-// Copyright (C) 2025 Nick Monaco
+// Copyright (C) 2025 Monaco
 //
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
@@ -149,16 +149,29 @@ enum war_cursor {
 };
 
 typedef struct war_lua_context {
-    _Atomic int AUDIO_SAMPLE_RATE;
-    _Atomic int AUDIO_SAMPLE_DURATION;
-    _Atomic int AUDIO_CHANNEL_COUNT;
-    _Atomic int AUDIO_NOTE_COUNT;
-    _Atomic int AUDIO_SAMPLES_PER_NOTE;
+    // audio
+    _Atomic int A_SAMPLE_RATE;
+    _Atomic int A_SAMPLE_DURATION;
+    _Atomic int A_CHANNEL_COUNT;
+    _Atomic int A_NOTE_COUNT;
+    _Atomic int A_SAMPLES_PER_NOTE;
+    _Atomic int A_BPM;
+    _Atomic int A_BASE_FREQUENCY;
+    _Atomic int A_BASE_NOTE;
+    _Atomic int A_EDO;
+    // window render
+    _Atomic int WR_VIEWS_SAVED;
+    _Atomic int WR_WARPOON_TEXT_COLS;
+    _Atomic int WR_STATES;
+    _Atomic int WR_MODE_COUNT;
+    _Atomic int WR_KEYSYM_COUNT;
+    _Atomic int WR_MOD_COUNT;
+    _Atomic int WR_NOTE_QUADS_MAX;
+    _Atomic int WR_STATUS_BAR_COLS_MAX;
+    _Atomic int WR_TEXT_QUADS_MAX;
+    _Atomic int WR_QUADS_MAX;
+    // pool
     _Atomic int POOL_ALIGNMENT;
-    _Atomic int AUDIO_BPM;
-    _Atomic int AUDIO_BASE_FREQUENCY;
-    _Atomic int AUDIO_BASE_NOTE;
-    _Atomic int AUDIO_EDO;
 } war_lua_context;
 
 typedef struct war_fsm_state {
@@ -508,7 +521,7 @@ typedef struct war_window_render_context {
     float gain_increment;
     float midi_octave;
     float midi_note;
-    bool trigger;
+    bool midi_toggle;
     bool skip_release;
 } war_window_render_context;
 

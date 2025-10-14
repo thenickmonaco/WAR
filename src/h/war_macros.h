@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //
 // WAR - make music with vim motions
-// Copyright (C) 2025 Nick Monaco
+// Copyright (C) 2025 Monaco
 //
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
@@ -77,16 +77,29 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     }                                                                          \
     lua_pop(L, 1);
 
-    LOAD_INT(AUDIO_SAMPLE_RATE)
-    LOAD_INT(AUDIO_SAMPLE_DURATION)
-    LOAD_INT(AUDIO_CHANNEL_COUNT)
-    LOAD_INT(AUDIO_NOTE_COUNT)
-    LOAD_INT(AUDIO_SAMPLES_PER_NOTE)
+    // audio
+    LOAD_INT(A_SAMPLE_RATE)
+    LOAD_INT(A_SAMPLE_DURATION)
+    LOAD_INT(A_CHANNEL_COUNT)
+    LOAD_INT(A_NOTE_COUNT)
+    LOAD_INT(A_SAMPLES_PER_NOTE)
+    LOAD_INT(A_BPM)
+    LOAD_INT(A_BASE_FREQUENCY)
+    LOAD_INT(A_BASE_NOTE)
+    LOAD_INT(A_EDO)
+    // window render
+    LOAD_INT(WR_VIEWS_SAVED)
+    LOAD_INT(WR_WARPOON_TEXT_COLS)
+    LOAD_INT(WR_STATES)
+    LOAD_INT(WR_MODE_COUNT)
+    LOAD_INT(WR_KEYSYM_COUNT)
+    LOAD_INT(WR_MOD_COUNT)
+    LOAD_INT(WR_NOTE_QUADS_MAX)
+    LOAD_INT(WR_STATUS_BAR_COLS_MAX)
+    LOAD_INT(WR_TEXT_QUADS_MAX)
+    LOAD_INT(WR_QUADS_MAX)
+    // pool
     LOAD_INT(POOL_ALIGNMENT)
-    LOAD_INT(AUDIO_BPM)
-    LOAD_INT(AUDIO_BASE_FREQUENCY)
-    LOAD_INT(AUDIO_BASE_NOTE)
-    LOAD_INT(AUDIO_EDO)
 
 #undef LOAD_INT
 
@@ -94,9 +107,9 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     return 0;
 }
 
-static inline size_t war_get_audio_pool_size(war_pool* pool,
-                                             war_lua_context* ctx_lua,
-                                             const char* lua_file) {
+static inline size_t war_get_pool_a_size(war_pool* pool,
+                                         war_lua_context* ctx_lua,
+                                         const char* lua_file) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
@@ -162,16 +175,81 @@ static inline size_t war_get_audio_pool_size(war_pool* pool,
     size_t alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     total_size = (total_size + alignment - 1) & ~(alignment - 1);
 
-    pool->pool_alignment = alignment;
-    pool->pool_size = total_size;
-
-    int result = posix_memalign(&pool->pool, alignment, total_size);
-    assert(result == 0);
-    memset(pool->pool, 0, total_size);
-    pool->pool_ptr = (uint8_t*)pool->pool;
-
     lua_close(L);
     call_carmack("pool_a size: %zu", total_size);
+    return total_size;
+}
+
+static inline size_t war_get_pool_wr_size(war_pool* pool,
+                                          war_lua_context* ctx_lua,
+                                          const char* lua_file) {
+    lua_State* L = luaL_newstate();
+    luaL_openlibs(L);
+
+    if (luaL_dofile(L, lua_file) != LUA_OK) {
+        fprintf(stderr, "Lua error: %s\n", lua_tostring(L, -1));
+        lua_close(L);
+        return 0;
+    }
+
+    lua_getglobal(L, "pool_wr");
+    if (!lua_istable(L, -1)) {
+        fprintf(stderr, "pool_wr not a table\n");
+        lua_close(L);
+        return 0;
+    }
+
+    size_t total_size = 0;
+
+    lua_pushnil(L);
+    while (lua_next(L, -2) != 0) { // iterate pool_wr entries
+        if (lua_istable(L, -1)) {
+            lua_getfield(L, -1, "type");
+            const char* type = lua_tostring(L, -1);
+            lua_pop(L, 1);
+
+            lua_getfield(L, -1, "count");
+            size_t count = (size_t)lua_tointeger(L, -1);
+            lua_pop(L, 1);
+
+            size_t type_size = 0;
+
+            if (strcmp(type, "uint8_t") == 0)
+                type_size = sizeof(uint8_t);
+            else if (strcmp(type, "uint64_t") == 0)
+                type_size = sizeof(uint64_t);
+            else if (strcmp(type, "int16_t") == 0)
+                type_size = sizeof(int16_t);
+            else if (strcmp(type, "int16_t*") == 0)
+                type_size = sizeof(int16_t*);
+            else if (strcmp(type, "float") == 0)
+                type_size = sizeof(float);
+            else if (strcmp(type, "uint32_t") == 0)
+                type_size = sizeof(uint32_t);
+            else if (strcmp(type, "int32_t") == 0)
+                type_size = sizeof(int32_t);
+            else if (strcmp(type, "void*") == 0)
+                type_size = sizeof(void*);
+            else if (strcmp(type, "war_audio_context") == 0)
+                type_size = sizeof(war_audio_context);
+            else if (strcmp(type, "war_samples") == 0)
+                type_size = sizeof(war_samples);
+            else {
+                fprintf(stderr, "Unknown pool_wr type: %s\n", type);
+                type_size = 0;
+            }
+
+            total_size += type_size * count;
+        }
+        lua_pop(L, 1); // pop value
+    }
+
+    // align total_size to pool alignment
+    size_t alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
+    total_size = (total_size + alignment - 1) & ~(alignment - 1);
+
+    lua_close(L);
+    call_carmack("pool_wr size: %zu", total_size);
     return total_size;
 }
 
@@ -248,22 +326,22 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
             break;
         }
         uint8_t loop = atomic_load(&atomics->loop);
-        uint8_t trigger = ctx_wr->trigger;
-        if (loop && trigger) {
+        uint8_t midi_toggle = ctx_wr->midi_toggle;
+        if (loop && midi_toggle) {
             memcpy(ctx_wr->text_middle_status_bar +
                        ctx_wr->text_status_bar_middle_index,
-                   "LOOP TRIGGER",
-                   sizeof("LOOP TRIGGER"));
-        } else if (loop && !trigger) {
+                   "LOOP TOGGLE",
+                   sizeof("LOOP TOGGLE"));
+        } else if (loop && !midi_toggle) {
             memcpy(ctx_wr->text_middle_status_bar +
                        ctx_wr->text_status_bar_middle_index,
                    "LOOP",
                    sizeof("LOOP"));
-        } else if (!loop && trigger) {
+        } else if (!loop && midi_toggle) {
             memcpy(ctx_wr->text_middle_status_bar +
                        ctx_wr->text_status_bar_middle_index,
-                   "TRIGGER",
-                   sizeof("TRIGGER"));
+                   "TOGGLE",
+                   sizeof("TOGGLE"));
         }
         break;
     }

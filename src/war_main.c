@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //
 // WAR - make music with vim motions
-// Copyright (C) 2025 Nick Monaco
+// Copyright (C) 2025 Monaco
 //
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
@@ -56,17 +56,31 @@
 
 int main() {
     CALL_CARMACK("war");
+    // defaults
     war_lua_context ctx_lua = {
-        .AUDIO_CHANNEL_COUNT = 2,
-        .AUDIO_SAMPLE_DURATION = 30,
-        .AUDIO_NOTE_COUNT = 128,
-        .AUDIO_SAMPLES_PER_NOTE = 128,
-        .AUDIO_SAMPLE_RATE = 44100,
+        // audio
+        .A_CHANNEL_COUNT = 2,
+        .A_SAMPLE_DURATION = 30,
+        .A_NOTE_COUNT = 128,
+        .A_SAMPLES_PER_NOTE = 128,
+        .A_SAMPLE_RATE = 44100,
+        .A_BPM = 100,
+        .A_BASE_NOTE = 69,
+        .A_BASE_FREQUENCY = 440,
+        .A_EDO = 12,
+        // window render
+        .WR_VIEWS_SAVED = 13,
+        .WR_WARPOON_TEXT_COLS = 25,
+        .WR_STATES = 256,
+        .WR_MODE_COUNT = 10,
+        .WR_KEYSYM_COUNT = 512,
+        .WR_MOD_COUNT = 16,
+        .WR_NOTE_QUADS_MAX = 20000,
+        .WR_STATUS_BAR_COLS_MAX = 200,
+        .WR_TEXT_QUADS_MAX = 20000,
+        .WR_QUADS_MAX = 20000,
+        // pool
         .POOL_ALIGNMENT = 256,
-        .AUDIO_BPM = 100,
-        .AUDIO_BASE_NOTE = 69,
-        .AUDIO_BASE_FREQUENCY = 440,
-        .AUDIO_EDO = 12,
     };
     war_load_lua(&ctx_lua, "src/lua/monaco/set.lua");
     war_producer_consumer pc;
@@ -97,7 +111,7 @@ int main() {
         .map_note = -1,
         .loop = 0,
         .start_war = 0,
-        .resample = 1,
+        .resample = 0,
         .midi_record_frames = 0,
     };
     war_pool pool_wr;
@@ -123,9 +137,13 @@ int main() {
 void* war_window_render(void* args) {
     header("war_window_render");
     void** args_ptrs = (void**)args;
+    war_producer_consumer* pc = args_ptrs[0];
+    war_atomics* atomics = args_ptrs[1];
     war_pool* pool_wr = args_ptrs[2];
-    pool_wr->pool_alignment = 256;
-    pool_wr->pool_size = 8;
+    war_lua_context* ctx_lua = args_ptrs[3];
+    pool_wr->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
+    pool_wr->pool_size =
+        war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/monaco/set.lua");
     pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
     int pool_result = posix_memalign(
         &pool_wr->pool, pool_wr->pool_alignment, pool_wr->pool_size);
@@ -133,9 +151,6 @@ void* war_window_render(void* args) {
     assert(pool_result == 0 && pool_wr->pool);
     pool_wr->pool_ptr = (uint8_t*)pool_wr->pool;
 reload_window_render:
-    war_producer_consumer* pc = args_ptrs[0];
-    war_atomics* atomics = args_ptrs[1];
-    war_lua_context* ctx_lua = args_ptrs[3];
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
@@ -188,14 +203,14 @@ reload_window_render:
                     ((float)num_rows_for_status_bars * ctx_vk.cell_height)) /
                    ctx_vk.cell_height);
     war_audio_context ctx_a = {
-        .sample_rate = atomic_load(&ctx_lua->AUDIO_SAMPLE_RATE),
-        .BPM = atomic_load(&ctx_lua->AUDIO_BPM),
-        .channel_count = atomic_load(&ctx_lua->AUDIO_CHANNEL_COUNT),
+        .sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
+        .BPM = atomic_load(&ctx_lua->A_BPM),
+        .channel_count = atomic_load(&ctx_lua->A_CHANNEL_COUNT),
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
     };
     war_window_render_context ctx_wr = {
         .skip_release = 0,
-        .trigger = 0,
+        .midi_toggle = 0,
         .midi_octave = 4,
         .record_octave = 4,
         .gain_increment = 0.05f,
@@ -273,7 +288,7 @@ reload_window_render:
         .logical_height = logical_height,
         .max_col = 144635, // shaking start happening after 289290,
                            // line numbers thinning happens after 144635
-        .max_row = atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) - 1,
+        .max_row = atomic_load(&ctx_lua->A_NOTE_COUNT) - 1,
         .min_col = 0,
         .min_row = 0,
         .input_sequence = {0},
@@ -310,23 +325,35 @@ reload_window_render:
     }
     war_views views;
     {
-        uint32_t* views_col = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
-        uint32_t* views_row = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
-        uint32_t* views_left_col = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
-        uint32_t* views_right_col = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
-        uint32_t* views_bottom_row = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
-        uint32_t* views_top_row = malloc(sizeof(uint32_t) * MAX_VIEWS_SAVED);
-        char** warpoon_text = malloc(sizeof(char*) * MAX_VIEWS_SAVED);
-        for (uint32_t i = 0; i < MAX_VIEWS_SAVED; i++) {
-            warpoon_text[i] = malloc(sizeof(char) * MAX_WARPOON_TEXT_COLS);
-            memset(warpoon_text[i], 0, MAX_WARPOON_TEXT_COLS);
+        uint32_t* views_col =
+            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_row =
+            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_left_col =
+            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_right_col =
+            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_bottom_row =
+            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_top_row =
+            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        char** warpoon_text =
+            malloc(sizeof(char*) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        for (uint32_t i = 0; i < atomic_load(&ctx_lua->WR_VIEWS_SAVED); i++) {
+            warpoon_text[i] = malloc(
+                sizeof(char) * atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
+            memset(warpoon_text[i],
+                   0,
+                   atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
         }
         uint32_t warpoon_viewport_cols = 25;
         uint32_t warpoon_viewport_rows = 8;
         uint32_t warpoon_hud_cols = 2;
         uint32_t warpoon_hud_rows = 0;
-        uint32_t warpoon_max_col = MAX_WARPOON_TEXT_COLS - 1 - warpoon_hud_cols;
-        uint32_t warpoon_max_row = MAX_VIEWS_SAVED - 1 - warpoon_hud_rows;
+        uint32_t warpoon_max_col =
+            atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS) - 1 - warpoon_hud_cols;
+        uint32_t warpoon_max_row =
+            atomic_load(&ctx_lua->WR_VIEWS_SAVED) - 1 - warpoon_hud_rows;
         views = (war_views){
             .col = views_col,
             .row = views_row,
@@ -371,26 +398,52 @@ reload_window_render:
     uint64_t timeout_start_us = 0;
     bool timeout = false;
     bool goto_cmd_timeout_done = false;
-    war_fsm_state* fsm = malloc(sizeof(war_fsm_state) * MAX_STATES);
-    for (int i = 0; i < MAX_STATES; i++) {
-        fsm[i].is_terminal = malloc(sizeof(uint8_t) * MODE_COUNT);
-        memset(fsm[i].is_terminal, 0, sizeof(uint8_t) * MODE_COUNT);
-        fsm[i].is_prefix = malloc(sizeof(uint8_t) * MODE_COUNT);
-        memset(fsm[i].is_prefix, 0, sizeof(uint8_t) * MODE_COUNT);
-        fsm[i].handle_release = malloc(sizeof(uint8_t) * MODE_COUNT);
-        memset(fsm[i].handle_release, 0, sizeof(uint8_t) * MODE_COUNT);
-        fsm[i].handle_repeat = malloc(sizeof(uint8_t) * MODE_COUNT);
-        memset(fsm[i].handle_repeat, 0, sizeof(uint8_t) * MODE_COUNT);
-        fsm[i].handle_timeout = malloc(sizeof(uint8_t) * MODE_COUNT);
-        memset(fsm[i].handle_timeout, 0, sizeof(uint8_t) * MODE_COUNT);
-        fsm[i].command = malloc(sizeof(void*) * MODE_COUNT);
-        memset(fsm[i].command, 0, sizeof(void*) * MODE_COUNT);
-        fsm[i].next_state = malloc(sizeof(uint16_t) * MAX_KEYSYM * MAX_MOD);
-        memset(fsm[i].next_state, 0, sizeof(uint16_t) * MAX_KEYSYM * MAX_MOD);
+    war_fsm_state* fsm =
+        malloc(sizeof(war_fsm_state) * atomic_load(&ctx_lua->WR_STATES));
+    for (int i = 0; i < atomic_load(&ctx_lua->WR_STATES); i++) {
+        fsm[i].is_terminal =
+            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].is_terminal,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].is_prefix =
+            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].is_prefix,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_release =
+            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].handle_release,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_repeat =
+            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].handle_repeat,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_timeout =
+            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].handle_timeout,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].command =
+            malloc(sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].command,
+               0,
+               sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].next_state =
+            malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+                   atomic_load(&ctx_lua->WR_MOD_COUNT));
+        memset(fsm[i].next_state,
+               0,
+               sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+                   atomic_load(&ctx_lua->WR_MOD_COUNT));
     }
     uint16_t current_state_index = 0;
-    bool key_down[MAX_KEYSYM][MAX_MOD];
-    uint64_t key_last_event_us[MAX_KEYSYM][MAX_MOD];
+    bool key_down[atomic_load(&ctx_lua->WR_KEYSYM_COUNT)]
+                 [atomic_load(&ctx_lua->WR_MOD_COUNT)];
+    uint64_t key_last_event_us[atomic_load(&ctx_lua->WR_KEYSYM_COUNT)]
+                              [atomic_load(&ctx_lua->WR_MOD_COUNT)];
     uint64_t fsm_state_last_event_us = 0;
 
     uint32_t mod_shift;
@@ -503,11 +556,14 @@ reload_window_render:
     size_t padding_per_array = 31;
     size_t note_quads_total_size =
         num_uint32_arrays *
-            (sizeof(uint32_t) * max_note_quads + padding_per_array) +
+            (sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX) +
+             padding_per_array) +
         num_float_arrays *
-            (sizeof(float) * max_note_quads + padding_per_array) +
+            (sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX) +
+             padding_per_array) +
         num_uint64_arrays *
-            (sizeof(uint64_t) * max_note_quads + padding_per_array);
+            (sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX) +
+             padding_per_array);
     void* note_quads_block = NULL;
     int note_quads_res =
         posix_memalign(&note_quads_block, 32, note_quads_total_size);
@@ -516,72 +572,79 @@ reload_window_render:
     war_note_quads note_quads;
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.timestamp = (uint64_t*)note_quads_p;
-    note_quads_p += sizeof(uint64_t) * max_note_quads;
+    note_quads_p += sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.row = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.sub_col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.sub_row = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.sub_cells_col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.cursor_width_whole_number = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.cursor_width_sub_col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.cursor_width_sub_cells = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.color = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.outline_color = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.gain = (float*)note_quads_p;
-    note_quads_p += sizeof(float) * max_note_quads;
+    note_quads_p += sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.voice = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.hidden = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     note_quads_p = ALIGN32(note_quads_p);
     note_quads.mute = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * max_note_quads;
+    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     assert(note_quads_p <= (uint8_t*)note_quads_block + note_quads_total_size);
     uint32_t note_quads_count = 0;
-    uint32_t* note_quads_in_x = malloc(sizeof(uint32_t) * max_note_quads);
+    uint32_t* note_quads_in_x =
+        malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
     uint32_t note_quads_in_x_count = 0;
     war_quad_vertex* quad_vertices =
-        malloc(sizeof(war_quad_vertex) * max_quads);
+        malloc(sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t quad_vertices_count = 0;
-    uint16_t* quad_indices = malloc(sizeof(uint16_t) * max_quads);
+    uint16_t* quad_indices =
+        malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t quad_indices_count = 0;
     war_quad_vertex* transparent_quad_vertices =
-        malloc(sizeof(war_quad_vertex) * max_quads);
+        malloc(sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t transparent_quad_vertices_count = 0;
-    uint16_t* transparent_quad_indices = malloc(sizeof(uint16_t) * max_quads);
+    uint16_t* transparent_quad_indices =
+        malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t transparent_quad_indices_count = 0;
-    war_text_vertex* text_vertices =
-        malloc(sizeof(war_text_vertex) * max_text_quads);
+    war_text_vertex* text_vertices = malloc(
+        sizeof(war_text_vertex) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_vertices_count = 0;
-    uint16_t* text_indices = malloc(sizeof(uint16_t) * max_text_quads);
+    uint16_t* text_indices =
+        malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_indices_count = 0;
 
-    ctx_wr.text_bottom_status_bar = malloc(sizeof(char) * MAX_STATUS_BAR_COLS);
-    ctx_wr.text_middle_status_bar = malloc(sizeof(char) * MAX_STATUS_BAR_COLS);
-    ctx_wr.text_top_status_bar = malloc(sizeof(char) * MAX_STATUS_BAR_COLS);
+    ctx_wr.text_bottom_status_bar =
+        malloc(sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_middle_status_bar =
+        malloc(sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_top_status_bar =
+        malloc(sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
 
     const double microsecond_conversion = 1000000.0;
     ctx_wr.sleep_duration_us = 50000;
@@ -729,8 +792,8 @@ reload_window_render:
                     if (elapsed >= repeat_rate_us) {
                         key_last_event_us[k][m] = ctx_wr.now;
                         uint16_t next_state_index =
-                            fsm[current_state_index]
-                                .next_state[k * MAX_MOD + m];
+                            fsm[current_state_index].next_state
+                                [k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
                         if (next_state_index != 0) {
                             current_state_index = next_state_index;
                             fsm_state_last_event_us = ctx_wr.now;
@@ -1456,8 +1519,7 @@ reload_window_render:
                 // draw playback bar
                 uint32_t playback_bar_color = ctx_wr.red_hex;
                 float span_y = ctx_wr.viewport_rows;
-                if (ctx_wr.top_row ==
-                    atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) - 1) {
+                if (ctx_wr.top_row == atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) {
                     span_y -= ctx_wr.num_rows_for_status_bars;
                 }
                 war_make_quad(
@@ -1524,7 +1586,7 @@ reload_window_render:
                 case HUD_PIANO:
                     float span_y = ctx_wr.viewport_rows;
                     if (ctx_wr.top_row ==
-                        atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) - 1) {
+                        atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) {
                         span_y -= ctx_wr.num_rows_for_status_bars;
                     }
                     war_make_quad(
@@ -1640,7 +1702,7 @@ reload_window_render:
                     if (!draw_vertical_line) { continue; }
                     uint32_t span_y = ctx_wr.viewport_rows;
                     if (ctx_wr.top_row ==
-                        atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) - 1) {
+                        atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) {
                         span_y -= ctx_wr.num_rows_for_status_bars;
                     }
                     war_make_quad(
@@ -4064,7 +4126,8 @@ reload_window_render:
                 };
                 //// default to void command if unset
                 // for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
-                //     for (size_t m = 0; m < MODE_COUNT; m++) {
+                //     for (size_t m = 0; m <
+                //     atomic_load(&ctx_lua->WR_MODE_COUNT); m++) {
                 //         if (key_labels[s][m].command == NULL) {
                 //             key_labels[s][m].command = &&cmd_void;
                 //         }
@@ -4084,16 +4147,23 @@ reload_window_render:
                         war_key_event* ev = &key_sequences[seq_idx][key_idx];
                         uint16_t next =
                             fsm[parent]
-                                .next_state[ev->keysym * MAX_MOD + ev->mod];
+                                .next_state[ev->keysym *
+                                                atomic_load(
+                                                    &ctx_lua->WR_MOD_COUNT) +
+                                            ev->mod];
 
                         if (next == 0) {
                             next = state_counter++;
                             fsm[parent]
-                                .next_state[ev->keysym * MAX_MOD + ev->mod] =
-                                next;
+                                .next_state[ev->keysym *
+                                                atomic_load(
+                                                    &ctx_lua->WR_MOD_COUNT) +
+                                            ev->mod] = next;
 
                             // initialize all modes
-                            for (size_t m = 0; m < MODE_COUNT; m++) {
+                            for (size_t m = 0;
+                                 m < atomic_load(&ctx_lua->WR_MODE_COUNT);
+                                 m++) {
                                 fsm[next].is_terminal[m] = false;
                                 fsm[next].is_prefix[m] = false;
                                 fsm[next].command[m] = NULL;
@@ -4103,13 +4173,17 @@ reload_window_render:
                             }
                             memset(fsm[next].next_state,
                                    0,
-                                   sizeof(uint16_t) * MAX_MOD * MAX_KEYSYM);
+                                   sizeof(uint16_t) *
+                                       atomic_load(&ctx_lua->WR_MOD_COUNT) *
+                                       atomic_load(&ctx_lua->WR_KEYSYM_COUNT));
                         }
 
                         // mark intermediate nodes as prefix only for modes that
                         // have a command in this sequence
                         if (key_idx != len - 1) {
-                            for (size_t m = 0; m < MODE_COUNT; m++) {
+                            for (size_t m = 0;
+                                 m < atomic_load(&ctx_lua->WR_MODE_COUNT);
+                                 m++) {
                                 if (key_labels[seq_idx][m].command != NULL) {
                                     fsm[next].is_prefix[m] = true;
                                 }
@@ -4120,7 +4194,8 @@ reload_window_render:
                     }
 
                     // terminal node
-                    for (size_t m = 0; m < MODE_COUNT; m++) {
+                    for (size_t m = 0; m < atomic_load(&ctx_lua->WR_MODE_COUNT);
+                         m++) {
                         if (key_labels[seq_idx][m].command != NULL) {
                             fsm[parent].is_terminal[m] = true;
                             fsm[parent].command[m] =
@@ -4152,7 +4227,7 @@ reload_window_render:
                     }
                 }
 
-                assert(state_counter < MAX_STATES);
+                assert(state_counter < atomic_load(&ctx_lua->WR_STATES));
                 munmap(keymap_map, keymap_size);
                 close(keymap_fd);
                 xkb_keymap_unref(xkb_keymap);
@@ -4222,10 +4297,13 @@ reload_window_render:
                         ctx_wr.skip_release = 0;
                         goto cmd_done;
                     }
-                    uint16_t idx = fsm[current_state_index]
-                                       .next_state[keysym * MAX_MOD + mod];
+                    uint16_t idx =
+                        fsm[current_state_index]
+                            .next_state[keysym * atomic_load(
+                                                     &ctx_lua->WR_MOD_COUNT) +
+                                        mod];
                     if (fsm[idx].handle_release[ctx_wr.mode] &&
-                        !ctx_wr.trigger && fsm[idx].command[ctx_wr.mode]) {
+                        !ctx_wr.midi_toggle && fsm[idx].command[ctx_wr.mode]) {
                         goto* fsm[idx].command[ctx_wr.mode];
                     }
                     goto cmd_done;
@@ -4239,11 +4317,16 @@ reload_window_render:
                     key_last_event_us[keysym][mod] = ctx_wr.now;
                 }
                 uint16_t next_state_index =
-                    fsm[current_state_index].next_state[keysym * MAX_MOD + mod];
-                if (timeout && fsm[timeout_state_index]
-                                   .next_state[keysym * MAX_MOD + mod]) {
-                    next_state_index = fsm[timeout_state_index]
-                                           .next_state[keysym * MAX_MOD + mod];
+                    fsm[current_state_index].next_state
+                        [keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
+                if (timeout &&
+                    fsm[timeout_state_index].next_state
+                        [keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
+                    next_state_index =
+                        fsm[timeout_state_index]
+                            .next_state[keysym * atomic_load(
+                                                     &ctx_lua->WR_MOD_COUNT) +
+                                        mod];
                 }
                 if (next_state_index == 0) {
                     current_state_index = 0;
@@ -4261,7 +4344,7 @@ reload_window_render:
                     current_state_index = 0;
                     // repeats
                     if ((ctx_wr.mode != MODE_MIDI ||
-                         (ctx_wr.mode == MODE_MIDI && ctx_wr.trigger)) &&
+                         (ctx_wr.mode == MODE_MIDI && ctx_wr.midi_toggle)) &&
                         fsm[temp].handle_repeat[ctx_wr.mode]) {
                         repeat_keysym = keysym;
                         repeat_mod = mod;
@@ -4294,7 +4377,7 @@ reload_window_render:
                     current_state_index = 0;
                     // repeats
                     if ((ctx_wr.mode != MODE_MIDI ||
-                         (ctx_wr.mode == MODE_MIDI && ctx_wr.trigger)) &&
+                         (ctx_wr.mode == MODE_MIDI && ctx_wr.midi_toggle)) &&
                         fsm[current_state_index].handle_timeout[ctx_wr.mode]) {
                         repeat_keysym = keysym;
                         repeat_mod = mod;
@@ -5783,7 +5866,8 @@ reload_window_render:
                 goto cmd_done;
             cmd_normal_spacea:
                 call_carmack("cmd_normal_spacea");
-                if (views.views_count < MAX_VIEWS_SAVED) {
+                if (views.views_count <
+                    (uint32_t)atomic_load(&ctx_lua->WR_VIEWS_SAVED)) {
                     views.col[views.views_count] = ctx_wr.col;
                     views.row[views.views_count] = ctx_wr.row;
                     views.left_col[views.views_count] = ctx_wr.left_col;
@@ -7858,7 +7942,7 @@ reload_window_render:
             }
             cmd_midi_T: {
                 call_carmack("cmd_midi_T");
-                ctx_wr.trigger ^= 1;
+                ctx_wr.midi_toggle ^= 1;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7866,7 +7950,7 @@ reload_window_render:
             }
             cmd_midi_b: {
                 call_carmack("cmd_midi_b");
-                ctx_wr.trigger ^= 1;
+                ctx_wr.midi_toggle ^= 1;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -8729,7 +8813,7 @@ static void war_play(void* userdata) {
     // -------------------------------------------------------------------------
     // Iterate over all notes
     // Inside the main note loop
-    for (int note = 0; note < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); note++) {
+    for (int note = 0; note < atomic_load(&ctx_lua->A_NOTE_COUNT); note++) {
         uint8_t note_on = atomic_load(&atomics->notes_on[note]);
         uint8_t prev_state = atomic_load(&atomics->notes_on_previous[note]);
 
@@ -8745,12 +8829,12 @@ static void war_play(void* userdata) {
 
             for (uint32_t s = 0; s < samples->samples_count[note]; s++) {
                 uint32_t rec_i = record_samples->samples_count[0];
-                if (rec_i >= atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                                 atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE))
+                if (rec_i >= atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                                 atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE))
                     break;
 
                 int samples_i =
-                    note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + s;
+                    note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + s;
 
                 record_samples->samples[rec_i] = samples->samples[samples_i];
                 record_samples->samples_frames_start[rec_i] = record_start;
@@ -8793,8 +8877,7 @@ static void war_play(void* userdata) {
 
                 for (uint32_t s = 0; s < samples->samples_count[note]; s++) {
                     int samples_i =
-                        note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) +
-                        s;
+                        note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + s;
                     if (samples->samples[samples_i] == ptr) {
                         if (record_samples->samples_frames_duration[i] == 0 &&
                             samples->samples_count[note] == 1) {
@@ -8838,7 +8921,7 @@ static void war_play(void* userdata) {
 
             for (uint32_t s = 0; s < samples->samples_count[note]; s++) {
                 int samples_i =
-                    note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + s;
+                    note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + s;
                 int16_t* sample_ptr = samples->samples[samples_i];
                 if (!sample_ptr || !samples->samples_active[samples_i]) {
                     continue;
@@ -8980,11 +9063,13 @@ static void war_record(void* userdata) {
 void* war_audio(void* args) {
     header("war_audio");
     void** args_ptrs = (void**)args;
+    war_producer_consumer* pc = args_ptrs[0];
+    war_atomics* atomics = args_ptrs[1];
     war_lua_context* ctx_lua = args_ptrs[3];
     war_pool* pool_a = args_ptrs[2];
-    pool_a->pool_alignment = ctx_lua->POOL_ALIGNMENT;
+    pool_a->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     pool_a->pool_size =
-        war_get_audio_pool_size(pool_a, ctx_lua, "src/lua/monaco/set.lua");
+        war_get_pool_a_size(pool_a, ctx_lua, "src/lua/monaco/set.lua");
     pool_a->pool_size = ALIGN_UP(pool_a->pool_size, pool_a->pool_alignment);
     //-------------------------------------------------------------------------
     // HACK SIZE
@@ -8997,16 +9082,14 @@ void* war_audio(void* args) {
     assert(pool_result == 0 && pool_a->pool);
     pool_a->pool_ptr = (uint8_t*)pool_a->pool;
 reload_audio:
-    war_producer_consumer* pc = args_ptrs[0];
-    war_atomics* atomics = args_ptrs[1];
     atomics->notes_on = war_pool_alloc(
-        pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
-    for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+        pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
         atomic_init(&atomics->notes_on[i], 0);
     }
     atomics->notes_on_previous = war_pool_alloc(
-        pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
-    for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+        pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
         atomic_init(&atomics->notes_on_previous[i], 0);
     }
     struct sched_param param = {.sched_priority = 10};
@@ -9021,29 +9104,28 @@ reload_audio:
         war_pool_alloc(pool_a, sizeof(war_audio_context));
     assert(ctx_a);
     ctx_a->sample_frames = war_pool_alloc(
-        pool_a, atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) * sizeof(uint64_t));
+        pool_a, atomic_load(&ctx_lua->A_NOTE_COUNT) * sizeof(uint64_t));
     assert(ctx_a->sample_frames);
     ctx_a->sample_frames_duration = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     assert(ctx_a->sample_frames_duration);
     ctx_a->sample_phase = war_pool_alloc(
-        pool_a, atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) * sizeof(float));
+        pool_a, atomic_load(&ctx_lua->A_NOTE_COUNT) * sizeof(float));
     assert(ctx_a->sample_phase);
-    ctx_a->sample_rate = atomic_load(&ctx_lua->AUDIO_SAMPLE_RATE);
+    ctx_a->sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
     ctx_a->period_size = AUDIO_DEFAULT_PERIOD_SIZE;
     ctx_a->sub_period_size =
         AUDIO_DEFAULT_PERIOD_SIZE / AUDIO_DEFAULT_SUB_PERIOD_FACTOR;
-    ctx_a->BPM = atomic_load(&ctx_lua->AUDIO_BPM);
-    ctx_a->channel_count = atomic_load(&ctx_lua->AUDIO_CHANNEL_COUNT);
+    ctx_a->BPM = atomic_load(&ctx_lua->A_BPM);
+    ctx_a->channel_count = atomic_load(&ctx_lua->A_CHANNEL_COUNT);
     ctx_a->phase = 0.0f;
-    ctx_a->sample_duration_seconds =
-        atomic_load(&ctx_lua->AUDIO_SAMPLE_DURATION);
+    ctx_a->sample_duration_seconds = atomic_load(&ctx_lua->A_SAMPLE_DURATION);
     ctx_a->over_threshold = 0;
     ctx_a->record_buffer = war_pool_alloc(
         pool_a,
-        atomic_load(&ctx_lua->AUDIO_SAMPLE_RATE) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLE_DURATION) *
-            atomic_load(&ctx_lua->AUDIO_CHANNEL_COUNT) * sizeof(int16_t));
+        atomic_load(&ctx_lua->A_SAMPLE_RATE) *
+            atomic_load(&ctx_lua->A_SAMPLE_DURATION) *
+            atomic_load(&ctx_lua->A_CHANNEL_COUNT) * sizeof(int16_t));
     assert(ctx_a->record_buffer);
     ctx_a->warmup_frames = 0;
     ctx_a->default_attack = 0.0f;
@@ -9060,7 +9142,7 @@ reload_audio:
     //-------------------------------------------------------------------------
     int16_t* sample_pool =
         war_pool_alloc(pool_a,
-                       atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
+                       atomic_load(&ctx_lua->A_NOTE_COUNT) *
                            ctx_a->sample_rate * ctx_a->sample_duration_seconds *
                            ctx_a->channel_count * sizeof(int16_t));
     assert(sample_pool);
@@ -9070,79 +9152,77 @@ reload_audio:
     war_samples* samples;
     samples = war_pool_alloc(pool_a, sizeof(war_samples));
     assert(samples);
-    samples->samples = war_pool_alloc(
-        pool_a,
-        sizeof(int16_t*) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    samples->samples_frames_start = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    samples->samples_frames_duration = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    samples->samples_frames = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    samples->samples_frames_trim_start = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    samples->samples_frames_trim_end = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+    samples->samples =
+        war_pool_alloc(pool_a,
+                       sizeof(int16_t*) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    samples->samples_frames_start =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    samples->samples_frames_duration =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    samples->samples_frames =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    samples->samples_frames_trim_start =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    samples->samples_frames_trim_end =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     samples->samples_attack =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     samples->samples_sustain =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     samples->samples_release =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     samples->samples_gain =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    samples->samples_active = war_pool_alloc(
-        pool_a,
-        sizeof(uint8_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    samples->samples_active =
+        war_pool_alloc(pool_a,
+                       sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     samples->notes_attack = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->notes_sustain = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->notes_release = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->notes_gain = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->notes_frames_start = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->notes_frames_duration = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->notes_frames_trim_start = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->notes_frames_trim_end = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     samples->samples_count = war_pool_alloc(
-        pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
-    for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+        pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
         samples->notes_attack[i] = ctx_a->default_attack;
         samples->notes_sustain[i] = ctx_a->default_sustain;
         samples->notes_release[i] = ctx_a->default_release;
         samples->notes_gain[i] = ctx_a->default_gain;
         samples->notes_frames_start[i] = 0;
         samples->notes_frames_duration[i] = 0;
-        for (int k = 0; k < atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE);
-             k++) {
-            int samples_i =
-                i * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + k;
+        for (int k = 0; k < atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE); k++) {
+            int samples_i = i * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + k;
             samples->samples_attack[samples_i] = ctx_a->default_attack;
             samples->samples_sustain[samples_i] = ctx_a->default_sustain;
             samples->samples_release[samples_i] = ctx_a->default_release;
@@ -9151,79 +9231,77 @@ reload_audio:
     }
     war_samples* record_samples = war_pool_alloc(pool_a, sizeof(war_samples));
     assert(record_samples);
-    record_samples->samples = war_pool_alloc(
-        pool_a,
-        sizeof(int16_t*) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    record_samples->samples_frames_start = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    record_samples->samples_frames_duration = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    record_samples->samples_frames = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    record_samples->samples_frames_trim_start = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    record_samples->samples_frames_trim_end = war_pool_alloc(
-        pool_a,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+    record_samples->samples =
+        war_pool_alloc(pool_a,
+                       sizeof(int16_t*) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    record_samples->samples_frames_start =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    record_samples->samples_frames_duration =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    record_samples->samples_frames =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    record_samples->samples_frames_trim_start =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    record_samples->samples_frames_trim_end =
+        war_pool_alloc(pool_a,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     record_samples->samples_attack =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     record_samples->samples_sustain =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     record_samples->samples_release =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     record_samples->samples_gain =
         war_pool_alloc(pool_a,
-                       sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
-    record_samples->samples_active = war_pool_alloc(
-        pool_a,
-        sizeof(uint8_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-            atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+                       sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
+    record_samples->samples_active =
+        war_pool_alloc(pool_a,
+                       sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     record_samples->notes_attack = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->notes_sustain = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->notes_release = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->notes_gain = war_pool_alloc(
-        pool_a, sizeof(float) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->notes_frames_start = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->notes_frames_duration = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->notes_frames_trim_start = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->notes_frames_trim_end = war_pool_alloc(
-        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->samples_count = war_pool_alloc(
-        pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
-    for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+        pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
         record_samples->notes_attack[i] = ctx_a->default_attack;
         record_samples->notes_sustain[i] = ctx_a->default_sustain;
         record_samples->notes_release[i] = ctx_a->default_release;
         record_samples->notes_gain[i] = ctx_a->default_gain;
         record_samples->notes_frames_start[i] = 0;
         record_samples->notes_frames_duration[i] = 0;
-        for (int k = 0; k < atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE);
-             k++) {
-            int samples_i =
-                i * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + k;
+        for (int k = 0; k < atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE); k++) {
+            int samples_i = i * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + k;
             record_samples->samples_attack[samples_i] = ctx_a->default_attack;
             record_samples->samples_sustain[samples_i] = ctx_a->default_sustain;
             record_samples->samples_release[samples_i] = ctx_a->default_release;
@@ -9237,16 +9315,16 @@ reload_audio:
     for (int i = 0; i < AUDIO_SINE_TABLE_SIZE; i++) {
         sine_table[i] = sinf(2.0f * M_PI * i / AUDIO_SINE_TABLE_SIZE);
     }
-    for (int note = 0; note < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); note++) {
+    for (int note = 0; note < atomic_load(&ctx_lua->A_NOTE_COUNT); note++) {
         int16_t* note_sample =
             sample_pool + note * ctx_a->sample_rate *
                               ctx_a->sample_duration_seconds *
                               ctx_a->channel_count;
         float freq =
-            atomic_load(&ctx_lua->AUDIO_BASE_FREQUENCY) *
+            atomic_load(&ctx_lua->A_BASE_FREQUENCY) *
             powf(2.0f,
-                 (note - atomic_load(&ctx_lua->AUDIO_BASE_NOTE)) /
-                     (float)atomic_load(&ctx_lua->AUDIO_EDO)); // MIDI to Hz
+                 (note - atomic_load(&ctx_lua->A_BASE_NOTE)) /
+                     (float)atomic_load(&ctx_lua->A_EDO)); // MIDI to Hz
         uint32_t n_samples =
             ctx_a->sample_rate * ctx_a->sample_duration_seconds;
         float table_phase_inc =
@@ -9262,8 +9340,7 @@ reload_audio:
             if (table_phase >= AUDIO_SINE_TABLE_SIZE)
                 table_phase -= AUDIO_SINE_TABLE_SIZE;
         }
-        int samples_i =
-            note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + 0;
+        int samples_i = note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + 0;
         samples->samples[samples_i] = note_sample;
         samples->samples_frames_duration[samples_i] = n_samples;
         samples->samples_frames_start[samples_i] = 0;
@@ -9274,8 +9351,8 @@ reload_audio:
         samples->samples_active[samples_i] = 1;
     }
     int32_t* record_samples_notes_indices = war_pool_alloc(
-        pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
-    for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+        pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
         record_samples_notes_indices[i] = -1;
     }
     assert(record_samples_notes_indices);
@@ -9425,13 +9502,14 @@ pc_record_map:
     memcpy(note_sample,
            ctx_a->record_buffer,
            record_frames * ctx_a->channel_count * sizeof(int16_t));
-    samples->samples[map_note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) +
-                     0] = note_sample;
+    samples->samples[map_note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + 0] =
+        note_sample;
     samples->samples_frames_duration
-        [map_note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + 0] =
+        [map_note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + 0] =
         record_frames;
-    samples->samples_frames_start
-        [map_note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + 0] = 0;
+    samples->samples_frames_start[map_note * atomic_load(
+                                                 &ctx_lua->A_SAMPLES_PER_NOTE) +
+                                  0] = 0;
     samples->samples_count[map_note] = 1;
     samples->notes_frames_start[map_note] = 0;
     samples->notes_frames_duration[map_note] = record_frames;
@@ -9461,7 +9539,7 @@ pc_note_off: {
     goto pc_audio_done;
 }
 pc_note_off_all: {
-    for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
         atomic_store(&atomics->notes_on_previous[i],
                      atomic_load(&atomics->notes_on[i]));
         atomic_store(&atomics->notes_on[i], 0);
@@ -9469,16 +9547,16 @@ pc_note_off_all: {
     goto pc_audio_done;
 }
 pc_reset_mappings:
-    for (int note = 0; note < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); note++) {
+    for (int note = 0; note < atomic_load(&ctx_lua->A_NOTE_COUNT); note++) {
         int16_t* note_sample =
             sample_pool + note * ctx_a->sample_rate *
                               ctx_a->sample_duration_seconds *
                               ctx_a->channel_count;
         float freq =
-            atomic_load(&ctx_lua->AUDIO_BASE_FREQUENCY) *
+            atomic_load(&ctx_lua->A_BASE_FREQUENCY) *
             powf(2.0f,
-                 (note - atomic_load(&ctx_lua->AUDIO_BASE_NOTE)) /
-                     (float)atomic_load(&ctx_lua->AUDIO_EDO)); // MIDI to Hz
+                 (note - atomic_load(&ctx_lua->A_BASE_NOTE)) /
+                     (float)atomic_load(&ctx_lua->A_EDO)); // MIDI to Hz
         uint32_t n_samples =
             ctx_a->sample_rate * ctx_a->sample_duration_seconds;
         float table_phase_inc =
@@ -9494,8 +9572,7 @@ pc_reset_mappings:
             if (table_phase >= AUDIO_SINE_TABLE_SIZE)
                 table_phase -= AUDIO_SINE_TABLE_SIZE;
         }
-        int samples_i =
-            note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE) + 0;
+        int samples_i = note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE) + 0;
         samples->samples[samples_i] = note_sample;
         samples->samples_frames_duration[samples_i] = n_samples;
         samples->samples_frames_start[samples_i] = 0;
@@ -9513,32 +9590,32 @@ pc_midi_record_map: {
     war_pc_to_wr(pc, AUDIO_CMD_NOTE_OFF, sizeof(map_note), &map_note);
     if (map_note == -1) {
         war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-        for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+        for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
             record_samples_notes_indices[i] = -1;
         }
         memset(record_samples->samples,
                0,
-               sizeof(int16_t*) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                   atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+               sizeof(int16_t*) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                   atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
         memset(record_samples->samples_frames_start,
                0,
-               sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                   atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+               sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                   atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
         memset(record_samples->samples_frames_duration,
                0,
-               sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-                   atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+               sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                   atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
         memset(record_samples->samples_count,
                0,
-               sizeof(uint32_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+               sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
         memset(record_samples_notes_indices,
                -1,
-               sizeof(int32_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+               sizeof(int32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
         record_samples->samples_count[0] = 0;
         goto pc_audio_done;
     }
     uint64_t notes_frames_duration = 0;
-    int samples_i = map_note * atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE);
+    int samples_i = map_note * atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE);
     for (uint32_t i = 0; i < record_samples->samples_count[0]; i++) {
         if (!record_samples->samples_active[i]) { continue; }
         samples->samples[samples_i] = record_samples->samples[i];
@@ -9574,27 +9651,27 @@ pc_midi_record_map: {
     samples->notes_gain[map_note] = record_samples->notes_gain[0];
     samples->notes_frames_start[map_note] = 0;
     samples->notes_frames_duration[map_note] = notes_frames_duration;
-    for (int i = 0; i < atomic_load(&ctx_lua->AUDIO_NOTE_COUNT); i++) {
+    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
         record_samples_notes_indices[i] = -1;
     }
     memset(record_samples->samples,
            0,
-           sizeof(int16_t*) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-               atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+           sizeof(int16_t*) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+               atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     memset(record_samples->samples_frames_start,
            0,
-           sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-               atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+           sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+               atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     memset(record_samples->samples_frames_duration,
            0,
-           sizeof(uint64_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT) *
-               atomic_load(&ctx_lua->AUDIO_SAMPLES_PER_NOTE));
+           sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+               atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE));
     memset(record_samples->samples_count,
            0,
-           sizeof(uint32_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+           sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     memset(record_samples_notes_indices,
            -1,
-           sizeof(int32_t) * atomic_load(&ctx_lua->AUDIO_NOTE_COUNT));
+           sizeof(int32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     record_samples->samples_count[0] = 0;
     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
     goto pc_audio_done;

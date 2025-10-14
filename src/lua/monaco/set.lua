@@ -42,6 +42,7 @@
 ---@field WR_STATUS_BAR_COLS_MAX number
 ---@field WR_TEXT_QUADS_MAX number
 ---@field WR_QUADS_MAX number
+---@field WR_LEADER string
 -- pool
 ---@field POOL_ALIGNMENT number
 ---@diagnostic disable: lowercase-global
@@ -68,6 +69,7 @@ ctx_lua = {
     WR_STATUS_BAR_COLS_MAX = 200,
     WR_TEXT_QUADS_MAX = 20000,
     WR_QUADS_MAX = 20000,
+    WR_LEADER = "<Space>",
     -- pool
     POOL_ALIGNMENT = 256,
 }
@@ -246,17 +248,34 @@ keymap = {
     -- | Command (Mac) | `D-`   | Not official, but often used in GUIs        |
 
     -- Special Edge Cases
-    --
     -- <lt> represents the literal < key (since < starts special sequences).
-    --
     -- <C-CR> or <S-CR> for Ctrl+Enter or Shift+Enter.
-    --
     -- <NL> is also valid for newline (same as <CR>).
 
     global = {
         handle_release = 0,
         handle_repeat = 1,
         handle_timeout = 1,
+    },
+    {
+        sequences = {
+            "k",
+            "<Up>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_k",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_views_k",
+                mode = "views",
+            },
+            {
+                cmd = "cmd_record_k",
+                mode = "record",
+            },
+        },
     },
     {
         sequences = {
@@ -280,54 +299,8 @@ keymap = {
     },
     {
         sequences = {
-            "k",
-            "<Up>",
-        },
-        commands = {
-            {
-                cmd = "cmd_normal_j",
-                mode = "normal",
-            },
-            {
-                cmd = "cmd_views_j",
-                mode = "views",
-            },
-            {
-                cmd = "cmd_record_j",
-                mode = "record",
-            },
-        },
-    },
-    {
-        sequences = {
-            "<Esc>",
-        },
-        commands = {
-            {
-                cmd = "cmd_normal_esc",
-                mode = "normal",
-            },
-            {
-                cmd = "cmd_views_esc",
-                mode = "views",
-            },
-            {
-                cmd = "cmd_record_esc",
-                mode = "record",
-            },
-            {
-                cmd = "cmd_midi_esc",
-                mode = "midi",
-            },
-            {
-                cmd = "cmd_command_esc",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
             "h",
+            "<Left>",
         },
         commands = {
             {
@@ -343,6 +316,7 @@ keymap = {
     {
         sequences = {
             "l",
+            "<Right>",
         },
         commands = {
             {
@@ -362,6 +336,7 @@ keymap = {
     {
         sequences = {
             "<A-k>",
+            "<A-Up>",
         },
         commands = {
             {
@@ -377,6 +352,7 @@ keymap = {
     {
         sequences = {
             "<A-j>",
+            "<A-Down>",
         },
         commands = {
             {
@@ -392,6 +368,7 @@ keymap = {
     {
         sequences = {
             "<A-h>",
+            "<A-Left>",
         },
         commands = {
             {
@@ -407,6 +384,7 @@ keymap = {
     {
         sequences = {
             "<A-l>",
+            "<A-Right>",
         },
         commands = {
             {
@@ -693,7 +671,33 @@ keymap = {
     {
         sequences = {
             {
-                "",
+                "<C-->",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_ctrl_minus",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<C-A-=>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_ctrl_alt_equal",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<C-A-->",
             },
         },
         commands = {
@@ -701,20 +705,44 @@ keymap = {
                 cmd = "",
                 mode = "normal",
             },
+        },
+    },
+    {
+        sequences = {
             {
-                cmd = "",
+                "<C-0>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_ctrl_0",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<Esc>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_esc",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_views_esc",
                 mode = "views",
             },
             {
-                cmd = "",
+                cmd = "cmd_record_esc",
                 mode = "record",
             },
             {
-                cmd = "",
+                cmd = "cmd_midi_esc",
                 mode = "midi",
             },
             {
-                cmd = "",
+                cmd = "cmd_command_esc",
                 mode = "command",
             },
         },
@@ -722,1421 +750,1021 @@ keymap = {
     {
         sequences = {
             {
-                "",
+                "f",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_f",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "t",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_t",
                 mode = "normal",
             },
             {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
+                cmd = "cmd_record_t",
                 mode = "record",
             },
             {
-                cmd = "",
+                cmd = "cmd_midi_t",
                 mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
+                handle_release = 1,
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "x",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_x",
                 mode = "normal",
             },
             {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
+                cmd = "cmd_midi_x",
                 mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "T",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_T",
                 mode = "normal",
             },
             {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
+                cmd = "cmd_midi_T",
                 mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "F",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_F",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "gb",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_gb",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "gt",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_gt",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "gm",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_gm",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "s",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_s",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "z",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_z",
                 mode = "normal",
             },
             {
-                cmd = "",
+                cmd = "cmd_views_z",
                 mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<CR>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_return",
                 mode = "normal",
             },
             {
-                cmd = "",
+                cmd = "cmd_views_return",
                 mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>div",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacediv",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>dov",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacedov",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>diw",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacediw",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>da",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spaceda",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>hov",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacehov",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>hiv",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacehiv",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>ha",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spaceha",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>sov",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacesov",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>siv",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacesiv",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>sa",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacesa",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>mov",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacemov",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>miv",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacemiv",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>ma",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacema",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>uov",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spaceuov",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>uiv",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spaceuiv",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>ua",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spaceua",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>a",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_spacea",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-g>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_g",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-t>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_t",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-n>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_n",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-s>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_s",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-m>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_m",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-y>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_y",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-z>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_z",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-q>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_q",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-e>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_e",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "a",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_a",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>1",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space1",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>2",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space2",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>3",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space3",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>4",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space4",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>5",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space5",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>6",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space6",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>7",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space7",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>8",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space8",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>9",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space9",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<leader>0",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_space0",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
     {
         sequences = {
             {
-                "",
+                "<A-1>",
             },
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_1",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-2>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_2",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-3>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_3",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-4>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_4",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-5>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_5",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-6>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_6",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-7>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_7",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-8>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_8",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-9>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_9",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-0>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_0",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<leader>d<leader>a",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_spacedspacea",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-K>",
+                "<A-S-Up>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_K",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-J>",
+                "<A-S-Down>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_J",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-H>",
+                "<A-S-Left>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_H",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-L>",
+                "<A-S-Right>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_L",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "d",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_d",
                 mode = "normal",
             },
             {
-                cmd = "",
+                cmd = "cmd_views_d",
                 mode = "views",
             },
+        },
+    },
+    {
+        sequences = {
             {
-                cmd = "",
+                "m",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_m",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_midi_m",
+                mode = "midi",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "X",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_X",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "w",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_w",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_normal_w",
                 mode = "record",
             },
             {
-                cmd = "",
+                cmd = "cmd_midi_w",
                 mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "W",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_W",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "e",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_e",
+                mode = "normal",
             },
             {
-                cmd = "",
-                mode = "command",
+                cmd = "cmd_record_e",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_e",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "E",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_E",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "b",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_b",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_midi_b",
+                mode = "midi",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-u>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_u",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "<A-d>",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_d",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            {
+                "A",
+            },
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_A",
+                mode = "normal",
             },
         },
     },

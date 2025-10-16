@@ -163,6 +163,8 @@ typedef struct war_lua_context {
     _Atomic int WR_VIEWS_SAVED;
     _Atomic int WR_WARPOON_TEXT_COLS;
     _Atomic int WR_STATES;
+    _Atomic int WR_SEQUENCE_COUNT;
+    _Atomic int WR_SEQUENCE_LENGTH_MAX;
     _Atomic int WR_MODE_COUNT;
     _Atomic int WR_KEYSYM_COUNT;
     _Atomic int WR_MOD_COUNT;

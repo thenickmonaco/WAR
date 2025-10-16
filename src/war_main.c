@@ -141,9 +141,12 @@ void* war_window_render(void* args) {
     war_atomics* atomics = args_ptrs[1];
     war_pool* pool_wr = args_ptrs[2];
     war_lua_context* ctx_lua = args_ptrs[3];
+    call_carmack("ctx_lua WR_STATES: %i", atomic_load(&ctx_lua->WR_STATES));
     pool_wr->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     pool_wr->pool_size =
         war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/monaco/set.lua");
+    pool_wr->pool_size += pool_wr->pool_alignment * 25000;
+    call_carmack("pool_wr hack size: %zu", pool_wr->pool_size);
     pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
     int pool_result = posix_memalign(
         &pool_wr->pool, pool_wr->pool_alignment, pool_wr->pool_size);
@@ -325,22 +328,23 @@ reload_window_render:
     }
     war_views views;
     {
-        uint32_t* views_col =
-            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_row =
-            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_left_col =
-            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_right_col =
-            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_bottom_row =
-            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_top_row =
-            malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        char** warpoon_text =
-            malloc(sizeof(char*) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_col = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_row = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_left_col = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_right_col = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_bottom_row = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_top_row = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        char** warpoon_text = war_pool_alloc(
+            pool_wr, sizeof(char*) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
         for (uint32_t i = 0; i < atomic_load(&ctx_lua->WR_VIEWS_SAVED); i++) {
-            warpoon_text[i] = malloc(
+            warpoon_text[i] = war_pool_alloc(
+                pool_wr,
                 sizeof(char) * atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
             memset(warpoon_text[i],
                    0,
@@ -398,42 +402,43 @@ reload_window_render:
     uint64_t timeout_start_us = 0;
     bool timeout = false;
     bool goto_cmd_timeout_done = false;
-    war_fsm_state* fsm =
-        malloc(sizeof(war_fsm_state) * atomic_load(&ctx_lua->WR_STATES));
+    war_fsm_state* fsm = war_pool_alloc(
+        pool_wr, sizeof(war_fsm_state) * atomic_load(&ctx_lua->WR_STATES));
     for (int i = 0; i < atomic_load(&ctx_lua->WR_STATES); i++) {
-        fsm[i].is_terminal =
-            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].is_terminal = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         memset(fsm[i].is_terminal,
                0,
                sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].is_prefix =
-            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].is_prefix = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         memset(fsm[i].is_prefix,
                0,
                sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_release =
-            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_release = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         memset(fsm[i].handle_release,
                0,
                sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_repeat =
-            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_repeat = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         memset(fsm[i].handle_repeat,
                0,
                sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_timeout =
-            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_timeout = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         memset(fsm[i].handle_timeout,
                0,
                sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].command =
-            malloc(sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].command = war_pool_alloc(
+            pool_wr, sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         memset(fsm[i].command,
                0,
                sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].next_state =
-            malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
-                   atomic_load(&ctx_lua->WR_MOD_COUNT));
+        fsm[i].next_state = war_pool_alloc(
+            pool_wr,
+            sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+                atomic_load(&ctx_lua->WR_MOD_COUNT));
         memset(fsm[i].next_state,
                0,
                sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
@@ -549,6 +554,7 @@ reload_window_render:
                    (ctx_vk.cell_height * ctx_wr.min_zoom_scale));
     uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
 
+    // TODO CHANGE TO INDIVIDUAL  WAR_POOL_ALLOCS (have one posix memalign here)
     // --- WAR_NOTE_QUADS ALLOCATION WITH 32-BYTE PER-ARRAY ALIGNMENT ---
     size_t num_uint32_arrays = 12;
     size_t num_uint64_arrays = 1;
@@ -617,34 +623,35 @@ reload_window_render:
     note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
     assert(note_quads_p <= (uint8_t*)note_quads_block + note_quads_total_size);
     uint32_t note_quads_count = 0;
-    uint32_t* note_quads_in_x =
-        malloc(sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    uint32_t* note_quads_in_x = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
     uint32_t note_quads_in_x_count = 0;
-    war_quad_vertex* quad_vertices =
-        malloc(sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    war_quad_vertex* quad_vertices = war_pool_alloc(
+        pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t quad_vertices_count = 0;
-    uint16_t* quad_indices =
-        malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    uint16_t* quad_indices = war_pool_alloc(
+        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t quad_indices_count = 0;
-    war_quad_vertex* transparent_quad_vertices =
-        malloc(sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    war_quad_vertex* transparent_quad_vertices = war_pool_alloc(
+        pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t transparent_quad_vertices_count = 0;
-    uint16_t* transparent_quad_indices =
-        malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    uint16_t* transparent_quad_indices = war_pool_alloc(
+        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t transparent_quad_indices_count = 0;
-    war_text_vertex* text_vertices = malloc(
+    war_text_vertex* text_vertices = war_pool_alloc(
+        pool_wr,
         sizeof(war_text_vertex) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_vertices_count = 0;
-    uint16_t* text_indices =
-        malloc(sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
+    uint16_t* text_indices = war_pool_alloc(
+        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_indices_count = 0;
 
-    ctx_wr.text_bottom_status_bar =
-        malloc(sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    ctx_wr.text_middle_status_bar =
-        malloc(sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    ctx_wr.text_top_status_bar =
-        malloc(sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_bottom_status_bar = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_middle_status_bar = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_top_status_bar = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
 
     const double microsecond_conversion = 1000000.0;
     ctx_wr.sleep_duration_us = 50000;
@@ -3996,7 +4003,7 @@ reload_window_render:
                     {
                         {&&cmd_normal_K, 0, 1, 1},
                         {&&cmd_views_K, 0, 1, 1},
-                        {&&cmd_midi_K, 0, 1, 1},
+                        {NULL, 0, 1, 1},
                         {&&cmd_record_K, 0, 1, 1},
                         {&&cmd_midi_K, 0, 1, 1},
                     },

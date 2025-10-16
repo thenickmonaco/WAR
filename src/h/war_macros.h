@@ -91,6 +91,8 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(WR_VIEWS_SAVED)
     LOAD_INT(WR_WARPOON_TEXT_COLS)
     LOAD_INT(WR_STATES)
+    LOAD_INT(WR_SEQUENCE_COUNT)
+    LOAD_INT(WR_SEQUENCE_LENGTH_MAX)
     LOAD_INT(WR_MODE_COUNT)
     LOAD_INT(WR_KEYSYM_COUNT)
     LOAD_INT(WR_MOD_COUNT)

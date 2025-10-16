@@ -35,6 +35,8 @@
 ---@field WR_VIEWS_SAVED number
 ---@field WR_WARPOON_TEXT_COLS number
 ---@field WR_STATES number
+---@field WR_SEQUENCE_COUNT number
+---@field WR_SEQUENCE_LENGTH_MAX number
 ---@field WR_MODE_COUNT number
 ---@field WR_KEYSYM_COUNT number
 ---@field WR_MOD_COUNT number
@@ -62,6 +64,8 @@ ctx_lua = {
     WR_VIEWS_SAVED = 13,
     WR_WARPOON_TEXT_COLS = 25,
     WR_STATES = 256,
+    WR_SEQUENCE_COUNT = 0,
+    WR_SEQUENCE_LENGTH_MAX = 0,
     WR_MODE_COUNT = 10,
     WR_KEYSYM_COUNT = 512,
     WR_MOD_COUNT = 16,
@@ -74,152 +78,11 @@ ctx_lua = {
     POOL_ALIGNMENT = 256,
 }
 
-pool_a = {
-    -- Atoms
-    { name = "atomics.notes_on",                         type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT },
-    { name = "atomics.notes_on_previous",                type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT },
-
-    -- Audio Context struct itself
-    { name = "audio_context",                            type = "war_audio_context", count = 1 },
-    { name = "audio_context.sample_frames",              type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "audio_context.sample_frames_duration",     type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "audio_context.sample_phase",               type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "audio_context.record_buffer",              type = "int16_t",           count = ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
-    { name = "audio_context.resample_buffer",            type = "int16_t",           count = ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
-
-    -- Sample Pool
-    { name = "sample_pool",                              type = "int16_t",           count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
-
-    -- Samples struct
-    { name = "samples",                                  type = "war_samples",       count = 1 },
-    { name = "samples.samples",                          type = "int16_t*",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_frames_start",             type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_frames_duration",          type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_frames",                   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_frames_trim_start",        type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_frames_trim_end",          type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_attack",                   type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_sustain",                  type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_release",                  type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_gain",                     type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.samples_active",                   type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "samples.notes_attack",                     type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.notes_sustain",                    type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.notes_release",                    type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.notes_gain",                       type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.notes_frames_start",               type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.notes_frames_duration",            type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.notes_frames_trim_start",          type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.notes_frames_trim_end",            type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "samples.samples_count",                    type = "uint32_t",          count = ctx_lua.A_NOTE_COUNT },
-
-    -- Record Samples struct
-    { name = "record_samples",                           type = "war_samples",       count = 1 },
-    { name = "record_samples.samples",                   type = "int16_t*",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_frames_start",      type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_frames_duration",   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_frames",            type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_frames_trim_start", type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_frames_trim_end",   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_attack",            type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_sustain",           type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_release",           type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_gain",              type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.samples_active",            type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
-    { name = "record_samples.notes_attack",              type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.notes_sustain",             type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.notes_release",             type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.notes_gain",                type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.notes_frames_start",        type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.notes_frames_duration",     type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.notes_frames_trim_start",   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.notes_frames_trim_end",     type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "record_samples.samples_count",             type = "uint32_t",          count = ctx_lua.A_NOTE_COUNT },
-
-    -- Record indices and userdata
-    { name = "record_samples_notes_indices",             type = "int32_t",           count = ctx_lua.A_NOTE_COUNT },
-    { name = "userdata",                                 type = "void*",             count = 8 },
+default_flags = {
+    handle_release = 0,
+    handle_repeat = 1,
+    handle_timeout = 1,
 }
-
-pool_wr = {
-    ---------------------------------------------------------------------------
-    -- Views (war_views)
-    ---------------------------------------------------------------------------
-    { name = "views.col",                            type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.row",                            type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.left_col",                       type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.right_col",                      type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.bottom_row",                     type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.top_row",                        type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.warpoon_text",                   type = "char*",           count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.warpoon_text_rows",              type = "char",            count = ctx_lua.WR_VIEWS_SAVED * ctx_lua.WR_WARPOON_TEXT_COLS },
-    { name = "views.instance",                       type = "war_views",       count = 1 },
-
-    ---------------------------------------------------------------------------
-    -- FSM State Machine
-    ---------------------------------------------------------------------------
-    { name = "fsm",                                  type = "war_fsm_state",   count = ctx_lua.WR_STATES },
-    { name = "fsm.is_terminal",                      type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.is_prefix",                        type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_release",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_repeat",                    type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_timeout",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.command",                          type = "void*",           count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.next_state",                       type = "uint16_t",        count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
-
-    ---------------------------------------------------------------------------
-    -- Quads and Vertices
-    ---------------------------------------------------------------------------
-    { name = "note_quads_in_x",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads_in_x_count",                type = "uint32_t",        count = 1 },
-
-    { name = "quad_vertices",                        type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
-    { name = "quad_vertices_count",                  type = "uint32_t",        count = 1 },
-
-    { name = "quad_indices",                         type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
-    { name = "quad_indices_count",                   type = "uint32_t",        count = 1 },
-
-    { name = "transparent_quad_vertices",            type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
-    { name = "transparent_quad_vertices_count",      type = "uint32_t",        count = 1 },
-
-    { name = "transparent_quad_indices",             type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
-    { name = "transparent_quad_indices_count",       type = "uint32_t",        count = 1 },
-
-    { name = "text_vertices",                        type = "war_text_vertex", count = ctx_lua.WR_TEXT_QUADS_MAX },
-    { name = "text_vertices_count",                  type = "uint32_t",        count = 1 },
-
-    { name = "text_indices",                         type = "uint16_t",        count = ctx_lua.WR_TEXT_QUADS_MAX },
-    { name = "text_indices_count",                   type = "uint32_t",        count = 1 },
-
-    ---------------------------------------------------------------------------
-    -- Status Bar Text Buffers
-    ---------------------------------------------------------------------------
-    { name = "text_top_status_bar",                  type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
-    { name = "text_middle_status_bar",               type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
-    { name = "text_bottom_status_bar",               type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
-
-    ---------------------------------------------------------------------------
-    -- Note Quads (war_note_quads)
-    ---------------------------------------------------------------------------
-    { name = "note_quads.timestamp",                 type = "uint64_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.col",                       type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.row",                       type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.sub_col",                   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.sub_row",                   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.sub_cells_col",             type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.cursor_width_whole_number", type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.cursor_width_sub_col",      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.cursor_width_sub_cells",    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.color",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.outline_color",             type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.gain",                      type = "float",           count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.voice",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.hidden",                    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.mute",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-
-    { name = "note_quads.count",                     type = "uint32_t",        count = 1 },
-}
-
 keymap = {
     -- | Key           | Neovim String    |
     -- | ------------- | ---------------- |
@@ -251,12 +114,6 @@ keymap = {
     -- <lt> represents the literal < key (since < starts special sequences).
     -- <C-CR> or <S-CR> for Ctrl+Enter or Shift+Enter.
     -- <NL> is also valid for newline (same as <CR>).
-
-    global = {
-        handle_release = 0,
-        handle_repeat = 1,
-        handle_timeout = 1,
-    },
     {
         sequences = {
             "k",
@@ -447,9 +304,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "1",
-            },
+            "1",
         },
         commands = {
             {
@@ -468,9 +323,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "2",
-            },
+            "2",
         },
         commands = {
             {
@@ -489,9 +342,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "3",
-            },
+            "3",
         },
         commands = {
             {
@@ -510,9 +361,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "4",
-            },
+            "4",
         },
         commands = {
             {
@@ -531,9 +380,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "5",
-            },
+            "5",
         },
         commands = {
             {
@@ -552,9 +399,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "6",
-            },
+            "6",
         },
         commands = {
             {
@@ -573,9 +418,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "7",
-            },
+            "7",
         },
         commands = {
             {
@@ -594,9 +437,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "8",
-            },
+            "8",
         },
         commands = {
             {
@@ -615,9 +456,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "9",
-            },
+            "9",
         },
         commands = {
             {
@@ -636,9 +475,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "9",
-            },
+            "9",
         },
         commands = {
             {
@@ -657,9 +494,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<C-=>",
-            },
+            "<C-=>",
         },
         commands = {
             {
@@ -670,9 +505,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<C-->",
-            },
+            "<C-->",
         },
         commands = {
             {
@@ -683,9 +516,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<C-A-=>",
-            },
+            "<C-A-=>",
         },
         commands = {
             {
@@ -696,9 +527,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<C-A-->",
-            },
+            "<C-A-->",
         },
         commands = {
             {
@@ -709,9 +538,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<C-0>",
-            },
+            "<C-0>",
         },
         commands = {
             {
@@ -749,9 +576,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "f",
-            },
+            "f",
         },
         commands = {
             {
@@ -762,9 +587,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "t",
-            },
+            "t",
         },
         commands = {
             {
@@ -784,9 +607,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "x",
-            },
+            "x",
         },
         commands = {
             {
@@ -801,9 +622,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "T",
-            },
+            "T",
         },
         commands = {
             {
@@ -818,9 +637,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "F",
-            },
+            "F",
         },
         commands = {
             {
@@ -831,9 +648,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "gb",
-            },
+            "gb",
         },
         commands = {
             {
@@ -844,9 +659,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "gt",
-            },
+            "gt",
         },
         commands = {
             {
@@ -857,9 +670,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "gm",
-            },
+            "gm",
         },
         commands = {
             {
@@ -870,9 +681,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "s",
-            },
+            "s",
         },
         commands = {
             {
@@ -883,9 +692,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "z",
-            },
+            "z",
         },
         commands = {
             {
@@ -900,9 +707,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<CR>",
-            },
+            "<CR>",
         },
         commands = {
             {
@@ -917,9 +722,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>div",
-            },
+            "<leader>div",
         },
         commands = {
             {
@@ -930,9 +733,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>dov",
-            },
+            "<leader>dov",
         },
         commands = {
             {
@@ -943,9 +744,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>diw",
-            },
+            "<leader>diw",
         },
         commands = {
             {
@@ -956,9 +755,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>da",
-            },
+            "<leader>da",
         },
         commands = {
             {
@@ -969,9 +766,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>hov",
-            },
+            "<leader>hov",
         },
         commands = {
             {
@@ -982,9 +777,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>hiv",
-            },
+            "<leader>hiv",
         },
         commands = {
             {
@@ -995,9 +788,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>ha",
-            },
+            "<leader>ha",
         },
         commands = {
             {
@@ -1008,9 +799,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>sov",
-            },
+            "<leader>sov",
         },
         commands = {
             {
@@ -1021,9 +810,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>siv",
-            },
+            "<leader>siv",
         },
         commands = {
             {
@@ -1034,9 +821,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>sa",
-            },
+            "<leader>sa",
         },
         commands = {
             {
@@ -1047,9 +832,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>mov",
-            },
+            "<leader>mov",
         },
         commands = {
             {
@@ -1060,9 +843,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>miv",
-            },
+            "<leader>miv",
         },
         commands = {
             {
@@ -1073,9 +854,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>ma",
-            },
+            "<leader>ma",
         },
         commands = {
             {
@@ -1086,9 +865,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>uov",
-            },
+            "<leader>uov",
         },
         commands = {
             {
@@ -1099,9 +876,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>uiv",
-            },
+            "<leader>uiv",
         },
         commands = {
             {
@@ -1112,9 +887,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>ua",
-            },
+            "<leader>ua",
         },
         commands = {
             {
@@ -1125,9 +898,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>a",
-            },
+            "<leader>a",
         },
         commands = {
             {
@@ -1138,9 +909,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-g>",
-            },
+            "<A-g>",
         },
         commands = {
             {
@@ -1151,9 +920,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-t>",
-            },
+            "<A-t>",
         },
         commands = {
             {
@@ -1164,9 +931,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-n>",
-            },
+            "<A-n>",
         },
         commands = {
             {
@@ -1177,9 +942,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-s>",
-            },
+            "<A-s>",
         },
         commands = {
             {
@@ -1190,9 +953,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-m>",
-            },
+            "<A-m>",
         },
         commands = {
             {
@@ -1203,9 +964,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-y>",
-            },
+            "<A-y>",
         },
         commands = {
             {
@@ -1216,9 +975,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-z>",
-            },
+            "<A-z>",
         },
         commands = {
             {
@@ -1229,9 +986,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-q>",
-            },
+            "<A-q>",
         },
         commands = {
             {
@@ -1242,9 +997,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-e>",
-            },
+            "<A-e>",
         },
         commands = {
             {
@@ -1255,9 +1008,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "a",
-            },
+            "a",
         },
         commands = {
             {
@@ -1268,9 +1019,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>1",
-            },
+            "<leader>1",
         },
         commands = {
             {
@@ -1281,9 +1030,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>2",
-            },
+            "<leader>2",
         },
         commands = {
             {
@@ -1294,9 +1041,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>3",
-            },
+            "<leader>3",
         },
         commands = {
             {
@@ -1307,9 +1052,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>4",
-            },
+            "<leader>4",
         },
         commands = {
             {
@@ -1320,9 +1063,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>5",
-            },
+            "<leader>5",
         },
         commands = {
             {
@@ -1333,9 +1074,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>6",
-            },
+            "<leader>6",
         },
         commands = {
             {
@@ -1346,9 +1085,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>7",
-            },
+            "<leader>7",
         },
         commands = {
             {
@@ -1359,9 +1096,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>8",
-            },
+            "<leader>8",
         },
         commands = {
             {
@@ -1372,9 +1107,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>9",
-            },
+            "<leader>9",
         },
         commands = {
             {
@@ -1385,9 +1118,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>0",
-            },
+            "<leader>0",
         },
         commands = {
             {
@@ -1398,9 +1129,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-1>",
-            },
+            "<A-1>",
         },
         commands = {
             {
@@ -1411,9 +1140,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-2>",
-            },
+            "<A-2>",
         },
         commands = {
             {
@@ -1424,9 +1151,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-3>",
-            },
+            "<A-3>",
         },
         commands = {
             {
@@ -1437,9 +1162,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-4>",
-            },
+            "<A-4>",
         },
         commands = {
             {
@@ -1450,9 +1173,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-5>",
-            },
+            "<A-5>",
         },
         commands = {
             {
@@ -1463,9 +1184,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-6>",
-            },
+            "<A-6>",
         },
         commands = {
             {
@@ -1476,9 +1195,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-7>",
-            },
+            "<A-7>",
         },
         commands = {
             {
@@ -1489,9 +1206,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-8>",
-            },
+            "<A-8>",
         },
         commands = {
             {
@@ -1502,9 +1217,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-9>",
-            },
+            "<A-9>",
         },
         commands = {
             {
@@ -1515,9 +1228,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-0>",
-            },
+            "<A-0>",
         },
         commands = {
             {
@@ -1528,9 +1239,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<leader>d<leader>a",
-            },
+            "<leader>d<leader>a",
         },
         commands = {
             {
@@ -1541,10 +1250,8 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-K>",
-                "<A-S-Up>",
-            },
+            "<A-K>",
+            "<A-S-Up>",
         },
         commands = {
             {
@@ -1555,10 +1262,8 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-J>",
-                "<A-S-Down>",
-            },
+            "<A-J>",
+            "<A-S-Down>",
         },
         commands = {
             {
@@ -1569,10 +1274,8 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-H>",
-                "<A-S-Left>",
-            },
+            "<A-H>",
+            "<A-S-Left>",
         },
         commands = {
             {
@@ -1583,10 +1286,8 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-L>",
-                "<A-S-Right>",
-            },
+            "<A-L>",
+            "<A-S-Right>",
         },
         commands = {
             {
@@ -1597,9 +1298,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "d",
-            },
+            "d",
         },
         commands = {
             {
@@ -1614,9 +1313,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "m",
-            },
+            "m",
         },
         commands = {
             {
@@ -1631,9 +1328,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "X",
-            },
+            "X",
         },
         commands = {
             {
@@ -1644,9 +1339,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "w",
-            },
+            "w",
         },
         commands = {
             {
@@ -1666,9 +1359,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "W",
-            },
+            "W",
         },
         commands = {
             {
@@ -1679,9 +1370,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "e",
-            },
+            "e",
         },
         commands = {
             {
@@ -1701,9 +1390,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "E",
-            },
+            "E",
         },
         commands = {
             {
@@ -1714,9 +1401,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "b",
-            },
+            "b",
         },
         commands = {
             {
@@ -1731,9 +1416,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-u>",
-            },
+            "<A-u>",
         },
         commands = {
             {
@@ -1744,9 +1427,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "<A-d>",
-            },
+            "<A-d>",
         },
         commands = {
             {
@@ -1757,9 +1438,7 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "A",
-            },
+            "A",
         },
         commands = {
             {
@@ -1770,1394 +1449,653 @@ keymap = {
     },
     {
         sequences = {
-            {
-                "",
-            },
+            "<A-a>",
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_alt_a",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-Esc>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_esc",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-A>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_A",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-a>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_ctrl_a",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<Tab>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_tab",
                 mode = "normal",
             },
             {
-                cmd = "",
+                cmd = "cmd_normal_tab",
+                mode = "record",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>hiw",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_spacehiw",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>siw",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_spacesiw",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>uiw",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_spaceuiw",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "ga",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_ga",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<S-Tab>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_shift_tab",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "V",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_V",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_views_V",
+                mode = "views",
+            },
+        },
+    },
+    {
+        sequences = {
+            "K",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_K",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_views_K",
                 mode = "views",
             },
             {
-                cmd = "",
+                cmd = "cmd_record_K",
                 mode = "record",
             },
             {
-                cmd = "",
+                cmd = "cmd_midi_K",
                 mode = "midi",
             },
+        },
+    },
+    {
+        sequences = {
+            "J",
+        },
+        commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_J",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_views_J",
+                mode = "views",
+            },
+            {
+                cmd = "cmd_record_J",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_J",
+                mode = "midi",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>m",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_spacem",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "B",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_B",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "q",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_q",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_record_q",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_q",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "Q",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_Q",
+                mode = "normal",
+            },
+            {
+                cmd = "cmd_record_Q",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_Q",
+                mode = "midi",
+            },
+        },
+    },
+    {
+        sequences = {
+            "r",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_r",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_r",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "y",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_y",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_y",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "u",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_u",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_u",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "i",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_i",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_i",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "o",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_o",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_o",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "p",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_p",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_p",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "[",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_leftbracket",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_leftbracket",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "]",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_rightbracket",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_rightbracket",
+                mode = "midi",
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "-",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_minus",
+                mode = "record",
+            },
+            {
+                cmd = "cmd_midi_minus",
+                mode = "midi",
+            },
+        },
+    },
+    {
+        sequences = {
+            "c",
+        },
+        commands = {
+            {
+                cmd = "cmd_midi_c",
+                mode = "midi",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<Space>",
+        },
+        commands = {
+            {
+                cmd = "cmd_record_space",
+                mode = "record",
+                handle_repeat = 0,
+            },
+            {
+                cmd = "cmd_midi_space",
+                mode = "midi",
+                handle_repeat = 0,
+            },
+        },
+    },
+    {
+        sequences = {
+            "w<CR>",
+        },
+        commands = {
+            {
+                cmd = "cmd_command_w",
                 mode = "command",
             },
         },
     },
     {
         sequences = {
-            {
-                "",
-            },
+            ":",
         },
         commands = {
             {
-                cmd = "",
+                cmd = "cmd_normal_colon",
                 mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
             },
         },
     },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
-    {
-        sequences = {
-            {
-                "",
-            },
-        },
-        commands = {
-            {
-                cmd = "",
-                mode = "normal",
-            },
-            {
-                cmd = "",
-                mode = "views",
-            },
-            {
-                cmd = "",
-                mode = "record",
-            },
-            {
-                cmd = "",
-                mode = "midi",
-            },
-            {
-                cmd = "",
-                mode = "command",
-            },
-        },
-    },
+}
+
+local function war_analyze_keymap(keymap)
+    print("# war_analyze_keymap")
+    local seen = { [""] = true } -- root node
+    local total_states = 1
+    local max_len = 0
+    print("keymap length:", #keymap)
+
+    for i, entry in ipairs(keymap) do
+        print("processing entry index:", i, "has sequences:", entry.sequences and #entry.sequences or 0)
+        if type(entry) == "table" and entry.sequences then
+            for j, seq in ipairs(entry.sequences) do
+                print("  sequence", j, ":", seq)
+                -- extract keys from sequence
+                local keys = {}
+                local k = 1
+                while k <= #seq do
+                    if seq:sub(k, k) == "<" then
+                        local closing = seq:find(">", k)
+                        if closing then
+                            table.insert(keys, seq:sub(k, closing))
+                            k = closing + 1
+                        else
+                            table.insert(keys, seq:sub(k, k))
+                            k = k + 1
+                        end
+                    else
+                        table.insert(keys, seq:sub(k, k))
+                        k = k + 1
+                    end
+                end
+                print("    keys extracted:", table.concat(keys, ", "))
+
+                -- build prefixes and count total states
+                local prefix = ""
+                for _, key in ipairs(keys) do
+                    prefix = prefix .. key
+                    if not seen[prefix] then
+                        seen[prefix] = true
+                        total_states = total_states + 1
+                    end
+                end
+
+                -- update max length
+                if #keys > max_len then
+                    max_len = #keys
+                end
+            end
+        end
+    end
+
+    -- fallback if total_states is too low
+    if #keymap > total_states then
+        total_states = #keymap * 3
+        print("total states is less than length, defaulting to length * 3")
+    end
+
+    print("total_states:", total_states, "Max len:", max_len)
+    print("# end war_analyze_keymap")
+    return total_states, max_len
+end
+
+-- usage:
+ctx_lua.WR_STATES, ctx_lua.WR_SEQUENCE_LENGTH_MAX = war_analyze_keymap(keymap)
+
+pool_a = {
+    -- Atoms
+    { name = "atomics.notes_on",                         type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT },
+    { name = "atomics.notes_on_previous",                type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT },
+
+    -- Audio Context struct itself
+    { name = "audio_context",                            type = "war_audio_context", count = 1 },
+    { name = "audio_context.sample_frames",              type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "audio_context.sample_frames_duration",     type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "audio_context.sample_phase",               type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "audio_context.record_buffer",              type = "int16_t",           count = ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
+    { name = "audio_context.resample_buffer",            type = "int16_t",           count = ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
+
+    -- Sample Pool
+    { name = "sample_pool",                              type = "int16_t",           count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
+
+    -- Samples struct
+    { name = "samples",                                  type = "war_samples",       count = 1 },
+    { name = "samples.samples",                          type = "int16_t*",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_frames_start",             type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_frames_duration",          type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_frames",                   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_frames_trim_start",        type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_frames_trim_end",          type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_attack",                   type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_sustain",                  type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_release",                  type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_gain",                     type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.samples_active",                   type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "samples.notes_attack",                     type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.notes_sustain",                    type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.notes_release",                    type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.notes_gain",                       type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.notes_frames_start",               type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.notes_frames_duration",            type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.notes_frames_trim_start",          type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.notes_frames_trim_end",            type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "samples.samples_count",                    type = "uint32_t",          count = ctx_lua.A_NOTE_COUNT },
+
+    -- Record Samples struct
+    { name = "record_samples",                           type = "war_samples",       count = 1 },
+    { name = "record_samples.samples",                   type = "int16_t*",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_frames_start",      type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_frames_duration",   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_frames",            type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_frames_trim_start", type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_frames_trim_end",   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_attack",            type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_sustain",           type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_release",           type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_gain",              type = "float",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.samples_active",            type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_SAMPLES_PER_NOTE },
+    { name = "record_samples.notes_attack",              type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.notes_sustain",             type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.notes_release",             type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.notes_gain",                type = "float",             count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.notes_frames_start",        type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.notes_frames_duration",     type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.notes_frames_trim_start",   type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.notes_frames_trim_end",     type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
+    { name = "record_samples.samples_count",             type = "uint32_t",          count = ctx_lua.A_NOTE_COUNT },
+
+    -- Record indices and userdata
+    { name = "record_samples_notes_indices",             type = "int32_t",           count = ctx_lua.A_NOTE_COUNT },
+    { name = "userdata",                                 type = "void*",             count = 8 },
+}
+
+pool_wr = {
+    ---------------------------------------------------------------------------
+    -- Views (war_views)
+    ---------------------------------------------------------------------------
+    { name = "views.col",                            type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.row",                            type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.left_col",                       type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.right_col",                      type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.bottom_row",                     type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.top_row",                        type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.warpoon_text",                   type = "char*",           count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.warpoon_text_rows",              type = "char",            count = ctx_lua.WR_VIEWS_SAVED * ctx_lua.WR_WARPOON_TEXT_COLS },
+    { name = "views.instance",                       type = "war_views",       count = 1 },
+
+    ---------------------------------------------------------------------------
+    -- FSM State Machine
+    ---------------------------------------------------------------------------
+    -- FSM root struct array
+    { name = "fsm",                                  type = "war_fsm_state",   count = ctx_lua.WR_STATES },
+
+    -- Pointer arrays (each fsm[i].field = pointer)
+    { name = "fsm.is_terminal",                      type = "uint8_t*",        count = ctx_lua.WR_STATES },
+    { name = "fsm.is_prefix",                        type = "uint8_t*",        count = ctx_lua.WR_STATES },
+    { name = "fsm.handle_release",                   type = "uint8_t*",        count = ctx_lua.WR_STATES },
+    { name = "fsm.handle_repeat",                    type = "uint8_t*",        count = ctx_lua.WR_STATES },
+    { name = "fsm.handle_timeout",                   type = "uint8_t*",        count = ctx_lua.WR_STATES },
+    { name = "fsm.command",                          type = "void**",          count = ctx_lua.WR_STATES },
+    { name = "fsm.next_state",                       type = "uint16_t*",       count = ctx_lua.WR_STATES },
+
+    -- Actual per-state inner arrays (what each pointer points to)
+    { name = "fsm.is_terminal_rows",                 type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.is_prefix_rows",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_release_rows",              type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_repeat_rows",               type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_timeout_rows",              type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.command_rows",                     type = "void*",           count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.next_state_rows",                  type = "uint16_t",        count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+
+    ---------------------------------------------------------------------------
+    -- Quads and Vertices
+    ---------------------------------------------------------------------------
+    { name = "note_quads_in_x",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads_in_x_count",                type = "uint32_t",        count = 1 },
+
+    { name = "quad_vertices",                        type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
+    { name = "quad_vertices_count",                  type = "uint32_t",        count = 1 },
+
+    { name = "quad_indices",                         type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
+    { name = "quad_indices_count",                   type = "uint32_t",        count = 1 },
+
+    { name = "transparent_quad_vertices",            type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
+    { name = "transparent_quad_vertices_count",      type = "uint32_t",        count = 1 },
+
+    { name = "transparent_quad_indices",             type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
+    { name = "transparent_quad_indices_count",       type = "uint32_t",        count = 1 },
+
+    { name = "text_vertices",                        type = "war_text_vertex", count = ctx_lua.WR_TEXT_QUADS_MAX },
+    { name = "text_vertices_count",                  type = "uint32_t",        count = 1 },
+
+    { name = "text_indices",                         type = "uint16_t",        count = ctx_lua.WR_TEXT_QUADS_MAX },
+    { name = "text_indices_count",                   type = "uint32_t",        count = 1 },
+
+    ---------------------------------------------------------------------------
+    -- Status Bar Text Buffers
+    ---------------------------------------------------------------------------
+    { name = "text_top_status_bar",                  type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
+    { name = "text_middle_status_bar",               type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
+    { name = "text_bottom_status_bar",               type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
+
+    ---------------------------------------------------------------------------
+    -- Note Quads (war_note_quads)
+    ---------------------------------------------------------------------------
+    { name = "note_quads.timestamp",                 type = "uint64_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.col",                       type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.row",                       type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.sub_col",                   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.sub_row",                   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.sub_cells_col",             type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.cursor_width_whole_number", type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.cursor_width_sub_col",      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.cursor_width_sub_cells",    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.color",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.outline_color",             type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.gain",                      type = "float",           count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.voice",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.hidden",                    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.mute",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+
+    { name = "note_quads.count",                     type = "uint32_t",        count = 1 },
 }

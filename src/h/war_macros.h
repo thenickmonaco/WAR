@@ -87,6 +87,7 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(A_BASE_FREQUENCY)
     LOAD_INT(A_BASE_NOTE)
     LOAD_INT(A_EDO)
+    LOAD_INT(A_NOTES_MAX);
     // window render
     LOAD_INT(WR_VIEWS_SAVED)
     LOAD_INT(WR_WARPOON_TEXT_COLS)
@@ -100,8 +101,15 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(WR_STATUS_BAR_COLS_MAX)
     LOAD_INT(WR_TEXT_QUADS_MAX)
     LOAD_INT(WR_QUADS_MAX)
+    LOAD_INT(WR_WAYLAND_MSG_BUFFER_SIZE)
+    LOAD_INT(WR_WAYLAND_MAX_OBJECTS)
+    LOAD_INT(WR_WAYLAND_MAX_OP_CODES)
     // pool
     LOAD_INT(POOL_ALIGNMENT)
+    // cmd
+    LOAD_INT(CMD_COUNT)
+    // pc
+    LOAD_INT(PC_BUFFER_SIZE)
 
 #undef LOAD_INT
 
@@ -163,7 +171,11 @@ static inline size_t war_get_pool_a_size(war_pool* pool,
                 type_size = sizeof(war_audio_context);
             else if (strcmp(type, "war_samples") == 0)
                 type_size = sizeof(war_samples);
-            else {
+            else if (strcmp(type, "war_notes") == 0) {
+                type_size = sizeof(war_notes);
+            } else if (strcmp(type, "bool") == 0) {
+                type_size = sizeof(bool);
+            } else {
                 fprintf(stderr, "Unknown pool_a type: %s\n", type);
                 type_size = 0;
             }
@@ -236,6 +248,9 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(char);
             else if (strcmp(type, "char*") == 0)
                 type_size = sizeof(char*);
+            else if (strcmp(type, "bool") == 0) {
+                type_size = sizeof(bool);
+            }
 
             /* --- WR-specific structs --- */
             else if (strcmp(type, "war_fsm_state") == 0)

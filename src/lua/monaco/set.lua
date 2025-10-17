@@ -45,6 +45,9 @@
 ---@field WR_TEXT_QUADS_MAX number
 ---@field WR_QUADS_MAX number
 ---@field WR_LEADER string
+---@field WR_WAYLAND_MSG_BUFFER_SIZE number
+---@field WR_WAYLAND_MAX_OBJECTS number
+---@field WR_WAYLAND_MAX_OP_CODES number
 -- pool
 ---@field POOL_ALIGNMENT number
 ---@diagnostic disable: lowercase-global
@@ -60,6 +63,7 @@ ctx_lua = {
     A_CHANNEL_COUNT = 2,
     A_NOTE_COUNT = 128,
     A_SAMPLES_PER_NOTE = 128,
+    A_NOTES_MAX = 20000,
     -- window render
     WR_VIEWS_SAVED = 13,
     WR_WARPOON_TEXT_COLS = 25,
@@ -74,8 +78,15 @@ ctx_lua = {
     WR_TEXT_QUADS_MAX = 20000,
     WR_QUADS_MAX = 20000,
     WR_LEADER = "<Space>",
+    WR_WAYLAND_MSG_BUFFER_SIZE = 4096,
+    WR_WAYLAND_MAX_OBJECTS = 1000,
+    WR_WAYLAND_MAX_OP_CODES = 20,
     -- pool
     POOL_ALIGNMENT = 256,
+    -- cmd
+    CMD_COUNT = 21,
+    -- pc
+    PC_BUFFER_SIZE = 4096,
 }
 
 keymap_flags = {
@@ -1347,7 +1358,7 @@ keymap = {
                 mode = "normal",
             },
             {
-                cmd = "cmd_normal_w",
+                cmd = "cmd_record_w",
                 mode = "record",
             },
             {
@@ -2039,9 +2050,26 @@ pool_a = {
     { name = "record_samples.notes_frames_trim_end",     type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
     { name = "record_samples.samples_count",             type = "uint32_t",          count = ctx_lua.A_NOTE_COUNT },
 
+    -- war_notes
+    { name = "notes",                                    type = "war_notes",         count = 1 },
+    { name = "notes.notes_start_frames",                 type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_duration_frames",              type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_phase_increment",              type = "float",             count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_velocity",                     type = "float",             count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_sample_index",                 type = "uint32_t",          count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_attack",                       type = "float",             count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_sustain",                      type = "float",             count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_release",                      type = "float",             count = ctx_lua.A_NOTES_MAX },
+
     -- Record indices and userdata
     { name = "record_samples_notes_indices",             type = "int32_t",           count = ctx_lua.A_NOTE_COUNT },
     { name = "userdata",                                 type = "void*",             count = 8 },
+
+    -- payload, pc_audio, play_buffer, record_buffer
+    { name = "pc_audio",                                 type = "void*",             count = ctx_lua.CMD_COUNT },
+    { name = "payload",                                  type = "uint8_t",           count = ctx_lua.PC_BUFFER_SIZE },
+    { name = "play_buffer",                              type = "uint8_t",           count = 1024 },
+    { name = "record_buffer",                            type = "uint8_t",           count = 1024 },
 }
 
 pool_wr = {
@@ -2112,4 +2140,12 @@ pool_wr = {
     { name = "note_quads.voice",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.hidden",                    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.mute",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+
+    -- keydown, keylasteventus, msgbuffer, pc_window_render, payload
+    { name = "key_down",                             type = "bool",            count = ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "key_last_event_us",                    type = "uint64_t",        count = ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "msg_buffer",                           type = "uint8_t",         count = ctx_lua.WR_WAYLAND_MSG_BUFFER_SIZE },
+    { name = "obj_op",                               type = "void*",           count = ctx_lua.WR_WAYLAND_MAX_OBJECTS * ctx_lua.WR_WAYLAND_MAX_OP_CODES },
+    { name = "pc_window_render",                     type = "void*",           count = ctx_lua.CMD_COUNT },
+    { name = "payload",                              type = "uint8_t",         count = ctx_lua.PC_BUFFER_SIZE },
 }

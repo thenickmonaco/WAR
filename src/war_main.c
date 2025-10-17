@@ -85,12 +85,14 @@ int main() {
     war_load_lua(&ctx_lua, "src/lua/monaco/set.lua");
     war_producer_consumer pc;
     {
-        pc.to_a = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
+        pc.to_a =
+            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua.PC_BUFFER_SIZE));
         assert(pc.to_a);
-        memset(pc.to_a, 0, PC_BUFFER_SIZE);
-        pc.to_wr = malloc(sizeof(uint8_t) * PC_BUFFER_SIZE);
+        memset(pc.to_a, 0, atomic_load(&ctx_lua.PC_BUFFER_SIZE));
+        pc.to_wr =
+            malloc(sizeof(uint8_t) * atomic_load(&ctx_lua.PC_BUFFER_SIZE));
         assert(pc.to_wr);
-        memset(pc.to_wr, 0, PC_BUFFER_SIZE);
+        memset(pc.to_wr, 0, atomic_load(&ctx_lua.PC_BUFFER_SIZE));
         pc.i_to_a = 0;
         pc.i_to_wr = 0;
         pc.i_from_a = 0;
@@ -445,10 +447,22 @@ reload_window_render:
                    atomic_load(&ctx_lua->WR_MOD_COUNT));
     }
     uint16_t current_state_index = 0;
-    bool key_down[atomic_load(&ctx_lua->WR_KEYSYM_COUNT)]
-                 [atomic_load(&ctx_lua->WR_MOD_COUNT)];
-    uint64_t key_last_event_us[atomic_load(&ctx_lua->WR_KEYSYM_COUNT)]
-                              [atomic_load(&ctx_lua->WR_MOD_COUNT)];
+    bool* key_down =
+        war_pool_alloc(pool_wr,
+                       sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+                           atomic_load(&ctx_lua->WR_MOD_COUNT));
+    memset(key_down,
+           0,
+           sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+               atomic_load(&ctx_lua->WR_MOD_COUNT));
+    uint64_t* key_last_event_us = war_pool_alloc(
+        pool_wr,
+        sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+            atomic_load(&ctx_lua->WR_MOD_COUNT));
+    memset(key_last_event_us,
+           0,
+           sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+               atomic_load(&ctx_lua->WR_MOD_COUNT));
     uint64_t fsm_state_last_event_us = 0;
 
     uint32_t mod_shift;
@@ -521,18 +535,23 @@ reload_window_render:
     int fd = war_wayland_make_fd();
     assert(fd >= 0);
 
-    uint8_t get_registry[12];
-    war_write_le32(get_registry, wl_display_id);
-    war_write_le16(get_registry + 4, 1);
-    war_write_le16(get_registry + 6, 12);
-    war_write_le32(get_registry + 8, wl_registry_id);
-    ssize_t written = write(fd, get_registry, 12);
-    call_carmack("written size: %lu", written);
-    dump_bytes("written", get_registry, 12);
-    assert(written == 12);
-    uint32_t new_id = wl_registry_id + 1;
+    uint32_t new_id;
+    {
+        uint8_t get_registry[12];
+        war_write_le32(get_registry, wl_display_id);
+        war_write_le16(get_registry + 4, 1);
+        war_write_le16(get_registry + 6, 12);
+        war_write_le32(get_registry + 8, wl_registry_id);
+        ssize_t written = write(fd, get_registry, 12);
+        call_carmack("written size: %lu", written);
+        dump_bytes("written", get_registry, 12);
+        assert(written == 12);
+        new_id = wl_registry_id + 1;
+    }
 
-    uint8_t msg_buffer[4096] = {0};
+    uint8_t* msg_buffer = war_pool_alloc(
+        pool_wr,
+        sizeof(uint8_t) * atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE));
     size_t msg_buffer_size = 0;
 
     struct pollfd pfd = {
@@ -540,11 +559,18 @@ reload_window_render:
         .events = POLLIN,
     };
 
-    void* obj_op[max_objects * max_opcodes] = {0};
-    obj_op[obj_op_index(wl_display_id, 0)] = &&wl_display_error;
-    obj_op[obj_op_index(wl_display_id, 1)] = &&wl_display_delete_id;
-    obj_op[obj_op_index(wl_registry_id, 0)] = &&wl_registry_global;
-    obj_op[obj_op_index(wl_registry_id, 1)] = &&wl_registry_global_remove;
+    void** obj_op = war_pool_alloc(
+        pool_wr,
+        sizeof(void*) * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OBJECTS) *
+            atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES));
+    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
+        &&wl_display_error;
+    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] =
+        &&wl_display_delete_id;
+    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+           0] = &&wl_registry_global;
+    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+           1] = &&wl_registry_global_remove;
 
     uint32_t max_viewport_cols =
         (uint32_t)(physical_width /
@@ -625,7 +651,12 @@ reload_window_render:
     ctx_wr.cursor_blink_previous_us = last_frame_time;
     ctx_wr.cursor_blinking = false;
 
-    void* pc_window_render[AUDIO_CMD_COUNT];
+    uint32_t header;
+    uint32_t size;
+    uint8_t* payload = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->PC_BUFFER_SIZE));
+    void** pc_window_render = war_pool_alloc(
+        pool_wr, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
     pc_window_render[AUDIO_CMD_STOP] = &&pc_stop;
     pc_window_render[AUDIO_CMD_PLAY] = &&pc_play;
     pc_window_render[AUDIO_CMD_PAUSE] = &&pc_pause;
@@ -646,9 +677,6 @@ reload_window_render:
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
     while (atomics->state != AUDIO_CMD_END_WAR) {
     pc_window_render:
-        uint32_t header;
-        uint32_t size;
-        uint8_t payload[PC_BUFFER_SIZE];
         if (war_pc_from_a(pc, &header, &size, payload)) {
             goto* pc_window_render[header];
         }
@@ -750,18 +778,25 @@ reload_window_render:
         if (repeat_keysym) {
             uint32_t k = repeat_keysym;
             uint8_t m = repeat_mod;
-            if (key_down[k][m]) {
-                uint64_t elapsed = ctx_wr.now - key_last_event_us[k][m];
+            if (key_down[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m]) {
+                uint64_t elapsed =
+                    ctx_wr.now -
+                    key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                      m];
                 if (!repeating) {
                     // still waiting for initial delay
                     if (elapsed >= repeat_delay_us) {
                         repeating = true;
-                        key_last_event_us[k][m] = ctx_wr.now; // reset timer
+                        key_last_event_us[k * atomic_load(
+                                                  &ctx_lua->WR_MOD_COUNT) +
+                                          m] = ctx_wr.now; // reset timer
                     }
                 } else {
                     // normal repeating
                     if (elapsed >= repeat_rate_us) {
-                        key_last_event_us[k][m] = ctx_wr.now;
+                        key_last_event_us[k * atomic_load(
+                                                  &ctx_lua->WR_MOD_COUNT) +
+                                          m] = ctx_wr.now;
                         uint16_t next_state_index =
                             fsm[current_state_index].next_state
                                 [k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
@@ -822,7 +857,9 @@ reload_window_render:
             struct msghdr poll_msg_hdr = {0};
             struct iovec poll_iov;
             poll_iov.iov_base = msg_buffer + msg_buffer_size;
-            poll_iov.iov_len = sizeof(msg_buffer) - msg_buffer_size;
+            poll_iov.iov_len =
+                atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE) -
+                msg_buffer_size;
             poll_msg_hdr.msg_iov = &poll_iov;
             poll_msg_hdr.msg_iovlen = 1;
             char poll_ctrl_buf[CMSG_SPACE(sizeof(int) * 4)];
@@ -843,14 +880,19 @@ reload_window_render:
                     war_read_le32(msg_buffer + msg_buffer_offset);
                 uint16_t opcode =
                     war_read_le16(msg_buffer + msg_buffer_offset + 4);
-                if (object_id >= max_objects || opcode >= max_opcodes) {
+                if (object_id >= (uint32_t)atomic_load(
+                                     &ctx_lua->WR_WAYLAND_MAX_OBJECTS) ||
+                    opcode >= (uint16_t)atomic_load(
+                                  &ctx_lua->WR_WAYLAND_MAX_OP_CODES)) {
                     // COMMENT CONCERN: INVALID OBJECT/OP 27 TIMES!
                     // call_carmack(
                     //    "invalid object/op: id=%u, op=%u", object_id,
                     //    opcode);
                     goto wayland_done;
                 }
-                size_t idx = obj_op_index(object_id, opcode);
+                size_t idx =
+                    object_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                    opcode;
                 if (obj_op[idx]) { goto* obj_op[idx]; }
                 goto wayland_default;
             wl_registry_global:
@@ -867,175 +909,208 @@ reload_window_render:
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_shm_id = new_id;
-                    obj_op[obj_op_index(wl_shm_id, 0)] = &&wl_shm_format;
+                    obj_op[wl_shm_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_shm_format;
                     new_id++;
 #endif
                 } else if (strcmp(iname, "wl_compositor") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_compositor_id = new_id;
-                    obj_op[obj_op_index(wl_compositor_id, 0)] =
-                        &&wl_compositor_jump;
+                    obj_op[wl_compositor_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_compositor_jump;
                     new_id++;
                 } else if (strcmp(iname, "wl_output") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_output_id = new_id;
-                    obj_op[obj_op_index(wl_output_id, 0)] =
-                        &&wl_output_geometry;
-                    obj_op[obj_op_index(wl_output_id, 1)] = &&wl_output_mode;
-                    obj_op[obj_op_index(wl_output_id, 2)] = &&wl_output_done;
-                    obj_op[obj_op_index(wl_output_id, 3)] = &&wl_output_scale;
-                    obj_op[obj_op_index(wl_output_id, 4)] = &&wl_output_name;
-                    obj_op[obj_op_index(wl_output_id, 5)] =
-                        &&wl_output_description;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_output_geometry;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_output_mode;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_output_done;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_output_scale;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_output_name;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_output_description;
                     new_id++;
                 } else if (strcmp(iname, "wl_seat") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_seat_id = new_id;
-                    obj_op[obj_op_index(wl_seat_id, 0)] =
-                        &&wl_seat_capabilities;
-                    obj_op[obj_op_index(wl_seat_id, 1)] = &&wl_seat_name;
+                    obj_op[wl_seat_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_seat_capabilities;
+                    obj_op[wl_seat_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_seat_name;
                     new_id++;
                 } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
 #if DMABUF
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_linux_dmabuf_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 0)] =
-                        &&zwp_linux_dmabuf_v1_format;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_v1_id, 1)] =
-                        &&zwp_linux_dmabuf_v1_modifier;
+                    obj_op[zwp_linux_dmabuf_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_linux_dmabuf_v1_format;
+                    obj_op[zwp_linux_dmabuf_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&zwp_linux_dmabuf_v1_modifier;
                     new_id++;
 #endif
                 } else if (strcmp(iname, "xdg_wm_base") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     xdg_wm_base_id = new_id;
-                    obj_op[obj_op_index(xdg_wm_base_id, 0)] =
-                        &&xdg_wm_base_ping;
+                    obj_op[xdg_wm_base_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_wm_base_ping;
                     new_id++;
                 } else if (strcmp(iname, "wp_linux_drm_syncobj_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_linux_drm_syncobj_manager_v1_id = new_id;
-                    obj_op[obj_op_index(wp_linux_drm_syncobj_manager_v1_id,
-                                        0)] =
-                        &&wp_linux_drm_syncobj_manager_v1_jump;
+                    obj_op[wp_linux_drm_syncobj_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_linux_drm_syncobj_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_idle_inhibit_manager_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_idle_inhibit_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_idle_inhibit_manager_v1_id, 0)] =
-                        &&zwp_idle_inhibit_manager_v1_jump;
+                    obj_op[zwp_idle_inhibit_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_idle_inhibit_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zxdg_decoration_manager_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zxdg_decoration_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zxdg_decoration_manager_v1_id, 0)] =
-                        &&zxdg_decoration_manager_v1_jump;
+                    obj_op[zxdg_decoration_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zxdg_decoration_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_relative_pointer_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_relative_pointer_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_relative_pointer_manager_v1_id,
-                                        0)] =
-                        &&zwp_relative_pointer_manager_v1_jump;
+                    obj_op[zwp_relative_pointer_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_relative_pointer_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_constraints_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_pointer_constraints_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_pointer_constraints_v1_id, 0)] =
-                        &&zwp_pointer_constraints_v1_jump;
+                    obj_op[zwp_pointer_constraints_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_pointer_constraints_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_output_manager_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_output_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwlr_output_manager_v1_id, 0)] =
-                        &&zwlr_output_manager_v1_head;
-                    obj_op[obj_op_index(zwlr_output_manager_v1_id, 1)] =
-                        &&zwlr_output_manager_v1_done;
+                    obj_op[zwlr_output_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwlr_output_manager_v1_head;
+                    obj_op[zwlr_output_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&zwlr_output_manager_v1_done;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_data_control_manager_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_data_control_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwlr_data_control_manager_v1_id, 0)] =
-                        &&zwlr_data_control_manager_v1_jump;
+                    obj_op[zwlr_data_control_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwlr_data_control_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_virtual_keyboard_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_virtual_keyboard_manager_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_virtual_keyboard_manager_v1_id,
-                                        0)] =
-                        &&zwp_virtual_keyboard_manager_v1_jump;
+                    obj_op[zwp_virtual_keyboard_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_virtual_keyboard_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_viewporter") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_viewporter_id = new_id;
-                    obj_op[obj_op_index(wp_viewporter_id, 0)] =
-                        &&wp_viewporter_jump;
+                    obj_op[wp_viewporter_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_viewporter_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_fractional_scale_manager_v1") ==
                            0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_fractional_scale_manager_v1_id = new_id;
-                    obj_op[obj_op_index(wp_fractional_scale_manager_v1_id, 0)] =
-                        &&wp_fractional_scale_manager_v1_jump;
+                    obj_op[wp_fractional_scale_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_fractional_scale_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_gestures_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_pointer_gestures_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_pointer_gestures_v1_id, 0)] =
-                        &&zwp_pointer_gestures_v1_jump;
+                    obj_op[zwp_pointer_gestures_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_pointer_gestures_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "xdg_activation_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     xdg_activation_v1_id = new_id;
-                    obj_op[obj_op_index(xdg_activation_v1_id, 0)] =
-                        &&xdg_activation_v1_jump;
+                    obj_op[xdg_activation_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_activation_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_presentation") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_presentation_id = new_id;
-                    obj_op[obj_op_index(wp_presentation_id, 0)] =
-                        &&wp_presentation_clock_id;
+                    obj_op[wp_presentation_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_presentation_clock_id;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_layer_shell_v1_id = new_id;
-                    obj_op[obj_op_index(zwlr_layer_shell_v1_id, 0)] =
-                        &&zwlr_layer_shell_v1_jump;
+                    obj_op[zwlr_layer_shell_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwlr_layer_shell_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "ext_foreign_toplevel_list_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     ext_foreign_toplevel_list_v1_id = new_id;
-                    obj_op[obj_op_index(ext_foreign_toplevel_list_v1_id, 0)] =
-                        &&ext_foreign_toplevel_list_v1_toplevel;
+                    obj_op[ext_foreign_toplevel_list_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&ext_foreign_toplevel_list_v1_toplevel;
                     new_id++;
                 } else if (strcmp(iname, "wp_content_type_manager_v1") == 0) {
                     war_wayland_registry_bind(
                         fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_content_type_manager_v1_id = new_id;
-                    obj_op[obj_op_index(wp_content_type_manager_v1_id, 0)] =
-                        &&wp_content_type_manager_v1_jump;
+                    obj_op[wp_content_type_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_content_type_manager_v1_jump;
                     new_id++;
                 }
                 if (!wl_surface_id && wl_compositor_id) {
@@ -1050,12 +1125,18 @@ reload_window_render:
                         write(fd, create_surface, 12);
                     assert(create_surface_written == 12);
                     wl_surface_id = new_id;
-                    obj_op[obj_op_index(wl_surface_id, 0)] = &&wl_surface_enter;
-                    obj_op[obj_op_index(wl_surface_id, 1)] = &&wl_surface_leave;
-                    obj_op[obj_op_index(wl_surface_id, 2)] =
-                        &&wl_surface_preferred_buffer_scale;
-                    obj_op[obj_op_index(wl_surface_id, 3)] =
-                        &&wl_surface_preferred_buffer_transform;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_surface_enter;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_surface_leave;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_surface_preferred_buffer_scale;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_surface_preferred_buffer_transform;
                     new_id++;
                 }
                 if (!wl_region_id && wl_surface_id && wl_compositor_id) {
@@ -1106,20 +1187,28 @@ reload_window_render:
                         write(fd, get_surface_feedback, 16);
                     assert(get_surface_feedback_written == 16);
                     zwp_linux_dmabuf_feedback_v1_id = new_id;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 0)] =
-                        &&zwp_linux_dmabuf_feedback_v1_done;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 1)] =
-                        &&zwp_linux_dmabuf_feedback_v1_format_table;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 2)] =
-                        &&zwp_linux_dmabuf_feedback_v1_main_device;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 3)] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_done;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 4)] =
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_linux_dmabuf_feedback_v1_done;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&zwp_linux_dmabuf_feedback_v1_format_table;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&zwp_linux_dmabuf_feedback_v1_main_device;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&zwp_linux_dmabuf_feedback_v1_tranche_done;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] =
                         &&zwp_linux_dmabuf_feedback_v1_tranche_target_device;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 5)] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
-                    obj_op[obj_op_index(zwp_linux_dmabuf_feedback_v1_id, 6)] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           6] = &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
                     new_id++;
                 }
 #endif
@@ -1136,8 +1225,9 @@ reload_window_render:
                         write(fd, get_xdg_surface, 16);
                     assert(get_xdg_surface_written == 16);
                     xdg_surface_id = new_id;
-                    obj_op[obj_op_index(xdg_surface_id, 0)] =
-                        &&xdg_surface_configure;
+                    obj_op[xdg_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_surface_configure;
                     new_id++;
                     uint8_t get_toplevel[12];
                     war_write_le32(get_toplevel, xdg_surface_id);
@@ -1149,14 +1239,18 @@ reload_window_render:
                     ssize_t get_toplevel_written = write(fd, get_toplevel, 12);
                     assert(get_toplevel_written == 12);
                     xdg_toplevel_id = new_id;
-                    obj_op[obj_op_index(xdg_toplevel_id, 0)] =
-                        &&xdg_toplevel_configure;
-                    obj_op[obj_op_index(xdg_toplevel_id, 1)] =
-                        &&xdg_toplevel_close;
-                    obj_op[obj_op_index(xdg_toplevel_id, 2)] =
-                        &&xdg_toplevel_configure_bounds;
-                    obj_op[obj_op_index(xdg_toplevel_id, 3)] =
-                        &&xdg_toplevel_wm_capabilities;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_toplevel_configure;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&xdg_toplevel_close;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&xdg_toplevel_configure_bounds;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&xdg_toplevel_wm_capabilities;
                     new_id++;
                 }
                 if (!zxdg_toplevel_decoration_v1_id && xdg_toplevel_id &&
@@ -1177,8 +1271,9 @@ reload_window_render:
                         write(fd, get_toplevel_decoration, 16);
                     assert(get_toplevel_decoration_written == 16);
                     zxdg_toplevel_decoration_v1_id = new_id;
-                    obj_op[obj_op_index(zxdg_toplevel_decoration_v1_id, 0)] =
-                        &&zxdg_toplevel_decoration_v1_configure;
+                    obj_op[zxdg_toplevel_decoration_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zxdg_toplevel_decoration_v1_configure;
                     new_id++;
 
                     //---------------------------------------------------------
@@ -2181,7 +2276,9 @@ reload_window_render:
                         write(fd, create_buffer, 32);
                     assert(create_buffer_written == 32);
                     wl_buffer_id = new_id;
-                    obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
+                    obj_op[wl_buffer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_buffer_release;
                     new_id++;
 
                     pixel_buffer = mmap(NULL,
@@ -2284,8 +2381,9 @@ reload_window_render:
                 if (!wl_callback_id) {
                     war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
                     wl_callback_id = new_id;
-                    obj_op[obj_op_index(wl_callback_id, 0)] =
-                        &&wl_callback_done;
+                    obj_op[wl_callback_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_callback_done;
                     new_id++;
                 }
                 war_wayland_wl_surface_commit(fd, wl_surface_id);
@@ -2429,10 +2527,12 @@ reload_window_render:
                 ssize_t create_params_written = write(fd, create_params, 12);
                 assert(create_params_written == 12);
                 zwp_linux_buffer_params_v1_id = new_id;
-                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 0)] =
-                    &&zwp_linux_buffer_params_v1_created;
-                obj_op[obj_op_index(zwp_linux_buffer_params_v1_id, 1)] =
-                    &&zwp_linux_buffer_params_v1_failed;
+                obj_op[zwp_linux_buffer_params_v1_id *
+                           atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                       0] = &&zwp_linux_buffer_params_v1_created;
+                obj_op[zwp_linux_buffer_params_v1_id *
+                           atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                       1] = &&zwp_linux_buffer_params_v1_failed;
                 new_id++; // COMMENT REFACTOR: move increment to declaration
                           // (one line it)
 
@@ -2496,7 +2596,9 @@ reload_window_render:
                 ssize_t create_immed_written = write(fd, create_immed, 28);
                 assert(create_immed_written == 28);
                 wl_buffer_id = new_id;
-                obj_op[obj_op_index(wl_buffer_id, 0)] = &&wl_buffer_release;
+                obj_op[wl_buffer_id *
+                           atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                       0] = &&wl_buffer_release;
                 new_id++;
 
                 uint8_t destroy[8];
@@ -2746,17 +2848,24 @@ reload_window_render:
                     ssize_t get_keyboard_written = write(fd, get_keyboard, 12);
                     assert(get_keyboard_written == 12);
                     wl_keyboard_id = new_id;
-                    obj_op[obj_op_index(wl_keyboard_id, 0)] =
-                        &&wl_keyboard_keymap;
-                    obj_op[obj_op_index(wl_keyboard_id, 1)] =
-                        &&wl_keyboard_enter;
-                    obj_op[obj_op_index(wl_keyboard_id, 2)] =
-                        &&wl_keyboard_leave;
-                    obj_op[obj_op_index(wl_keyboard_id, 3)] = &&wl_keyboard_key;
-                    obj_op[obj_op_index(wl_keyboard_id, 4)] =
-                        &&wl_keyboard_modifiers;
-                    obj_op[obj_op_index(wl_keyboard_id, 5)] =
-                        &&wl_keyboard_repeat_info;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_keyboard_keymap;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_keyboard_enter;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_keyboard_leave;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_keyboard_key;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_keyboard_modifiers;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_keyboard_repeat_info;
                     new_id++;
                 }
                 if (capabilities & wl_seat_pointer) {
@@ -2772,24 +2881,39 @@ reload_window_render:
                     ssize_t get_pointer_written = write(fd, get_pointer, 12);
                     assert(get_pointer_written == 12);
                     wl_pointer_id = new_id;
-                    obj_op[obj_op_index(wl_pointer_id, 0)] = &&wl_pointer_enter;
-                    obj_op[obj_op_index(wl_pointer_id, 1)] = &&wl_pointer_leave;
-                    obj_op[obj_op_index(wl_pointer_id, 2)] =
-                        &&wl_pointer_motion;
-                    obj_op[obj_op_index(wl_pointer_id, 3)] =
-                        &&wl_pointer_button;
-                    obj_op[obj_op_index(wl_pointer_id, 4)] = &&wl_pointer_axis;
-                    obj_op[obj_op_index(wl_pointer_id, 5)] = &&wl_pointer_frame;
-                    obj_op[obj_op_index(wl_pointer_id, 6)] =
-                        &&wl_pointer_axis_source;
-                    obj_op[obj_op_index(wl_pointer_id, 7)] =
-                        &&wl_pointer_axis_stop;
-                    obj_op[obj_op_index(wl_pointer_id, 8)] =
-                        &&wl_pointer_axis_discrete;
-                    obj_op[obj_op_index(wl_pointer_id, 9)] =
-                        &&wl_pointer_axis_value120;
-                    obj_op[obj_op_index(wl_pointer_id, 10)] =
-                        &&wl_pointer_axis_relative_direction;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_pointer_enter;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_pointer_leave;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_pointer_motion;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_pointer_button;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_pointer_axis;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_pointer_frame;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           6] = &&wl_pointer_axis_source;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           7] = &&wl_pointer_axis_stop;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           8] = &&wl_pointer_axis_discrete;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           9] = &&wl_pointer_axis_value120;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           10] = &&wl_pointer_axis_relative_direction;
                     new_id++;
                 }
                 if (capabilities & wl_seat_touch) {
@@ -2805,14 +2929,27 @@ reload_window_render:
                     ssize_t get_touch_written = write(fd, get_touch, 12);
                     assert(get_touch_written == 12);
                     wl_touch_id = new_id;
-                    obj_op[obj_op_index(wl_touch_id, 0)] = &&wl_touch_down;
-                    obj_op[obj_op_index(wl_touch_id, 1)] = &&wl_touch_up;
-                    obj_op[obj_op_index(wl_touch_id, 2)] = &&wl_touch_motion;
-                    obj_op[obj_op_index(wl_touch_id, 3)] = &&wl_touch_frame;
-                    obj_op[obj_op_index(wl_touch_id, 4)] = &&wl_touch_cancel;
-                    obj_op[obj_op_index(wl_touch_id, 5)] = &&wl_touch_shape;
-                    obj_op[obj_op_index(wl_touch_id, 6)] =
-                        &&wl_touch_orientation;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_touch_down;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_touch_up;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_touch_motion;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_touch_frame;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_touch_cancel;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_touch_shape;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           6] = &&wl_touch_orientation;
                     new_id++;
                 }
                 goto wayland_done;
@@ -3861,9 +3998,13 @@ reload_window_render:
                 if (mods & (1 << mod_logo)) mod |= MOD_LOGO;
                 if (mods & (1 << mod_caps)) mod |= MOD_CAPS;
                 if (mods & (1 << mod_num)) mod |= MOD_NUM;
+                call_carmack("keysym: %u", keysym);
+                call_carmack("mod: %u", mod);
                 if (keysym == KEYSYM_DEFAULT) {
                     // repeats
-                    key_down[repeat_keysym][repeat_mod] = false;
+                    key_down[repeat_keysym *
+                                 atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                             repeat_mod] = false;
                     repeat_keysym = 0;
                     repeat_mod = 0;
                     repeating = false;
@@ -3872,8 +4013,11 @@ reload_window_render:
                 // if (mods & (1 << mod_fn)) mod |= MOD_FN;
                 bool pressed = (wl_key_state == 1);
                 if (!pressed) {
-                    key_down[keysym][mod] = false;
-                    key_last_event_us[keysym][mod] = 0;
+                    key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                             mod] = false;
+                    key_last_event_us[keysym *
+                                          atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                      mod] = 0;
                     // repeats
                     if (repeat_keysym == keysym &&
                         fsm[current_state_index].handle_repeat[ctx_wr.mode]) {
@@ -3904,9 +4048,13 @@ reload_window_render:
                     ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] =
                         war_keysym_to_char(keysym, mod);
                 }
-                if (!key_down[keysym][mod]) {
-                    key_down[keysym][mod] = true;
-                    key_last_event_us[keysym][mod] = ctx_wr.now;
+                if (!key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                              mod]) {
+                    key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                             mod] = true;
+                    key_last_event_us[keysym *
+                                          atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                      mod] = ctx_wr.now;
                 }
                 uint16_t next_state_index =
                     fsm[current_state_index].next_state
@@ -4939,44 +5087,29 @@ reload_window_render:
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 goto cmd_done;
-            cmd_normal_z:
-                call_carmack("cmd_normal_z");
-                if (ctx_wr.numeric_prefix) {
-                    for (uint32_t i = 0; i < ctx_wr.numeric_prefix; i++) {
-                        war_note_quads_add(&note_quads,
-                                           &note_quads_count,
-                                           pc,
-                                           &ctx_wr,
-                                           ctx_wr.color_cursor,
-                                           ctx_wr.color_note_outline_default,
-                                           100.0f,
-                                           AUDIO_VOICE_GRAND_PIANO,
-                                           false,
-                                           false);
-                    }
-                    ctx_wr.numeric_prefix = 0;
-                    memset(ctx_wr.input_sequence,
-                           0,
-                           sizeof(ctx_wr.input_sequence));
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_note_quads_add(&note_quads,
-                                   &note_quads_count,
-                                   pc,
-                                   &ctx_wr,
-                                   ctx_wr.color_cursor,
-                                   ctx_wr.color_note_outline_default,
-                                   100.0f,
-                                   AUDIO_VOICE_GRAND_PIANO,
-                                   false,
-                                   false);
-                ctx_wr.numeric_prefix = 0;
-                memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
-                ctx_wr.num_chars_in_sequence = 0;
-                goto cmd_done;
             cmd_normal_return:
-                call_carmack("cmd_normal_return");
+            cmd_normal_z: {
+                call_carmack("cmd_normal_z");
+                uint64_t start_frames =
+                    (uint64_t)((ctx_wr.col +
+                                (float)ctx_wr.sub_col /
+                                    ctx_wr.navigation_sub_cells_col) *
+                               ((60.0f / ctx_a.BPM) / 4.0f) *
+                               ctx_a.sample_rate);
+                uint64_t duration_frames =
+                    ((float)ctx_wr.cursor_width_whole_number *
+                     ctx_wr.cursor_width_sub_col /
+                     ctx_wr.cursor_width_sub_cells) -
+                    start_frames;
+                war_note_msg note_msg = (war_note_msg){
+                    .note_start_frames = start_frames,
+                    .note_duration_frames = duration_frames,
+                    .note_sample_index = ctx_wr.row,
+                    .note_gain = 1.0f,
+                    .note_attack = 0.0f,
+                    .note_sustain = 0.0f,
+                    .note_release = 0.0f,
+                };
                 if (ctx_wr.numeric_prefix) {
                     for (uint32_t i = 0; i < ctx_wr.numeric_prefix; i++) {
                         war_note_quads_add(&note_quads,
@@ -4989,6 +5122,10 @@ reload_window_render:
                                            AUDIO_VOICE_GRAND_PIANO,
                                            false,
                                            false);
+                        war_pc_to_a(pc,
+                                    AUDIO_CMD_ADD_NOTE,
+                                    sizeof(war_note_msg),
+                                    &note_msg);
                     }
                     ctx_wr.numeric_prefix = 0;
                     memset(ctx_wr.input_sequence,
@@ -5007,10 +5144,13 @@ reload_window_render:
                                    AUDIO_VOICE_GRAND_PIANO,
                                    false,
                                    false);
+                war_pc_to_a(
+                    pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note_msg), &note_msg);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
             cmd_normal_x:
                 call_carmack("cmd_normal_x");
                 note_quads_in_x_count = 0;
@@ -5069,7 +5209,7 @@ reload_window_render:
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_d:
+            cmd_normal_d: {
                 call_carmack("cmd_normal_d");
                 note_quads_in_x_count = 0;
                 war_note_quads_under_cursor(&note_quads,
@@ -5093,11 +5233,36 @@ reload_window_render:
                     if (note_quads.hidden[i_delete]) { continue; }
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
+                    uint64_t start_frames =
+                        (uint64_t)((note_quads.col[i_delete] +
+                                    (float)note_quads.sub_col[i_delete] /
+                                        note_quads.sub_cells_col[i_delete]) *
+                                   ((60.0f / ctx_a.BPM) / 4.0f) *
+                                   ctx_a.sample_rate);
+                    uint64_t duration_frames =
+                        ((float)note_quads.cursor_width_whole_number[i_delete] *
+                         note_quads.cursor_width_sub_col[i_delete] /
+                         note_quads.cursor_width_sub_cells[i_delete]) -
+                        start_frames;
+                    war_note_msg note_msg = (war_note_msg){
+                        .note_start_frames = start_frames,
+                        .note_duration_frames = duration_frames,
+                        .note_sample_index = note_quads.row[i_delete],
+                        .note_gain = 1.0f,
+                        .note_attack = 0.0f,
+                        .note_sustain = 0.0f,
+                        .note_release = 0.0f,
+                    };
+                    war_pc_to_a(pc,
+                                AUDIO_CMD_REMOVE_NOTE,
+                                sizeof(war_note_msg),
+                                &note_msg);
                 }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
             cmd_normal_spacediv:
                 call_carmack("cmd_normal_spacediv");
                 note_quads_in_x_count = 0;
@@ -8663,10 +8828,7 @@ void* war_audio(void* args) {
     pool_a->pool_size =
         war_get_pool_a_size(pool_a, ctx_lua, "src/lua/monaco/set.lua");
     pool_a->pool_size = ALIGN_UP(pool_a->pool_size, pool_a->pool_alignment);
-    //-------------------------------------------------------------------------
-    // HACK SIZE
-    //-------------------------------------------------------------------------
-    pool_a->pool_size += pool_a->pool_alignment * 3;
+    pool_a->pool_size += pool_a->pool_alignment * 10;
     call_carmack("pool_a hack size: %zu", pool_a->pool_size);
     int pool_result = posix_memalign(
         &pool_a->pool, pool_a->pool_alignment, pool_a->pool_size);
@@ -8948,6 +9110,29 @@ reload_audio:
         record_samples_notes_indices[i] = -1;
     }
     assert(record_samples_notes_indices);
+    //-------------------------------------------------------------------------
+    // WAR_NOTES
+    //-------------------------------------------------------------------------
+    war_notes* notes = war_pool_alloc(pool_a, sizeof(war_notes));
+    {
+        notes->notes_start_frames = war_pool_alloc(
+            pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_duration_frames = war_pool_alloc(
+            pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_phase_increment = war_pool_alloc(
+            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_gain = war_pool_alloc(
+            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_sample_index = war_pool_alloc(
+            pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_attack = war_pool_alloc(
+            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_sustain = war_pool_alloc(
+            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_release = war_pool_alloc(
+            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+        notes->notes_count = 0;
+    }
     void** userdata = war_pool_alloc(pool_a, sizeof(void*) * 8);
     assert(userdata);
     userdata[0] = ctx_a;
@@ -8969,9 +9154,9 @@ reload_audio:
         .channels = ctx_a->channel_count,
         .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
     };
-    uint8_t play_buffer[1024];
+    uint8_t* play_buffer = war_pool_alloc(pool_a, sizeof(uint8_t) * 1024);
     struct spa_pod_builder play_builder;
-    spa_pod_builder_init(&play_builder, play_buffer, sizeof(play_buffer));
+    spa_pod_builder_init(&play_builder, play_buffer, sizeof(uint8_t) * 1024);
     const struct spa_pod* play_params[1];
     play_params[0] = spa_format_audio_raw_build(
         &play_builder, SPA_PARAM_EnumFormat, &play_info);
@@ -8995,9 +9180,10 @@ reload_audio:
         .channels = ctx_a->channel_count,
         .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
     };
-    uint8_t record_buffer[1024];
+    uint8_t* record_buffer = war_pool_alloc(pool_a, sizeof(uint8_t) * 1024);
     struct spa_pod_builder record_builder;
-    spa_pod_builder_init(&record_builder, record_buffer, sizeof(record_buffer));
+    spa_pod_builder_init(
+        &record_builder, record_buffer, sizeof(uint8_t) * 1024);
     const struct spa_pod* record_params[1];
     record_params[0] = spa_format_audio_raw_build(
         &record_builder, SPA_PARAM_EnumFormat, &record_info);
@@ -9026,8 +9212,10 @@ reload_audio:
     //-------------------------------------------------------------------------
     uint32_t header;
     uint32_t size;
-    uint8_t payload[PC_BUFFER_SIZE];
-    void* pc_audio[AUDIO_CMD_COUNT];
+    uint8_t* payload = war_pool_alloc(
+        pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->PC_BUFFER_SIZE));
+    void** pc_audio = war_pool_alloc(
+        pool_a, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
     pc_audio[AUDIO_CMD_STOP] = &&pc_stop;
     pc_audio[AUDIO_CMD_PLAY] = &&pc_play;
     pc_audio[AUDIO_CMD_PAUSE] = &&pc_pause;
@@ -9047,6 +9235,7 @@ reload_audio:
     pc_audio[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
     pc_audio[AUDIO_CMD_MIDI_RECORD_WAIT] = &&pc_midi_record_wait;
     pc_audio[AUDIO_CMD_SAVE] = &&pc_save;
+    pc_audio[AUDIO_CMD_REMOVE_NOTE] = &&pc_remove_note;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -9060,8 +9249,64 @@ pc_pause:
     goto pc_audio_done;
 pc_get_frames:
     goto pc_audio_done;
-pc_add_note:
+pc_add_note: {
+    call_carmack("from wr: add_note");
+    war_note_msg note_msg;
+    memcpy(&note_msg, payload, size);
+    uint32_t* notes_count = &notes->notes_count;
+    notes->notes_start_frames[*notes_count] = note_msg.note_start_frames;
+    notes->notes_duration_frames[*notes_count] = note_msg.note_duration_frames;
+    notes->notes_sample_index[*notes_count] = note_msg.note_sample_index;
+    notes->notes_gain[*notes_count] = note_msg.note_gain;
+    notes->notes_attack[*notes_count] = note_msg.note_attack;
+    notes->notes_sustain[*notes_count] = note_msg.note_sustain;
+    notes->notes_release[*notes_count] = note_msg.note_release;
+    (*notes_count)++;
+    if (*notes_count >= (uint32_t)atomic_load(&ctx_lua->A_NOTES_MAX)) {
+        *notes_count = 0;
+        call_carmack("WARN: notes_count wrapped (max=%u)",
+                     atomic_load(&ctx_lua->A_NOTES_MAX));
+    }
     goto pc_audio_done;
+}
+pc_remove_note: {
+    call_carmack("from wr: remove_note");
+    war_note_msg note_msg;
+    memcpy(&note_msg, payload, size);
+
+    uint32_t* count = &notes->notes_count;
+    if (*count == 0) goto pc_audio_done;
+
+    uint64_t target_start = note_msg.note_start_frames;
+    uint64_t target_duration = note_msg.note_duration_frames;
+    uint32_t target_sample = note_msg.note_sample_index;
+
+    // Iterate backward so newer notes get removed first
+    for (int32_t i = (int32_t)(*count) - 1; i >= 0; i--) {
+        if (notes->notes_start_frames[i] == target_start &&
+            notes->notes_duration_frames[i] == target_duration &&
+            notes->notes_sample_index[i] == target_sample) {
+
+            uint32_t last = *count - 1;
+
+            // Swap-back if not already the last element
+            if ((uint32_t)i != last) {
+                notes->notes_start_frames[i] = notes->notes_start_frames[last];
+                notes->notes_duration_frames[i] =
+                    notes->notes_duration_frames[last];
+                notes->notes_sample_index[i] = notes->notes_sample_index[last];
+                notes->notes_gain[i] = notes->notes_gain[last];
+                notes->notes_attack[i] = notes->notes_attack[last];
+                notes->notes_sustain[i] = notes->notes_sustain[last];
+                notes->notes_release[i] = notes->notes_release[last];
+            }
+
+            (*count)--; // logically remove
+            break;
+        }
+    }
+    goto pc_audio_done;
+}
 pc_end_war:
     goto pc_audio_done;
 pc_seek:

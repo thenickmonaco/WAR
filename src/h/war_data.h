@@ -159,6 +159,7 @@ typedef struct war_lua_context {
     _Atomic int A_BASE_FREQUENCY;
     _Atomic int A_BASE_NOTE;
     _Atomic int A_EDO;
+    _Atomic int A_NOTES_MAX;
     // window render
     _Atomic int WR_VIEWS_SAVED;
     _Atomic int WR_WARPOON_TEXT_COLS;
@@ -173,8 +174,15 @@ typedef struct war_lua_context {
     _Atomic int WR_TEXT_QUADS_MAX;
     _Atomic int WR_QUADS_MAX;
     _Atomic char* WR_LEADER;
+    _Atomic int WR_WAYLAND_MSG_BUFFER_SIZE;
+    _Atomic int WR_WAYLAND_MAX_OBJECTS;
+    _Atomic int WR_WAYLAND_MAX_OP_CODES;
     // pool
     _Atomic int POOL_ALIGNMENT;
+    // cmd
+    _Atomic int CMD_COUNT;
+    // pc
+    _Atomic int PC_BUFFER_SIZE;
 } war_lua_context;
 
 typedef struct war_fsm_state {
@@ -205,24 +213,6 @@ typedef struct war_rgba_t {
     float b;
     float a;
 } war_rgba_t;
-
-typedef struct war_notes {
-    uint64_t* start_frames;
-    uint64_t* duration_frames;
-    float* phase_increment;
-    float* velocity; // can be constant if ASR-10 style
-    uint32_t* sample_id;
-    uint32_t* voice_id;
-    // Envelope
-    float* attack;
-    float* decay;
-    float* sustain;
-    float* release;
-    // Optional for multisample instruments
-    uint8_t* key_low;
-    uint8_t* key_high;
-    uint32_t count;
-} war_notes;
 
 typedef struct war_note_quads {
     uint64_t* timestamp;
@@ -287,7 +277,7 @@ enum war_audio {
     AUDIO_DEFAULT_SAMPLE_DURATION = 30,
     AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
-    AUDIO_CMD_COUNT = 20,
+    AUDIO_CMD_COUNT = 21,
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
@@ -307,6 +297,7 @@ enum war_audio {
     AUDIO_CMD_MIDI_RECORD = 17,
     AUDIO_CMD_MIDI_RECORD_MAP = 18,
     AUDIO_CMD_SAVE = 19,
+    AUDIO_CMD_REMOVE_NOTE = 20,
     // cmd sizes (not including header)
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,
@@ -352,6 +343,28 @@ typedef struct war_pool {
     size_t pool_size;
     size_t pool_alignment;
 } war_pool;
+
+typedef struct war_note_msg {
+    uint64_t note_start_frames;
+    uint64_t note_duration_frames;
+    uint32_t note_sample_index;
+    float note_gain;
+    float note_attack;
+    float note_sustain;
+    float note_release;
+} war_note_msg;
+
+typedef struct war_notes {
+    uint64_t* notes_start_frames;
+    uint64_t* notes_duration_frames;
+    uint32_t* notes_sample_index;
+    float* notes_phase_increment;
+    float* notes_gain;
+    float* notes_attack;
+    float* notes_sustain;
+    float* notes_release;
+    uint32_t notes_count;
+} war_notes;
 
 typedef struct war_samples {
     int16_t** samples;

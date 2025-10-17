@@ -5097,17 +5097,18 @@ reload_window_render:
                                ((60.0f / ctx_a.BPM) / 4.0f) *
                                ctx_a.sample_rate);
                 uint64_t duration_frames =
-                    ((float)ctx_wr.cursor_width_whole_number *
-                     ctx_wr.cursor_width_sub_col /
-                     ctx_wr.cursor_width_sub_cells) -
-                    start_frames;
+                    (uint64_t)((60.0f / ctx_a.BPM) *
+                               ((float)ctx_wr.cursor_width_whole_number +
+                                (float)ctx_wr.cursor_width_sub_col /
+                                    ctx_wr.cursor_width_sub_cells) *
+                               ctx_a.sample_rate);
                 war_note_msg note_msg = (war_note_msg){
                     .note_start_frames = start_frames,
                     .note_duration_frames = duration_frames,
                     .note_sample_index = ctx_wr.row,
                     .note_gain = 1.0f,
                     .note_attack = 0.0f,
-                    .note_sustain = 0.0f,
+                    .note_sustain = 1.0f,
                     .note_release = 0.0f,
                 };
                 if (ctx_wr.numeric_prefix) {
@@ -5248,10 +5249,6 @@ reload_window_render:
                         .note_start_frames = start_frames,
                         .note_duration_frames = duration_frames,
                         .note_sample_index = note_quads.row[i_delete],
-                        .note_gain = 1.0f,
-                        .note_attack = 0.0f,
-                        .note_sustain = 0.0f,
-                        .note_release = 0.0f,
                     };
                     war_pc_to_a(pc,
                                 AUDIO_CMD_REMOVE_NOTE,
@@ -8537,6 +8534,7 @@ static void war_play(void* userdata) {
     int16_t* sample_pool = data[5];
     int32_t* record_samples_notes_indices = data[6];
     war_lua_context* ctx_lua = data[7];
+    war_notes* notes = data[8];
 
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->play_stream);
     if (!b) return;
@@ -8566,6 +8564,76 @@ static void war_play(void* userdata) {
     uint64_t global_frame = atomic_load(&atomics->play_clock);
     uint8_t midi_record = atomic_load(&atomics->midi_record);
     uint8_t play = atomic_load(&atomics->play);
+
+    if (play && notes && notes->notes_count > 0) {
+        call_carmack("hi");
+        uint64_t frame_start = atomic_load(&atomics->play_frames);
+        uint64_t frame_end = frame_start + n_frames;
+        float master_gain = atomic_load(&atomics->play_gain);
+
+        for (uint32_t i = 0; i < notes->notes_count; i++) {
+            uint64_t note_start = notes->notes_start_frames[i];
+            uint64_t note_duration = notes->notes_duration_frames[i];
+            uint64_t note_end = note_start + notes->notes_duration_frames[i];
+            call_carmack("play_frames=%llu note_start=%llu note_end=%llu",
+                         frame_start,
+                         note_start,
+                         note_end);
+
+            // If this buffer does not overlap with the note, skip
+            if (frame_end < note_start || frame_start >= note_end) continue;
+
+            uint32_t sample_index = notes->notes_sample_index[i];
+            float note_gain = notes->notes_gain[i];
+            float note_attack = notes->notes_attack[i];
+            float note_sustain = notes->notes_sustain[i];
+            float note_release = notes->notes_release[i];
+
+            int16_t* sample_ptr = samples->samples[sample_index];
+            if (!sample_ptr) continue;
+
+            uint64_t sample_duration =
+                samples->samples_frames_duration[sample_index];
+            uint64_t overlap_start =
+                (frame_start > note_start) ? (frame_start - note_start) : 0;
+            uint64_t note_play_offset = overlap_start;
+
+            // For each frame in this buffer
+            for (uint32_t f = 0; f < n_frames; f++) {
+                uint64_t global_pos = frame_start + f;
+                if (global_pos < note_start || global_pos >= note_end) continue;
+
+                uint64_t sample_pos = note_play_offset + f;
+                if (sample_pos >= sample_duration) continue;
+
+                // Apply simple ADSR envelope if desired
+                float env = 1.0f;
+                uint64_t note_frame = global_pos - note_start;
+                if (note_frame < note_attack) {
+                    env = (float)note_frame / (float)note_attack;
+                } else if (note_frame > note_duration - note_release) {
+                    uint64_t rel_start = note_duration - note_release;
+                    env = 1.0f -
+                          (float)(note_frame - rel_start) / (float)note_release;
+                } else {
+                    env = note_sustain;
+                }
+
+                for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
+                    uint64_t src_idx = sample_pos * ctx_a->channel_count + c;
+                    uint64_t dst_idx = f * ctx_a->channel_count + c;
+
+                    int32_t mixed =
+                        dst[dst_idx] + (int32_t)(sample_ptr[src_idx] *
+                                                 master_gain * note_gain * env);
+
+                    if (mixed > 32767) mixed = 32767;
+                    if (mixed < -32768) mixed = -32768;
+                    dst[dst_idx] = (int16_t)mixed;
+                }
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Iterate over all notes
@@ -8741,6 +8809,7 @@ static void war_record(void* userdata) {
     int16_t* sample_pool = data[5];
     int32_t* record_samples_notes_indices = data[6];
     war_lua_context* ctx_lua = data[7];
+    war_notes* notes = data[8];
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->record_stream);
     if (!b) return;
     struct spa_buffer* buf = b->buffer;
@@ -9114,26 +9183,24 @@ reload_audio:
     // WAR_NOTES
     //-------------------------------------------------------------------------
     war_notes* notes = war_pool_alloc(pool_a, sizeof(war_notes));
-    {
-        notes->notes_start_frames = war_pool_alloc(
-            pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_duration_frames = war_pool_alloc(
-            pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_phase_increment = war_pool_alloc(
-            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_gain = war_pool_alloc(
-            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_sample_index = war_pool_alloc(
-            pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_attack = war_pool_alloc(
-            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_sustain = war_pool_alloc(
-            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_release = war_pool_alloc(
-            pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-        notes->notes_count = 0;
-    }
-    void** userdata = war_pool_alloc(pool_a, sizeof(void*) * 8);
+    notes->notes_start_frames = war_pool_alloc(
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_duration_frames = war_pool_alloc(
+        pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_phase_increment = war_pool_alloc(
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_gain = war_pool_alloc(
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_sample_index = war_pool_alloc(
+        pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_attack = war_pool_alloc(
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_sustain = war_pool_alloc(
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_release = war_pool_alloc(
+        pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_count = 0;
+    void** userdata = war_pool_alloc(pool_a, sizeof(void*) * 9);
     assert(userdata);
     userdata[0] = ctx_a;
     userdata[1] = pc;
@@ -9143,6 +9210,7 @@ reload_audio:
     userdata[5] = sample_pool;
     userdata[6] = record_samples_notes_indices;
     userdata[7] = ctx_lua;
+    userdata[8] = notes;
     //-------------------------------------------------------------------------
     // PIPEWIRE
     //-------------------------------------------------------------------------
@@ -9250,10 +9318,19 @@ pc_pause:
 pc_get_frames:
     goto pc_audio_done;
 pc_add_note: {
-    call_carmack("from wr: add_note");
+    call_carmack("from wr: add_note"); // already there
+
     war_note_msg note_msg;
     memcpy(&note_msg, payload, size);
+
     uint32_t* notes_count = &notes->notes_count;
+    call_carmack("Adding note idx=%u start=% " PRIu64 "dur=% " PRIu64
+                 "sample=%u",
+                 *notes_count,
+                 note_msg.note_start_frames,
+                 note_msg.note_duration_frames,
+                 note_msg.note_sample_index);
+
     notes->notes_start_frames[*notes_count] = note_msg.note_start_frames;
     notes->notes_duration_frames[*notes_count] = note_msg.note_duration_frames;
     notes->notes_sample_index[*notes_count] = note_msg.note_sample_index;
@@ -9261,18 +9338,27 @@ pc_add_note: {
     notes->notes_attack[*notes_count] = note_msg.note_attack;
     notes->notes_sustain[*notes_count] = note_msg.note_sustain;
     notes->notes_release[*notes_count] = note_msg.note_release;
+
     (*notes_count)++;
+
     if (*notes_count >= (uint32_t)atomic_load(&ctx_lua->A_NOTES_MAX)) {
         *notes_count = 0;
         call_carmack("WARN: notes_count wrapped (max=%u)",
                      atomic_load(&ctx_lua->A_NOTES_MAX));
     }
+
     goto pc_audio_done;
 }
 pc_remove_note: {
     call_carmack("from wr: remove_note");
+
     war_note_msg note_msg;
     memcpy(&note_msg, payload, size);
+
+    call_carmack("Removing note start=%llu dur=%llu sample=%u",
+                 note_msg.note_start_frames,
+                 note_msg.note_duration_frames,
+                 note_msg.note_sample_index);
 
     uint32_t* count = &notes->notes_count;
     if (*count == 0) goto pc_audio_done;
@@ -9302,6 +9388,8 @@ pc_remove_note: {
             }
 
             (*count)--; // logically remove
+            call_carmack(
+                "Removed note at idx=%d, new notes_count=%u", i, *count);
             break;
         }
     }

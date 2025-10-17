@@ -2063,7 +2063,7 @@ pool_a = {
 
     -- Record indices and userdata
     { name = "record_samples_notes_indices",             type = "int32_t",           count = ctx_lua.A_NOTE_COUNT },
-    { name = "userdata",                                 type = "void*",             count = 8 },
+    { name = "userdata",                                 type = "void*",             count = 9 },
 
     -- payload, pc_audio, play_buffer, record_buffer
     { name = "pc_audio",                                 type = "void*",             count = ctx_lua.CMD_COUNT },

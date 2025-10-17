@@ -172,6 +172,7 @@ typedef struct war_lua_context {
     _Atomic int WR_STATUS_BAR_COLS_MAX;
     _Atomic int WR_TEXT_QUADS_MAX;
     _Atomic int WR_QUADS_MAX;
+    _Atomic char* WR_LEADER;
     // pool
     _Atomic int POOL_ALIGNMENT;
 } war_lua_context;

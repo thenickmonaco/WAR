@@ -218,24 +218,48 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
 
             if (strcmp(type, "uint8_t") == 0)
                 type_size = sizeof(uint8_t);
+            else if (strcmp(type, "uint16_t") == 0)
+                type_size = sizeof(uint16_t);
+            else if (strcmp(type, "uint32_t") == 0)
+                type_size = sizeof(uint32_t);
             else if (strcmp(type, "uint64_t") == 0)
                 type_size = sizeof(uint64_t);
             else if (strcmp(type, "int16_t") == 0)
                 type_size = sizeof(int16_t);
-            else if (strcmp(type, "int16_t*") == 0)
-                type_size = sizeof(int16_t*);
-            else if (strcmp(type, "float") == 0)
-                type_size = sizeof(float);
-            else if (strcmp(type, "uint32_t") == 0)
-                type_size = sizeof(uint32_t);
             else if (strcmp(type, "int32_t") == 0)
                 type_size = sizeof(int32_t);
+            else if (strcmp(type, "float") == 0)
+                type_size = sizeof(float);
             else if (strcmp(type, "void*") == 0)
                 type_size = sizeof(void*);
+            else if (strcmp(type, "char") == 0)
+                type_size = sizeof(char);
+            else if (strcmp(type, "char*") == 0)
+                type_size = sizeof(char*);
+
+            /* --- WR-specific structs --- */
+            else if (strcmp(type, "war_fsm_state") == 0)
+                type_size = sizeof(war_fsm_state);
+            else if (strcmp(type, "war_quad_vertex") == 0)
+                type_size = sizeof(war_quad_vertex);
+            else if (strcmp(type, "war_text_vertex") == 0)
+                type_size = sizeof(war_text_vertex);
             else if (strcmp(type, "war_audio_context") == 0)
                 type_size = sizeof(war_audio_context);
             else if (strcmp(type, "war_samples") == 0)
                 type_size = sizeof(war_samples);
+
+            /* --- Pointer variants (optional but useful if you define them in
+             * Lua) --- */
+            else if (strcmp(type, "uint8_t*") == 0)
+                type_size = sizeof(uint8_t*);
+            else if (strcmp(type, "uint16_t*") == 0)
+                type_size = sizeof(uint16_t*);
+            else if (strcmp(type, "uint32_t*") == 0)
+                type_size = sizeof(uint32_t*);
+            else if (strcmp(type, "void**") == 0)
+                type_size = sizeof(void**);
+
             else {
                 fprintf(stderr, "Unknown pool_wr type: %s\n", type);
                 type_size = 0;

@@ -78,7 +78,7 @@ ctx_lua = {
     POOL_ALIGNMENT = 256,
 }
 
-default_flags = {
+keymap_flags = {
     handle_release = 0,
     handle_repeat = 1,
     handle_timeout = 1,
@@ -1878,49 +1878,60 @@ keymap = {
     },
 }
 
+-- Preprocess keymap: replace <leader> with WR_LEADER
+local function preprocess_leader(keymap)
+    for _, entry in ipairs(keymap) do
+        if type(entry) == "table" and entry.sequences then
+            for i, seq in ipairs(entry.sequences) do
+                entry.sequences[i] = seq:gsub("<leader>", ctx_lua.WR_LEADER)
+            end
+        end
+    end
+end
+
+preprocess_leader(keymap)
+
+-- Extract individual keys from a sequence string (handles <...> tokens)
+local function parse_sequence(seq)
+    local keys = {}
+    local i = 1
+    while i <= #seq do
+        if seq:sub(i, i) == "<" then
+            local closing = seq:find(">", i)
+            if closing then
+                table.insert(keys, seq:sub(i, closing))
+                i = closing + 1
+            else
+                table.insert(keys, seq:sub(i, i))
+                i = i + 1
+            end
+        else
+            table.insert(keys, seq:sub(i, i))
+            i = i + 1
+        end
+    end
+    return keys
+end
+
 local function war_analyze_keymap(keymap)
-    print("# war_analyze_keymap")
-    local seen = { [""] = true } -- root node
+    local seen = { [""] = true }
     local total_states = 1
     local max_len = 0
-    print("keymap length:", #keymap)
 
-    for i, entry in ipairs(keymap) do
-        print("processing entry index:", i, "has sequences:", entry.sequences and #entry.sequences or 0)
-        if type(entry) == "table" and entry.sequences then
-            for j, seq in ipairs(entry.sequences) do
-                print("  sequence", j, ":", seq)
-                -- extract keys from sequence
-                local keys = {}
-                local k = 1
-                while k <= #seq do
-                    if seq:sub(k, k) == "<" then
-                        local closing = seq:find(">", k)
-                        if closing then
-                            table.insert(keys, seq:sub(k, closing))
-                            k = closing + 1
-                        else
-                            table.insert(keys, seq:sub(k, k))
-                            k = k + 1
-                        end
-                    else
-                        table.insert(keys, seq:sub(k, k))
-                        k = k + 1
-                    end
-                end
-                print("    keys extracted:", table.concat(keys, ", "))
-
-                -- build prefixes and count total states
+    for _, entry in ipairs(keymap) do
+        if entry.sequences then
+            for _, seq in ipairs(entry.sequences) do
+                -- replace <leader> in sequence
+                seq = seq:gsub("<leader>", ctx_lua.WR_LEADER)
+                local keys = parse_sequence(seq)
                 local prefix = ""
-                for _, key in ipairs(keys) do
-                    prefix = prefix .. key
+                for _, k in ipairs(keys) do
+                    prefix = prefix .. k
                     if not seen[prefix] then
                         seen[prefix] = true
                         total_states = total_states + 1
                     end
                 end
-
-                -- update max length
                 if #keys > max_len then
                     max_len = #keys
                 end
@@ -1928,19 +1939,43 @@ local function war_analyze_keymap(keymap)
         end
     end
 
-    -- fallback if total_states is too low
-    if #keymap > total_states then
-        total_states = #keymap * 3
-        print("total states is less than length, defaulting to length * 3")
-    end
-
-    print("total_states:", total_states, "Max len:", max_len)
-    print("# end war_analyze_keymap")
     return total_states, max_len
 end
 
--- usage:
 ctx_lua.WR_STATES, ctx_lua.WR_SEQUENCE_LENGTH_MAX = war_analyze_keymap(keymap)
+ctx_lua.WR_STATES = ctx_lua.WR_STATES * 2
+
+print("Total FSM states needed:", ctx_lua.WR_STATES)
+print("Max sequence length:", ctx_lua.WR_SEQUENCE_LENGTH_MAX)
+
+-- Flatten keymap with parsed keys and merged command flags
+local function war_flatten_keymap(keymap)
+    local flattened = {}
+    for _, entry in ipairs(keymap) do
+        if entry.sequences then
+            for _, seq in ipairs(entry.sequences) do
+                local keys = parse_sequence(seq)
+
+                local commands_with_flags = {}
+                for _, cmd in ipairs(entry.commands) do
+                    local merged = {
+                        cmd            = cmd.cmd,
+                        mode           = cmd.mode,
+                        handle_release = cmd.handle_release or keymap_flags.handle_release,
+                        handle_repeat  = cmd.handle_repeat or keymap_flags.handle_repeat,
+                        handle_timeout = cmd.handle_timeout or keymap_flags.handle_timeout,
+                    }
+                    table.insert(commands_with_flags, merged)
+                end
+
+                table.insert(flattened, { keys = keys, commands = commands_with_flags })
+            end
+        end
+    end
+    return flattened
+end
+
+war_flattened = war_flatten_keymap(keymap)
 
 pool_a = {
     -- Atoms
@@ -2021,55 +2056,36 @@ pool_wr = {
     { name = "views.top_row",                        type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
     { name = "views.warpoon_text",                   type = "char*",           count = ctx_lua.WR_VIEWS_SAVED },
     { name = "views.warpoon_text_rows",              type = "char",            count = ctx_lua.WR_VIEWS_SAVED * ctx_lua.WR_WARPOON_TEXT_COLS },
-    { name = "views.instance",                       type = "war_views",       count = 1 },
 
     ---------------------------------------------------------------------------
     -- FSM State Machine
     ---------------------------------------------------------------------------
     -- FSM root struct array
     { name = "fsm",                                  type = "war_fsm_state",   count = ctx_lua.WR_STATES },
-
-    -- Pointer arrays (each fsm[i].field = pointer)
-    { name = "fsm.is_terminal",                      type = "uint8_t*",        count = ctx_lua.WR_STATES },
-    { name = "fsm.is_prefix",                        type = "uint8_t*",        count = ctx_lua.WR_STATES },
-    { name = "fsm.handle_release",                   type = "uint8_t*",        count = ctx_lua.WR_STATES },
-    { name = "fsm.handle_repeat",                    type = "uint8_t*",        count = ctx_lua.WR_STATES },
-    { name = "fsm.handle_timeout",                   type = "uint8_t*",        count = ctx_lua.WR_STATES },
-    { name = "fsm.command",                          type = "void**",          count = ctx_lua.WR_STATES },
-    { name = "fsm.next_state",                       type = "uint16_t*",       count = ctx_lua.WR_STATES },
-
-    -- Actual per-state inner arrays (what each pointer points to)
-    { name = "fsm.is_terminal_rows",                 type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.is_prefix_rows",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_release_rows",              type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_repeat_rows",               type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_timeout_rows",              type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.command_rows",                     type = "void*",           count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.next_state_rows",                  type = "uint16_t",        count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "fsm.is_terminal",                      type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.is_prefix",                        type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_release",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_repeat",                    type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_timeout",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.command",                          type = "void*",           count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.next_state",                       type = "uint16_t",        count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
 
     ---------------------------------------------------------------------------
     -- Quads and Vertices
     ---------------------------------------------------------------------------
     { name = "note_quads_in_x",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads_in_x_count",                type = "uint32_t",        count = 1 },
 
     { name = "quad_vertices",                        type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
-    { name = "quad_vertices_count",                  type = "uint32_t",        count = 1 },
 
     { name = "quad_indices",                         type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
-    { name = "quad_indices_count",                   type = "uint32_t",        count = 1 },
 
     { name = "transparent_quad_vertices",            type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
-    { name = "transparent_quad_vertices_count",      type = "uint32_t",        count = 1 },
 
     { name = "transparent_quad_indices",             type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
-    { name = "transparent_quad_indices_count",       type = "uint32_t",        count = 1 },
 
     { name = "text_vertices",                        type = "war_text_vertex", count = ctx_lua.WR_TEXT_QUADS_MAX },
-    { name = "text_vertices_count",                  type = "uint32_t",        count = 1 },
 
     { name = "text_indices",                         type = "uint16_t",        count = ctx_lua.WR_TEXT_QUADS_MAX },
-    { name = "text_indices_count",                   type = "uint32_t",        count = 1 },
 
     ---------------------------------------------------------------------------
     -- Status Bar Text Buffers
@@ -2096,6 +2112,4 @@ pool_wr = {
     { name = "note_quads.voice",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.hidden",                    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.mute",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-
-    { name = "note_quads.count",                     type = "uint32_t",        count = 1 },
 }

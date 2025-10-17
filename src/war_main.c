@@ -145,7 +145,7 @@ void* war_window_render(void* args) {
     pool_wr->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     pool_wr->pool_size =
         war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/monaco/set.lua");
-    pool_wr->pool_size += pool_wr->pool_alignment * 25000;
+    pool_wr->pool_size += pool_wr->pool_alignment * 2000;
     call_carmack("pool_wr hack size: %zu", pool_wr->pool_size);
     pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
     int pool_result = posix_memalign(
@@ -554,74 +554,38 @@ reload_window_render:
                    (ctx_vk.cell_height * ctx_wr.min_zoom_scale));
     uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
 
-    // TODO CHANGE TO INDIVIDUAL  WAR_POOL_ALLOCS (have one posix memalign here)
-    // --- WAR_NOTE_QUADS ALLOCATION WITH 32-BYTE PER-ARRAY ALIGNMENT ---
-    size_t num_uint32_arrays = 12;
-    size_t num_uint64_arrays = 1;
-    size_t num_float_arrays = 2;
-    size_t padding_per_array = 31;
-    size_t note_quads_total_size =
-        num_uint32_arrays *
-            (sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX) +
-             padding_per_array) +
-        num_float_arrays *
-            (sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX) +
-             padding_per_array) +
-        num_uint64_arrays *
-            (sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX) +
-             padding_per_array);
-    void* note_quads_block = NULL;
-    int note_quads_res =
-        posix_memalign(&note_quads_block, 32, note_quads_total_size);
-    assert(note_quads_res == 0 && note_quads_block);
-    uint8_t* note_quads_p = (uint8_t*)note_quads_block;
+    // --- WAR_NOTE_QUADS ALLOCATION ---
     war_note_quads note_quads;
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.timestamp = (uint64_t*)note_quads_p;
-    note_quads_p += sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.row = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.sub_col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.sub_row = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.sub_cells_col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.cursor_width_whole_number = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.cursor_width_sub_col = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.cursor_width_sub_cells = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.color = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.outline_color = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.gain = (float*)note_quads_p;
-    note_quads_p += sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.voice = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.hidden = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    note_quads_p = ALIGN32(note_quads_p);
-    note_quads.mute = (uint32_t*)note_quads_p;
-    note_quads_p += sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    assert(note_quads_p <= (uint8_t*)note_quads_block + note_quads_total_size);
+    note_quads.timestamp = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.col = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.row = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.sub_col = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.sub_row = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.sub_cells_col = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.cursor_width_whole_number = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.cursor_width_sub_col = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.cursor_width_sub_cells = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.color = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.outline_color = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.gain = war_pool_alloc(
+        pool_wr, sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.voice = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.hidden = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.mute = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
     uint32_t note_quads_count = 0;
     uint32_t* note_quads_in_x = war_pool_alloc(
         pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
@@ -2900,1237 +2864,6 @@ reload_window_render:
                     xkb_keymap, XKB_MOD_NAME_CAPS); // Super/Meta
                 mod_num = xkb_keymap_mod_get_index(
                     xkb_keymap, XKB_MOD_NAME_NUM); // Super/Meta
-                war_key_event
-                    key_sequences[SEQUENCE_COUNT][MAX_SEQUENCE_LENGTH] = {
-                        {
-                            {.keysym = XKB_KEY_k, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_j, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_h, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_l, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_k, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_j, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_h, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_l, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_0, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_4, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_g, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_g, .mod = 0},
-                            {.keysym = XKB_KEY_g, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_1, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_2, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_3, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_4, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_5, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_6, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_7, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_8, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_9, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_equal, .mod = MOD_CTRL},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_MINUS, .mod = MOD_CTRL},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_equal,
-                             .mod = MOD_CTRL | MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_MINUS, .mod = MOD_CTRL | MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_0, .mod = MOD_CTRL},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_ESCAPE, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_f, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_t, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_x, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_t, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_f, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_g, .mod = 0},
-                            {.keysym = XKB_KEY_b, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_g, .mod = 0},
-                            {.keysym = XKB_KEY_t, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_g, .mod = 0},
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_s, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_z, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_RETURN, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_d, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_d, .mod = 0},
-                            {.keysym = XKB_KEY_o, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_d, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_w, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_d, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_h, .mod = 0},
-                            {.keysym = XKB_KEY_o, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_h, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_h, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_s, .mod = 0},
-                            {.keysym = XKB_KEY_o, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_s, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_s, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {.keysym = XKB_KEY_o, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_u, .mod = 0},
-                            {.keysym = XKB_KEY_o, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_u, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_v, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_u, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_g, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_t, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_n, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_s, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_m, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_y, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_z, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_q, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_e, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_1, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_2, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_3, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_4, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_5, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_6, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_7, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_8, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_9, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_0, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_1, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_2, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_3, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_4, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_5, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_6, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_7, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_8, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_9, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_0, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_d, .mod = 0},
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_k, .mod = MOD_ALT | MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_j, .mod = MOD_ALT | MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_h, .mod = MOD_ALT | MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_l, .mod = MOD_ALT | MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_d, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_x, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_w, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_w, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_e, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_e, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_b, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_UP, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_DOWN, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_LEFT, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_RIGHT, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_UP, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_DOWN, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_LEFT, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_RIGHT, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_u, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_d, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_a, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_a, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_ESCAPE, .mod = MOD_ALT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_a, .mod = MOD_ALT | MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_a, .mod = MOD_CTRL},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_TAB, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_h, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_w, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_s, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_w, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_u, .mod = 0},
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {.keysym = XKB_KEY_w, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_g, .mod = 0},
-                            {.keysym = XKB_KEY_a, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_TAB, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_v, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_k, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_j, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {.keysym = XKB_KEY_m, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_b, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_q, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_q, .mod = MOD_SHIFT},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_r, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_y, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_u, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_i, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_o, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_p, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_LEFTBRACKET, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_RIGHTBRACKET, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_MINUS, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_c, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SPACE, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = XKB_KEY_w, .mod = 0},
-                            {.keysym = KEYSYM_RETURN, .mod = 0},
-                            {0},
-                        },
-                        {
-                            {.keysym = KEYSYM_SEMICOLON, .mod = MOD_SHIFT},
-                            {0},
-                        }};
-                war_label key_labels[SEQUENCE_COUNT][MODE_COUNT] = {
-                    // MODE_NORMAL = 0,
-                    // MODE_VIEWS = 1,
-                    // MODE_VISUAL_LINE = 2,
-                    // MODE_RECORD = 3,
-                    // MODE_MIDI = 4,
-                    // MODE_COMMAND = 5,
-                    // MODE_VISUAL_BLOCK = 6,
-                    // MODE_INSERT = 7,
-                    // MODE_O = 8,
-                    // MODE_VISUAL = 9,
-                    // cmd, handle_release, handle_timeout, handle_repeat
-                    {
-                        {&&cmd_normal_k, 0, 1, 1},
-                        {&&cmd_views_k, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_k, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_j, 0, 1, 1},
-                        {&&cmd_views_j, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_j, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_h, 0, 1, 1},
-                        {&&cmd_views_h, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_l, 0, 1, 1},
-                        {&&cmd_views_l, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_midi_l, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_k, 0, 1, 1},
-                        {&&cmd_views_alt_k, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_j, 0, 1, 1},
-                        {&&cmd_views_alt_j, 0, 1, 1},
-                    },
-                    {{&&cmd_normal_alt_h, 0, 1, 1},
-                     {&&cmd_views_alt_h, 0, 1, 1}},
-                    {{&&cmd_normal_alt_l, 0, 1, 1},
-                     {&&cmd_views_alt_l, 0, 1, 1}},
-                    {{&&cmd_normal_0, 0, 1, 1},
-                     {NULL, 0, 1, 1},
-                     {NULL, 0, 1, 1},
-
-                     {&&cmd_record_0, 0, 1, 1}},
-                    {
-                        {&&cmd_normal_$, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_G, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_gg, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_1, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_1, 0, 1, 1},
-                        {&&cmd_midi_1, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_2, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_2, 0, 1, 1},
-                        {&&cmd_midi_2, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_3, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_3, 0, 1, 1},
-                        {&&cmd_midi_3, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_4, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_4, 0, 1, 1},
-                        {&&cmd_midi_4, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_5, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_5, 0, 1, 1},
-                        {&&cmd_midi_5, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_6, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_6, 0, 1, 1},
-                        {&&cmd_midi_6, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_7, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_7, 0, 1, 1},
-                        {&&cmd_midi_7, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_8, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_8, 0, 1, 1},
-                        {&&cmd_midi_8, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_9, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_9, 0, 1, 1},
-                        {&&cmd_midi_9, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_ctrl_equal, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_ctrl_minus, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_ctrl_alt_equal, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_ctrl_alt_minus, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_ctrl_0, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_esc, 0, 1, 1},
-                        {&&cmd_views_esc, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_esc, 0, 1, 1},
-                        {&&cmd_midi_esc, 0, 1, 1},
-                        {&&cmd_command_esc, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_f, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_t, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_t, 0, 1, 1},
-                        {&&cmd_midi_t, 1, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_x, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_midi_x, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_T, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_midi_T, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_F, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_gb, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_gt, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_gm, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_s, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_z, 0, 1, 1},
-                        {&&cmd_views_z, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_return, 0, 1, 1},
-                        {&&cmd_views_return, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacediv, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacedov, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacediw, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spaceda, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacehov, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacehiv, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spaceha, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacesov, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacesiv, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacesa, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacemov, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacemiv, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacema, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spaceuov, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spaceuiv, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spaceua, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacea, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_g, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_t, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_n, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_s, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_m, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_y, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_z, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_q, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_e, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_a, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space1, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space2, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space3, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space4, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space5, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space6, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space7, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space8, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space9, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_space0, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_1, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_2, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_3, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_4, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_5, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_6, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_7, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_8, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_9, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_0, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacedspacea, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_K, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_J, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_H, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_L, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_d, 0, 1, 1},
-                        {&&cmd_views_d, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_m, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_midi_m, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_X, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_w, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_w, 0, 1, 1},
-                        {&&cmd_midi_w, 1, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_W, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_e, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_e, 0, 1, 1},
-                        {&&cmd_midi_e, 1, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_E, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_b, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_midi_b, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_k, 0, 1, 1},
-                        {&&cmd_views_k, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_j, 0, 1, 1},
-                        {&&cmd_views_j, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_h, 0, 1, 1},
-                        {&&cmd_views_h, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_l, 0, 1, 1},
-                        {&&cmd_views_l, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_k, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_j, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_h, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_l, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_u, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_d, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_A, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_a, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_esc, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_alt_A, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_ctrl_a, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_tab, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_tab, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacehiw, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacesiw, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spaceuiw, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_ga, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_shift_tab, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_V, 0, 1, 1},
-                        {&&cmd_views_V, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_K, 0, 1, 1},
-                        {&&cmd_views_K, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_K, 0, 1, 1},
-                        {&&cmd_midi_K, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_J, 0, 1, 1},
-                        {&&cmd_views_J, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_J, 0, 1, 1},
-                        {&&cmd_midi_J, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_spacem, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_B, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_q, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_q, 0, 1, 1},
-                        {&&cmd_midi_q, 1, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_Q, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_Q, 0, 1, 1},
-                        {&&cmd_midi_Q, 0, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_r, 0, 1, 1},
-                        {&&cmd_midi_r, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_y, 0, 1, 1},
-                        {&&cmd_midi_y, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_u, 0, 1, 1},
-                        {&&cmd_midi_u, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_i, 0, 1, 1},
-                        {&&cmd_midi_i, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_o, 0, 1, 1},
-                        {&&cmd_midi_o, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_p, 0, 1, 1},
-                        {&&cmd_midi_p, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_leftbracket, 0, 1, 1},
-                        {&&cmd_midi_leftbracket, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_rightbracket, 0, 1, 1},
-                        {&&cmd_midi_rightbracket, 1, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_minus, 0, 1, 1},
-                        {&&cmd_midi_minus, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_void, 0, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_midi_c, 0, 1, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_record_space, 0, 0, 1},
-                        {&&cmd_midi_space, 0, 0, 1},
-                    },
-                    {
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {&&cmd_command_w, 0, 1, 1},
-                    },
-                    {
-                        {&&cmd_normal_colon, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                        {NULL, 0, 1, 1},
-                    },
-                };
                 //// default to void command if unset
                 // for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
                 //     for (size_t m = 0; m <
@@ -4140,101 +2873,953 @@ reload_window_render:
                 //         }
                 //     }
                 // }
-                size_t state_counter = 1; // root = 0
-                for (size_t seq_idx = 0; seq_idx < SEQUENCE_COUNT; seq_idx++) {
-                    size_t parent = 0; // start at root
+                {
+                    size_t state_counter = 1; // root = 0
 
-                    // compute sequence length
-                    size_t len = 0;
-                    while (len < MAX_SEQUENCE_LENGTH &&
-                           key_sequences[seq_idx][len].keysym != 0)
-                        len++;
+                    lua_State* L = luaL_newstate();
+                    luaL_openlibs(L);
 
-                    for (size_t key_idx = 0; key_idx < len; key_idx++) {
-                        war_key_event* ev = &key_sequences[seq_idx][key_idx];
-                        uint16_t next =
-                            fsm[parent]
-                                .next_state[ev->keysym *
-                                                atomic_load(
-                                                    &ctx_lua->WR_MOD_COUNT) +
-                                            ev->mod];
+                    if (luaL_dofile(L, "src/lua/monaco/set.lua") != LUA_OK) {
+                        call_carmack("Lua error: %s\n", lua_tostring(L, -1));
+                        lua_close(L);
+                        return 0;
+                    }
 
-                        if (next == 0) {
-                            next = state_counter++;
-                            fsm[parent]
-                                .next_state[ev->keysym *
-                                                atomic_load(
-                                                    &ctx_lua->WR_MOD_COUNT) +
-                                            ev->mod] = next;
+                    lua_getglobal(L, "war_flattened");
+                    if (!lua_istable(L, -1)) {
+                        lua_pop(L, 1);
+                        call_carmack(
+                            "war_flattened not found or not a table\n");
+                    } else {
+                        size_t n_sequences = lua_objlen(L, -1);
 
-                            // initialize all modes
-                            for (size_t m = 0;
-                                 m < atomic_load(&ctx_lua->WR_MODE_COUNT);
-                                 m++) {
-                                fsm[next].is_terminal[m] = false;
-                                fsm[next].is_prefix[m] = false;
-                                fsm[next].command[m] = NULL;
-                                fsm[next].handle_release[m] = 0;
-                                fsm[next].handle_timeout[m] = 0;
-                                fsm[next].handle_repeat[m] = 0;
-                            }
-                            memset(fsm[next].next_state,
-                                   0,
-                                   sizeof(uint16_t) *
-                                       atomic_load(&ctx_lua->WR_MOD_COUNT) *
-                                       atomic_load(&ctx_lua->WR_KEYSYM_COUNT));
-                        }
+                        for (size_t seq_idx = 1; seq_idx <= n_sequences;
+                             seq_idx++) {
+                            lua_rawgeti(L, -1, seq_idx); // flattened[seq_idx]
 
-                        // mark intermediate nodes as prefix only for modes that
-                        // have a command in this sequence
-                        if (key_idx != len - 1) {
-                            for (size_t m = 0;
-                                 m < atomic_load(&ctx_lua->WR_MODE_COUNT);
-                                 m++) {
-                                if (key_labels[seq_idx][m].command != NULL) {
-                                    fsm[next].is_prefix[m] = true;
+                            // --- get keys table ---
+                            lua_getfield(L, -1, "keys");
+                            size_t n_keys = lua_objlen(L, -1);
+
+                            size_t parent = 0; // start at root
+
+                            for (size_t key_idx = 1; key_idx <= n_keys;
+                                 key_idx++) {
+                                lua_rawgeti(L, -1, key_idx);
+                                const char* key = lua_tostring(L, -1);
+
+                                uint32_t keysym = 0;
+                                uint32_t mod = 0;
+
+                                // --- inline key parser (Neovim-style) ---
+                                if (key[0] == '<') {
+                                    const char* inner = key + 1;
+                                    size_t len = strlen(inner);
+                                    if (inner[len - 1] == '>') len--;
+
+                                    char buf[32];
+                                    if (len >= sizeof(buf))
+                                        len = sizeof(buf) - 1;
+                                    memcpy(buf, inner, len);
+                                    buf[len] = '\0';
+
+                                    call_carmack("Parsing special key: <%s>\n",
+                                                 buf);
+
+                                    // --- parse modifiers first ---
+                                    while (true) {
+                                        if (strncmp(buf, "C-", 2) == 0) {
+                                            mod |= MOD_CTRL;
+                                            memmove(buf,
+                                                    buf + 2,
+                                                    strlen(buf + 2) + 1);
+                                            call_carmack(
+                                                "Detected Ctrl modifier, "
+                                                "remaining: %s\n",
+                                                buf);
+                                        } else if (strncmp(buf, "A-", 2) == 0 ||
+                                                   strncmp(buf, "M-", 2) == 0) {
+                                            mod |= MOD_ALT;
+                                            memmove(buf,
+                                                    buf + 2,
+                                                    strlen(buf + 2) + 1);
+                                            call_carmack(
+                                                "Detected Alt modifier, "
+                                                "remaining: %s\n",
+                                                buf);
+                                        } else if (strncmp(buf, "S-", 2) == 0) {
+                                            mod |= MOD_SHIFT;
+                                            memmove(buf,
+                                                    buf + 2,
+                                                    strlen(buf + 2) + 1);
+                                            call_carmack(
+                                                "Detected Shift modifier, "
+                                                "remaining: %s\n",
+                                                buf);
+                                        } else {
+                                            break;
+                                        }
+                                    }
+
+                                    // --- Neovim-style special keys ---
+                                    if (strcmp(buf, "CR") == 0)
+                                        keysym = KEYSYM_RETURN;
+                                    else if (strcmp(buf, "Space") == 0)
+                                        keysym = KEYSYM_SPACE;
+                                    else if (strcmp(buf, "Tab") == 0)
+                                        keysym = KEYSYM_TAB;
+                                    else if (strcmp(buf, "Esc") == 0)
+                                        keysym = KEYSYM_ESCAPE;
+                                    else if (strcmp(buf, "BS") == 0 ||
+                                             strcmp(buf, "Backspace") == 0)
+                                        keysym = XKB_KEY_BackSpace;
+                                    else if (strcmp(buf, "Del") == 0)
+                                        keysym = XKB_KEY_Delete;
+                                    else if (strcmp(buf, "Up") == 0)
+                                        keysym = KEYSYM_UP;
+                                    else if (strcmp(buf, "Down") == 0)
+                                        keysym = KEYSYM_DOWN;
+                                    else if (strcmp(buf, "Left") == 0)
+                                        keysym = KEYSYM_LEFT;
+                                    else if (strcmp(buf, "Right") == 0)
+                                        keysym = KEYSYM_RIGHT;
+                                    else if (strlen(buf) == 1) {
+                                        char c = buf[0];
+                                        if (c >= 'A' && c <= 'Z') {
+                                            keysym =
+                                                (uint32_t)(c + ('a' - 'A'));
+                                            mod |= MOD_SHIFT;
+                                            call_carmack(
+                                                "Detected uppercase letter: %c "
+                                                "-> keysym %u + Shift\n",
+                                                c,
+                                                keysym);
+                                        } else {
+                                            keysym = (uint32_t)c;
+                                            call_carmack(
+                                                "Detected literal character: "
+                                                "%c -> keysym %u\n",
+                                                c,
+                                                keysym);
+                                        }
+                                    } else {
+                                        call_carmack("Unknown key name: <%s>\n",
+                                                     buf);
+                                        keysym = 0;
+                                    }
+
+                                } else {
+                                    // Handle single printable keys including
+                                    // shifted symbols
+                                    char c = key[0];
+
+                                    if (c >= 'A' && c <= 'Z') {
+                                        keysym = (uint32_t)(c + ('a' - 'A'));
+                                        mod |= MOD_SHIFT;
+                                        call_carmack(
+                                            "Uppercase literal key: %c -> "
+                                            "keysym %u + Shift\n",
+                                            c,
+                                            keysym);
+                                    } else if (c == ':') {
+                                        keysym = KEYSYM_SEMICOLON;
+                                        mod |= MOD_SHIFT;
+                                        call_carmack(
+                                            "Colon ':' -> KEYSYM_SEMICOLON\n");
+                                    } else if (c == '[') {
+                                        keysym = KEYSYM_LEFTBRACKET;
+                                    } else if (c == ']') {
+                                        keysym = KEYSYM_RIGHTBRACKET;
+                                    } else {
+                                        struct {
+                                            char sym;
+                                            char base;
+                                        } shift_map[] = {{'$', '4'},
+                                                         {'%', '5'},
+                                                         {'^', '6'},
+                                                         {'&', '7'},
+                                                         {'*', '8'},
+                                                         {'(', '9'},
+                                                         {')', '0'},
+                                                         {'_', '-'},
+                                                         {'+', '='},
+                                                         {'{', '['},
+                                                         {'}', ']'},
+                                                         {'"', '\''},
+                                                         {'<', ','},
+                                                         {'>', '.'},
+                                                         {'?', '/'},
+                                                         {'|', '\\'}};
+
+                                        int found = 0;
+                                        for (size_t i = 0;
+                                             i < sizeof(shift_map) /
+                                                     sizeof(shift_map[0]);
+                                             i++) {
+                                            if (c == shift_map[i].sym) {
+                                                keysym =
+                                                    (uint32_t)shift_map[i].base;
+                                                mod |= MOD_SHIFT;
+                                                found = 1;
+                                                call_carmack(
+                                                    "Shifted symbol: %c -> "
+                                                    "base %c + Shift\n",
+                                                    c,
+                                                    shift_map[i].base);
+                                                break;
+                                            }
+                                        }
+                                        if (!found) {
+                                            keysym = (uint32_t)c;
+                                            call_carmack("Literal key: %c -> "
+                                                         "keysym %u\n",
+                                                         c,
+                                                         keysym);
+                                        }
+                                    }
                                 }
+
+                                // --- FSM transition logic ---
+                                uint16_t next =
+                                    fsm[parent].next_state
+                                        [keysym * atomic_load(
+                                                      &ctx_lua->WR_MOD_COUNT) +
+                                         mod];
+
+                                // After FSM transition
+                                call_carmack("FSM: parent=%u keysym=%u mod=%u "
+                                             "-> next=%u",
+                                             parent,
+                                             keysym,
+                                             mod,
+                                             next);
+
+                                if (next == 0) {
+                                    next = state_counter++;
+                                    fsm[parent].next_state
+                                        [keysym * atomic_load(
+                                                      &ctx_lua->WR_MOD_COUNT) +
+                                         mod] = next;
+
+                                    for (size_t m = 0;
+                                         m <
+                                         atomic_load(&ctx_lua->WR_MODE_COUNT);
+                                         m++) {
+                                        fsm[next].is_terminal[m] = false;
+                                        fsm[next].is_prefix[m] = false;
+                                        fsm[next].command[m] = NULL;
+                                        fsm[next].handle_release[m] = 0;
+                                        fsm[next].handle_timeout[m] = 0;
+                                        fsm[next].handle_repeat[m] = 0;
+                                    }
+                                    memset(fsm[next].next_state,
+                                           0,
+                                           sizeof(uint16_t) *
+                                               atomic_load(
+                                                   &ctx_lua->WR_MOD_COUNT) *
+                                               atomic_load(
+                                                   &ctx_lua->WR_KEYSYM_COUNT));
+                                }
+
+                                parent = next;
+                                lua_pop(L, 1); // pop key string
                             }
-                        }
+                            lua_pop(L, 1); // pop keys table
 
-                        parent = next;
+                            // --- get commands table ---
+                            lua_getfield(L, -1, "commands");
+                            size_t n_cmds = lua_objlen(L, -1);
+
+                            for (size_t c = 1; c <= n_cmds; c++) {
+                                lua_rawgeti(L, -1, c);
+
+                                lua_getfield(L, -1, "cmd");
+                                const char* cmd_name = lua_tostring(L, -1);
+                                lua_pop(L, 1);
+
+                                lua_getfield(L, -1, "mode");
+                                const char* mode_name = lua_tostring(L, -1);
+                                lua_pop(L, 1);
+
+                                int mode_idx = -1;
+                                if (strcmp(mode_name, "normal") == 0)
+                                    mode_idx = MODE_NORMAL;
+                                else if (strcmp(mode_name, "views") == 0)
+                                    mode_idx = MODE_VIEWS;
+                                else if (strcmp(mode_name, "visual_line") == 0)
+                                    mode_idx = MODE_VISUAL_LINE;
+                                else if (strcmp(mode_name, "record") == 0)
+                                    mode_idx = MODE_RECORD;
+                                else if (strcmp(mode_name, "midi") == 0)
+                                    mode_idx = MODE_MIDI;
+                                else if (strcmp(mode_name, "command") == 0)
+                                    mode_idx = MODE_COMMAND;
+                                else if (strcmp(mode_name, "visual_block") == 0)
+                                    mode_idx = MODE_VISUAL_BLOCK;
+                                else if (strcmp(mode_name, "insert") == 0)
+                                    mode_idx = MODE_INSERT;
+                                else if (strcmp(mode_name, "o") == 0)
+                                    mode_idx = MODE_O;
+                                else if (strcmp(mode_name, "visual") == 0)
+                                    mode_idx = MODE_VISUAL;
+                                else {
+                                    call_carmack("Unknown mode: %s\n",
+                                                 mode_name);
+                                    lua_pop(L, 1);
+                                    continue;
+                                }
+                                fsm[parent].is_terminal[mode_idx] = true;
+
+                                void* cmd_ptr = NULL;
+                                if (strcmp(cmd_name, "cmd_normal_k") == 0) {
+                                    cmd_ptr = &&cmd_normal_k;
+                                } else if (strcmp(cmd_name, "cmd_views_k") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_k;
+                                } else if (strcmp(cmd_name, "cmd_record_k") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_k;
+                                } else if (strcmp(cmd_name, "cmd_normal_j") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_j;
+                                } else if (strcmp(cmd_name, "cmd_views_j") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_j;
+                                } else if (strcmp(cmd_name, "cmd_record_j") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_j;
+                                } else if (strcmp(cmd_name, "cmd_normal_h") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_h;
+                                } else if (strcmp(cmd_name, "cmd_views_h") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_h;
+                                } else if (strcmp(cmd_name, "cmd_normal_l") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_l;
+                                } else if (strcmp(cmd_name, "cmd_views_l") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_l;
+                                } else if (strcmp(cmd_name, "cmd_midi_l") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_l;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_k") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_k;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_k") == 0) {
+                                    cmd_ptr = &&cmd_views_alt_k;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_j") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_j;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_j") == 0) {
+                                    cmd_ptr = &&cmd_views_alt_j;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_h") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_h;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_h") == 0) {
+                                    cmd_ptr = &&cmd_views_alt_h;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_l") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_l;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_l") == 0) {
+                                    cmd_ptr = &&cmd_views_alt_l;
+                                } else if (strcmp(cmd_name, "cmd_normal_0") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_0;
+                                } else if (strcmp(cmd_name, "cmd_record_0") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_0;
+                                } else if (strcmp(cmd_name, "cmd_normal_$") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_$;
+                                } else if (strcmp(cmd_name, "cmd_normal_G") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_G;
+                                } else if (strcmp(cmd_name, "cmd_normal_gg") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_gg;
+                                } else if (strcmp(cmd_name, "cmd_normal_1") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_1;
+                                } else if (strcmp(cmd_name, "cmd_record_1") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_1;
+                                } else if (strcmp(cmd_name, "cmd_midi_1") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_1;
+                                } else if (strcmp(cmd_name, "cmd_normal_2") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_2;
+                                } else if (strcmp(cmd_name, "cmd_record_2") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_2;
+                                } else if (strcmp(cmd_name, "cmd_midi_2") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_2;
+                                } else if (strcmp(cmd_name, "cmd_normal_3") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_3;
+                                } else if (strcmp(cmd_name, "cmd_record_3") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_3;
+                                } else if (strcmp(cmd_name, "cmd_midi_3") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_3;
+                                } else if (strcmp(cmd_name, "cmd_normal_4") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_4;
+                                } else if (strcmp(cmd_name, "cmd_record_4") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_4;
+                                } else if (strcmp(cmd_name, "cmd_midi_4") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_4;
+                                } else if (strcmp(cmd_name, "cmd_normal_5") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_5;
+                                } else if (strcmp(cmd_name, "cmd_record_5") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_5;
+                                } else if (strcmp(cmd_name, "cmd_midi_5") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_5;
+                                } else if (strcmp(cmd_name, "cmd_normal_6") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_6;
+                                } else if (strcmp(cmd_name, "cmd_record_6") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_6;
+                                } else if (strcmp(cmd_name, "cmd_midi_6") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_6;
+                                } else if (strcmp(cmd_name, "cmd_normal_7") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_7;
+                                } else if (strcmp(cmd_name, "cmd_record_7") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_7;
+                                } else if (strcmp(cmd_name, "cmd_midi_7") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_7;
+                                } else if (strcmp(cmd_name, "cmd_normal_8") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_8;
+                                } else if (strcmp(cmd_name, "cmd_record_8") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_8;
+                                } else if (strcmp(cmd_name, "cmd_midi_8") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_8;
+                                } else if (strcmp(cmd_name, "cmd_normal_9") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_9;
+                                } else if (strcmp(cmd_name, "cmd_record_9") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_9;
+                                } else if (strcmp(cmd_name, "cmd_midi_9") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_9;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_equal") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_ctrl_equal;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_minus") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_ctrl_minus;
+                                } else if (strcmp(
+                                               cmd_name,
+                                               "cmd_normal_ctrl_alt_equal") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_ctrl_alt_equal;
+                                } else if (strcmp(
+                                               cmd_name,
+                                               "cmd_normal_ctrl_alt_minus") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_ctrl_alt_minus;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_0") == 0) {
+                                    cmd_ptr = &&cmd_normal_ctrl_0;
+                                } else if (strcmp(cmd_name, "cmd_normal_esc") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_esc;
+                                } else if (strcmp(cmd_name, "cmd_views_esc") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_esc;
+                                } else if (strcmp(cmd_name, "cmd_record_esc") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_esc;
+                                } else if (strcmp(cmd_name, "cmd_midi_esc") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_esc;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_command_esc") == 0) {
+                                    cmd_ptr = &&cmd_command_esc;
+                                } else if (strcmp(cmd_name, "cmd_normal_f") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_f;
+                                } else if (strcmp(cmd_name, "cmd_normal_t") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_t;
+                                } else if (strcmp(cmd_name, "cmd_record_t") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_t;
+                                } else if (strcmp(cmd_name, "cmd_midi_t") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_t;
+                                } else if (strcmp(cmd_name, "cmd_normal_x") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_x;
+                                } else if (strcmp(cmd_name, "cmd_midi_x") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_x;
+                                } else if (strcmp(cmd_name, "cmd_normal_T") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_T;
+                                } else if (strcmp(cmd_name, "cmd_midi_T") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_T;
+                                } else if (strcmp(cmd_name, "cmd_normal_F") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_F;
+                                } else if (strcmp(cmd_name, "cmd_normal_gb") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_gb;
+                                } else if (strcmp(cmd_name, "cmd_normal_gt") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_gt;
+                                } else if (strcmp(cmd_name, "cmd_normal_gm") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_gm;
+                                } else if (strcmp(cmd_name, "cmd_normal_s") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_s;
+                                } else if (strcmp(cmd_name, "cmd_normal_z") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_z;
+                                } else if (strcmp(cmd_name, "cmd_views_z") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_z;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_return") == 0) {
+                                    cmd_ptr = &&cmd_normal_return;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_return") == 0) {
+                                    cmd_ptr = &&cmd_views_return;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacediv") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacediv;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacedov") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacedov;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacediw") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacediw;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceda") == 0) {
+                                    cmd_ptr = &&cmd_normal_spaceda;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacehov") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacehov;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacehiv") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacehiv;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceha") == 0) {
+                                    cmd_ptr = &&cmd_normal_spaceha;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesov") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacesov;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesiv") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacesiv;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesa") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacesa;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacemov") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacemov;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacemiv") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacemiv;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacema") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacema;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceuov") == 0) {
+                                    cmd_ptr = &&cmd_normal_spaceuov;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceuiv") == 0) {
+                                    cmd_ptr = &&cmd_normal_spaceuiv;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceua") == 0) {
+                                    cmd_ptr = &&cmd_normal_spaceua;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacea") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacea;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_g") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_g;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_t") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_t;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_n") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_n;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_s") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_s;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_m") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_m;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_y") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_y;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_z") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_z;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_q") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_q;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_e") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_e;
+                                } else if (strcmp(cmd_name, "cmd_normal_a") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_a;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space1") == 0) {
+                                    cmd_ptr = &&cmd_normal_space1;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space2") == 0) {
+                                    cmd_ptr = &&cmd_normal_space2;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space3") == 0) {
+                                    cmd_ptr = &&cmd_normal_space3;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space4") == 0) {
+                                    cmd_ptr = &&cmd_normal_space4;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space5") == 0) {
+                                    cmd_ptr = &&cmd_normal_space5;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space6") == 0) {
+                                    cmd_ptr = &&cmd_normal_space6;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space7") == 0) {
+                                    cmd_ptr = &&cmd_normal_space7;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space8") == 0) {
+                                    cmd_ptr = &&cmd_normal_space8;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space9") == 0) {
+                                    cmd_ptr = &&cmd_normal_space9;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space0") == 0) {
+                                    cmd_ptr = &&cmd_normal_space0;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_1") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_1;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_2") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_2;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_3") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_3;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_4") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_4;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_5") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_5;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_6") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_6;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_7") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_7;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_8") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_8;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_9") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_9;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_0") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_0;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacedspacea") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_spacedspacea;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_K") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_K;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_J") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_J;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_H") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_H;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_L") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_L;
+                                } else if (strcmp(cmd_name, "cmd_normal_d") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_d;
+                                } else if (strcmp(cmd_name, "cmd_views_d") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_d;
+                                } else if (strcmp(cmd_name, "cmd_normal_m") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_m;
+                                } else if (strcmp(cmd_name, "cmd_midi_m") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_m;
+                                } else if (strcmp(cmd_name, "cmd_normal_X") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_X;
+                                } else if (strcmp(cmd_name, "cmd_normal_w") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_w;
+                                } else if (strcmp(cmd_name, "cmd_record_w") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_w;
+                                } else if (strcmp(cmd_name, "cmd_midi_w") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_w;
+                                } else if (strcmp(cmd_name, "cmd_normal_W") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_W;
+                                } else if (strcmp(cmd_name, "cmd_normal_e") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_e;
+                                } else if (strcmp(cmd_name, "cmd_record_e") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_e;
+                                } else if (strcmp(cmd_name, "cmd_midi_e") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_e;
+                                } else if (strcmp(cmd_name, "cmd_normal_E") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_E;
+                                } else if (strcmp(cmd_name, "cmd_normal_b") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_b;
+                                } else if (strcmp(cmd_name, "cmd_midi_b") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_b;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_u") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_u;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_d") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_d;
+                                } else if (strcmp(cmd_name, "cmd_normal_A") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_A;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_a") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_a;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_esc") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_esc;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_A") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_A;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_a") == 0) {
+                                    cmd_ptr = &&cmd_normal_ctrl_a;
+                                } else if (strcmp(cmd_name, "cmd_normal_tab") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_tab;
+                                } else if (strcmp(cmd_name, "cmd_record_tab") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_tab;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacehiw") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacehiw;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesiw") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacesiw;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceuiw") == 0) {
+                                    cmd_ptr = &&cmd_normal_spaceuiw;
+                                } else if (strcmp(cmd_name, "cmd_normal_ga") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_ga;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_shift_tab") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_shift_tab;
+                                } else if (strcmp(cmd_name, "cmd_normal_V") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_V;
+                                } else if (strcmp(cmd_name, "cmd_views_V") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_V;
+                                } else if (strcmp(cmd_name, "cmd_normal_K") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_K;
+                                } else if (strcmp(cmd_name, "cmd_views_K") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_K;
+                                } else if (strcmp(cmd_name, "cmd_record_K") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_K;
+                                } else if (strcmp(cmd_name, "cmd_midi_K") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_K;
+                                } else if (strcmp(cmd_name, "cmd_normal_J") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_J;
+                                } else if (strcmp(cmd_name, "cmd_views_J") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_views_J;
+                                } else if (strcmp(cmd_name, "cmd_record_J") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_J;
+                                } else if (strcmp(cmd_name, "cmd_midi_J") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_J;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacem") == 0) {
+                                    cmd_ptr = &&cmd_normal_spacem;
+                                } else if (strcmp(cmd_name, "cmd_normal_B") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_B;
+                                } else if (strcmp(cmd_name, "cmd_normal_q") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_q;
+                                } else if (strcmp(cmd_name, "cmd_record_q") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_q;
+                                } else if (strcmp(cmd_name, "cmd_midi_q") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_q;
+                                } else if (strcmp(cmd_name, "cmd_normal_Q") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_Q;
+                                } else if (strcmp(cmd_name, "cmd_record_Q") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_Q;
+                                } else if (strcmp(cmd_name, "cmd_midi_Q") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_Q;
+                                } else if (strcmp(cmd_name, "cmd_record_r") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_r;
+                                } else if (strcmp(cmd_name, "cmd_midi_r") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_r;
+                                } else if (strcmp(cmd_name, "cmd_record_y") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_y;
+                                } else if (strcmp(cmd_name, "cmd_midi_y") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_y;
+                                } else if (strcmp(cmd_name, "cmd_record_u") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_u;
+                                } else if (strcmp(cmd_name, "cmd_midi_u") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_u;
+                                } else if (strcmp(cmd_name, "cmd_record_i") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_i;
+                                } else if (strcmp(cmd_name, "cmd_midi_i") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_i;
+                                } else if (strcmp(cmd_name, "cmd_record_o") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_o;
+                                } else if (strcmp(cmd_name, "cmd_midi_o") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_o;
+                                } else if (strcmp(cmd_name, "cmd_record_p") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_p;
+                                } else if (strcmp(cmd_name, "cmd_midi_p") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_p;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_leftbracket") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_leftbracket;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_leftbracket") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_leftbracket;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_rightbracket") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_record_rightbracket;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_rightbracket") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_rightbracket;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_minus") == 0) {
+                                    cmd_ptr = &&cmd_record_minus;
+                                } else if (strcmp(cmd_name, "cmd_midi_minus") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_minus;
+                                } else if (strcmp(cmd_name, "cmd_void") == 0) {
+                                    cmd_ptr = &&cmd_void;
+                                } else if (strcmp(cmd_name, "cmd_midi_c") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_c;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_space") == 0) {
+                                    cmd_ptr = &&cmd_record_space;
+                                } else if (strcmp(cmd_name, "cmd_midi_space") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_midi_space;
+                                } else if (strcmp(cmd_name, "cmd_command_w") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_command_w;
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_colon") == 0) {
+                                    cmd_ptr = &&cmd_normal_colon;
+                                } else {
+                                    call_carmack("unknown command: %s",
+                                                 cmd_name);
+                                }
+                                fsm[parent].command[mode_idx] = cmd_ptr;
+
+                                lua_getfield(L, -1, "handle_release");
+                                if (lua_isnumber(L, -1))
+                                    fsm[parent].handle_release[mode_idx] =
+                                        (uint8_t)lua_tointeger(L, -1);
+                                lua_pop(L, 1);
+
+                                lua_getfield(L, -1, "handle_timeout");
+                                if (lua_isnumber(L, -1))
+                                    fsm[parent].handle_timeout[mode_idx] =
+                                        (uint8_t)lua_tointeger(L, -1);
+                                lua_pop(L, 1);
+
+                                lua_getfield(L, -1, "handle_repeat");
+                                if (lua_isnumber(L, -1))
+                                    fsm[parent].handle_repeat[mode_idx] =
+                                        (uint8_t)lua_tointeger(L, -1);
+                                lua_pop(L, 1);
+
+                                lua_pop(L, 1); // pop command table
+                            }
+                            lua_pop(L, 1); // pop commands table
+                            lua_pop(L, 1); // pop sequence table
+                        }
+                        lua_pop(L, 1); // pop war_flattened
                     }
 
-                    // terminal node
-                    for (size_t m = 0; m < atomic_load(&ctx_lua->WR_MODE_COUNT);
-                         m++) {
-                        if (key_labels[seq_idx][m].command != NULL) {
-                            fsm[parent].is_terminal[m] = true;
-                            fsm[parent].command[m] =
-                                key_labels[seq_idx][m].command;
-                            fsm[parent].handle_release[m] =
-                                key_labels[seq_idx][m].handle_release;
-                            fsm[parent].handle_timeout[m] =
-                                key_labels[seq_idx][m].handle_timeout;
-                            fsm[parent].handle_repeat[m] =
-                                key_labels[seq_idx][m].handle_repeat;
-                        } else {
-                            fsm[parent].is_terminal[m] = false;
-                            fsm[parent].command[m] = NULL;
-                            fsm[parent].handle_release[m] = 0;
-                            fsm[parent].handle_timeout[m] = 0;
-                            fsm[parent].handle_repeat[m] = 0;
-                        }
+                    assert(state_counter < atomic_load(&ctx_lua->WR_STATES));
 
-                        // debug print for command mode
-                        if (m == MODE_COMMAND) {
-                            // call_carmack("Assigned terminal node for "
-                            //              "seq_idx=%zu mode=%zu: "
-                            //              "terminal=%d, prefix=%d,
-                            //              command=%p", seq_idx, m,
-                            //              fsm[parent].is_terminal[m],
-                            //              fsm[parent].is_prefix[m],
-                            //              fsm[parent].command[m]);
-                        }
-                    }
+                    lua_close(L);
                 }
-
-                assert(state_counter < atomic_load(&ctx_lua->WR_STATES));
                 munmap(keymap_map, keymap_size);
                 close(keymap_fd);
                 xkb_keymap_unref(xkb_keymap);

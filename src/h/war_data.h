@@ -298,6 +298,7 @@ enum war_audio {
     AUDIO_CMD_MIDI_RECORD_MAP = 18,
     AUDIO_CMD_SAVE = 19,
     AUDIO_CMD_REMOVE_NOTE = 20,
+    AUDIO_CMD_REMOVE_ALL_NOTES = 21,
     // cmd sizes (not including header)
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,

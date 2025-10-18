@@ -1313,9 +1313,9 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     (*indices_count) += 6;
 }
 
-static inline float war_cursor_pos_x(war_window_render_context* ctx_wr) {
+static inline double war_cursor_pos_x(war_window_render_context* ctx_wr) {
     return ctx_wr->col +
-           (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+           (double)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
 }
 
 static inline float war_cursor_span_x(war_window_render_context* ctx_wr) {

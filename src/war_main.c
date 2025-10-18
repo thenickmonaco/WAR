@@ -5090,27 +5090,29 @@ reload_window_render:
             cmd_normal_return:
             cmd_normal_z: {
                 call_carmack("cmd_normal_z");
+                double d_start_sec =
+                    (double)(ctx_wr.col + (float)ctx_wr.sub_col /
+                                              ctx_wr.navigation_sub_cells_col) *
+                    ((60.0 / ctx_a.BPM) / 4.0);
                 uint64_t start_frames =
-                    (uint64_t)((ctx_wr.col +
-                                (float)ctx_wr.sub_col /
-                                    ctx_wr.navigation_sub_cells_col) *
-                               ((60.0f / ctx_a.BPM) / 4.0f) *
-                               ctx_a.sample_rate);
+                    (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
+                double sub_width = ctx_wr.cursor_width_sub_col;
+                if (sub_width >= ctx_wr.cursor_width_sub_cells)
+                    sub_width = ctx_wr.cursor_width_sub_cells - 1;
+                double d_duration_sec =
+                    ((60.0 / ctx_a.BPM) / 4.0) *
+                    ((double)ctx_wr.cursor_width_whole_number +
+                     sub_width / ctx_wr.cursor_width_sub_cells);
                 uint64_t duration_frames =
-                    (uint64_t)((60.0f / ctx_a.BPM) *
-                               ((float)ctx_wr.cursor_width_whole_number +
-                                (float)ctx_wr.cursor_width_sub_col /
-                                    ctx_wr.cursor_width_sub_cells) *
-                               ctx_a.sample_rate);
-                war_note_msg note_msg = (war_note_msg){
-                    .note_start_frames = start_frames,
-                    .note_duration_frames = duration_frames,
-                    .note_sample_index = ctx_wr.row,
-                    .note_gain = 1.0f,
-                    .note_attack = 0.0f,
-                    .note_sustain = 1.0f,
-                    .note_release = 0.0f,
-                };
+                    (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
+                war_note_msg note_msg = {.note_start_frames = start_frames,
+                                         .note_duration_frames =
+                                             duration_frames,
+                                         .note_sample_index = ctx_wr.row,
+                                         .note_gain = 1.0f,
+                                         .note_attack = 0.0f,
+                                         .note_sustain = 1.0f,
+                                         .note_release = 0.0f};
                 if (ctx_wr.numeric_prefix) {
                     for (uint32_t i = 0; i < ctx_wr.numeric_prefix; i++) {
                         war_note_quads_add(&note_quads,
@@ -5226,35 +5228,49 @@ reload_window_render:
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
+
                 for (int32_t i = (int32_t)note_quads_in_x_count - 1;
                      i >= (int32_t)note_quads_in_x_count - 1 -
                               (int32_t)ctx_wr.numeric_prefix;
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
-                    war_note_quads_delete_at_i(
-                        &note_quads, &note_quads_count, pc, i_delete);
+                    double d_start_sec =
+                        (double)note_quads.col[i_delete] +
+                        (double)note_quads.sub_col[i_delete] /
+                            (double)note_quads.sub_cells_col[i_delete];
+                    d_start_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
                     uint64_t start_frames =
-                        (uint64_t)((note_quads.col[i_delete] +
-                                    (float)note_quads.sub_col[i_delete] /
-                                        note_quads.sub_cells_col[i_delete]) *
-                                   ((60.0f / ctx_a.BPM) / 4.0f) *
-                                   ctx_a.sample_rate);
+                        (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
+                    double sub_width =
+                        note_quads.cursor_width_sub_col[i_delete];
+                    if (sub_width >=
+                        note_quads.cursor_width_sub_cells[i_delete])
+                        sub_width =
+                            note_quads.cursor_width_sub_cells[i_delete] - 1;
+                    double d_duration_sec =
+                        ((60.0 / ctx_a.BPM) / 4.0) *
+                        ((double)
+                             note_quads.cursor_width_whole_number[i_delete] +
+                         sub_width /
+                             note_quads.cursor_width_sub_cells[i_delete]);
                     uint64_t duration_frames =
-                        ((float)note_quads.cursor_width_whole_number[i_delete] *
-                         note_quads.cursor_width_sub_col[i_delete] /
-                         note_quads.cursor_width_sub_cells[i_delete]) -
-                        start_frames;
+                        (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
                     war_note_msg note_msg = (war_note_msg){
                         .note_start_frames = start_frames,
                         .note_duration_frames = duration_frames,
                         .note_sample_index = note_quads.row[i_delete],
                     };
+                    call_carmack("note_msg start: %llu",
+                                 note_msg.note_start_frames);
                     war_pc_to_a(pc,
                                 AUDIO_CMD_REMOVE_NOTE,
                                 sizeof(war_note_msg),
                                 &note_msg);
+                    war_note_quads_delete_at_i(
+                        &note_quads, &note_quads_count, pc, i_delete);
                 }
+
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5272,6 +5288,31 @@ reload_window_render:
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
+                    double d_start_sec =
+                        (double)note_quads.col[i_delete] +
+                        (double)note_quads.sub_col[i_delete] /
+                            (double)note_quads.sub_cells_col[i_delete];
+                    d_start_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
+                    uint64_t start_frames =
+                        (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
+                    double d_duration_sec =
+                        (double)note_quads.cursor_width_whole_number[i_delete] +
+                        (double)note_quads.cursor_width_sub_col[i_delete] /
+                            (double)note_quads.cursor_width_sub_cells[i_delete];
+                    d_duration_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
+                    uint64_t duration_frames =
+                        (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
+                    war_note_msg note_msg = (war_note_msg){
+                        .note_start_frames = start_frames,
+                        .note_duration_frames = duration_frames,
+                        .note_sample_index = note_quads.row[i_delete],
+                    };
+                    call_carmack("note_msg start: %llu",
+                                 note_msg.note_start_frames);
+                    war_pc_to_a(pc,
+                                AUDIO_CMD_REMOVE_NOTE,
+                                sizeof(war_note_msg),
+                                &note_msg);
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
                 }
@@ -5291,6 +5332,31 @@ reload_window_render:
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
+                    double d_start_sec =
+                        (double)note_quads.col[i_delete] +
+                        (double)note_quads.sub_col[i_delete] /
+                            (double)note_quads.sub_cells_col[i_delete];
+                    d_start_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
+                    uint64_t start_frames =
+                        (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
+                    double d_duration_sec =
+                        (double)note_quads.cursor_width_whole_number[i_delete] +
+                        (double)note_quads.cursor_width_sub_col[i_delete] /
+                            (double)note_quads.cursor_width_sub_cells[i_delete];
+                    d_duration_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
+                    uint64_t duration_frames =
+                        (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
+                    war_note_msg note_msg = (war_note_msg){
+                        .note_start_frames = start_frames,
+                        .note_duration_frames = duration_frames,
+                        .note_sample_index = note_quads.row[i_delete],
+                    };
+                    call_carmack("note_msg start: %llu",
+                                 note_msg.note_start_frames);
+                    war_pc_to_a(pc,
+                                AUDIO_CMD_REMOVE_NOTE,
+                                sizeof(war_note_msg),
+                                &note_msg);
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
                 }
@@ -5330,6 +5396,7 @@ reload_window_render:
             cmd_normal_spaceda:
                 call_carmack("cmd_normal_spaceda");
                 note_quads_count = 0;
+                war_pc_to_a(pc, AUDIO_CMD_REMOVE_ALL_NOTES, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5782,11 +5849,11 @@ reload_window_render:
             }
             cmd_normal_alt_a: {
                 call_carmack("cmd_normal_alt_a");
-                uint64_t seek_viewport = (uint64_t)((
-                    float)(ctx_wr.left_col * ((60.0f / ctx_a.BPM) / 4.0f) *
-                           ctx_a.sample_rate));
-                war_pc_to_a(
-                    pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_viewport);
+                double d_seek_sec =
+                    (double)ctx_wr.left_col * ((60.0 / ctx_a.BPM) / 4.0);
+                uint64_t seek_frames =
+                    (uint64_t)llround(d_seek_sec * ctx_a.sample_rate);
+                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_frames);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5794,10 +5861,11 @@ reload_window_render:
             }
             cmd_normal_alt_A: {
                 call_carmack("cmd_normal_alt_A");
-                uint64_t seek = (uint64_t)((
-                    float)(war_cursor_pos_x(&ctx_wr) *
-                           ((60.0f / ctx_a.BPM) / 4.0f) * ctx_a.sample_rate));
-                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek);
+                double d_seek_sec = (double)war_cursor_pos_x(&ctx_wr) *
+                                    ((60.0 / ctx_a.BPM) / 4.0);
+                uint64_t seek_frames =
+                    (uint64_t)llround(d_seek_sec * ctx_a.sample_rate);
+                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_frames);
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5806,10 +5874,12 @@ reload_window_render:
             cmd_normal_A: {
                 call_carmack("cmd_normal_A");
                 if (ctx_wr.numeric_prefix) {
-                    uint64_t seek = (uint64_t)((float)ctx_wr.numeric_prefix *
-                                               ((60.0f / ctx_a.BPM) / 4.0f) *
-                                               ctx_a.sample_rate);
-                    war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek);
+                    double d_seek_sec = (double)ctx_wr.numeric_prefix *
+                                        ((60.0 / ctx_a.BPM) / 4.0);
+                    uint64_t seek_frames =
+                        (uint64_t)llround(d_seek_sec * ctx_a.sample_rate);
+                    war_pc_to_a(
+                        pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_frames);
                 }
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -8535,10 +8605,8 @@ static void war_play(void* userdata) {
     int32_t* record_samples_notes_indices = data[6];
     war_lua_context* ctx_lua = data[7];
     war_notes* notes = data[8];
-
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->play_stream);
     if (!b) return;
-
     struct spa_buffer* buf = b->buffer;
     if (!buf || !buf->datas[0].data) {
         if (buf && buf->datas[0].maxsize > 0) {
@@ -8553,85 +8621,111 @@ static void war_play(void* userdata) {
         pw_stream_queue_buffer(ctx_a->play_stream, b);
         return;
     }
-
     int16_t* dst = (int16_t*)buf->datas[0].data;
     size_t stride = sizeof(int16_t) * ctx_a->channel_count;
     uint32_t n_frames = buf->datas[0].maxsize / stride;
     if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
     memset(dst, 0, n_frames * stride);
-
     float gain = atomic_load(&atomics->play_gain);
     uint64_t global_frame = atomic_load(&atomics->play_clock);
     uint8_t midi_record = atomic_load(&atomics->midi_record);
     uint8_t play = atomic_load(&atomics->play);
-
     if (play && notes && notes->notes_count > 0) {
-        call_carmack("hi");
         uint64_t frame_start = atomic_load(&atomics->play_frames);
         uint64_t frame_end = frame_start + n_frames;
         float master_gain = atomic_load(&atomics->play_gain);
-
+        uint32_t A_NOTE_COUNT = atomic_load(&ctx_lua->A_NOTE_COUNT);
+        uint32_t A_SAMPLES_PER_NOTE = atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE);
+        uint8_t loop_note_global = atomic_load(&atomics->loop);
         for (uint32_t i = 0; i < notes->notes_count; i++) {
-            uint64_t note_start = notes->notes_start_frames[i];
-            uint64_t note_duration = notes->notes_duration_frames[i];
-            uint64_t note_end = note_start + notes->notes_duration_frames[i];
-            call_carmack("play_frames=%llu note_start=%llu note_end=%llu",
-                         frame_start,
-                         note_start,
-                         note_end);
-
-            // If this buffer does not overlap with the note, skip
-            if (frame_end < note_start || frame_start >= note_end) continue;
-
-            uint32_t sample_index = notes->notes_sample_index[i];
+            // --- Convert start/duration to frames using double precision
+            double d_note_start_sec =
+                (double)notes->notes_start_frames[i] / ctx_a->sample_rate;
+            double d_note_duration_sec =
+                (double)notes->notes_duration_frames[i] / ctx_a->sample_rate;
+            uint64_t note_start =
+                (uint64_t)llround(d_note_start_sec * ctx_a->sample_rate);
+            uint64_t note_duration =
+                (uint64_t)llround(d_note_duration_sec * ctx_a->sample_rate);
+            uint64_t note_end = note_start + note_duration; // exclusive
+            // --- Skip notes outside current buffer
+            if (note_start >= frame_end || note_end <= frame_start) continue;
+            uint32_t map_note = notes->notes_sample_index[i];
+            if (map_note >= A_NOTE_COUNT) continue;
+            uint32_t sample_count = samples->samples_count[map_note];
+            if (sample_count == 0) continue;
             float note_gain = notes->notes_gain[i];
             float note_attack = notes->notes_attack[i];
             float note_sustain = notes->notes_sustain[i];
             float note_release = notes->notes_release[i];
+            for (uint32_t s = 0; s < sample_count; s++) {
+                uint32_t samples_i = map_note * A_SAMPLES_PER_NOTE + s;
+                int16_t* sample_ptr = samples->samples[samples_i];
+                if (!sample_ptr || !samples->samples_active[samples_i])
+                    continue;
+                uint64_t sample_start =
+                    samples->samples_frames_start[samples_i];
+                uint64_t sample_duration =
+                    samples->samples_frames_duration[samples_i];
+                uint64_t sample_trim_start =
+                    samples->samples_frames_trim_start[samples_i];
+                uint64_t sample_trim_end =
+                    samples->samples_frames_trim_end[samples_i];
+                if (sample_duration == 0) continue;
+                // --- Per-frame mixing
+                for (uint32_t f = 0; f < n_frames; f++) {
+                    uint64_t global_pos = frame_start + f;
+                    // Must fall inside note bounds
+                    if (global_pos < note_start || global_pos >= note_end)
+                        continue;
+                    uint64_t note_frame = global_pos - note_start;
+                    if (loop_note_global && note_duration > 0)
+                        note_frame %= note_duration;
+                    // Clip to sample duration minus trim
+                    uint64_t max_frame = SPA_MIN(
+                        note_duration, sample_duration - sample_trim_end);
+                    if (note_frame >= max_frame) continue;
+                    uint64_t sample_phase =
+                        note_frame - sample_start + sample_trim_start;
+                    if (sample_phase >= sample_duration) continue;
+                    // --- ADSR envelope
+                    float env = 1.0f;
+                    if (note_frame < note_attack) {
+                        env = (float)note_frame / note_attack;
+                    } else if (note_frame >= note_duration - note_release) {
+                        uint64_t rel_start = (note_duration > note_release) ?
+                                                 note_duration - note_release :
+                                                 0;
+                        env = 1.0f -
+                              (float)(note_frame - rel_start) / note_release;
+                        if (env < 0.0f) env = 0.0f;
+                    } else {
+                        env = note_sustain;
+                    }
+                    // --- Per-channel mixing
+                    for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
+                        uint64_t src_idx =
+                            sample_phase * ctx_a->channel_count + c;
+                        uint64_t dst_idx = f * ctx_a->channel_count + c;
+                        float src_f = (float)sample_ptr[src_idx] / 32767.0f;
+                        float out_f = src_f * env * note_gain * master_gain;
 
-            int16_t* sample_ptr = samples->samples[sample_index];
-            if (!sample_ptr) continue;
-
-            uint64_t sample_duration =
-                samples->samples_frames_duration[sample_index];
-            uint64_t overlap_start =
-                (frame_start > note_start) ? (frame_start - note_start) : 0;
-            uint64_t note_play_offset = overlap_start;
-
-            // For each frame in this buffer
-            for (uint32_t f = 0; f < n_frames; f++) {
-                uint64_t global_pos = frame_start + f;
-                if (global_pos < note_start || global_pos >= note_end) continue;
-
-                uint64_t sample_pos = note_play_offset + f;
-                if (sample_pos >= sample_duration) continue;
-
-                // Apply simple ADSR envelope if desired
-                float env = 1.0f;
-                uint64_t note_frame = global_pos - note_start;
-                if (note_frame < note_attack) {
-                    env = (float)note_frame / (float)note_attack;
-                } else if (note_frame > note_duration - note_release) {
-                    uint64_t rel_start = note_duration - note_release;
-                    env = 1.0f -
-                          (float)(note_frame - rel_start) / (float)note_release;
-                } else {
-                    env = note_sustain;
-                }
-
-                for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
-                    uint64_t src_idx = sample_pos * ctx_a->channel_count + c;
-                    uint64_t dst_idx = f * ctx_a->channel_count + c;
-
-                    int32_t mixed =
-                        dst[dst_idx] + (int32_t)(sample_ptr[src_idx] *
-                                                 master_gain * note_gain * env);
-
-                    if (mixed > 32767) mixed = 32767;
-                    if (mixed < -32768) mixed = -32768;
-                    dst[dst_idx] = (int16_t)mixed;
+                        int32_t mixed =
+                            dst[dst_idx] + (int32_t)(out_f * 32767.0f);
+                        if (mixed > 32767) mixed = 32767;
+                        if (mixed < -32768) mixed = -32768;
+                        dst[dst_idx] = (int16_t)mixed;
+                    }
                 }
             }
+
+            call_carmack("MIXED piano-roll note[%u] map_note=%u samples=%u "
+                         "start=%" PRIu64 " dur=%" PRIu64,
+                         i,
+                         map_note,
+                         sample_count,
+                         note_start,
+                         note_duration);
         }
     }
 
@@ -9304,6 +9398,7 @@ reload_audio:
     pc_audio[AUDIO_CMD_MIDI_RECORD_WAIT] = &&pc_midi_record_wait;
     pc_audio[AUDIO_CMD_SAVE] = &&pc_save;
     pc_audio[AUDIO_CMD_REMOVE_NOTE] = &&pc_remove_note;
+    pc_audio[AUDIO_CMD_REMOVE_ALL_NOTES] = &&pc_remove_all_notes;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -9351,31 +9446,22 @@ pc_add_note: {
 }
 pc_remove_note: {
     call_carmack("from wr: remove_note");
-
     war_note_msg note_msg;
     memcpy(&note_msg, payload, size);
-
-    call_carmack("Removing note start=%llu dur=%llu sample=%u",
-                 note_msg.note_start_frames,
-                 note_msg.note_duration_frames,
-                 note_msg.note_sample_index);
-
     uint32_t* count = &notes->notes_count;
     if (*count == 0) goto pc_audio_done;
-
     uint64_t target_start = note_msg.note_start_frames;
     uint64_t target_duration = note_msg.note_duration_frames;
     uint32_t target_sample = note_msg.note_sample_index;
-
-    // Iterate backward so newer notes get removed first
+    call_carmack("Trying to remove note: start=%llu dur=%llu sample=%u",
+                 target_start,
+                 target_duration,
+                 target_sample);
     for (int32_t i = (int32_t)(*count) - 1; i >= 0; i--) {
         if (notes->notes_start_frames[i] == target_start &&
             notes->notes_duration_frames[i] == target_duration &&
             notes->notes_sample_index[i] == target_sample) {
-
             uint32_t last = *count - 1;
-
-            // Swap-back if not already the last element
             if ((uint32_t)i != last) {
                 notes->notes_start_frames[i] = notes->notes_start_frames[last];
                 notes->notes_duration_frames[i] =
@@ -9386,13 +9472,19 @@ pc_remove_note: {
                 notes->notes_sustain[i] = notes->notes_sustain[last];
                 notes->notes_release[i] = notes->notes_release[last];
             }
-
-            (*count)--; // logically remove
+            (*count)--;
             call_carmack(
-                "Removed note at idx=%d, new notes_count=%u", i, *count);
+                "Removed note at idx=%d (target index), new notes_count=%u",
+                i,
+                *count);
             break;
         }
     }
+    goto pc_audio_done;
+}
+pc_remove_all_notes: {
+    call_carmack("from wr: remove_all_notes");
+    notes->notes_count = 0;
     goto pc_audio_done;
 }
 pc_end_war:

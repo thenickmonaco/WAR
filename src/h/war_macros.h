@@ -313,7 +313,11 @@ static inline void war_get_top_text(war_window_render_context* ctx_wr) {
     ctx_wr->text_top_status_bar_count += sizeof("projects/test.war");
     char tmp[MAX_STATUS_BAR_COLS];
     memset(tmp, 0, MAX_STATUS_BAR_COLS);
-    snprintf(tmp, MAX_STATUS_BAR_COLS, "%u,%u", ctx_wr->row, ctx_wr->col);
+    snprintf(tmp,
+             MAX_STATUS_BAR_COLS,
+             "%.0f,%.0f",
+             ctx_wr->cursor_pos_y,
+             ctx_wr->cursor_pos_x);
     memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
            tmp,
            sizeof(ctx_wr->text_top_status_bar));
@@ -1314,7 +1318,7 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
 }
 
 static inline double war_cursor_pos_x(war_window_render_context* ctx_wr) {
-    return ctx_wr->col +
+    return ctx_wr->cursor_pos_x +
            (double)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
 }
 
@@ -1354,8 +1358,8 @@ static inline void war_note_quads_add(war_note_quads* note_quads,
                                       uint32_t mute) {
     assert(*note_quads_count < max_note_quads);
     note_quads->timestamp[*note_quads_count] = ctx_wr->now;
-    note_quads->col[*note_quads_count] = ctx_wr->col;
-    note_quads->row[*note_quads_count] = ctx_wr->row;
+    note_quads->col[*note_quads_count] = ctx_wr->cursor_pos_x;
+    note_quads->row[*note_quads_count] = ctx_wr->cursor_pos_y;
     note_quads->sub_col[*note_quads_count] = ctx_wr->sub_col;
     note_quads->sub_cells_col[*note_quads_count] =
         ctx_wr->navigation_sub_cells_col;
@@ -1387,8 +1391,8 @@ static inline void war_note_quads_delete(war_note_quads* note_quads,
     int32_t freshest_index = -1;
 
     for (uint32_t i = 0; i < *note_quads_count; i++) {
-        if (note_quads->col[i] == ctx_wr->col &&
-            note_quads->row[i] == ctx_wr->row &&
+        if (note_quads->col[i] == ctx_wr->cursor_pos_x &&
+            note_quads->row[i] == ctx_wr->cursor_pos_y &&
             note_quads->timestamp[i] > freshest_time) {
             freshest_time = note_quads->timestamp[i];
             freshest_index = i;
@@ -1611,9 +1615,9 @@ war_note_quads_trim_right_at_i(war_note_quads* note_quads,
                                war_producer_consumer* pc,
                                uint32_t i_trim) {
     if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
-
     float cursor_pos_x =
-        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+        ctx_wr->cursor_pos_x +
+        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
     float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
                           ctx_wr->cursor_width_sub_col /
                           ctx_wr->cursor_width_sub_cells;
@@ -1684,7 +1688,8 @@ war_note_quads_trim_left_at_i(war_note_quads* note_quads,
                               uint32_t i_trim) {
     if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
     float cursor_pos_x =
-        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+        ctx_wr->cursor_pos_x +
+        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
     float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
                           ctx_wr->cursor_width_sub_col /
                           ctx_wr->cursor_width_sub_cells;
@@ -1744,7 +1749,7 @@ war_note_quads_trim_left_at_i(war_note_quads* note_quads,
     note_quads->cursor_width_sub_col[i_trim] = new_cursor_width_sub_col;
     note_quads->cursor_width_sub_cells[i_trim] = new_cursor_width_sub_cells;
     float new_pos_x = cursor_pos_x_end;
-    float new_col = ctx_wr->col;
+    float new_col = ctx_wr->cursor_pos_x;
     float new_sub_col = 1;
     float new_sub_cells_col = 1;
     float practical_pos_x = new_col + (float)new_sub_col / new_sub_cells_col;
@@ -1846,12 +1851,13 @@ war_note_quads_under_cursor(war_note_quads* note_quads,
                             uint32_t* out_indices,
                             uint32_t* out_indices_count) {
     float cursor_pos_x =
-        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+        ctx_wr->cursor_pos_x +
+        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
     float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
                           ctx_wr->cursor_width_sub_col /
                           ctx_wr->cursor_width_sub_cells;
     float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float cursor_pos_y = ctx_wr->row;
+    float cursor_pos_y = ctx_wr->cursor_pos_y;
     float cursor_pos_y_end = cursor_pos_y + 1;
     for (uint32_t i = 0; i < note_quads_count; i++) {
         float note_pos_x =
@@ -1875,7 +1881,7 @@ static inline void war_note_quads_in_row(war_note_quads* note_quads,
                                          war_window_render_context* ctx_wr,
                                          uint32_t* out_indices,
                                          uint32_t* out_indices_count) {
-    uint32_t row = ctx_wr->row;
+    uint32_t row = ctx_wr->cursor_pos_y;
     for (uint32_t i = 0; i < note_quads_count; i++) {
         if (row == note_quads->row[i] && !note_quads->hidden[i]) {
             out_indices[(*out_indices_count)++] = i;
@@ -1889,12 +1895,13 @@ static inline void war_note_quads_in_col(war_note_quads* note_quads,
                                          uint32_t* out_indices,
                                          uint32_t* out_indices_count) {
     float cursor_pos_x =
-        ctx_wr->col + (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
+        ctx_wr->cursor_pos_x +
+        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
     float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
                           ctx_wr->cursor_width_sub_col /
                           ctx_wr->cursor_width_sub_cells;
     float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float cursor_pos_y = ctx_wr->row;
+    float cursor_pos_y = ctx_wr->cursor_pos_y;
     float cursor_pos_y_end = cursor_pos_y + 1;
     for (uint32_t i = 0; i < note_quads_count; i++) {
         float note_pos_x =

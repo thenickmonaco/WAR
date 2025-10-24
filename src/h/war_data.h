@@ -299,6 +299,7 @@ enum war_audio {
     AUDIO_CMD_SAVE = 19,
     AUDIO_CMD_REMOVE_NOTE = 20,
     AUDIO_CMD_REMOVE_ALL_NOTES = 21,
+    AUDIO_CMD_REPLACE_NOTE = 22,
     // cmd sizes (not including header)
     // voices
     AUDIO_VOICE_GRAND_PIANO = 0,
@@ -419,8 +420,12 @@ typedef struct war_audio_context {
 
 typedef struct war_window_render_context {
     uint64_t now;
-    uint32_t col;
-    uint32_t row;
+    double cursor_pos_x;
+    double cursor_pos_y;
+    double cursor_size_x;
+    double cursor_size_y;
+    double cursor_navigation_x;
+    double cursor_navigation_y;
     uint32_t sub_col;
     uint32_t sub_row;
     uint32_t navigation_whole_number_col;

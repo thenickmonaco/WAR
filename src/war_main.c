@@ -160,8 +160,8 @@ reload_window_render:
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
 
-    uint32_t physical_width = 2560;
-    uint32_t physical_height = 1600;
+    double physical_width = 2560;
+    double physical_height = 1600;
     const uint32_t stride = physical_width * 4;
 
     const uint32_t light_gray_hex = 0xFF454950;
@@ -193,7 +193,7 @@ reload_window_render:
     uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
 #endif
 
-    float scale_factor = 1.483333;
+    double scale_factor = 1.483333;
     const uint32_t logical_width =
         (uint32_t)floor(physical_width / scale_factor);
     const uint32_t logical_height =
@@ -228,8 +228,10 @@ reload_window_render:
         .hud_state = HUD_PIANO,
         .cursor_blink_state = 0,
         .cursor_blink_duration_us = DEFAULT_CURSOR_BLINK_DURATION,
-        .col = 0,
-        .row = 60,
+        .cursor_pos_x = 0,
+        .cursor_pos_y = 60,
+        .cursor_size_x = 1.0,
+        .cursor_navigation_x = 1.0,
         .sub_col = 0,
         .sub_row = 0,
         .navigation_whole_number_col = 1,
@@ -1365,15 +1367,12 @@ reload_window_render:
                         transparent_quad_indices,
                         &transparent_quad_vertices_count,
                         &transparent_quad_indices_count,
-                        (float[3]){ctx_wr.col +
+                        (float[3]){ctx_wr.cursor_pos_x +
                                        (float)ctx_wr.sub_col /
                                            ctx_wr.navigation_sub_cells_col,
-                                   ctx_wr.row,
+                                   ctx_wr.cursor_pos_y,
                                    ctx_wr.layers[LAYER_CURSOR]},
-                        (float[2]){(float)ctx_wr.cursor_width_whole_number *
-                                       ctx_wr.cursor_width_sub_col /
-                                       ctx_wr.cursor_width_sub_cells,
-                                   1},
+                        (float[2]){(float)ctx_wr.cursor_size_x, 1},
                         cursor_color,
                         0,
                         0,
@@ -1698,6 +1697,11 @@ reload_window_render:
                 // draw line number quad
                 int ln_offset = (ctx_wr.hud_state == HUD_LINE_NUMBERS) ? 0 : 3;
                 if (ctx_wr.hud_state != HUD_PIANO) {
+                    uint32_t span_y = ctx_wr.viewport_rows;
+                    if (ctx_wr.top_row ==
+                        atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) {
+                        span_y -= ctx_wr.num_rows_for_status_bars;
+                    }
                     war_make_quad(
                         quad_vertices,
                         quad_indices,
@@ -1708,8 +1712,7 @@ reload_window_render:
                                    ctx_wr.bottom_row +
                                        ctx_wr.num_rows_for_status_bars,
                                    ctx_wr.layers[LAYER_HUD]},
-                        (float[2]){3 - gutter_end_span_inset,
-                                   ctx_wr.viewport_rows},
+                        (float[2]){3 - gutter_end_span_inset, span_y},
                         ctx_wr.red_hex,
                         0,
                         0,
@@ -1830,7 +1833,7 @@ reload_window_render:
                                      ctx_wr.num_rows_for_status_bars},
                     .scroll_margin = {ctx_wr.scroll_margin_cols,
                                       ctx_wr.scroll_margin_rows},
-                    .anchor_cell = {ctx_wr.col, ctx_wr.row},
+                    .anchor_cell = {ctx_wr.cursor_pos_x, ctx_wr.cursor_pos_y},
                     .top_right = {ctx_wr.right_col, ctx_wr.top_row},
                 };
                 vkCmdPushConstants(ctx_vk.cmd_buffer,
@@ -1897,7 +1900,7 @@ reload_window_render:
                                      ctx_wr.num_rows_for_status_bars},
                     .scroll_margin = {ctx_wr.scroll_margin_cols,
                                       ctx_wr.scroll_margin_rows},
-                    .anchor_cell = {ctx_wr.col, ctx_wr.row},
+                    .anchor_cell = {ctx_wr.cursor_pos_x, ctx_wr.cursor_pos_y},
                     .top_right = {ctx_wr.right_col, ctx_wr.top_row},
                 };
                 vkCmdPushConstants(ctx_vk.cmd_buffer,
@@ -2117,7 +2120,7 @@ reload_window_render:
                                      ctx_wr.num_rows_for_status_bars},
                     .scroll_margin = {ctx_wr.scroll_margin_cols,
                                       ctx_wr.scroll_margin_rows},
-                    .anchor_cell = {ctx_wr.col, ctx_wr.row},
+                    .anchor_cell = {ctx_wr.cursor_pos_x, ctx_wr.cursor_pos_y},
                     .top_right = {ctx_wr.right_col, ctx_wr.top_row},
                     .ascent = ctx_vk.ascent,
                     .descent = ctx_vk.descent,
@@ -2177,9 +2180,9 @@ reload_window_render:
 
                 uint32_t cursor_w = ctx_vk.cell_width;
                 uint32_t cursor_h = ctx_vk.cell_height;
-                ctx_wr.cursor_x = ctx_wr.col * ctx_vk.cell_width;
-                ctx_wr.cursor_y =
-                    (physical_height - 1) - (ctx_wr.row * ctx_vk.cell_height);
+                ctx_wr.cursor_x = ctx_wr.cursor_pos_x * ctx_vk.cell_width;
+                ctx_wr.cursor_y = (physical_height - 1) -
+                                  (ctx_wr.cursor_pos_y * ctx_vk.cell_height);
 
                 for (uint32_t y = ctx_wr.cursor_y;
                      y < ctx_wr.cursor_y + cursor_h;
@@ -4148,19 +4151,20 @@ reload_window_render:
                 uint32_t scaled_frac =
                     (increment * ctx_wr.navigation_whole_number_row) %
                     ctx_wr.navigation_sub_cells_row;
-                ctx_wr.row = war_clamp_add_uint32(
-                    ctx_wr.row, scaled_whole, ctx_wr.max_row);
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, scaled_whole, ctx_wr.max_row);
                 ctx_wr.sub_row = war_clamp_add_uint32(
                     ctx_wr.sub_row, scaled_frac, ctx_wr.max_row);
-                ctx_wr.row = war_clamp_add_uint32(
-                    ctx_wr.row,
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y,
                     ctx_wr.sub_row / ctx_wr.navigation_sub_cells_row,
                     ctx_wr.max_row);
                 ctx_wr.sub_row = war_clamp_uint32(
                     ctx_wr.sub_row % ctx_wr.navigation_sub_cells_row,
                     ctx_wr.min_row,
                     ctx_wr.max_row);
-                if (ctx_wr.row > ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
+                if (ctx_wr.cursor_pos_y >
+                    ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
                     ctx_wr.bottom_row = war_clamp_add_uint32(
@@ -4191,24 +4195,24 @@ reload_window_render:
                     ctx_wr.navigation_sub_cells_row;
                 scaled_frac = (increment * ctx_wr.navigation_whole_number_row) %
                               ctx_wr.navigation_sub_cells_row;
-                ctx_wr.row = war_clamp_subtract_uint32(
-                    ctx_wr.row, scaled_whole, ctx_wr.min_row);
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, scaled_whole, ctx_wr.min_row);
                 if (ctx_wr.sub_row < scaled_frac) {
-                    ctx_wr.row = war_clamp_subtract_uint32(
-                        ctx_wr.row, 1, ctx_wr.min_row);
+                    ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                        ctx_wr.cursor_pos_y, 1, ctx_wr.min_row);
                     ctx_wr.sub_row += ctx_wr.navigation_sub_cells_row;
                 }
                 ctx_wr.sub_row = war_clamp_subtract_uint32(
                     ctx_wr.sub_row, scaled_frac, ctx_wr.min_row);
-                ctx_wr.row = war_clamp_subtract_uint32(
-                    ctx_wr.row,
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y,
                     ctx_wr.sub_row / ctx_wr.navigation_sub_cells_row,
                     ctx_wr.min_row);
                 ctx_wr.sub_row = war_clamp_uint32(
                     ctx_wr.sub_row % ctx_wr.navigation_sub_cells_row,
                     ctx_wr.min_row,
                     ctx_wr.max_row);
-                if (ctx_wr.row <
+                if (ctx_wr.cursor_pos_y <
                     ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
@@ -4228,33 +4232,21 @@ reload_window_render:
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_l:
+            cmd_normal_l: {
                 call_carmack("cmd_normal_l");
-                uint32_t initial = ctx_wr.col;
-                increment = ctx_wr.col_increment;
+                double initial = ctx_wr.cursor_pos_x;
+                double increment =
+                    (double)ctx_wr.col_increment * ctx_wr.cursor_navigation_x;
                 if (ctx_wr.numeric_prefix) {
-                    increment = war_clamp_multiply_uint32(
-                        increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
+                    increment *= ctx_wr.numeric_prefix;
                 }
-                scaled_whole =
-                    (increment * ctx_wr.navigation_whole_number_col) /
-                    ctx_wr.navigation_sub_cells_col;
-                scaled_frac = (increment * ctx_wr.navigation_whole_number_col) %
-                              ctx_wr.navigation_sub_cells_col;
-                ctx_wr.col = war_clamp_add_uint32(
-                    ctx_wr.col, scaled_whole, ctx_wr.max_col);
-                ctx_wr.sub_col = war_clamp_add_uint32(
-                    ctx_wr.sub_col, scaled_frac, ctx_wr.max_col);
-                if (ctx_wr.sub_col >= ctx_wr.navigation_sub_cells_col) {
-                    uint32_t carry =
-                        ctx_wr.sub_col / ctx_wr.navigation_sub_cells_col;
-                    ctx_wr.col =
-                        war_clamp_add_uint32(ctx_wr.col, carry, ctx_wr.max_col);
-                    ctx_wr.sub_col =
-                        ctx_wr.sub_col % ctx_wr.navigation_sub_cells_col;
+                ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x + increment;
+                if (ctx_wr.cursor_pos_x > ctx_wr.max_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.max_col;
                 }
-                uint32_t pan = ctx_wr.col - initial;
-                if (ctx_wr.col > ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
+                double pan = ctx_wr.cursor_pos_x - initial;
+                if (ctx_wr.cursor_pos_x >
+                    ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
                     uint32_t viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     ctx_wr.left_col = war_clamp_add_uint32(
@@ -4273,42 +4265,22 @@ reload_window_render:
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_h:
+            }
+            cmd_normal_h: {
                 call_carmack("cmd_normal_h");
-                initial = ctx_wr.col;
-                increment = ctx_wr.col_increment;
+                double initial = ctx_wr.cursor_pos_x;
+                double increment =
+                    (double)ctx_wr.col_increment * ctx_wr.cursor_navigation_x;
                 if (ctx_wr.numeric_prefix) {
-                    increment = war_clamp_multiply_uint32(
-                        increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
+                    increment *= ctx_wr.numeric_prefix;
                 }
-                scaled_whole =
-                    (increment * ctx_wr.navigation_whole_number_col) /
-                    ctx_wr.navigation_sub_cells_col;
-                scaled_frac = (increment * ctx_wr.navigation_whole_number_col) %
-                              ctx_wr.navigation_sub_cells_col;
-                ctx_wr.col = war_clamp_subtract_uint32(
-                    ctx_wr.col, scaled_whole, ctx_wr.min_col);
-                if (ctx_wr.sub_col < scaled_frac) {
-                    if (ctx_wr.col > ctx_wr.min_col) {
-                        ctx_wr.col = war_clamp_subtract_uint32(
-                            ctx_wr.col, 1, ctx_wr.min_col);
-                        ctx_wr.sub_col += ctx_wr.navigation_sub_cells_col;
-                    } else {
-                        ctx_wr.sub_col = 0;
-                    }
+                ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x - increment;
+                if (ctx_wr.cursor_pos_x < ctx_wr.min_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.min_col;
                 }
-                ctx_wr.sub_col = war_clamp_subtract_uint32(
-                    ctx_wr.sub_col, scaled_frac, ctx_wr.min_col);
-                ctx_wr.col = war_clamp_subtract_uint32(
-                    ctx_wr.col,
-                    ctx_wr.sub_col / ctx_wr.navigation_sub_cells_col,
-                    ctx_wr.min_col);
-                ctx_wr.sub_col = war_clamp_uint32(
-                    ctx_wr.sub_col % ctx_wr.navigation_sub_cells_col,
-                    ctx_wr.min_col,
-                    ctx_wr.max_col);
-                pan = initial - ctx_wr.col;
-                if (ctx_wr.col < ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
+                double pan = initial - ctx_wr.cursor_pos_x;
+                if (ctx_wr.cursor_pos_x <
+                    ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
                     uint32_t viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     ctx_wr.left_col = war_clamp_subtract_uint32(
@@ -4327,6 +4299,7 @@ reload_window_render:
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
             cmd_normal_K: {
                 call_carmack("cmd_normal_K");
                 float gain =
@@ -4356,9 +4329,10 @@ reload_window_render:
                     increment = war_clamp_multiply_uint32(
                         increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
                 }
-                ctx_wr.row =
-                    war_clamp_add_uint32(ctx_wr.row, increment, ctx_wr.max_row);
-                if (ctx_wr.row > ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.max_row);
+                if (ctx_wr.cursor_pos_y >
+                    ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
                     ctx_wr.bottom_row = war_clamp_add_uint32(
@@ -4384,9 +4358,9 @@ reload_window_render:
                     increment = war_clamp_multiply_uint32(
                         increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
                 }
-                ctx_wr.row = war_clamp_subtract_uint32(
-                    ctx_wr.row, increment, ctx_wr.min_row);
-                if (ctx_wr.row <
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.min_row);
+                if (ctx_wr.cursor_pos_y <
                     ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
@@ -4406,22 +4380,27 @@ reload_window_render:
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_alt_l:
-                call_carmack("cmd_normal_alt_l");
-                increment = ctx_wr.col_leap_increment;
+            cmd_normal_alt_l: {
+                call_carmack("cmd_normal_l");
+                double initial = ctx_wr.cursor_pos_x;
+                double increment = (double)ctx_wr.col_leap_increment *
+                                   ctx_wr.cursor_navigation_x;
                 if (ctx_wr.numeric_prefix) {
-                    increment = war_clamp_multiply_uint32(
-                        increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
+                    increment *= ctx_wr.numeric_prefix;
                 }
-                ctx_wr.col =
-                    war_clamp_add_uint32(ctx_wr.col, increment, ctx_wr.max_col);
-                if (ctx_wr.col > ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
+                ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x + increment;
+                if (ctx_wr.cursor_pos_x > ctx_wr.max_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.max_col;
+                }
+                double pan = ctx_wr.cursor_pos_x - initial;
+                if (ctx_wr.cursor_pos_x >
+                    ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
                     uint32_t viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     ctx_wr.left_col = war_clamp_add_uint32(
-                        ctx_wr.left_col, increment, ctx_wr.max_col);
+                        ctx_wr.left_col, pan, ctx_wr.max_col);
                     ctx_wr.right_col = war_clamp_add_uint32(
-                        ctx_wr.right_col, increment, ctx_wr.max_col);
+                        ctx_wr.right_col, pan, ctx_wr.max_col);
                     uint32_t new_viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
@@ -4434,22 +4413,28 @@ reload_window_render:
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_alt_h:
-                call_carmack("cmd_normal_alt_h");
-                increment = ctx_wr.col_leap_increment;
+            }
+            cmd_normal_alt_h: {
+                call_carmack("cmd_normal_h");
+                double initial = ctx_wr.cursor_pos_x;
+                double increment = (double)ctx_wr.col_leap_increment *
+                                   ctx_wr.cursor_navigation_x;
                 if (ctx_wr.numeric_prefix) {
-                    increment = war_clamp_multiply_uint32(
-                        increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
+                    increment *= ctx_wr.numeric_prefix;
                 }
-                ctx_wr.col = war_clamp_subtract_uint32(
-                    ctx_wr.col, increment, ctx_wr.min_col);
-                if (ctx_wr.col < ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
+                ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x - increment;
+                if (ctx_wr.cursor_pos_x < ctx_wr.min_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.min_col;
+                }
+                double pan = initial - ctx_wr.cursor_pos_x;
+                if (ctx_wr.cursor_pos_x <
+                    ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
                     uint32_t viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     ctx_wr.left_col = war_clamp_subtract_uint32(
-                        ctx_wr.left_col, increment, ctx_wr.min_col);
+                        ctx_wr.left_col, pan, ctx_wr.min_col);
                     ctx_wr.right_col = war_clamp_subtract_uint32(
-                        ctx_wr.right_col, increment, ctx_wr.min_col);
+                        ctx_wr.right_col, pan, ctx_wr.min_col);
                     uint32_t new_viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
@@ -4462,6 +4447,7 @@ reload_window_render:
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
             cmd_normal_alt_K:
                 call_carmack("cmd_normal_alt_shift_k");
                 increment =
@@ -4470,9 +4456,10 @@ reload_window_render:
                     increment = war_clamp_multiply_uint32(
                         increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
                 }
-                ctx_wr.row =
-                    war_clamp_add_uint32(ctx_wr.row, increment, ctx_wr.max_row);
-                if (ctx_wr.row > ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.max_row);
+                if (ctx_wr.cursor_pos_y >
+                    ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
                     ctx_wr.bottom_row = war_clamp_add_uint32(
@@ -4499,9 +4486,9 @@ reload_window_render:
                     increment = war_clamp_multiply_uint32(
                         increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
                 }
-                ctx_wr.row = war_clamp_subtract_uint32(
-                    ctx_wr.row, increment, ctx_wr.min_row);
-                if (ctx_wr.row <
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.min_row);
+                if (ctx_wr.cursor_pos_y <
                     ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
@@ -4529,9 +4516,10 @@ reload_window_render:
                     increment = war_clamp_multiply_uint32(
                         increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
                 }
-                ctx_wr.col =
-                    war_clamp_add_uint32(ctx_wr.col, increment, ctx_wr.max_col);
-                if (ctx_wr.col > ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
+                ctx_wr.cursor_pos_x = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_x, increment, ctx_wr.max_col);
+                if (ctx_wr.cursor_pos_x >
+                    ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
                     uint32_t viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     ctx_wr.left_col = war_clamp_add_uint32(
@@ -4558,9 +4546,10 @@ reload_window_render:
                     increment = war_clamp_multiply_uint32(
                         increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
                 }
-                ctx_wr.col = war_clamp_subtract_uint32(
-                    ctx_wr.col, increment, ctx_wr.min_col);
-                if (ctx_wr.col < ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
+                ctx_wr.cursor_pos_x = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_x, increment, ctx_wr.min_col);
+                if (ctx_wr.cursor_pos_x <
+                    ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
                     uint32_t viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     ctx_wr.left_col = war_clamp_subtract_uint32(
@@ -4585,7 +4574,7 @@ reload_window_render:
                     ctx_wr.numeric_prefix = ctx_wr.numeric_prefix * 10;
                     goto cmd_done;
                 }
-                ctx_wr.col = ctx_wr.left_col;
+                ctx_wr.cursor_pos_x = ctx_wr.left_col;
                 ctx_wr.sub_col = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -4603,15 +4592,15 @@ reload_window_render:
                 uint32_t col = ((float)atomic_load(&atomics->play_clock) /
                                 ctx_a.sample_rate) /
                                ((60.0f / ctx_a.BPM) / 4.0f);
-                ctx_wr.col =
+                ctx_wr.cursor_pos_x =
                     war_clamp_uint32(col, ctx_wr.min_col, ctx_wr.max_col);
                 ctx_wr.sub_col = 0;
                 uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
                 uint32_t distance = viewport_width / 2;
                 ctx_wr.left_col = war_clamp_subtract_uint32(
-                    ctx_wr.col, distance, ctx_wr.min_col);
-                ctx_wr.right_col =
-                    war_clamp_add_uint32(ctx_wr.col, distance, ctx_wr.max_col);
+                    ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
+                ctx_wr.right_col = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
                 uint32_t new_viewport_width = war_clamp_subtract_uint32(
                     ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
                 if (new_viewport_width < viewport_width) {
@@ -4634,16 +4623,16 @@ reload_window_render:
             cmd_normal_$:
                 call_carmack("cmd_normal_$");
                 if (ctx_wr.numeric_prefix) {
-                    ctx_wr.col = war_clamp_uint32(
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(
                         ctx_wr.numeric_prefix, ctx_wr.min_col, ctx_wr.max_col);
                     ctx_wr.sub_col = 0;
                     uint32_t viewport_width =
                         ctx_wr.right_col - ctx_wr.left_col;
                     uint32_t distance = viewport_width / 2;
                     ctx_wr.left_col = war_clamp_subtract_uint32(
-                        ctx_wr.col, distance, ctx_wr.min_col);
+                        ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
                     ctx_wr.right_col = war_clamp_add_uint32(
-                        ctx_wr.col, distance, ctx_wr.max_col);
+                        ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
                     uint32_t new_viewport_width = war_clamp_subtract_uint32(
                         ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
                     if (new_viewport_width < viewport_width) {
@@ -4665,7 +4654,7 @@ reload_window_render:
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.col = ctx_wr.right_col;
+                ctx_wr.cursor_pos_x = ctx_wr.right_col;
                 ctx_wr.sub_col = 0;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
@@ -4674,15 +4663,15 @@ reload_window_render:
             cmd_normal_G:
                 call_carmack("cmd_normal_G");
                 if (ctx_wr.numeric_prefix) {
-                    ctx_wr.row = war_clamp_uint32(
+                    ctx_wr.cursor_pos_y = war_clamp_uint32(
                         ctx_wr.numeric_prefix, ctx_wr.min_row, ctx_wr.max_row);
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
                     uint32_t distance = viewport_height / 2;
                     ctx_wr.bottom_row = war_clamp_subtract_uint32(
-                        ctx_wr.row, distance, ctx_wr.min_row);
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
                     ctx_wr.top_row = war_clamp_add_uint32(
-                        ctx_wr.row, distance, ctx_wr.max_row);
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
                     uint32_t new_viewport_height = war_clamp_subtract_uint32(
                         ctx_wr.top_row, ctx_wr.bottom_row, 0);
                     if (new_viewport_height < viewport_height) {
@@ -4704,7 +4693,7 @@ reload_window_render:
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.row = ctx_wr.bottom_row;
+                ctx_wr.cursor_pos_y = ctx_wr.bottom_row;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -4712,15 +4701,15 @@ reload_window_render:
             cmd_normal_gg:
                 call_carmack("cmd_normal_gg");
                 if (ctx_wr.numeric_prefix) {
-                    ctx_wr.row = war_clamp_uint32(
+                    ctx_wr.cursor_pos_y = war_clamp_uint32(
                         ctx_wr.numeric_prefix, ctx_wr.min_row, ctx_wr.max_row);
                     uint32_t viewport_height =
                         ctx_wr.top_row - ctx_wr.bottom_row;
                     uint32_t distance = viewport_height / 2;
                     ctx_wr.bottom_row = war_clamp_subtract_uint32(
-                        ctx_wr.row, distance, ctx_wr.min_row);
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
                     ctx_wr.top_row = war_clamp_add_uint32(
-                        ctx_wr.row, distance, ctx_wr.max_row);
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
                     uint32_t new_viewport_height = war_clamp_subtract_uint32(
                         ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                     if (new_viewport_height < viewport_height) {
@@ -4744,7 +4733,7 @@ reload_window_render:
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.row = ctx_wr.top_row;
+                ctx_wr.cursor_pos_y = ctx_wr.top_row;
                 ctx_wr.numeric_prefix = 0;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
@@ -4911,6 +4900,8 @@ reload_window_render:
                 ctx_wr.cursor_width_sub_col = 1;
                 ctx_wr.navigation_whole_number_col = 1;
                 ctx_wr.navigation_sub_cells_col = 1;
+                ctx_wr.cursor_size_x = 1.0;
+                ctx_wr.cursor_navigation_x = 1.0;
                 if (ctx_wr.navigation_sub_cells_col !=
                     ctx_wr.previous_navigation_sub_cells_col) {
                     ctx_wr.sub_col =
@@ -4930,7 +4921,9 @@ reload_window_render:
                 call_carmack("cmd_normal_f");
                 if (ctx_wr.numeric_prefix) {
                     ctx_wr.cursor_width_whole_number = ctx_wr.numeric_prefix;
-                    ctx_wr.f_cursor_width_whole_number = ctx_wr.numeric_prefix;
+                    ctx_wr.cursor_size_x =
+                        (double)ctx_wr.cursor_width_whole_number /
+                        ctx_wr.cursor_width_sub_cells;
                     memset(ctx_wr.input_sequence,
                            0,
                            sizeof(ctx_wr.input_sequence));
@@ -4939,6 +4932,9 @@ reload_window_render:
                     goto cmd_done;
                 }
                 ctx_wr.cursor_width_whole_number = 1;
+                ctx_wr.cursor_size_x =
+                    (double)ctx_wr.cursor_width_whole_number /
+                    ctx_wr.cursor_width_sub_cells;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 ctx_wr.numeric_prefix = 0;
@@ -4947,6 +4943,9 @@ reload_window_render:
                 call_carmack("cmd_normal_t");
                 if (ctx_wr.numeric_prefix) {
                     ctx_wr.cursor_width_sub_cells = ctx_wr.numeric_prefix;
+                    ctx_wr.cursor_size_x =
+                        (double)ctx_wr.cursor_width_whole_number /
+                        ctx_wr.cursor_width_sub_cells;
                     memset(ctx_wr.input_sequence,
                            0,
                            sizeof(ctx_wr.input_sequence));
@@ -4955,29 +4954,20 @@ reload_window_render:
                     goto cmd_done;
                 }
                 ctx_wr.cursor_width_sub_cells = 1;
+                ctx_wr.cursor_size_x =
+                    (double)ctx_wr.cursor_width_whole_number /
+                    ctx_wr.cursor_width_sub_cells;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 ctx_wr.numeric_prefix = 0;
+                goto cmd_done;
             cmd_normal_T:
                 call_carmack("cmd_normal_T");
                 if (ctx_wr.numeric_prefix) {
-                    ctx_wr.previous_navigation_sub_cells_col =
-                        ctx_wr.navigation_sub_cells_col;
                     ctx_wr.navigation_sub_cells_col = ctx_wr.numeric_prefix;
-                    ctx_wr.t_navigation_sub_cells = ctx_wr.numeric_prefix;
-                    if (ctx_wr.navigation_sub_cells_col !=
-                        ctx_wr.previous_navigation_sub_cells_col) {
-                        ctx_wr.sub_col =
-                            (ctx_wr.sub_col * ctx_wr.navigation_sub_cells_col) /
-                            ctx_wr.previous_navigation_sub_cells_col;
-                        ctx_wr.sub_col = war_clamp_uint32(
-                            ctx_wr.sub_col,
-                            0,
-                            ctx_wr.navigation_sub_cells_col - 1);
-
-                        ctx_wr.previous_navigation_sub_cells_col =
-                            ctx_wr.navigation_sub_cells_col;
-                    }
+                    ctx_wr.cursor_navigation_x =
+                        (double)ctx_wr.navigation_whole_number_col /
+                        ctx_wr.navigation_sub_cells_col;
                     memset(ctx_wr.input_sequence,
                            0,
                            sizeof(ctx_wr.input_sequence));
@@ -4986,6 +4976,9 @@ reload_window_render:
                     goto cmd_done;
                 }
                 ctx_wr.navigation_sub_cells_col = 1;
+                ctx_wr.cursor_navigation_x =
+                    (double)ctx_wr.navigation_whole_number_col /
+                    ctx_wr.navigation_sub_cells_col;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 ctx_wr.numeric_prefix = 0;
@@ -4994,7 +4987,9 @@ reload_window_render:
                 call_carmack("cmd_normal_F");
                 if (ctx_wr.numeric_prefix) {
                     ctx_wr.navigation_whole_number_col = ctx_wr.numeric_prefix;
-                    ctx_wr.f_navigation_whole_number = ctx_wr.numeric_prefix;
+                    ctx_wr.cursor_navigation_x =
+                        (double)ctx_wr.navigation_whole_number_col /
+                        ctx_wr.navigation_sub_cells_col;
                     memset(ctx_wr.input_sequence,
                            0,
                            sizeof(ctx_wr.input_sequence));
@@ -5003,19 +4998,22 @@ reload_window_render:
                     goto cmd_done;
                 }
                 ctx_wr.navigation_whole_number_col = 1;
+                ctx_wr.cursor_navigation_x =
+                    (double)ctx_wr.navigation_whole_number_col /
+                    ctx_wr.navigation_sub_cells_col;
                 memset(ctx_wr.input_sequence, 0, sizeof(ctx_wr.input_sequence));
                 ctx_wr.num_chars_in_sequence = 0;
                 ctx_wr.numeric_prefix = 0;
                 goto cmd_done;
             cmd_normal_gb:
                 call_carmack("cmd_normal_gb");
-                ctx_wr.row = ctx_wr.min_row;
+                ctx_wr.cursor_pos_y = ctx_wr.min_row;
                 uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
                 uint32_t distance = viewport_height / 2;
                 ctx_wr.bottom_row = war_clamp_subtract_uint32(
-                    ctx_wr.row, distance, ctx_wr.min_row);
-                ctx_wr.top_row =
-                    war_clamp_add_uint32(ctx_wr.row, distance, ctx_wr.max_row);
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                ctx_wr.top_row = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
                 uint32_t new_viewport_height = war_clamp_subtract_uint32(
                     ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                 if (new_viewport_height < viewport_height) {
@@ -5036,13 +5034,13 @@ reload_window_render:
                 goto cmd_done;
             cmd_normal_gt:
                 call_carmack("cmd_normal_gt");
-                ctx_wr.row = ctx_wr.max_row;
+                ctx_wr.cursor_pos_y = ctx_wr.max_row;
                 viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
                 distance = viewport_height / 2;
                 ctx_wr.bottom_row = war_clamp_subtract_uint32(
-                    ctx_wr.row, distance, ctx_wr.min_row);
-                ctx_wr.top_row =
-                    war_clamp_add_uint32(ctx_wr.row, distance, ctx_wr.max_row);
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                ctx_wr.top_row = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
                 new_viewport_height = war_clamp_subtract_uint32(
                     ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                 if (new_viewport_height < viewport_height) {
@@ -5063,13 +5061,13 @@ reload_window_render:
                 goto cmd_done;
             cmd_normal_gm:
                 call_carmack("cmd_normal_gm");
-                ctx_wr.row = 60;
+                ctx_wr.cursor_pos_y = 60;
                 viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
                 distance = viewport_height / 2;
                 ctx_wr.bottom_row = war_clamp_subtract_uint32(
-                    ctx_wr.row, distance, ctx_wr.min_row);
-                ctx_wr.top_row =
-                    war_clamp_add_uint32(ctx_wr.row, distance, ctx_wr.max_row);
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                ctx_wr.top_row = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
                 new_viewport_height = war_clamp_subtract_uint32(
                     ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                 if (new_viewport_height < viewport_height) {
@@ -5091,8 +5089,9 @@ reload_window_render:
             cmd_normal_z: {
                 call_carmack("cmd_normal_z");
                 double d_start_sec =
-                    (double)(ctx_wr.col + (float)ctx_wr.sub_col /
-                                              ctx_wr.navigation_sub_cells_col) *
+                    (double)(ctx_wr.cursor_pos_x +
+                             (double)ctx_wr.sub_col /
+                                 ctx_wr.navigation_sub_cells_col) *
                     ((60.0 / ctx_a.BPM) / 4.0);
                 uint64_t start_frames =
                     (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
@@ -5105,14 +5104,14 @@ reload_window_render:
                      sub_width / ctx_wr.cursor_width_sub_cells);
                 uint64_t duration_frames =
                     (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
-                war_note_msg note_msg = {.note_start_frames = start_frames,
-                                         .note_duration_frames =
-                                             duration_frames,
-                                         .note_sample_index = ctx_wr.row,
-                                         .note_gain = 1.0f,
-                                         .note_attack = 0.0f,
-                                         .note_sustain = 1.0f,
-                                         .note_release = 0.0f};
+                war_note_msg note_msg = {
+                    .note_start_frames = start_frames,
+                    .note_duration_frames = duration_frames,
+                    .note_sample_index = ctx_wr.cursor_pos_y,
+                    .note_gain = 1.0f,
+                    .note_attack = 0.0f,
+                    .note_sustain = 1.0f,
+                    .note_release = 0.0f};
                 if (ctx_wr.numeric_prefix) {
                     for (uint32_t i = 0; i < ctx_wr.numeric_prefix; i++) {
                         war_note_quads_add(&note_quads,
@@ -5176,6 +5175,28 @@ reload_window_render:
                      i--) {
                     uint32_t i_trim = note_quads_in_x[i];
                     if (note_quads.hidden[i_trim]) { continue; }
+                    float cursor_pos_x =
+                        ctx_wr.cursor_pos_x +
+                        (float)ctx_wr.sub_col / ctx_wr.navigation_sub_cells_col;
+                    float cursor_span_x =
+                        (float)ctx_wr.cursor_width_whole_number *
+                        ctx_wr.cursor_width_sub_col /
+                        ctx_wr.cursor_width_sub_cells;
+                    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
+                    float note_pos_x = note_quads.col[i_trim] +
+                                       (float)note_quads.sub_col[i_trim] /
+                                           note_quads.sub_cells_col[i_trim];
+                    float note_span_x =
+                        (float)note_quads.cursor_width_whole_number[i_trim] *
+                        note_quads.cursor_width_sub_col[i_trim] /
+                        note_quads.cursor_width_sub_cells[i_trim];
+                    float note_pos_x_end = note_pos_x + note_span_x;
+                    bool delete = cursor_pos_x <= note_pos_x;
+                    if (delete) {
+                        war_note_quads_delete_at_i(
+                            &note_quads, &note_quads_count, pc, i_trim);
+                        continue;
+                    }
                     war_note_quads_trim_right_at_i(
                         &note_quads, &note_quads_count, &ctx_wr, pc, i_trim);
                 }
@@ -5295,11 +5316,18 @@ reload_window_render:
                     d_start_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
                     uint64_t start_frames =
                         (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
+                    double sub_width =
+                        note_quads.cursor_width_sub_col[i_delete];
+                    if (sub_width >=
+                        note_quads.cursor_width_sub_cells[i_delete])
+                        sub_width =
+                            note_quads.cursor_width_sub_cells[i_delete] - 1;
                     double d_duration_sec =
-                        (double)note_quads.cursor_width_whole_number[i_delete] +
-                        (double)note_quads.cursor_width_sub_col[i_delete] /
-                            (double)note_quads.cursor_width_sub_cells[i_delete];
-                    d_duration_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
+                        ((60.0 / ctx_a.BPM) / 4.0) *
+                        ((double)
+                             note_quads.cursor_width_whole_number[i_delete] +
+                         sub_width /
+                             note_quads.cursor_width_sub_cells[i_delete]);
                     uint64_t duration_frames =
                         (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
                     war_note_msg note_msg = (war_note_msg){
@@ -5339,11 +5367,18 @@ reload_window_render:
                     d_start_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
                     uint64_t start_frames =
                         (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
+                    double sub_width =
+                        note_quads.cursor_width_sub_col[i_delete];
+                    if (sub_width >=
+                        note_quads.cursor_width_sub_cells[i_delete])
+                        sub_width =
+                            note_quads.cursor_width_sub_cells[i_delete] - 1;
                     double d_duration_sec =
-                        (double)note_quads.cursor_width_whole_number[i_delete] +
-                        (double)note_quads.cursor_width_sub_col[i_delete] /
-                            (double)note_quads.cursor_width_sub_cells[i_delete];
-                    d_duration_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
+                        ((60.0 / ctx_a.BPM) / 4.0) *
+                        ((double)
+                             note_quads.cursor_width_whole_number[i_delete] +
+                         sub_width /
+                             note_quads.cursor_width_sub_cells[i_delete]);
                     uint64_t duration_frames =
                         (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
                     war_note_msg note_msg = (war_note_msg){
@@ -5386,6 +5421,32 @@ reload_window_render:
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
+                    double d_start_sec =
+                        (double)note_quads.col[i_delete] +
+                        (double)note_quads.sub_col[i_delete] /
+                            (double)note_quads.sub_cells_col[i_delete];
+                    d_start_sec *= ((60.0 / (double)ctx_a.BPM) / 4.0);
+                    uint64_t start_frames =
+                        (uint64_t)llround(d_start_sec * ctx_a.sample_rate);
+                    double sub_width =
+                        note_quads.cursor_width_sub_col[i_delete];
+                    if (sub_width >=
+                        note_quads.cursor_width_sub_cells[i_delete])
+                        sub_width =
+                            note_quads.cursor_width_sub_cells[i_delete] - 1;
+                    double d_duration_sec =
+                        ((60.0 / ctx_a.BPM) / 4.0) *
+                        ((double)
+                             note_quads.cursor_width_whole_number[i_delete] +
+                         sub_width /
+                             note_quads.cursor_width_sub_cells[i_delete]);
+                    uint64_t duration_frames =
+                        (uint64_t)llround(d_duration_sec * ctx_a.sample_rate);
+                    war_note_msg note_msg = (war_note_msg){
+                        .note_start_frames = start_frames,
+                        .note_duration_frames = duration_frames,
+                        .note_sample_index = note_quads.row[i_delete],
+                    };
                     war_note_quads_delete_at_i(
                         &note_quads, &note_quads_count, pc, i_delete);
                 }
@@ -5689,8 +5750,8 @@ reload_window_render:
                 call_carmack("cmd_normal_spacea");
                 if (views.views_count <
                     (uint32_t)atomic_load(&ctx_lua->WR_VIEWS_SAVED)) {
-                    views.col[views.views_count] = ctx_wr.col;
-                    views.row[views.views_count] = ctx_wr.row;
+                    views.col[views.views_count] = ctx_wr.cursor_pos_x;
+                    views.row[views.views_count] = ctx_wr.cursor_pos_y;
                     views.left_col[views.views_count] = ctx_wr.left_col;
                     views.bottom_row[views.views_count] = ctx_wr.bottom_row;
                     views.right_col[views.views_count] = ctx_wr.right_col;
@@ -5711,8 +5772,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_g");
                 if (views.views_count > 0) {
                     uint32_t i_views = 0;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -5726,8 +5787,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_t");
                 if (views.views_count > 1) {
                     uint32_t i_views = 1;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -5741,8 +5802,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_n");
                 if (views.views_count > 2) {
                     uint32_t i_views = 2;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -5756,8 +5817,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_s");
                 if (views.views_count > 3) {
                     uint32_t i_views = 3;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -5771,8 +5832,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_m");
                 if (views.views_count > 4) {
                     uint32_t i_views = 4;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -5786,8 +5847,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_y");
                 if (views.views_count > 5) {
                     uint32_t i_views = 5;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -5801,8 +5862,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_z");
                 if (views.views_count > 6) {
                     uint32_t i_views = 6;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -5816,8 +5877,8 @@ reload_window_render:
                 call_carmack("cmd_normal_alt_q");
                 if (views.views_count > 7) {
                     uint32_t i_views = 7;
-                    ctx_wr.col = views.col[i_views];
-                    ctx_wr.row = views.row[i_views];
+                    ctx_wr.cursor_pos_x = views.col[i_views];
+                    ctx_wr.cursor_pos_y = views.row[i_views];
                     ctx_wr.left_col = views.left_col[i_views];
                     ctx_wr.bottom_row = views.bottom_row[i_views];
                     ctx_wr.right_col = views.right_col[i_views];
@@ -6069,21 +6130,22 @@ reload_window_render:
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    ctx_wr.col = war_clamp_uint32(note_quads.col[i_next_note],
-                                                  ctx_wr.min_col,
-                                                  ctx_wr.max_col);
+                    ctx_wr.cursor_pos_x =
+                        war_clamp_uint32(note_quads.col[i_next_note],
+                                         ctx_wr.min_col,
+                                         ctx_wr.max_col);
                     ctx_wr.sub_col = note_quads.sub_col[i_next_note];
                     ctx_wr.navigation_sub_cells_col =
                         note_quads.sub_cells_col[i_next_note];
-                    if (ctx_wr.col > ctx_wr.right_col ||
-                        ctx_wr.col < ctx_wr.left_col) {
+                    if (ctx_wr.cursor_pos_x > ctx_wr.right_col ||
+                        ctx_wr.cursor_pos_x < ctx_wr.left_col) {
                         uint32_t viewport_width =
                             ctx_wr.right_col - ctx_wr.left_col;
                         distance = viewport_width / 2;
                         ctx_wr.left_col = war_clamp_subtract_uint32(
-                            ctx_wr.col, distance, ctx_wr.min_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
                         ctx_wr.right_col = war_clamp_add_uint32(
-                            ctx_wr.col, distance, ctx_wr.max_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
                         ctx_wr.sub_col = note_quads.sub_col[i_next_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
@@ -6161,7 +6223,7 @@ reload_window_render:
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    ctx_wr.col =
+                    ctx_wr.cursor_pos_x =
                         war_clamp_uint32(note_quads.col[i_next_note] +
                                              (uint32_t)war_note_span_x(
                                                  &note_quads, i_next_note) -
@@ -6171,15 +6233,15 @@ reload_window_render:
                     ctx_wr.sub_col = note_quads.sub_col[i_next_note];
                     ctx_wr.navigation_sub_cells_col =
                         note_quads.sub_cells_col[i_next_note];
-                    if (ctx_wr.col > ctx_wr.right_col ||
-                        ctx_wr.col < ctx_wr.left_col) {
+                    if (ctx_wr.cursor_pos_x > ctx_wr.right_col ||
+                        ctx_wr.cursor_pos_x < ctx_wr.left_col) {
                         uint32_t viewport_width =
                             ctx_wr.right_col - ctx_wr.left_col;
                         distance = viewport_width / 2;
                         ctx_wr.left_col = war_clamp_subtract_uint32(
-                            ctx_wr.col, distance, ctx_wr.min_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
                         ctx_wr.right_col = war_clamp_add_uint32(
-                            ctx_wr.col, distance, ctx_wr.max_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
                         ctx_wr.sub_col = note_quads.sub_col[i_next_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
@@ -6252,7 +6314,7 @@ reload_window_render:
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    ctx_wr.col = war_clamp_uint32(
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(
                         note_quads.col[i_next_note] +
                             (uint32_t)war_note_span_x(&note_quads, i_next_note),
                         ctx_wr.min_col,
@@ -6260,15 +6322,15 @@ reload_window_render:
                     ctx_wr.sub_col = note_quads.sub_col[i_next_note];
                     ctx_wr.navigation_sub_cells_col =
                         note_quads.sub_cells_col[i_next_note];
-                    if (ctx_wr.col > ctx_wr.right_col ||
-                        ctx_wr.col < ctx_wr.left_col) {
+                    if (ctx_wr.cursor_pos_x > ctx_wr.right_col ||
+                        ctx_wr.cursor_pos_x < ctx_wr.left_col) {
                         uint32_t viewport_width =
                             ctx_wr.right_col - ctx_wr.left_col;
                         distance = viewport_width / 2;
                         ctx_wr.left_col = war_clamp_subtract_uint32(
-                            ctx_wr.col, distance, ctx_wr.min_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
                         ctx_wr.right_col = war_clamp_add_uint32(
-                            ctx_wr.col, distance, ctx_wr.max_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
                         ctx_wr.sub_col = note_quads.sub_col[i_next_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
@@ -6342,22 +6404,22 @@ reload_window_render:
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    ctx_wr.col =
+                    ctx_wr.cursor_pos_x =
                         war_clamp_uint32(note_quads.col[i_previous_note],
                                          ctx_wr.min_col,
                                          ctx_wr.max_col);
                     ctx_wr.sub_col = note_quads.sub_col[i_previous_note];
                     ctx_wr.navigation_sub_cells_col =
                         note_quads.sub_cells_col[i_previous_note];
-                    if (ctx_wr.col > ctx_wr.right_col ||
-                        ctx_wr.col < ctx_wr.left_col) {
+                    if (ctx_wr.cursor_pos_x > ctx_wr.right_col ||
+                        ctx_wr.cursor_pos_x < ctx_wr.left_col) {
                         uint32_t viewport_width =
                             ctx_wr.right_col - ctx_wr.left_col;
                         distance = viewport_width / 2;
                         ctx_wr.left_col = war_clamp_subtract_uint32(
-                            ctx_wr.col, distance, ctx_wr.min_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
                         ctx_wr.right_col = war_clamp_add_uint32(
-                            ctx_wr.col, distance, ctx_wr.max_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
                         ctx_wr.sub_col = note_quads.sub_col[i_previous_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
@@ -6429,24 +6491,24 @@ reload_window_render:
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    ctx_wr.col =
+                    ctx_wr.cursor_pos_x =
                         war_clamp_uint32(note_quads.col[i_previous_note],
                                          ctx_wr.min_col,
                                          ctx_wr.max_col);
-                    ctx_wr.col = war_clamp_subtract_uint32(
-                        ctx_wr.col, 1, ctx_wr.min_col);
+                    ctx_wr.cursor_pos_x = war_clamp_subtract_uint32(
+                        ctx_wr.cursor_pos_x, 1, ctx_wr.min_col);
                     ctx_wr.sub_col = note_quads.sub_col[i_previous_note];
                     ctx_wr.navigation_sub_cells_col =
                         note_quads.sub_cells_col[i_previous_note];
-                    if (ctx_wr.col > ctx_wr.right_col ||
-                        ctx_wr.col < ctx_wr.left_col) {
+                    if (ctx_wr.cursor_pos_x > ctx_wr.right_col ||
+                        ctx_wr.cursor_pos_x < ctx_wr.left_col) {
                         uint32_t viewport_width =
                             ctx_wr.right_col - ctx_wr.left_col;
                         distance = viewport_width / 2;
                         ctx_wr.left_col = war_clamp_subtract_uint32(
-                            ctx_wr.col, distance, ctx_wr.min_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
                         ctx_wr.right_col = war_clamp_add_uint32(
-                            ctx_wr.col, distance, ctx_wr.max_col);
+                            ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
                         ctx_wr.sub_col = note_quads.sub_col[i_previous_note];
                         uint32_t new_viewport_width = war_clamp_subtract_uint32(
                             ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
@@ -6482,7 +6544,7 @@ reload_window_render:
                                       &ctx_wr,
                                       note_quads_in_x,
                                       &note_quads_in_x_count);
-                uint32_t cursor_row = ctx_wr.row;
+                uint32_t cursor_row = ctx_wr.cursor_pos_y;
                 uint32_t count = 1;
                 int i_above = -1;
                 if (ctx_wr.numeric_prefix) { count = ctx_wr.numeric_prefix; }
@@ -6512,18 +6574,19 @@ reload_window_render:
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    ctx_wr.row = war_clamp_uint32(note_quads.row[i_above],
-                                                  ctx_wr.min_row,
-                                                  ctx_wr.max_row);
-                    if (ctx_wr.row > ctx_wr.top_row ||
-                        ctx_wr.row < ctx_wr.bottom_row) {
+                    ctx_wr.cursor_pos_y =
+                        war_clamp_uint32(note_quads.row[i_above],
+                                         ctx_wr.min_row,
+                                         ctx_wr.max_row);
+                    if (ctx_wr.cursor_pos_y > ctx_wr.top_row ||
+                        ctx_wr.cursor_pos_y < ctx_wr.bottom_row) {
                         uint32_t viewport_height =
                             ctx_wr.top_row - ctx_wr.bottom_row;
                         uint32_t distance = viewport_height / 2;
                         ctx_wr.bottom_row = war_clamp_subtract_uint32(
-                            ctx_wr.row, distance, ctx_wr.min_row);
+                            ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
                         ctx_wr.top_row = war_clamp_add_uint32(
-                            ctx_wr.row, distance, ctx_wr.max_row);
+                            ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
                         uint32_t new_viewport_height =
                             war_clamp_subtract_uint32(ctx_wr.top_row,
                                                       ctx_wr.bottom_row,
@@ -6559,7 +6622,7 @@ reload_window_render:
                                       &ctx_wr,
                                       note_quads_in_x,
                                       &note_quads_in_x_count);
-                uint32_t cursor_row = ctx_wr.row;
+                uint32_t cursor_row = ctx_wr.cursor_pos_y;
                 uint32_t count = 1;
                 int i_above = -1;
                 if (ctx_wr.numeric_prefix) { count = ctx_wr.numeric_prefix; }
@@ -6589,18 +6652,19 @@ reload_window_render:
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    ctx_wr.row = war_clamp_uint32(note_quads.row[i_above],
-                                                  ctx_wr.min_row,
-                                                  ctx_wr.max_row);
-                    if (ctx_wr.row > ctx_wr.top_row ||
-                        ctx_wr.row < ctx_wr.bottom_row) {
+                    ctx_wr.cursor_pos_y =
+                        war_clamp_uint32(note_quads.row[i_above],
+                                         ctx_wr.min_row,
+                                         ctx_wr.max_row);
+                    if (ctx_wr.cursor_pos_y > ctx_wr.top_row ||
+                        ctx_wr.cursor_pos_y < ctx_wr.bottom_row) {
                         uint32_t viewport_height =
                             ctx_wr.top_row - ctx_wr.bottom_row;
                         uint32_t distance = viewport_height / 2;
                         ctx_wr.bottom_row = war_clamp_subtract_uint32(
-                            ctx_wr.row, distance, ctx_wr.min_row);
+                            ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
                         ctx_wr.top_row = war_clamp_add_uint32(
-                            ctx_wr.row, distance, ctx_wr.max_row);
+                            ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
                         uint32_t new_viewport_height =
                             war_clamp_subtract_uint32(ctx_wr.top_row,
                                                       ctx_wr.bottom_row,
@@ -6661,15 +6725,15 @@ reload_window_render:
                     ctx_wr.hud_state = HUD_PIANO_AND_LINE_NUMBERS;
                     ctx_wr.num_cols_for_line_numbers = 6;
                     ctx_wr.right_col -= 3;
-                    ctx_wr.col =
-                        war_clamp_uint32(ctx_wr.col, 0, ctx_wr.right_col);
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(
+                        ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
                     break;
                 case HUD_PIANO_AND_LINE_NUMBERS:
                     ctx_wr.hud_state = HUD_LINE_NUMBERS;
                     ctx_wr.num_cols_for_line_numbers = 3;
                     ctx_wr.right_col += 3;
-                    ctx_wr.col =
-                        war_clamp_uint32(ctx_wr.col, 0, ctx_wr.right_col);
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(
+                        ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
                     break;
                 case HUD_LINE_NUMBERS:
                     ctx_wr.hud_state = HUD_PIANO;
@@ -7721,8 +7785,8 @@ reload_window_render:
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.col = views.col[i_views];
-                ctx_wr.row = views.row[i_views];
+                ctx_wr.cursor_pos_x = views.col[i_views];
+                ctx_wr.cursor_pos_y = views.row[i_views];
                 ctx_wr.left_col = views.left_col[i_views];
                 ctx_wr.bottom_row = views.bottom_row[i_views];
                 ctx_wr.right_col = views.right_col[i_views];
@@ -7744,8 +7808,8 @@ reload_window_render:
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                ctx_wr.col = views.col[i_views];
-                ctx_wr.row = views.row[i_views];
+                ctx_wr.cursor_pos_x = views.col[i_views];
+                ctx_wr.cursor_pos_y = views.row[i_views];
                 ctx_wr.left_col = views.left_col[i_views];
                 ctx_wr.bottom_row = views.bottom_row[i_views];
                 ctx_wr.right_col = views.right_col[i_views];
@@ -8419,41 +8483,41 @@ reload_window_render:
                         BTN_LEFT) {
                         if (((int)(ctx_wr.cursor_x / ctx_vk.cell_width) -
                              (int)ctx_wr.num_cols_for_line_numbers) < 0) {
-                            ctx_wr.col = ctx_wr.left_col;
+                            ctx_wr.cursor_pos_x = ctx_wr.left_col;
                             break;
                         }
                         if ((((physical_height - ctx_wr.cursor_y) /
                               ctx_vk.cell_height) -
                              ctx_wr.num_rows_for_status_bars) < 0) {
-                            ctx_wr.row = ctx_wr.bottom_row;
+                            ctx_wr.cursor_pos_y = ctx_wr.bottom_row;
                             break;
                         }
-                        ctx_wr.col =
+                        ctx_wr.cursor_pos_x =
                             (uint32_t)(ctx_wr.cursor_x / ctx_vk.cell_width) -
                             ctx_wr.num_cols_for_line_numbers + ctx_wr.left_col;
-                        ctx_wr.row =
+                        ctx_wr.cursor_pos_y =
                             (uint32_t)((physical_height - ctx_wr.cursor_y) /
                                        ctx_vk.cell_height) -
                             ctx_wr.num_rows_for_status_bars + ctx_wr.bottom_row;
                         ctx_wr.cursor_blink_previous_us = ctx_wr.now;
                         ctx_wr.cursor_blinking = false;
-                        if (ctx_wr.row > ctx_wr.max_row) {
-                            ctx_wr.row = ctx_wr.max_row;
+                        if (ctx_wr.cursor_pos_y > ctx_wr.max_row) {
+                            ctx_wr.cursor_pos_y = ctx_wr.max_row;
                         }
-                        if (ctx_wr.row > ctx_wr.top_row) {
-                            ctx_wr.row = ctx_wr.top_row;
+                        if (ctx_wr.cursor_pos_y > ctx_wr.top_row) {
+                            ctx_wr.cursor_pos_y = ctx_wr.top_row;
                         }
-                        if (ctx_wr.row < ctx_wr.bottom_row) {
-                            ctx_wr.row = ctx_wr.bottom_row;
+                        if (ctx_wr.cursor_pos_y < ctx_wr.bottom_row) {
+                            ctx_wr.cursor_pos_y = ctx_wr.bottom_row;
                         }
-                        if (ctx_wr.col > ctx_wr.max_col) {
-                            ctx_wr.col = ctx_wr.max_col;
+                        if (ctx_wr.cursor_pos_x > ctx_wr.max_col) {
+                            ctx_wr.cursor_pos_x = ctx_wr.max_col;
                         }
-                        if (ctx_wr.col > ctx_wr.right_col) {
-                            ctx_wr.col = ctx_wr.right_col;
+                        if (ctx_wr.cursor_pos_x > ctx_wr.right_col) {
+                            ctx_wr.cursor_pos_x = ctx_wr.right_col;
                         }
-                        if (ctx_wr.col < ctx_wr.left_col) {
-                            ctx_wr.col = ctx_wr.left_col;
+                        if (ctx_wr.cursor_pos_x < ctx_wr.left_col) {
+                            ctx_wr.cursor_pos_x = ctx_wr.left_col;
                         }
                     }
                 }
@@ -9399,6 +9463,7 @@ reload_audio:
     pc_audio[AUDIO_CMD_SAVE] = &&pc_save;
     pc_audio[AUDIO_CMD_REMOVE_NOTE] = &&pc_remove_note;
     pc_audio[AUDIO_CMD_REMOVE_ALL_NOTES] = &&pc_remove_all_notes;
+    pc_audio[AUDIO_CMD_REPLACE_NOTE] = &&pc_replace_note;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -9485,6 +9550,10 @@ pc_remove_note: {
 pc_remove_all_notes: {
     call_carmack("from wr: remove_all_notes");
     notes->notes_count = 0;
+    goto pc_audio_done;
+}
+pc_replace_note: {
+    call_carmack("from wr: replace_note");
     goto pc_audio_done;
 }
 pc_end_war:

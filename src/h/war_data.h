@@ -216,14 +216,14 @@ typedef struct war_rgba_t {
 
 typedef struct war_note_quads {
     uint64_t* timestamp;
-    uint32_t* col;
-    uint32_t* row;
-    uint32_t* sub_col;
-    uint32_t* sub_row;
-    uint32_t* sub_cells_col;
-    uint32_t* cursor_width_whole_number;
-    uint32_t* cursor_width_sub_col;
-    uint32_t* cursor_width_sub_cells;
+    double* pos_x;
+    double* pos_y;
+    double* size_x;
+    double* navigation_x;
+    uint32_t* navigation_x_numerator;
+    uint32_t* navigation_x_denominator;
+    uint32_t* size_x_numerator;
+    uint32_t* size_x_denominator;
     uint32_t* color;
     uint32_t* outline_color;
     float* gain;
@@ -277,7 +277,6 @@ enum war_audio {
     AUDIO_DEFAULT_SAMPLE_DURATION = 30,
     AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
-    AUDIO_CMD_COUNT = 21,
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
     AUDIO_CMD_PAUSE = 3,
@@ -297,11 +296,12 @@ enum war_audio {
     AUDIO_CMD_MIDI_RECORD = 17,
     AUDIO_CMD_MIDI_RECORD_MAP = 18,
     AUDIO_CMD_SAVE = 19,
-    AUDIO_CMD_REMOVE_NOTE = 20,
-    AUDIO_CMD_REMOVE_ALL_NOTES = 21,
+    AUDIO_CMD_DELETE_NOTE = 20,
+    AUDIO_CMD_DELETE_ALL_NOTES = 21,
     AUDIO_CMD_REPLACE_NOTE = 22,
-    // cmd sizes (not including header)
-    // voices
+    AUDIO_CMD_REPLACE_NOTE_DURATION = 23,
+    AUDIO_CMD_REPLACE_NOTE_START = 24,
+    //
     AUDIO_VOICE_GRAND_PIANO = 0,
     AUDIO_VOICE_COUNT = 128,
     AUDIO_SINE_TABLE_SIZE = 1024,
@@ -392,7 +392,7 @@ typedef struct war_samples {
 } war_samples;
 
 typedef struct war_audio_context {
-    float BPM;
+    double BPM;
     uint32_t sample_rate;
     uint32_t period_size;
     uint32_t sub_period_size;

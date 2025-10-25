@@ -84,7 +84,7 @@ ctx_lua = {
     -- pool
     POOL_ALIGNMENT = 256,
     -- cmd
-    CMD_COUNT = 23,
+    CMD_COUNT = 24,
     -- pc
     PC_BUFFER_SIZE = 4096,
 }
@@ -2076,76 +2076,76 @@ pool_wr = {
     ---------------------------------------------------------------------------
     -- Views (war_views)
     ---------------------------------------------------------------------------
-    { name = "views.col",                            type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.row",                            type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.left_col",                       type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.right_col",                      type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.bottom_row",                     type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.top_row",                        type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.warpoon_text",                   type = "char*",           count = ctx_lua.WR_VIEWS_SAVED },
-    { name = "views.warpoon_text_rows",              type = "char",            count = ctx_lua.WR_VIEWS_SAVED * ctx_lua.WR_WARPOON_TEXT_COLS },
+    { name = "views.col",                           type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.row",                           type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.left_col",                      type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.right_col",                     type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.bottom_row",                    type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.top_row",                       type = "uint32_t",        count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.warpoon_text",                  type = "char*",           count = ctx_lua.WR_VIEWS_SAVED },
+    { name = "views.warpoon_text_rows",             type = "char",            count = ctx_lua.WR_VIEWS_SAVED * ctx_lua.WR_WARPOON_TEXT_COLS },
 
     ---------------------------------------------------------------------------
     -- FSM State Machine
     ---------------------------------------------------------------------------
     -- FSM root struct array
-    { name = "fsm",                                  type = "war_fsm_state",   count = ctx_lua.WR_STATES },
-    { name = "fsm.is_terminal",                      type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.is_prefix",                        type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_release",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_repeat",                    type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.handle_timeout",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.command",                          type = "void*",           count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.next_state",                       type = "uint16_t",        count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "fsm",                                 type = "war_fsm_state",   count = ctx_lua.WR_STATES },
+    { name = "fsm.is_terminal",                     type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.is_prefix",                       type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_release",                  type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_repeat",                   type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.handle_timeout",                  type = "uint8_t",         count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.command",                         type = "void*",           count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.next_state",                      type = "uint16_t",        count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
 
     ---------------------------------------------------------------------------
     -- Quads and Vertices
     ---------------------------------------------------------------------------
-    { name = "note_quads_in_x",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads_in_x",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
 
-    { name = "quad_vertices",                        type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
+    { name = "quad_vertices",                       type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
 
-    { name = "quad_indices",                         type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
+    { name = "quad_indices",                        type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
 
-    { name = "transparent_quad_vertices",            type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
+    { name = "transparent_quad_vertices",           type = "war_quad_vertex", count = ctx_lua.WR_QUADS_MAX },
 
-    { name = "transparent_quad_indices",             type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
+    { name = "transparent_quad_indices",            type = "uint16_t",        count = ctx_lua.WR_QUADS_MAX },
 
-    { name = "text_vertices",                        type = "war_text_vertex", count = ctx_lua.WR_TEXT_QUADS_MAX },
+    { name = "text_vertices",                       type = "war_text_vertex", count = ctx_lua.WR_TEXT_QUADS_MAX },
 
-    { name = "text_indices",                         type = "uint16_t",        count = ctx_lua.WR_TEXT_QUADS_MAX },
+    { name = "text_indices",                        type = "uint16_t",        count = ctx_lua.WR_TEXT_QUADS_MAX },
 
     ---------------------------------------------------------------------------
     -- Status Bar Text Buffers
     ---------------------------------------------------------------------------
-    { name = "text_top_status_bar",                  type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
-    { name = "text_middle_status_bar",               type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
-    { name = "text_bottom_status_bar",               type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
+    { name = "text_top_status_bar",                 type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
+    { name = "text_middle_status_bar",              type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
+    { name = "text_bottom_status_bar",              type = "char",            count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
 
     ---------------------------------------------------------------------------
     -- Note Quads (war_note_quads)
     ---------------------------------------------------------------------------
-    { name = "note_quads.timestamp",                 type = "uint64_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.col",                       type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.row",                       type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.sub_col",                   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.sub_row",                   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.sub_cells_col",             type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.cursor_width_whole_number", type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.cursor_width_sub_col",      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.cursor_width_sub_cells",    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.color",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.outline_color",             type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.gain",                      type = "float",           count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.voice",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.hidden",                    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
-    { name = "note_quads.mute",                      type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.timestamp",                type = "uint64_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.pos_x",                    type = "double",          count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.pos_y",                    type = "double",          count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.size_x",                   type = "double",          count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.navigation_x",             type = "double",          count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.navigation_x_numerator",   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.navigation_x_denominator", type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.size_x_numerator",         type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.size_x_denominator",       type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.color",                    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.outline_color",            type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.gain",                     type = "float",           count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.voice",                    type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.hidden",                   type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.mute",                     type = "uint32_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
 
     -- keydown, keylasteventus, msgbuffer, pc_window_render, payload
-    { name = "key_down",                             type = "bool",            count = ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
-    { name = "key_last_event_us",                    type = "uint64_t",        count = ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
-    { name = "msg_buffer",                           type = "uint8_t",         count = ctx_lua.WR_WAYLAND_MSG_BUFFER_SIZE },
-    { name = "obj_op",                               type = "void*",           count = ctx_lua.WR_WAYLAND_MAX_OBJECTS * ctx_lua.WR_WAYLAND_MAX_OP_CODES },
-    { name = "pc_window_render",                     type = "void*",           count = ctx_lua.CMD_COUNT },
-    { name = "payload",                              type = "uint8_t",         count = ctx_lua.PC_BUFFER_SIZE },
+    { name = "key_down",                            type = "bool",            count = ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "key_last_event_us",                   type = "uint64_t",        count = ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "msg_buffer",                          type = "uint8_t",         count = ctx_lua.WR_WAYLAND_MSG_BUFFER_SIZE },
+    { name = "obj_op",                              type = "void*",           count = ctx_lua.WR_WAYLAND_MAX_OBJECTS * ctx_lua.WR_WAYLAND_MAX_OP_CODES },
+    { name = "pc_window_render",                    type = "void*",           count = ctx_lua.CMD_COUNT },
+    { name = "payload",                             type = "uint8_t",         count = ctx_lua.PC_BUFFER_SIZE },
 }

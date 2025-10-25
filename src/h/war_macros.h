@@ -242,6 +242,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(int32_t);
             else if (strcmp(type, "float") == 0)
                 type_size = sizeof(float);
+            else if (strcmp(type, "double") == 0)
+                type_size = sizeof(double);
             else if (strcmp(type, "void*") == 0)
                 type_size = sizeof(void*);
             else if (strcmp(type, "char") == 0)
@@ -416,7 +418,7 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
         memcpy(ctx_wr->text_middle_status_bar +
                    ctx_wr->text_status_bar_end_index,
                ctx_wr->input_sequence,
-               1);
+               ctx_wr->num_chars_in_sequence);
         uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ?
                             sizeof("BLINK") :
                             sizeof("BPM");
@@ -428,7 +430,7 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
     }
     memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index,
            ctx_wr->input_sequence,
-           1);
+           ctx_wr->num_chars_in_sequence);
 }
 
 static inline void war_get_bottom_text(war_window_render_context* ctx_wr) {
@@ -941,7 +943,7 @@ static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
     if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (char)(ks - XKB_KEY_A + 'a');
 
     // Numbers 0-9
-    if (ks >= XKB_KEY_0 && ks <= XKB_KEY_9) return (char)ks;
+    if (ks >= XKB_KEY_0 && ks <= XKB_KEY_9 && mod == 0) return (char)ks;
 
     switch (ks) {
     case KEYSYM_SPACE:
@@ -1317,57 +1319,30 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     (*indices_count) += 6;
 }
 
-static inline double war_cursor_pos_x(war_window_render_context* ctx_wr) {
-    return ctx_wr->cursor_pos_x +
-           (double)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
-}
-
-static inline float war_cursor_span_x(war_window_render_context* ctx_wr) {
-    return (float)ctx_wr->cursor_width_whole_number *
-           ctx_wr->cursor_width_sub_col / ctx_wr->cursor_width_sub_cells;
-}
-
-static inline float war_cursor_pos_x_end(war_window_render_context* ctx_wr) {
-    return war_cursor_pos_x(ctx_wr) + war_cursor_span_x(ctx_wr);
-}
-
-static inline float war_note_pos_x(war_note_quads* note_quads, uint32_t i) {
-    return note_quads->col[i] +
-           (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
-}
-
-static inline float war_note_span_x(war_note_quads* note_quads, uint32_t i) {
-    return (float)note_quads->cursor_width_whole_number[i] *
-           note_quads->cursor_width_sub_col[i] /
-           note_quads->cursor_width_sub_cells[i];
-}
-
-static inline float war_note_pos_x_end(war_note_quads* note_quads, uint32_t i) {
-    return war_note_pos_x(note_quads, i) + war_note_span_x(note_quads, i);
-}
-
-static inline void war_note_quads_add(war_note_quads* note_quads,
-                                      uint32_t* note_quads_count,
-                                      war_producer_consumer* pc,
-                                      war_window_render_context* ctx_wr,
-                                      uint32_t color,
-                                      uint32_t outline_color,
-                                      float gain,
-                                      uint32_t voice,
-                                      uint32_t hidden,
-                                      uint32_t mute) {
+static inline void war_notes_add(war_note_quads* note_quads,
+                                 uint32_t* note_quads_count,
+                                 war_producer_consumer* pc,
+                                 war_window_render_context* ctx_wr,
+                                 war_lua_context* ctx_lua,
+                                 uint32_t color,
+                                 uint32_t outline_color,
+                                 float gain,
+                                 uint32_t voice,
+                                 uint32_t hidden,
+                                 uint32_t mute) {
     assert(*note_quads_count < max_note_quads);
     note_quads->timestamp[*note_quads_count] = ctx_wr->now;
-    note_quads->col[*note_quads_count] = ctx_wr->cursor_pos_x;
-    note_quads->row[*note_quads_count] = ctx_wr->cursor_pos_y;
-    note_quads->sub_col[*note_quads_count] = ctx_wr->sub_col;
-    note_quads->sub_cells_col[*note_quads_count] =
+    note_quads->pos_x[*note_quads_count] = ctx_wr->cursor_pos_x;
+    note_quads->pos_y[*note_quads_count] = ctx_wr->cursor_pos_y;
+    note_quads->navigation_x[*note_quads_count] = ctx_wr->cursor_navigation_x;
+    note_quads->size_x[*note_quads_count] = ctx_wr->cursor_size_x;
+    note_quads->navigation_x_numerator[*note_quads_count] =
+        ctx_wr->navigation_whole_number_col;
+    note_quads->navigation_x_denominator[*note_quads_count] =
         ctx_wr->navigation_sub_cells_col;
-    note_quads->cursor_width_whole_number[*note_quads_count] =
+    note_quads->size_x_numerator[*note_quads_count] =
         ctx_wr->cursor_width_whole_number;
-    note_quads->cursor_width_sub_col[*note_quads_count] =
-        ctx_wr->cursor_width_sub_col;
-    note_quads->cursor_width_sub_cells[*note_quads_count] =
+    note_quads->size_x_denominator[*note_quads_count] =
         ctx_wr->cursor_width_sub_cells;
     note_quads->color[*note_quads_count] = color;
     note_quads->outline_color[*note_quads_count] = outline_color;
@@ -1377,7 +1352,22 @@ static inline void war_note_quads_add(war_note_quads* note_quads,
     note_quads->mute[*note_quads_count] = mute;
     (*note_quads_count)++;
 
-    // TODO: send add command to audio thread
+    double d_start_sec =
+        ctx_wr->cursor_pos_x * ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
+    uint64_t start_frames =
+        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
+                            ((double)ctx_wr->cursor_size_x);
+    uint64_t duration_frames = (uint64_t)llround(
+        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    war_note_msg note_msg = {.note_start_frames = start_frames,
+                             .note_duration_frames = duration_frames,
+                             .note_sample_index = ctx_wr->cursor_pos_y,
+                             .note_gain = 1.0f,
+                             .note_attack = 0.0f,
+                             .note_sustain = 1.0f,
+                             .note_release = 0.0f};
+    war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note_msg), &note_msg);
 }
 
 static inline void war_note_quads_delete(war_note_quads* note_quads,
@@ -1391,8 +1381,8 @@ static inline void war_note_quads_delete(war_note_quads* note_quads,
     int32_t freshest_index = -1;
 
     for (uint32_t i = 0; i < *note_quads_count; i++) {
-        if (note_quads->col[i] == ctx_wr->cursor_pos_x &&
-            note_quads->row[i] == ctx_wr->cursor_pos_y &&
+        if (note_quads->pos_x[i] == ctx_wr->cursor_pos_x &&
+            note_quads->pos_y[i] == ctx_wr->cursor_pos_y &&
             note_quads->timestamp[i] > freshest_time) {
             freshest_time = note_quads->timestamp[i];
             freshest_index = i;
@@ -1405,17 +1395,19 @@ static inline void war_note_quads_delete(war_note_quads* note_quads,
     uint32_t last = *note_quads_count - 1;
     if ((uint32_t)freshest_index != last) {
         note_quads->timestamp[freshest_index] = note_quads->timestamp[last];
-        note_quads->col[freshest_index] = note_quads->col[last];
-        note_quads->row[freshest_index] = note_quads->row[last];
-        note_quads->sub_col[freshest_index] = note_quads->sub_col[last];
-        note_quads->sub_cells_col[freshest_index] =
-            note_quads->sub_cells_col[last];
-        note_quads->cursor_width_whole_number[freshest_index] =
-            note_quads->cursor_width_whole_number[last];
-        note_quads->cursor_width_sub_col[freshest_index] =
-            note_quads->cursor_width_sub_col[last];
-        note_quads->cursor_width_sub_cells[freshest_index] =
-            note_quads->cursor_width_sub_cells[last];
+        note_quads->pos_x[freshest_index] = note_quads->pos_x[last];
+        note_quads->pos_y[freshest_index] = note_quads->pos_y[last];
+        note_quads->navigation_x[freshest_index] =
+            note_quads->navigation_x[last];
+        note_quads->size_x[freshest_index] = note_quads->size_x[last];
+        note_quads->navigation_x_numerator[freshest_index] =
+            note_quads->navigation_x_numerator[last];
+        note_quads->navigation_x_denominator[freshest_index] =
+            note_quads->navigation_x_denominator[last];
+        note_quads->size_x_numerator[freshest_index] =
+            note_quads->size_x_numerator[last];
+        note_quads->size_x_denominator[freshest_index] =
+            note_quads->size_x_denominator[last];
         note_quads->color[freshest_index] = note_quads->color[last];
         note_quads->outline_color[freshest_index] =
             note_quads->outline_color[last];
@@ -1430,167 +1422,157 @@ static inline void war_note_quads_delete(war_note_quads* note_quads,
     // TODO: send delete command to audio thread
 }
 
-static inline void war_note_quads_delete_at_i(war_note_quads* note_quads,
-                                              uint32_t* note_quads_count,
-                                              war_producer_consumer* pc,
-                                              uint32_t i_delete) {
+static inline void war_notes_delete_at_i(war_note_quads* note_quads,
+                                         uint32_t* note_quads_count,
+                                         war_producer_consumer* pc,
+                                         war_lua_context* ctx_lua,
+                                         uint32_t i_delete) {
     if (*note_quads_count == 0 || i_delete >= *note_quads_count) return;
-
+    double d_start_sec = note_quads->pos_x[i_delete] *
+                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
+    uint64_t start_frames =
+        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
+                            ((double)note_quads->size_x[i_delete]);
+    uint64_t duration_frames = (uint64_t)llround(
+        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    war_note_msg note_msg = {.note_start_frames = start_frames,
+                             .note_duration_frames = duration_frames,
+                             .note_sample_index = note_quads->pos_y[i_delete],
+                             .note_gain = 1.0f,
+                             .note_attack = 0.0f,
+                             .note_sustain = 1.0f,
+                             .note_release = 0.0f};
+    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(note_msg), &note_msg);
     uint32_t last = *note_quads_count - 1;
-
     // Swap the element to delete with the last element
     uint64_t swapped_time = note_quads->timestamp[last];
-
     note_quads->timestamp[i_delete] = note_quads->timestamp[last];
-    note_quads->col[i_delete] = note_quads->col[last];
-    note_quads->row[i_delete] = note_quads->row[last];
-    note_quads->sub_col[i_delete] = note_quads->sub_col[last];
-    note_quads->sub_cells_col[i_delete] = note_quads->sub_cells_col[last];
-    note_quads->cursor_width_whole_number[i_delete] =
-        note_quads->cursor_width_whole_number[last];
-    note_quads->cursor_width_sub_col[i_delete] =
-        note_quads->cursor_width_sub_col[last];
-    note_quads->cursor_width_sub_cells[i_delete] =
-        note_quads->cursor_width_sub_cells[last];
+    note_quads->pos_x[i_delete] = note_quads->pos_x[last];
+    note_quads->pos_y[i_delete] = note_quads->pos_y[last];
+    note_quads->navigation_x[i_delete] = note_quads->navigation_x[last];
+    note_quads->size_x[i_delete] = note_quads->size_x[last];
+    note_quads->navigation_x_numerator[i_delete] =
+        note_quads->navigation_x_numerator[last];
+    note_quads->navigation_x_denominator[i_delete] =
+        note_quads->navigation_x_denominator[last];
+    note_quads->size_x_numerator[i_delete] = note_quads->size_x_numerator[last];
+    note_quads->size_x_denominator[i_delete] =
+        note_quads->size_x_denominator[last];
     note_quads->color[i_delete] = note_quads->color[last];
     note_quads->outline_color[i_delete] = note_quads->outline_color[last];
     note_quads->gain[i_delete] = note_quads->gain[last];
     note_quads->voice[i_delete] = note_quads->voice[last];
     note_quads->hidden[i_delete] = note_quads->hidden[last];
     note_quads->mute[i_delete] = note_quads->mute[last];
-
     (*note_quads_count)--;
-
-    // Bubble left if needed
     int32_t i = i_delete;
     while (i > 0 && note_quads->timestamp[i] < note_quads->timestamp[i - 1]) {
-        // Swap with previous
         uint64_t tmp_time = note_quads->timestamp[i - 1];
         note_quads->timestamp[i - 1] = note_quads->timestamp[i];
         note_quads->timestamp[i] = tmp_time;
-
-        uint32_t tmp_col = note_quads->col[i - 1];
-        note_quads->col[i - 1] = note_quads->col[i];
-        note_quads->col[i] = tmp_col;
-
-        uint32_t tmp_row = note_quads->row[i - 1];
-        note_quads->row[i - 1] = note_quads->row[i];
-        note_quads->row[i] = tmp_row;
-
-        uint32_t tmp_sub_col = note_quads->sub_col[i - 1];
-        note_quads->sub_col[i - 1] = note_quads->sub_col[i];
-        note_quads->sub_col[i] = tmp_sub_col;
-
-        uint32_t tmp_sub_cells = note_quads->sub_cells_col[i - 1];
-        note_quads->sub_cells_col[i - 1] = note_quads->sub_cells_col[i];
-        note_quads->sub_cells_col[i] = tmp_sub_cells;
-
-        uint32_t tmp_cwwn = note_quads->cursor_width_whole_number[i - 1];
-        note_quads->cursor_width_whole_number[i - 1] =
-            note_quads->cursor_width_whole_number[i];
-        note_quads->cursor_width_whole_number[i] = tmp_cwwn;
-
-        uint32_t tmp_cwsc = note_quads->cursor_width_sub_col[i - 1];
-        note_quads->cursor_width_sub_col[i - 1] =
-            note_quads->cursor_width_sub_col[i];
-        note_quads->cursor_width_sub_col[i] = tmp_cwsc;
-
-        uint32_t tmp_cwscs = note_quads->cursor_width_sub_cells[i - 1];
-        note_quads->cursor_width_sub_cells[i - 1] =
-            note_quads->cursor_width_sub_cells[i];
-        note_quads->cursor_width_sub_cells[i] = tmp_cwscs;
-
+        double tmp_col = note_quads->pos_x[i - 1];
+        note_quads->pos_x[i - 1] = note_quads->pos_x[i];
+        note_quads->pos_x[i] = tmp_col;
+        double tmp_row = note_quads->pos_y[i - 1];
+        note_quads->pos_y[i - 1] = note_quads->pos_y[i];
+        note_quads->pos_y[i] = tmp_row;
+        double tmp_navigation_x = note_quads->navigation_x[i - 1];
+        note_quads->navigation_x[i - 1] = note_quads->navigation_x[i];
+        note_quads->navigation_x[i] = tmp_navigation_x;
+        double tmp_size_x = note_quads->size_x[i - 1];
+        note_quads->size_x[i - 1] = note_quads->size_x[i];
+        note_quads->size_x[i] = tmp_size_x;
+        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i - 1];
+        note_quads->size_x_numerator[i - 1] = note_quads->size_x_numerator[i];
+        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
+        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i - 1];
+        note_quads->size_x_denominator[i - 1] =
+            note_quads->size_x_denominator[i];
+        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
+        uint32_t tmp_navigation_x_numerator =
+            note_quads->navigation_x_numerator[i - 1];
+        note_quads->navigation_x_numerator[i - 1] =
+            note_quads->navigation_x_numerator[i];
+        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
+        uint32_t tmp_navigation_x_denominator =
+            note_quads->navigation_x_denominator[i - 1];
+        note_quads->navigation_x_denominator[i - 1] =
+            note_quads->navigation_x_denominator[i];
+        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
         uint32_t tmp_color = note_quads->color[i - 1];
         note_quads->color[i - 1] = note_quads->color[i];
         note_quads->color[i] = tmp_color;
-
         uint32_t tmp_outline = note_quads->outline_color[i - 1];
         note_quads->outline_color[i - 1] = note_quads->outline_color[i];
         note_quads->outline_color[i] = tmp_outline;
-
         uint8_t tmp_strength = note_quads->gain[i - 1];
         note_quads->gain[i - 1] = note_quads->gain[i];
         note_quads->gain[i] = tmp_strength;
-
         uint8_t tmp_voice = note_quads->voice[i - 1];
         note_quads->voice[i - 1] = note_quads->voice[i];
         note_quads->voice[i] = tmp_voice;
-
         uint8_t tmp_hidden = note_quads->hidden[i - 1];
         note_quads->hidden[i - 1] = note_quads->hidden[i];
         note_quads->hidden[i] = tmp_hidden;
-
         uint8_t tmp_mute = note_quads->mute[i - 1];
         note_quads->mute[i - 1] = note_quads->mute[i];
         note_quads->mute[i] = tmp_mute;
-
         i--;
     }
-
-    // Bubble right if needed
     i = i_delete;
     while (i < (int32_t)(*note_quads_count - 1) &&
            note_quads->timestamp[i] > note_quads->timestamp[i + 1]) {
-        // Swap with next (same as above but with i and i+1)
         uint64_t tmp_time = note_quads->timestamp[i + 1];
         note_quads->timestamp[i + 1] = note_quads->timestamp[i];
         note_quads->timestamp[i] = tmp_time;
-
-        uint32_t tmp_col = note_quads->col[i + 1];
-        note_quads->col[i + 1] = note_quads->col[i];
-        note_quads->col[i] = tmp_col;
-
-        uint32_t tmp_row = note_quads->row[i + 1];
-        note_quads->row[i + 1] = note_quads->row[i];
-        note_quads->row[i] = tmp_row;
-
-        uint32_t tmp_sub_col = note_quads->sub_col[i + 1];
-        note_quads->sub_col[i + 1] = note_quads->sub_col[i];
-        note_quads->sub_col[i] = tmp_sub_col;
-
-        uint32_t tmp_sub_cells = note_quads->sub_cells_col[i + 1];
-        note_quads->sub_cells_col[i + 1] = note_quads->sub_cells_col[i];
-        note_quads->sub_cells_col[i] = tmp_sub_cells;
-
-        uint32_t tmp_cwwn = note_quads->cursor_width_whole_number[i + 1];
-        note_quads->cursor_width_whole_number[i + 1] =
-            note_quads->cursor_width_whole_number[i];
-        note_quads->cursor_width_whole_number[i] = tmp_cwwn;
-
-        uint32_t tmp_cwsc = note_quads->cursor_width_sub_col[i + 1];
-        note_quads->cursor_width_sub_col[i + 1] =
-            note_quads->cursor_width_sub_col[i];
-        note_quads->cursor_width_sub_col[i] = tmp_cwsc;
-
-        uint32_t tmp_cwscs = note_quads->cursor_width_sub_cells[i + 1];
-        note_quads->cursor_width_sub_cells[i + 1] =
-            note_quads->cursor_width_sub_cells[i];
-        note_quads->cursor_width_sub_cells[i] = tmp_cwscs;
-
+        double tmp_col = note_quads->pos_x[i + 1];
+        note_quads->pos_x[i + 1] = note_quads->pos_x[i];
+        note_quads->pos_x[i] = tmp_col;
+        double tmp_row = note_quads->pos_y[i + 1];
+        note_quads->pos_y[i + 1] = note_quads->pos_y[i];
+        note_quads->pos_y[i] = tmp_row;
+        double tmp_navigation_x = note_quads->navigation_x[i + 1];
+        note_quads->navigation_x[i + 1] = note_quads->navigation_x[i];
+        note_quads->navigation_x[i] = tmp_navigation_x;
+        double tmp_size_x = note_quads->size_x[i + 1];
+        note_quads->size_x[i + 1] = note_quads->size_x[i];
+        note_quads->size_x[i] = tmp_size_x;
+        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i + 1];
+        note_quads->size_x_numerator[i + 1] = note_quads->size_x_numerator[i];
+        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
+        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i + 1];
+        note_quads->size_x_denominator[i + 1] =
+            note_quads->size_x_denominator[i];
+        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
+        uint32_t tmp_navigation_x_numerator =
+            note_quads->navigation_x_numerator[i + 1];
+        note_quads->navigation_x_numerator[i + 1] =
+            note_quads->navigation_x_numerator[i];
+        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
+        uint32_t tmp_navigation_x_denominator =
+            note_quads->navigation_x_denominator[i + 1];
+        note_quads->navigation_x_denominator[i + 1] =
+            note_quads->navigation_x_denominator[i];
+        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
         uint32_t tmp_color = note_quads->color[i + 1];
         note_quads->color[i + 1] = note_quads->color[i];
         note_quads->color[i] = tmp_color;
-
         uint32_t tmp_outline = note_quads->outline_color[i + 1];
         note_quads->outline_color[i + 1] = note_quads->outline_color[i];
         note_quads->outline_color[i] = tmp_outline;
-
         uint8_t tmp_strength = note_quads->gain[i + 1];
         note_quads->gain[i + 1] = note_quads->gain[i];
         note_quads->gain[i] = tmp_strength;
-
         uint8_t tmp_voice = note_quads->voice[i + 1];
         note_quads->voice[i + 1] = note_quads->voice[i];
         note_quads->voice[i] = tmp_voice;
-
         uint8_t tmp_hidden = note_quads->hidden[i + 1];
         note_quads->hidden[i + 1] = note_quads->hidden[i];
         note_quads->hidden[i] = tmp_hidden;
-
         uint8_t tmp_mute = note_quads->mute[i + 1];
         note_quads->mute[i + 1] = note_quads->mute[i];
         note_quads->mute[i] = tmp_mute;
-
         i++;
     }
 }
@@ -1608,186 +1590,83 @@ static inline uint32_t war_lcm(uint32_t a, uint32_t b) {
     return a / war_gcd(a, b) * b;
 }
 
-static inline void
-war_note_quads_trim_right_at_i(war_note_quads* note_quads,
-                               uint32_t* note_quads_count,
-                               war_window_render_context* ctx_wr,
-                               war_producer_consumer* pc,
-                               uint32_t i_trim) {
+static inline void war_notes_trim_right_at_i(war_note_quads* note_quads,
+                                             uint32_t* note_quads_count,
+                                             war_window_render_context* ctx_wr,
+                                             war_producer_consumer* pc,
+                                             war_lua_context* ctx_lua,
+                                             uint32_t i_trim) {
     if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
-    float cursor_pos_x =
-        ctx_wr->cursor_pos_x +
-        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
-                          ctx_wr->cursor_width_sub_col /
-                          ctx_wr->cursor_width_sub_cells;
-    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float note_pos_x =
-        note_quads->col[i_trim] +
-        (float)note_quads->sub_col[i_trim] / note_quads->sub_cells_col[i_trim];
-    float note_span_x = (float)note_quads->cursor_width_whole_number[i_trim] *
-                        note_quads->cursor_width_sub_col[i_trim] /
-                        note_quads->cursor_width_sub_cells[i_trim];
-    float note_pos_x_end = note_pos_x + note_span_x;
-    bool delete = cursor_pos_x <= note_pos_x;
-    if (delete) {
-        war_note_quads_delete_at_i(note_quads, note_quads_count, pc, i_trim);
-        return;
-    }
-    float new_span_x = cursor_pos_x - note_pos_x;
-    uint32_t new_cursor_width_whole_number = 1;
-    uint32_t new_cursor_width_sub_col = 1;
-    uint32_t new_cursor_width_sub_cells = 1;
-    float practical_span_x = (float)new_cursor_width_whole_number *
-                             new_cursor_width_sub_col /
-                             new_cursor_width_sub_cells;
-    const float EPS = 1e-2f;
-    float min_error = fabs(new_span_x - practical_span_x);
-    bool practical = false;
-    while (!practical) {
-        for (uint32_t sub_cells = 1; sub_cells <= 1000 && !practical;
-             sub_cells++) {
-            for (uint32_t sub_col = 1; sub_col <= 1000 && !practical;
-                 sub_col++) {
-                for (uint32_t whole = 1; whole <= 1000 && !practical; whole++) {
-                    float test_span = (float)whole * sub_col / sub_cells;
-                    float error = fabs(new_span_x - test_span);
-                    if (error < min_error) {
-                        min_error = error;
-                        new_cursor_width_whole_number = whole;
-                        new_cursor_width_sub_col = sub_col;
-                        new_cursor_width_sub_cells = sub_cells;
-                        practical_span_x = test_span;
-                    }
-                    if (error <= EPS) {
-                        practical = true;
-                        break;
-                    }
-                }
-            }
-        }
-        if (min_error <= EPS) {
-            practical = true;
-        } else {
-            break;
-        }
-    }
-    note_quads->cursor_width_whole_number[i_trim] =
-        new_cursor_width_whole_number;
-    note_quads->cursor_width_sub_col[i_trim] = new_cursor_width_sub_col;
-    ;
-    note_quads->cursor_width_sub_cells[i_trim] = new_cursor_width_sub_cells;
-    ;
+    double d_start_sec = note_quads->pos_x[i_trim] *
+                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
+    uint64_t start_frames =
+        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
+                            ((double)note_quads->size_x[i_trim]);
+    uint64_t duration_frames = (uint64_t)llround(
+        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    war_note_msg old_note_msg = {.note_start_frames = start_frames,
+                                 .note_duration_frames = duration_frames,
+                                 .note_sample_index = note_quads->pos_y[i_trim],
+                                 .note_gain = 1.0f,
+                                 .note_attack = 0.0f,
+                                 .note_sustain = 1.0f,
+                                 .note_release = 0.0f};
+    double new_size_x = ctx_wr->cursor_pos_x - note_quads->pos_x[i_trim];
+    double new_d_duration_sec =
+        ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) * (new_size_x);
+    uint64_t new_duration_frames = (uint64_t)llround(
+        new_d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    uint8_t payload[sizeof(war_note_msg) + sizeof(uint64_t)];
+    memcpy(payload, &old_note_msg, sizeof(war_note_msg));
+    memcpy(
+        payload + sizeof(war_note_msg), &new_duration_frames, sizeof(uint64_t));
+    war_pc_to_a(pc, AUDIO_CMD_REPLACE_NOTE_DURATION, sizeof(payload), payload);
+    note_quads->size_x[i_trim] = new_size_x;
 }
 
-static inline void
-war_note_quads_trim_left_at_i(war_note_quads* note_quads,
-                              uint32_t* note_quads_count,
-                              war_window_render_context* ctx_wr,
-                              war_producer_consumer* pc,
-                              uint32_t i_trim) {
+static inline void war_notes_trim_left_at_i(war_note_quads* note_quads,
+                                            uint32_t* note_quads_count,
+                                            war_window_render_context* ctx_wr,
+                                            war_producer_consumer* pc,
+                                            war_lua_context* ctx_lua,
+                                            uint32_t i_trim) {
     if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
-    float cursor_pos_x =
-        ctx_wr->cursor_pos_x +
-        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
-                          ctx_wr->cursor_width_sub_col /
-                          ctx_wr->cursor_width_sub_cells;
-    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float note_pos_x =
-        note_quads->col[i_trim] +
-        (float)note_quads->sub_col[i_trim] / note_quads->sub_cells_col[i_trim];
-    float note_span_x = (float)note_quads->cursor_width_whole_number[i_trim] *
-                        note_quads->cursor_width_sub_col[i_trim] /
-                        note_quads->cursor_width_sub_cells[i_trim];
-    float note_pos_x_end = note_pos_x + note_span_x;
-    bool delete = cursor_pos_x_end >= note_pos_x_end;
-    if (delete) {
-        war_note_quads_delete_at_i(note_quads, note_quads_count, pc, i_trim);
-        return;
-    }
-    float new_span_x = note_pos_x_end - cursor_pos_x_end;
-    uint32_t new_cursor_width_whole_number = 1;
-    uint32_t new_cursor_width_sub_col = 1;
-    uint32_t new_cursor_width_sub_cells = 1;
-    float practical_span_x = (float)new_cursor_width_whole_number *
-                             new_cursor_width_sub_col /
-                             new_cursor_width_sub_cells;
-    const float EPS = 1e-2f;
-    float min_error = fabs(new_span_x - practical_span_x);
-    bool practical = false;
-    while (!practical) {
-        for (uint32_t sub_cells = 1; sub_cells <= 1000 && !practical;
-             sub_cells++) {
-            for (uint32_t sub_col = 1; sub_col <= 1000 && !practical;
-                 sub_col++) {
-                for (uint32_t whole = 1; whole <= 1000 && !practical; whole++) {
-                    float test_span = (float)whole * sub_col / sub_cells;
-                    float error = fabs(new_span_x - test_span);
-                    if (error < min_error) {
-                        min_error = error;
-                        new_cursor_width_whole_number = whole;
-                        new_cursor_width_sub_col = sub_col;
-                        new_cursor_width_sub_cells = sub_cells;
-                        practical_span_x = test_span;
-                    }
-                    if (error <= EPS) {
-                        practical = true;
-                        break;
-                    }
-                }
-            }
-        }
-        if (min_error <= EPS) {
-            practical = true;
-        } else {
-            break;
-        }
-    }
-    note_quads->cursor_width_whole_number[i_trim] =
-        new_cursor_width_whole_number;
-    note_quads->cursor_width_sub_col[i_trim] = new_cursor_width_sub_col;
-    note_quads->cursor_width_sub_cells[i_trim] = new_cursor_width_sub_cells;
-    float new_pos_x = cursor_pos_x_end;
-    float new_col = ctx_wr->cursor_pos_x;
-    float new_sub_col = 1;
-    float new_sub_cells_col = 1;
-    float practical_pos_x = new_col + (float)new_sub_col / new_sub_cells_col;
-    float min_error_pos = fabs(new_pos_x - practical_pos_x);
-    bool practical_pos = false;
-    while (!practical_pos) {
-        for (uint32_t sub_cells = 1; sub_cells <= 1000 && !practical_pos;
-             sub_cells++) {
-            for (uint32_t sub_col = 1; sub_col <= 1000 && !practical_pos;
-                 sub_col++) {
-                for (uint32_t col = 0;
-                     col <= (uint32_t)new_pos_x && !practical_pos;
-                     col++) {
-                    float test_pos = col + (float)sub_col / sub_cells;
-                    float error = fabs(new_pos_x - test_pos);
-                    if (error < min_error_pos) {
-                        min_error_pos = error;
-                        new_col = col;
-                        new_sub_col = sub_col;
-                        new_sub_cells_col = sub_cells;
-                        practical_pos_x = test_pos;
-                    }
-                    if (error <= EPS) {
-                        practical_pos = true;
-                        break;
-                    }
-                }
-            }
-        }
-        if (min_error_pos <= EPS) {
-            practical_pos = true;
-        } else {
-            break;
-        }
-    }
-    note_quads->col[i_trim] = new_col;
-    note_quads->sub_col[i_trim] = new_sub_col;
-    note_quads->sub_cells_col[i_trim] = new_sub_cells_col;
+    double d_start_sec = note_quads->pos_x[i_trim] *
+                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
+    uint64_t start_frames =
+        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
+                            ((double)note_quads->size_x[i_trim]);
+    uint64_t duration_frames = (uint64_t)llround(
+        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    war_note_msg old_note_msg = {.note_start_frames = start_frames,
+                                 .note_duration_frames = duration_frames,
+                                 .note_sample_index = note_quads->pos_y[i_trim],
+                                 .note_gain = 1.0f,
+                                 .note_attack = 0.0f,
+                                 .note_sustain = 1.0f,
+                                 .note_release = 0.0f};
+    double new_pos_x = ctx_wr->cursor_pos_x + ctx_wr->cursor_size_x;
+    double new_size_x =
+        note_quads->size_x[i_trim] - (new_pos_x - note_quads->pos_x[i_trim]);
+    double new_d_pos_seconds =
+        ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) * (new_pos_x);
+    uint64_t new_start_frames = (uint64_t)llround(
+        new_d_pos_seconds * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    uint64_t new_duration_frames =
+        duration_frames - (new_start_frames - start_frames);
+    war_note_msg new_note_msg = {
+        .note_start_frames = new_start_frames,
+        .note_duration_frames = new_duration_frames,
+        .note_sample_index = note_quads->pos_y[i_trim],
+    };
+    uint8_t payload[sizeof(war_note_msg) * 2];
+    memcpy(payload, &old_note_msg, sizeof(war_note_msg));
+    memcpy(payload + sizeof(war_note_msg), &new_note_msg, sizeof(war_note_msg));
+    war_pc_to_a(pc, AUDIO_CMD_REPLACE_NOTE, sizeof(payload), payload);
+    note_quads->pos_x[i_trim] = new_pos_x;
+    note_quads->size_x[i_trim] = new_size_x;
 }
 
 static inline void war_note_quads_in_view(war_note_quads* note_quads,
@@ -1796,20 +1675,16 @@ static inline void war_note_quads_in_view(war_note_quads* note_quads,
                                           uint32_t* out_indices,
                                           uint32_t* out_indices_count) {
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        float leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
-                           ctx_wr->cell_width;
-        float note_pos_x =
-            note_quads->col[i] +
-            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
-        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
-                            note_quads->cursor_width_sub_col[i] /
-                            note_quads->cursor_width_sub_cells[i];
-        float note_pos_y = note_quads->row[i];
-        float note_pos_x_end = note_pos_x + note_span_x;
-        float left_col = ctx_wr->left_col;
-        float right_col = ctx_wr->right_col + leftover_x + 1;
-        float bottom_row = ctx_wr->bottom_row;
-        float top_row = ctx_wr->top_row;
+        double leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
+                            ctx_wr->cell_width;
+        double note_pos_x = note_quads->pos_x[i];
+        double note_span_x = note_quads->size_x[i];
+        double note_pos_y = note_quads->pos_y[i];
+        double note_pos_x_end = note_pos_x + note_span_x;
+        double left_col = ctx_wr->left_col;
+        double right_col = ctx_wr->right_col + leftover_x + 1;
+        double bottom_row = ctx_wr->bottom_row;
+        double top_row = ctx_wr->top_row;
         bool in_view = (note_pos_x <= right_col && note_pos_x_end > left_col) &&
                        (note_pos_y >= bottom_row && note_pos_y <= top_row);
         if (in_view) { out_indices[(*out_indices_count)++] = i; }
@@ -1823,20 +1698,16 @@ war_note_quads_outside_view(war_note_quads* note_quads,
                             uint32_t* out_indices,
                             uint32_t* out_indices_count) {
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        float leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
-                           ctx_wr->cell_width;
-        float note_pos_x =
-            note_quads->col[i] +
-            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
-        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
-                            note_quads->cursor_width_sub_col[i] /
-                            note_quads->cursor_width_sub_cells[i];
-        float note_pos_y = note_quads->row[i];
-        float note_pos_x_end = note_pos_x + note_span_x;
-        float left_col = ctx_wr->left_col;
-        float right_col = ctx_wr->right_col + leftover_x + 1;
-        float bottom_row = ctx_wr->bottom_row;
-        float top_row = ctx_wr->top_row;
+        double leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
+                            ctx_wr->cell_width;
+        double note_pos_x = note_quads->pos_x[i];
+        double note_span_x = note_quads->size_x[i];
+        double note_pos_y = note_quads->pos_y[i];
+        double note_pos_x_end = note_pos_x + note_span_x;
+        double left_col = ctx_wr->left_col;
+        double right_col = ctx_wr->right_col + leftover_x + 1;
+        double bottom_row = ctx_wr->bottom_row;
+        double top_row = ctx_wr->top_row;
         bool outside_view =
             !((note_pos_x <= right_col && note_pos_x_end > left_col) &&
               (note_pos_y >= bottom_row && note_pos_y <= top_row));
@@ -1850,25 +1721,17 @@ war_note_quads_under_cursor(war_note_quads* note_quads,
                             war_window_render_context* ctx_wr,
                             uint32_t* out_indices,
                             uint32_t* out_indices_count) {
-    float cursor_pos_x =
-        ctx_wr->cursor_pos_x +
-        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
-                          ctx_wr->cursor_width_sub_col /
-                          ctx_wr->cursor_width_sub_cells;
-    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float cursor_pos_y = ctx_wr->cursor_pos_y;
-    float cursor_pos_y_end = cursor_pos_y + 1;
+    double cursor_pos_x = ctx_wr->cursor_pos_x;
+    double cursor_span_x = ctx_wr->cursor_size_x;
+    double cursor_pos_x_end = cursor_pos_x + cursor_span_x;
+    double cursor_pos_y = ctx_wr->cursor_pos_y;
+    double cursor_pos_y_end = cursor_pos_y + 1;
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        float note_pos_x =
-            note_quads->col[i] +
-            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
-        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
-                            note_quads->cursor_width_sub_col[i] /
-                            note_quads->cursor_width_sub_cells[i];
-        float note_pos_x_end = note_pos_x + note_span_x;
-        float note_pos_y = note_quads->row[i];
-        float note_pos_y_end = note_pos_y + 1;
+        double note_pos_x = note_quads->pos_x[i];
+        double note_span_x = note_quads->size_x[i];
+        double note_pos_x_end = note_pos_x + note_span_x;
+        double note_pos_y = note_quads->pos_y[i];
+        double note_pos_y_end = note_pos_y + 1;
         bool under_cursor =
             (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x) &&
             (note_pos_y == cursor_pos_y);
@@ -1883,7 +1746,7 @@ static inline void war_note_quads_in_row(war_note_quads* note_quads,
                                          uint32_t* out_indices_count) {
     uint32_t row = ctx_wr->cursor_pos_y;
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        if (row == note_quads->row[i] && !note_quads->hidden[i]) {
+        if (row == note_quads->pos_y[i] && !note_quads->hidden[i]) {
             out_indices[(*out_indices_count)++] = i;
         }
     }
@@ -1894,25 +1757,17 @@ static inline void war_note_quads_in_col(war_note_quads* note_quads,
                                          war_window_render_context* ctx_wr,
                                          uint32_t* out_indices,
                                          uint32_t* out_indices_count) {
-    float cursor_pos_x =
-        ctx_wr->cursor_pos_x +
-        (float)ctx_wr->sub_col / ctx_wr->navigation_sub_cells_col;
-    float cursor_span_x = (float)ctx_wr->cursor_width_whole_number *
-                          ctx_wr->cursor_width_sub_col /
-                          ctx_wr->cursor_width_sub_cells;
-    float cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    float cursor_pos_y = ctx_wr->cursor_pos_y;
-    float cursor_pos_y_end = cursor_pos_y + 1;
+    double cursor_pos_x = ctx_wr->cursor_pos_x;
+    double cursor_span_x = ctx_wr->cursor_size_x;
+    double cursor_pos_x_end = cursor_pos_x + cursor_span_x;
+    double cursor_pos_y = ctx_wr->cursor_pos_y;
+    double cursor_pos_y_end = cursor_pos_y + 1;
     for (uint32_t i = 0; i < note_quads_count; i++) {
-        float note_pos_x =
-            note_quads->col[i] +
-            (float)note_quads->sub_col[i] / note_quads->sub_cells_col[i];
-        float note_span_x = (float)note_quads->cursor_width_whole_number[i] *
-                            note_quads->cursor_width_sub_col[i] /
-                            note_quads->cursor_width_sub_cells[i];
-        float note_pos_x_end = note_pos_x + note_span_x;
-        float note_pos_y = note_quads->row[i];
-        float note_pos_y_end = note_pos_y + 1;
+        double note_pos_x = note_quads->pos_x[i];
+        double note_span_x = note_quads->size_x[i];
+        double note_pos_x_end = note_pos_x + note_span_x;
+        double note_pos_y = note_quads->pos_y[i];
+        double note_pos_y_end = note_pos_y + 1;
         bool under_cursor =
             (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x);
         if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
@@ -1927,8 +1782,5 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a,
                                              float frequency) {
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
-
-static inline int16_t* war_sample_buffer(war_audio_context* ctx_a,
-                                         float midi_note) {}
 
 #endif // WAR_MACROS_H

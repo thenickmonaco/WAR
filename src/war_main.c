@@ -5869,6 +5869,11 @@ reload_window_render:
                     note_quads.navigation_x_numerator[next_idx];
                 ctx_wr.navigation_sub_cells_col =
                     note_quads.navigation_x_denominator[next_idx];
+                ctx_wr.cursor_size_x = note_quads.size_x[next_idx];
+                ctx_wr.cursor_width_whole_number =
+                    note_quads.size_x_numerator[next_idx];
+                ctx_wr.cursor_width_sub_cells =
+                    note_quads.size_x_denominator[next_idx];
                 if (ctx_wr.cursor_pos_x > ctx_wr.right_col) {
                     uint32_t distance = ctx_wr.cursor_pos_x - ctx_wr.right_col;
                     ctx_wr.left_col += distance;
@@ -5925,6 +5930,11 @@ reload_window_render:
                     note_quads.navigation_x_numerator[next_idx];
                 ctx_wr.navigation_sub_cells_col =
                     note_quads.navigation_x_denominator[next_idx];
+                ctx_wr.cursor_size_x = note_quads.size_x[next_idx];
+                ctx_wr.cursor_width_whole_number =
+                    note_quads.size_x_numerator[next_idx];
+                ctx_wr.cursor_width_sub_cells =
+                    note_quads.size_x_denominator[next_idx];
                 if (ctx_wr.cursor_pos_x > ctx_wr.right_col) {
                     uint32_t distance = ctx_wr.cursor_pos_x - ctx_wr.right_col;
                     ctx_wr.left_col += distance;
@@ -6061,6 +6071,11 @@ reload_window_render:
                     note_quads.navigation_x_numerator[next_idx];
                 ctx_wr.navigation_sub_cells_col =
                     note_quads.navigation_x_denominator[next_idx];
+                ctx_wr.cursor_size_x = note_quads.size_x[next_idx];
+                ctx_wr.cursor_width_whole_number =
+                    note_quads.size_x_numerator[next_idx];
+                ctx_wr.cursor_width_sub_cells =
+                    note_quads.size_x_denominator[next_idx];
                 if (ctx_wr.cursor_pos_x < ctx_wr.left_col) {
                     uint32_t distance = ctx_wr.left_col - ctx_wr.cursor_pos_x;
                     ctx_wr.left_col -= distance;
@@ -6108,6 +6123,11 @@ reload_window_render:
                     goto cmd_done;
                 }
                 ctx_wr.cursor_pos_y = note_quads.pos_y[next_idx];
+                ctx_wr.cursor_size_x = note_quads.size_x[next_idx];
+                ctx_wr.cursor_width_whole_number =
+                    note_quads.size_x_numerator[next_idx];
+                ctx_wr.cursor_width_sub_cells =
+                    note_quads.size_x_denominator[next_idx];
                 if (ctx_wr.cursor_pos_y > ctx_wr.top_row) {
                     uint32_t distance = ctx_wr.cursor_pos_y - ctx_wr.top_row;
                     ctx_wr.top_row += distance;
@@ -6149,6 +6169,11 @@ reload_window_render:
                     goto cmd_done;
                 }
                 ctx_wr.cursor_pos_y = note_quads.pos_y[next_idx];
+                ctx_wr.cursor_size_x = note_quads.size_x[next_idx];
+                ctx_wr.cursor_width_whole_number =
+                    note_quads.size_x_numerator[next_idx];
+                ctx_wr.cursor_width_sub_cells =
+                    note_quads.size_x_denominator[next_idx];
                 if (ctx_wr.cursor_pos_y < ctx_wr.bottom_row) {
                     uint32_t distance = ctx_wr.bottom_row - ctx_wr.cursor_pos_y;
                     ctx_wr.top_row -= distance;

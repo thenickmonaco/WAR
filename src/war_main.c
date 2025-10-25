@@ -115,6 +115,9 @@ int main() {
         .start_war = 0,
         .resample = 0,
         .midi_record_frames = 0,
+        .repeat_section = 0,
+        .repeat_start_frames = 0,
+        .repeat_end_frames = 0,
     };
     war_pool pool_wr;
     war_pool pool_a;
@@ -1932,7 +1935,7 @@ reload_window_render:
                 ctx_wr.text_status_bar_end_index =
                     (ctx_wr.viewport_cols * 3) / 4;
                 war_get_top_text(&ctx_wr);
-                war_get_middle_text(&ctx_wr, &views, atomics);
+                war_get_middle_text(&ctx_wr, &views, atomics, ctx_lua);
                 war_get_bottom_text(&ctx_wr);
                 for (float col = 0; col < ctx_wr.viewport_cols; col++) {
                     if (ctx_wr.text_top_status_bar[(int)col] != 0) {
@@ -3545,6 +3548,9 @@ reload_window_render:
                                 } else if (strcmp(cmd_name,
                                                   "cmd_normal_return") == 0) {
                                     cmd_ptr = &&cmd_normal_return;
+                                } else if (strcmp(cmd_name, "cmd_normal_r") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_r;
                                 } else if (strcmp(cmd_name,
                                                   "cmd_views_return") == 0) {
                                     cmd_ptr = &&cmd_views_return;
@@ -4780,6 +4786,34 @@ reload_window_render:
                 ctx_wr.numeric_prefix =
                     war_clamp_add_uint32(ctx_wr.numeric_prefix, 9, UINT32_MAX);
                 goto cmd_done;
+            cmd_normal_r:
+                call_carmack("cmd_normal_r");
+                if (ctx_wr.numeric_prefix != 0) {
+                    double d_start_sec =
+                        ctx_wr.cursor_pos_x *
+                        ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
+                    uint64_t start_frames = (uint64_t)llround(
+                        d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+                    double d_duration_sec =
+                        ctx_wr.numeric_prefix *
+                        ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
+                    uint64_t duration_frames = (uint64_t)llround(
+                        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+                    uint64_t end_frames = start_frames + duration_frames;
+                    atomic_store(&atomics->repeat_start_frames, start_frames);
+                    atomic_store(&atomics->repeat_end_frames, end_frames);
+                    ctx_wr.numeric_prefix = 0;
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                atomic_fetch_xor(&atomics->repeat_section, 1);
+                uint64_t start_frames =
+                    atomic_load(&atomics->repeat_start_frames);
+                war_pc_to_a(
+                    pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &start_frames);
+                ctx_wr.numeric_prefix = 0;
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
             cmd_normal_ctrl_equal:
                 call_carmack("cmd_normal_ctrl_equal");
                 // ctx_wr.zoom_scale +=
@@ -4852,7 +4886,7 @@ reload_window_render:
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_esc:
+            cmd_normal_esc: {
                 call_carmack("cmd_normal_esc");
                 if (timeout_state_index) {
                     if (fsm[timeout_state_index].command[ctx_wr.mode]) {
@@ -4864,8 +4898,8 @@ reload_window_render:
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
             cmd_normal_s: {
                 call_carmack("cmd_normal_s");
                 ctx_wr.cursor_width_sub_cells = 1;
@@ -7925,14 +7959,6 @@ static void war_play(void* userdata) {
                     }
                 }
             }
-
-            call_carmack("MIXED piano-roll note[%u] map_note=%u samples=%u "
-                         "start=%" PRIu64 " dur=%" PRIu64,
-                         i,
-                         map_note,
-                         sample_count,
-                         note_start,
-                         note_duration);
         }
     }
 
@@ -8093,7 +8119,32 @@ static void war_play(void* userdata) {
     // -------------------------------------------------------------------------
     // Frame counters
     atomic_fetch_add(&atomics->play_clock, n_frames);
-    if (play) { atomic_fetch_add(&atomics->play_frames, n_frames); }
+    if (play) {
+        // -------------------------------------------------------------------------
+        // Frame counters with repeat section logic
+        uint8_t repeat_section = atomic_load(&atomics->repeat_section);
+        uint64_t repeat_start_frames =
+            atomic_load(&atomics->repeat_start_frames);
+        uint64_t repeat_end_frames = atomic_load(&atomics->repeat_end_frames);
+
+        if (repeat_section && repeat_end_frames > repeat_start_frames) {
+            uint64_t current_frame = atomic_load(&atomics->play_frames);
+            uint64_t next_frame = current_frame + n_frames;
+
+            // If we've reached or passed the repeat end, wrap around
+            if (next_frame >= repeat_end_frames) {
+                uint64_t overshoot = next_frame - repeat_end_frames;
+                uint64_t wrapped_frame = repeat_start_frames + overshoot;
+
+                atomic_store(&atomics->play_frames, wrapped_frame);
+            } else {
+                atomic_fetch_add(&atomics->play_frames, n_frames);
+            }
+        } else {
+            // Normal playback (no repeat section)
+            atomic_fetch_add(&atomics->play_frames, n_frames);
+        }
+    }
     if (midi_record && record_samples->samples_count[0] > 0) {
         atomic_fetch_add(&atomics->midi_record_frames, n_frames);
     } else if (!midi_record) {

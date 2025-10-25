@@ -301,6 +301,7 @@ enum war_audio {
     AUDIO_CMD_REPLACE_NOTE = 22,
     AUDIO_CMD_REPLACE_NOTE_DURATION = 23,
     AUDIO_CMD_REPLACE_NOTE_START = 24,
+    AUDIO_CMD_REPEAT_SECTION = 25,
     //
     AUDIO_VOICE_GRAND_PIANO = 0,
     AUDIO_VOICE_COUNT = 128,
@@ -326,6 +327,9 @@ typedef struct war_atomics {
     _Atomic uint8_t* notes_on;
     _Atomic uint8_t* notes_on_previous;
     _Atomic uint8_t loop;
+    _Atomic uint8_t repeat_section;
+    _Atomic uint64_t repeat_start_frames;
+    _Atomic uint64_t repeat_end_frames;
     _Atomic uint8_t start_war;
     _Atomic uint8_t resample;
 } war_atomics;

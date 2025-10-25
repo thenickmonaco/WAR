@@ -322,14 +322,36 @@ static inline void war_get_top_text(war_window_render_context* ctx_wr) {
              ctx_wr->cursor_pos_x);
     memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
            tmp,
-           sizeof(ctx_wr->text_top_status_bar));
+           sizeof(tmp));
 }
 
 static inline void war_get_middle_text(war_window_render_context* ctx_wr,
                                        war_views* views,
-                                       war_atomics* atomics) {
+                                       war_atomics* atomics,
+                                       war_lua_context* ctx_lua) {
     memset(ctx_wr->text_middle_status_bar, 0, MAX_STATUS_BAR_COLS);
     switch (ctx_wr->mode) {
+    case MODE_NORMAL:
+        if (atomic_load(&atomics->repeat_section)) {
+            double start_frames =
+                (double)atomic_load(&atomics->repeat_start_frames);
+            double end_frames =
+                (double)atomic_load(&atomics->repeat_end_frames);
+            double bpm = atomic_load(&ctx_lua->A_BPM);
+            double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
+            uint32_t grid_start =
+                (uint32_t)((start_frames * bpm * 4.0) / (60.0 * sample_rate));
+            uint32_t grid_end =
+                (uint32_t)((end_frames * bpm * 4.0) / (60.0 * sample_rate));
+            char tmp[MAX_STATUS_BAR_COLS];
+            memset(tmp, 0, MAX_STATUS_BAR_COLS);
+            snprintf(tmp, MAX_STATUS_BAR_COLS, "R:%u,%u", grid_start, grid_end);
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_middle_index,
+                   tmp,
+                   sizeof(tmp));
+        }
+        break;
     case MODE_VISUAL:
         memcpy(ctx_wr->text_middle_status_bar,
                "-- VISUAL --",

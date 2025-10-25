@@ -84,7 +84,7 @@ ctx_lua = {
     -- pool
     POOL_ALIGNMENT = 256,
     -- cmd
-    CMD_COUNT = 24,
+    CMD_COUNT = 25,
     -- pc
     PC_BUFFER_SIZE = 4096,
 }
@@ -162,6 +162,17 @@ keymap = {
             {
                 cmd = "cmd_record_j",
                 mode = "record",
+            },
+        },
+    },
+    {
+        sequences = {
+            "r",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_r",
+                mode = "normal",
             },
         },
     },

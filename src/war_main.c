@@ -158,7 +158,6 @@ void* war_window_render(void* args) {
     memset(pool_wr->pool, 0, pool_wr->pool_size);
     assert(pool_result == 0 && pool_wr->pool);
     pool_wr->pool_ptr = (uint8_t*)pool_wr->pool;
-reload_window_render:
 
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
@@ -196,7 +195,7 @@ reload_window_render:
     uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
 #endif
 
-    double scale_factor = 1.483333;
+    double scale_factor = 1.483333; // 1.483333
     const uint32_t logical_width =
         (uint32_t)floor(physical_width / scale_factor);
     const uint32_t logical_height =
@@ -216,6 +215,9 @@ reload_window_render:
         .channel_count = atomic_load(&ctx_lua->A_CHANNEL_COUNT),
         .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
     };
+    war_undo_tree* undo_tree = war_pool_alloc(pool_wr, sizeof(war_undo_tree));
+    undo_tree->current = NULL;
+    undo_tree->root = NULL;
     war_window_render_context ctx_wr = {
         .skip_release = 0,
         .midi_toggle = 0,
@@ -230,7 +232,8 @@ reload_window_render:
         .mode = MODE_NORMAL,
         .hud_state = HUD_PIANO,
         .cursor_blink_state = 0,
-        .cursor_blink_duration_us = DEFAULT_CURSOR_BLINK_DURATION,
+        .cursor_blink_duration_us =
+            atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US),
         .cursor_pos_x = 0,
         .cursor_pos_y = 60,
         .cursor_size_x = 1.0,
@@ -770,7 +773,7 @@ reload_window_render:
               views.warpoon_mode != MODE_VISUAL_LINE))) {
             ctx_wr.cursor_blink_duration_us =
                 (ctx_wr.cursor_blink_state == CURSOR_BLINK) ?
-                    DEFAULT_CURSOR_BLINK_DURATION :
+                    atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US) :
                     (uint64_t)round((60.0 / ((double)ctx_a.BPM)) *
                                     microsecond_conversion);
             ;
@@ -2235,7 +2238,7 @@ reload_window_render:
                     war_write_le16(create_pool + 4, 0);     // opcode 0
                     war_write_le16(
                         create_pool + 6,
-                        16); // message size = 12 + 4 bytes for pool size
+                        16);                                 // message size = 12 + 4 bytes for pool size
                     war_write_le32(create_pool + 8, new_id); // new pool id
                     uint32_t pool_size = stride * physical_height;
                     struct iovec iov[2] = {
@@ -3594,14 +3597,16 @@ reload_window_render:
                                                   "cmd_normal_spacema") == 0) {
                                     cmd_ptr = &&cmd_normal_spacema;
                                 } else if (strcmp(cmd_name,
-                                                  "cmd_normal_spaceuov") == 0) {
-                                    cmd_ptr = &&cmd_normal_spaceuov;
+                                                  "cmd_normal_spaceumov") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_spaceumov;
                                 } else if (strcmp(cmd_name,
-                                                  "cmd_normal_spaceuiv") == 0) {
-                                    cmd_ptr = &&cmd_normal_spaceuiv;
+                                                  "cmd_normal_spaceumiv") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_spaceumiv;
                                 } else if (strcmp(cmd_name,
-                                                  "cmd_normal_spaceua") == 0) {
-                                    cmd_ptr = &&cmd_normal_spaceua;
+                                                  "cmd_normal_spaceuma") == 0) {
+                                    cmd_ptr = &&cmd_normal_spaceuma;
                                 } else if (strcmp(cmd_name,
                                                   "cmd_normal_spacea") == 0) {
                                     cmd_ptr = &&cmd_normal_spacea;
@@ -3790,8 +3795,9 @@ reload_window_render:
                                                   "cmd_normal_spacesiw") == 0) {
                                     cmd_ptr = &&cmd_normal_spacesiw;
                                 } else if (strcmp(cmd_name,
-                                                  "cmd_normal_spaceuiw") == 0) {
-                                    cmd_ptr = &&cmd_normal_spaceuiw;
+                                                  "cmd_normal_spaceumiw") ==
+                                           0) {
+                                    cmd_ptr = &&cmd_normal_spaceumiw;
                                 } else if (strcmp(cmd_name, "cmd_normal_ga") ==
                                            0) {
                                     cmd_ptr = &&cmd_normal_ga;
@@ -3853,6 +3859,10 @@ reload_window_render:
                                 } else if (strcmp(cmd_name, "cmd_midi_Q") ==
                                            0) {
                                     cmd_ptr = &&cmd_midi_Q;
+                                } else if (strcmp(cmd_name, "cmd_normal_u") == 0) {
+                                    cmd_ptr = &&cmd_normal_u;
+                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_r") == 0) {
+                                    cmd_ptr = &&cmd_normal_ctrl_r;
                                 } else if (strcmp(cmd_name, "cmd_record_r") ==
                                            0) {
                                     cmd_ptr = &&cmd_record_r;
@@ -4005,8 +4015,6 @@ reload_window_render:
                 if (mods & (1 << mod_logo)) mod |= MOD_LOGO;
                 if (mods & (1 << mod_caps)) mod |= MOD_CAPS;
                 if (mods & (1 << mod_num)) mod |= MOD_NUM;
-                call_carmack("keysym: %u", keysym);
-                call_carmack("mod: %u", mod);
                 if (keysym == KEYSYM_DEFAULT) {
                     // repeats
                     key_down[repeat_keysym *
@@ -4898,6 +4906,7 @@ reload_window_render:
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
+                call_carmack("hi");
                 goto cmd_done;
             }
             cmd_normal_s: {
@@ -5127,7 +5136,11 @@ reload_window_render:
                                               &note_quads_count,
                                               pc,
                                               ctx_lua,
-                                              i_trim);
+                                              &ctx_wr,
+                                              undo_tree,
+                                              pool_wr,
+                                              i_trim,
+                                              1);
                         continue;
                     }
                     war_notes_trim_right_at_i(&note_quads,
@@ -5170,7 +5183,11 @@ reload_window_render:
                                               &note_quads_count,
                                               pc,
                                               ctx_lua,
-                                              i_trim);
+                                              &ctx_wr,
+                                              undo_tree,
+                                              pool_wr,
+                                              i_trim,
+                                              1);
                         continue;
                     }
                     war_notes_trim_left_at_i(&note_quads,
@@ -5203,8 +5220,15 @@ reload_window_render:
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
-                    war_notes_delete_at_i(
-                        &note_quads, &note_quads_count, pc, ctx_lua, i_delete);
+                    war_notes_delete_at_i(&note_quads,
+                                          &note_quads_count,
+                                          pc,
+                                          ctx_lua,
+                                          &ctx_wr,
+                                          undo_tree,
+                                          pool_wr,
+                                          i_delete,
+                                          1);
                 }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5222,8 +5246,15 @@ reload_window_render:
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
-                    war_notes_delete_at_i(
-                        &note_quads, &note_quads_count, pc, ctx_lua, i_delete);
+                    war_notes_delete_at_i(&note_quads,
+                                          &note_quads_count,
+                                          pc,
+                                          ctx_lua,
+                                          &ctx_wr,
+                                          undo_tree,
+                                          pool_wr,
+                                          i_delete,
+                                          1);
                 }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5241,8 +5272,15 @@ reload_window_render:
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
-                    war_notes_delete_at_i(
-                        &note_quads, &note_quads_count, pc, ctx_lua, i_delete);
+                    war_notes_delete_at_i(&note_quads,
+                                          &note_quads_count,
+                                          pc,
+                                          ctx_lua,
+                                          &ctx_wr,
+                                          undo_tree,
+                                          pool_wr,
+                                          i_delete,
+                                          1);
                 }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5266,8 +5304,15 @@ reload_window_render:
                      i--) {
                     uint32_t i_delete = note_quads_in_x[i];
                     if (note_quads.hidden[i_delete]) { continue; }
-                    war_notes_delete_at_i(
-                        &note_quads, &note_quads_count, pc, ctx_lua, i_delete);
+                    war_notes_delete_at_i(&note_quads,
+                                          &note_quads_count,
+                                          pc,
+                                          ctx_lua,
+                                          &ctx_wr,
+                                          undo_tree,
+                                          pool_wr,
+                                          i_delete,
+                                          1);
                 }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5469,8 +5514,8 @@ reload_window_render:
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_spaceuov:
-                call_carmack("cmd_normal_spaceuov");
+            cmd_normal_spaceumov:
+                call_carmack("cmd_normal_spaceumov");
                 note_quads_in_x_count = 0;
                 war_note_quads_outside_view(&note_quads,
                                             note_quads_count,
@@ -5485,8 +5530,8 @@ reload_window_render:
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_spaceuiv:
-                call_carmack("cmd_normal_spaceuiv");
+            cmd_normal_spaceumiv:
+                call_carmack("cmd_normal_spaceumiv");
                 note_quads_in_x_count = 0;
                 war_note_quads_in_view(&note_quads,
                                        note_quads_count,
@@ -5501,8 +5546,8 @@ reload_window_render:
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_spaceuiw:
-                call_carmack("cmd_normal_spaceuiw");
+            cmd_normal_spaceumiw:
+                call_carmack("cmd_normal_spaceumiw");
                 note_quads_in_x_count = 0;
                 war_note_quads_under_cursor(&note_quads,
                                             note_quads_count,
@@ -5524,8 +5569,8 @@ reload_window_render:
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_spaceua:
-                call_carmack("cmd_normal_spaceua");
+            cmd_normal_spaceuma:
+                call_carmack("cmd_normal_spaceuma");
                 for (uint32_t i = 0; i < note_quads_count; i++) {
                     note_quads.mute[note_quads_in_x[i]] = false;
                 }
@@ -6222,8 +6267,7 @@ reload_window_render:
                     ctx_wr.hud_state = HUD_LINE_NUMBERS;
                     ctx_wr.num_cols_for_line_numbers = 3;
                     ctx_wr.right_col += 3;
-                    ctx_wr.cursor_pos_x = war_clamp_uint32(
-                        ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
                     break;
                 case HUD_LINE_NUMBERS:
                     ctx_wr.hud_state = HUD_PIANO;
@@ -6277,6 +6321,58 @@ reload_window_render:
                 ctx_wr.mode = MODE_COMMAND;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_normal_u: {
+                call_carmack("cmd_normal_u");
+                if (undo_tree->current) {
+                    war_undo_node* node = undo_tree->current;
+                    switch (node->command) {
+                    case CMD_DELETE_NOTE: {
+                        uint32_t i = note_quads_count;
+                        note_quads.timestamp[i] = node->payload.add_note.note_quad.timestamp;
+                        note_quads.pos_x[i] = node->payload.add_note.note_quad.pos_x;
+                        note_quads.pos_y[i] = node->payload.add_note.note_quad.pos_y;
+                        note_quads.size_x[i] = node->payload.add_note.note_quad.size_x;
+                        note_quads.size_x_numerator[i] = node->payload.add_note.note_quad.size_x_numerator;
+                        note_quads.size_x_denominator[i] = node->payload.add_note.note_quad.size_x_denominator;
+                        note_quads.navigation_x[i] = node->payload.add_note.note_quad.navigation_x;
+                        note_quads.navigation_x_numerator[i] = node->payload.add_note.note_quad.navigation_x_numerator;
+                        note_quads.navigation_x_denominator[i] = node->payload.add_note.note_quad.navigation_x_denominator;
+                        note_quads.color[i] = node->payload.add_note.note_quad.color;
+                        note_quads.outline_color[i] = node->payload.add_note.note_quad.outline_color;
+                        note_quads.gain[i] = node->payload.add_note.note_quad.gain;
+                        note_quads.voice[i] = node->payload.add_note.note_quad.voice;
+                        note_quads.hidden[i] = node->payload.add_note.note_quad.hidden;
+                        note_quads.mute[i] = node->payload.add_note.note_quad.mute;
+                        note_quads_count++;
+                        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note_msg), &node->payload.add_note.note_msg);
+                        break;
+                    }
+                    }
+                    undo_tree->current = node->parent;
+                }
+                goto cmd_done;
+            }
+            cmd_normal_ctrl_r: {
+                call_carmack("cmd_normal_ctrl_r");
+                if (undo_tree->current && undo_tree->current->child_count > 0) {
+                    war_undo_node* node = undo_tree->current->children[0];
+                    switch (node->command) {
+                    case CMD_DELETE_NOTE: {
+                        war_notes_delete(&note_quads,
+                                         &note_quads_count,
+                                         pc,
+                                         ctx_lua,
+                                         &ctx_wr,
+                                         undo_tree,
+                                         pool_wr,
+                                         node->payload.add_note.note_quad,
+                                         0);
+                    }
+                    }
+                    undo_tree->current = node;
+                }
                 goto cmd_done;
             }
             //------------------------------------------------------------------
@@ -8281,7 +8377,6 @@ void* war_audio(void* args) {
     memset(pool_a->pool, 0, pool_a->pool_size);
     assert(pool_result == 0 && pool_a->pool);
     pool_a->pool_ptr = (uint8_t*)pool_a->pool;
-reload_audio:
     atomics->notes_on = war_pool_alloc(
         pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
@@ -8705,13 +8800,6 @@ pc_add_note: {
     memcpy(&note_msg, payload, size);
 
     uint32_t* notes_count = &notes->notes_count;
-    call_carmack("Adding note idx=%u start=% " PRIu64 "dur=% " PRIu64
-                 "sample=%u",
-                 *notes_count,
-                 note_msg.note_start_frames,
-                 note_msg.note_duration_frames,
-                 note_msg.note_sample_index);
-
     notes->notes_start_frames[*notes_count] = note_msg.note_start_frames;
     notes->notes_duration_frames[*notes_count] = note_msg.note_duration_frames;
     notes->notes_sample_index[*notes_count] = note_msg.note_sample_index;

@@ -81,6 +81,12 @@ ctx_lua = {
     WR_WAYLAND_MSG_BUFFER_SIZE = 4096,
     WR_WAYLAND_MAX_OBJECTS = 1000,
     WR_WAYLAND_MAX_OP_CODES = 20,
+    WR_UNDO_NODES_MAX = 10000,
+    WR_UNDO_NODES_CHILDREN_MAX = 5,
+    WR_TIMESTAMP_LENGTH_MAX = 33,
+    WR_REPEAT_DELAY_US = 150000,          -- 150000
+    WR_REPEAT_RATE_US = 40000,            -- 40000
+    WR_CURSOR_BLINK_DURATION_US = 700000, -- 700000
     -- pool
     POOL_ALIGNMENT = 256,
     -- cmd
@@ -887,33 +893,33 @@ keymap = {
     },
     {
         sequences = {
-            "<leader>uov",
+            "<leader>umov",
         },
         commands = {
             {
-                cmd = "cmd_normal_spaceuov",
+                cmd = "cmd_normal_spaceumov",
                 mode = "normal",
             },
         },
     },
     {
         sequences = {
-            "<leader>uiv",
+            "<leader>umiv",
         },
         commands = {
             {
-                cmd = "cmd_normal_spaceuiv",
+                cmd = "cmd_normal_spaceumiv",
                 mode = "normal",
             },
         },
     },
     {
         sequences = {
-            "<leader>ua",
+            "<leader>uma",
         },
         commands = {
             {
-                cmd = "cmd_normal_spaceua",
+                cmd = "cmd_normal_spaceuma",
                 mode = "normal",
             },
         },
@@ -1552,11 +1558,11 @@ keymap = {
     },
     {
         sequences = {
-            "<leader>uiw",
+            "<leader>umiw",
         },
         commands = {
             {
-                cmd = "cmd_normal_spaceuiw",
+                cmd = "cmd_normal_spaceumiw",
                 mode = "normal",
             },
         },
@@ -1861,6 +1867,28 @@ keymap = {
     },
     {
         sequences = {
+            "u",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_u",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-r>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_ctrl_r",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
             "<Space>",
         },
         commands = {
@@ -2159,4 +2187,18 @@ pool_wr = {
     { name = "obj_op",                              type = "void*",           count = ctx_lua.WR_WAYLAND_MAX_OBJECTS * ctx_lua.WR_WAYLAND_MAX_OP_CODES },
     { name = "pc_window_render",                    type = "void*",           count = ctx_lua.CMD_COUNT },
     { name = "payload",                             type = "uint8_t",         count = ctx_lua.PC_BUFFER_SIZE },
+
+    -- undo tree
+    { name = "undo_tree",                           type = "war_undo_tree",   count = 1 },
+    { name = "undo_node.command",                   type = "uint32_t",        count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.cursor_pos_x",              type = "double",          count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.cursor_pos_y",              type = "double",          count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.left_col",                  type = "uint32_t",        count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.right_col",                 type = "uint32_t",        count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.top_row",                   type = "uint32_t",        count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.bottom_row",                type = "uint32_t",        count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.timestamp",                 type = "char",            count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_TIMESTAMP_LENGTH_MAX },
+    { name = "undo_node.parent",                    type = "void*",           count = ctx_lua.WR_UNDO_NODES_MAX },
+    { name = "undo_node.children",                  type = "void*",           count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NODES_CHILDREN_MAX },
+    { name = "undo_node.child_count",               type = "uint32_t",        count = ctx_lua.WR_UNDO_NODES_MAX },
 }

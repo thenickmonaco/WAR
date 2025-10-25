@@ -148,6 +148,68 @@ enum war_cursor {
     DEFAULT_CURSOR_BLINK_DURATION = 700000,
 };
 
+enum war_commands_enum {
+    CMD_ADD_NOTE = 0,
+    CMD_DELETE_NOTE = 1,
+};
+
+typedef struct war_note_quad {
+    uint64_t timestamp;
+    double pos_x;
+    double pos_y;
+    double size_x;
+    double navigation_x;
+    uint32_t navigation_x_numerator;
+    uint32_t navigation_x_denominator;
+    uint32_t size_x_numerator;
+    uint32_t size_x_denominator;
+    uint32_t color;
+    uint32_t outline_color;
+    float gain;
+    uint32_t voice;
+    uint32_t hidden;
+    uint32_t mute;
+} war_note_quad;
+
+typedef struct war_note_msg {
+    uint64_t note_start_frames;
+    uint64_t note_duration_frames;
+    uint32_t note_sample_index;
+    float note_gain;
+    float note_attack;
+    float note_sustain;
+    float note_release;
+} war_note_msg;
+
+typedef struct war_payload_add_note {
+    war_note_msg note_msg;
+    war_note_quad note_quad;
+} war_payload_add_note;
+
+typedef union war_payload_union {
+    war_payload_add_note add_note;
+} war_payload_union;
+
+typedef struct war_undo_node {
+    int command;
+    war_payload_union payload;
+    double cursor_pos_x;
+    double cursor_pos_y;
+    uint32_t left_col;
+    uint32_t right_col;
+    uint32_t top_row;
+    uint32_t bottom_row;
+    char* timestamp;
+    struct war_undo_node* parent;
+    struct war_undo_node** children;
+    int child_count;
+} war_undo_node;
+
+typedef struct war_undo_tree {
+    war_undo_node* root;
+    war_undo_node* current;
+} war_undo_tree;
+
 typedef struct war_lua_context {
     // audio
     _Atomic int A_SAMPLE_RATE;
@@ -177,6 +239,12 @@ typedef struct war_lua_context {
     _Atomic int WR_WAYLAND_MSG_BUFFER_SIZE;
     _Atomic int WR_WAYLAND_MAX_OBJECTS;
     _Atomic int WR_WAYLAND_MAX_OP_CODES;
+    _Atomic int WR_UNDO_NODES_MAX;
+    _Atomic int WR_UNDO_NODES_CHILDREN_MAX;
+    _Atomic int WR_TIMESTAMP_LENGTH_MAX;
+    _Atomic int WR_REPEAT_DELAY_US;
+    _Atomic int WR_REPEAT_RATE_US;
+    _Atomic int WR_CURSOR_BLINK_DURATION_US;
     // pool
     _Atomic int POOL_ALIGNMENT;
     // cmd
@@ -349,16 +417,6 @@ typedef struct war_pool {
     size_t pool_size;
     size_t pool_alignment;
 } war_pool;
-
-typedef struct war_note_msg {
-    uint64_t note_start_frames;
-    uint64_t note_duration_frames;
-    uint32_t note_sample_index;
-    float note_gain;
-    float note_attack;
-    float note_sustain;
-    float note_release;
-} war_note_msg;
 
 typedef struct war_notes {
     uint64_t* notes_start_frames;

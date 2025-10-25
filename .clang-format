@@ -10,4 +10,4 @@ AllowShortFunctionsOnASingleLine: All
 AllowShortLoopsOnASingleLine: true
 BreakBeforeBinaryOperators: None    # Keep binary operators with their left operand
 BreakBeforeTernaryOperators: false
-
+ColumnLimit: 0

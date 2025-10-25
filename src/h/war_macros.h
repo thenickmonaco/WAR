@@ -69,12 +69,12 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
         return -1;
     }
 
-#define LOAD_INT(field)                                                        \
-    lua_getfield(L, -1, #field);                                               \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
-        ctx_lua->field = (int)lua_tointeger(L, -1);                            \
-        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field);              \
-    }                                                                          \
+#define LOAD_INT(field)                                           \
+    lua_getfield(L, -1, #field);                                  \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                         \
+        ctx_lua->field = (int)lua_tointeger(L, -1);               \
+        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field); \
+    }                                                             \
     lua_pop(L, 1);
 
     // audio
@@ -104,6 +104,12 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(WR_WAYLAND_MSG_BUFFER_SIZE)
     LOAD_INT(WR_WAYLAND_MAX_OBJECTS)
     LOAD_INT(WR_WAYLAND_MAX_OP_CODES)
+    LOAD_INT(WR_UNDO_NODES_MAX)
+    LOAD_INT(WR_UNDO_NODES_CHILDREN_MAX)
+    LOAD_INT(WR_TIMESTAMP_LENGTH_MAX)
+    LOAD_INT(WR_CURSOR_BLINK_DURATION_US)
+    LOAD_INT(WR_REPEAT_DELAY_US)
+    LOAD_INT(WR_REPEAT_RATE_US)
     // pool
     LOAD_INT(POOL_ALIGNMENT)
     // cmd
@@ -265,6 +271,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_audio_context);
             else if (strcmp(type, "war_samples") == 0)
                 type_size = sizeof(war_samples);
+            else if (strcmp(type, "war_undo_tree") == 0)
+                type_size = sizeof(war_undo_tree);
 
             /* --- Pointer variants (optional but useful if you define them in
              * Lua) --- */
@@ -455,6 +463,16 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
            ctx_wr->num_chars_in_sequence);
 }
 
+static inline void war_get_local_time(char* timestamp,
+                                      war_lua_context* ctx_lua) {
+    time_t now = time(NULL);
+    struct tm* tm_info = localtime(&now);
+    strftime(timestamp,
+             atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX),
+             "%H:%M:%S, %m-%d-%Y",
+             tm_info);
+}
+
 static inline void war_get_bottom_text(war_window_render_context* ctx_wr) {
     memset(ctx_wr->text_bottom_status_bar, 0, MAX_STATUS_BAR_COLS);
     memcpy(ctx_wr->text_bottom_status_bar,
@@ -483,9 +501,7 @@ static inline void war_get_warpoon_text(war_views* views) {
 static inline void war_warpoon_delete_at_i(war_views* views,
                                            uint32_t i_delete) {
     if (i_delete >= views->views_count) return;
-
     uint32_t last = views->views_count - 1;
-
     // Shift all SoA arrays to the left to fill the gap
     for (uint32_t j = i_delete; j < last; j++) {
         views->col[j] = views->col[j + 1];
@@ -495,7 +511,6 @@ static inline void war_warpoon_delete_at_i(war_views* views,
         views->bottom_row[j] = views->bottom_row[j + 1];
         views->top_row[j] = views->top_row[j + 1];
     }
-
     views->views_count--;
 }
 
@@ -1448,7 +1463,11 @@ static inline void war_notes_delete_at_i(war_note_quads* note_quads,
                                          uint32_t* note_quads_count,
                                          war_producer_consumer* pc,
                                          war_lua_context* ctx_lua,
-                                         uint32_t i_delete) {
+                                         war_window_render_context* ctx_wr,
+                                         war_undo_tree* undo_tree,
+                                         war_pool* pool_wr,
+                                         uint32_t i_delete,
+                                         uint8_t record_undo) {
     if (*note_quads_count == 0 || i_delete >= *note_quads_count) return;
     double d_start_sec = note_quads->pos_x[i_delete] *
                          ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
@@ -1466,9 +1485,53 @@ static inline void war_notes_delete_at_i(war_note_quads* note_quads,
                              .note_sustain = 1.0f,
                              .note_release = 0.0f};
     war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(note_msg), &note_msg);
+    war_note_quad note_quad = {
+        .size_x = note_quads->size_x[i_delete],
+        .size_x_numerator = note_quads->size_x_numerator[i_delete],
+        .size_x_denominator = note_quads->size_x_denominator[i_delete],
+        .timestamp = note_quads->timestamp[i_delete],
+        .pos_x = note_quads->pos_x[i_delete],
+        .pos_y = note_quads->pos_y[i_delete],
+        .navigation_x = note_quads->navigation_x[i_delete],
+        .navigation_x_numerator = note_quads->navigation_x_numerator[i_delete],
+        .navigation_x_denominator =
+            note_quads->navigation_x_denominator[i_delete],
+        .color = note_quads->color[i_delete],
+        .outline_color = note_quads->outline_color[i_delete],
+        .gain = note_quads->gain[i_delete],
+        .voice = note_quads->voice[i_delete],
+        .hidden = note_quads->hidden[i_delete],
+        .mute = note_quads->mute[i_delete],
+    };
+    if (record_undo) {
+        war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
+        node->command = CMD_DELETE_NOTE;
+        node->payload.add_note.note_msg = note_msg;
+        node->payload.add_note.note_quad = note_quad;
+        node->cursor_pos_x = ctx_wr->cursor_pos_x;
+        node->cursor_pos_y = ctx_wr->cursor_pos_y;
+        node->left_col = ctx_wr->left_col;
+        node->right_col = ctx_wr->right_col;
+        node->top_row = ctx_wr->top_row;
+        node->bottom_row = ctx_wr->bottom_row;
+        node->timestamp = war_pool_alloc(
+            pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX));
+        war_get_local_time(node->timestamp, ctx_lua);
+        node->child_count = 0;
+        node->children =
+            war_pool_alloc(pool_wr,
+                           sizeof(war_undo_node*) *
+                               atomic_load(&ctx_lua->WR_UNDO_NODES_CHILDREN_MAX));
+        if (undo_tree->current) {
+            node->parent = undo_tree->current;
+            undo_tree->current->children[undo_tree->current->child_count++] = node;
+        } else {
+            node->parent = NULL;
+            undo_tree->root = node;
+        }
+        undo_tree->current = node;
+    }
     uint32_t last = *note_quads_count - 1;
-    // Swap the element to delete with the last element
-    uint64_t swapped_time = note_quads->timestamp[last];
     note_quads->timestamp[i_delete] = note_quads->timestamp[last];
     note_quads->pos_x[i_delete] = note_quads->pos_x[last];
     note_quads->pos_y[i_delete] = note_quads->pos_y[last];
@@ -1488,6 +1551,235 @@ static inline void war_notes_delete_at_i(war_note_quads* note_quads,
     note_quads->hidden[i_delete] = note_quads->hidden[last];
     note_quads->mute[i_delete] = note_quads->mute[last];
     (*note_quads_count)--;
+    int32_t i = i_delete;
+    while (i > 0 && note_quads->timestamp[i] < note_quads->timestamp[i - 1]) {
+        uint64_t tmp_time = note_quads->timestamp[i - 1];
+        note_quads->timestamp[i - 1] = note_quads->timestamp[i];
+        note_quads->timestamp[i] = tmp_time;
+        double tmp_col = note_quads->pos_x[i - 1];
+        note_quads->pos_x[i - 1] = note_quads->pos_x[i];
+        note_quads->pos_x[i] = tmp_col;
+        double tmp_row = note_quads->pos_y[i - 1];
+        note_quads->pos_y[i - 1] = note_quads->pos_y[i];
+        note_quads->pos_y[i] = tmp_row;
+        double tmp_navigation_x = note_quads->navigation_x[i - 1];
+        note_quads->navigation_x[i - 1] = note_quads->navigation_x[i];
+        note_quads->navigation_x[i] = tmp_navigation_x;
+        double tmp_size_x = note_quads->size_x[i - 1];
+        note_quads->size_x[i - 1] = note_quads->size_x[i];
+        note_quads->size_x[i] = tmp_size_x;
+        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i - 1];
+        note_quads->size_x_numerator[i - 1] = note_quads->size_x_numerator[i];
+        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
+        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i - 1];
+        note_quads->size_x_denominator[i - 1] =
+            note_quads->size_x_denominator[i];
+        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
+        uint32_t tmp_navigation_x_numerator =
+            note_quads->navigation_x_numerator[i - 1];
+        note_quads->navigation_x_numerator[i - 1] =
+            note_quads->navigation_x_numerator[i];
+        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
+        uint32_t tmp_navigation_x_denominator =
+            note_quads->navigation_x_denominator[i - 1];
+        note_quads->navigation_x_denominator[i - 1] =
+            note_quads->navigation_x_denominator[i];
+        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
+        uint32_t tmp_color = note_quads->color[i - 1];
+        note_quads->color[i - 1] = note_quads->color[i];
+        note_quads->color[i] = tmp_color;
+        uint32_t tmp_outline = note_quads->outline_color[i - 1];
+        note_quads->outline_color[i - 1] = note_quads->outline_color[i];
+        note_quads->outline_color[i] = tmp_outline;
+        uint8_t tmp_strength = note_quads->gain[i - 1];
+        note_quads->gain[i - 1] = note_quads->gain[i];
+        note_quads->gain[i] = tmp_strength;
+        uint8_t tmp_voice = note_quads->voice[i - 1];
+        note_quads->voice[i - 1] = note_quads->voice[i];
+        note_quads->voice[i] = tmp_voice;
+        uint8_t tmp_hidden = note_quads->hidden[i - 1];
+        note_quads->hidden[i - 1] = note_quads->hidden[i];
+        note_quads->hidden[i] = tmp_hidden;
+        uint8_t tmp_mute = note_quads->mute[i - 1];
+        note_quads->mute[i - 1] = note_quads->mute[i];
+        note_quads->mute[i] = tmp_mute;
+        i--;
+    }
+    i = i_delete;
+    while (i < (int32_t)(*note_quads_count - 1) &&
+           note_quads->timestamp[i] > note_quads->timestamp[i + 1]) {
+        uint64_t tmp_time = note_quads->timestamp[i + 1];
+        note_quads->timestamp[i + 1] = note_quads->timestamp[i];
+        note_quads->timestamp[i] = tmp_time;
+        double tmp_col = note_quads->pos_x[i + 1];
+        note_quads->pos_x[i + 1] = note_quads->pos_x[i];
+        note_quads->pos_x[i] = tmp_col;
+        double tmp_row = note_quads->pos_y[i + 1];
+        note_quads->pos_y[i + 1] = note_quads->pos_y[i];
+        note_quads->pos_y[i] = tmp_row;
+        double tmp_navigation_x = note_quads->navigation_x[i + 1];
+        note_quads->navigation_x[i + 1] = note_quads->navigation_x[i];
+        note_quads->navigation_x[i] = tmp_navigation_x;
+        double tmp_size_x = note_quads->size_x[i + 1];
+        note_quads->size_x[i + 1] = note_quads->size_x[i];
+        note_quads->size_x[i] = tmp_size_x;
+        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i + 1];
+        note_quads->size_x_numerator[i + 1] = note_quads->size_x_numerator[i];
+        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
+        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i + 1];
+        note_quads->size_x_denominator[i + 1] =
+            note_quads->size_x_denominator[i];
+        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
+        uint32_t tmp_navigation_x_numerator =
+            note_quads->navigation_x_numerator[i + 1];
+        note_quads->navigation_x_numerator[i + 1] =
+            note_quads->navigation_x_numerator[i];
+        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
+        uint32_t tmp_navigation_x_denominator =
+            note_quads->navigation_x_denominator[i + 1];
+        note_quads->navigation_x_denominator[i + 1] =
+            note_quads->navigation_x_denominator[i];
+        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
+        uint32_t tmp_color = note_quads->color[i + 1];
+        note_quads->color[i + 1] = note_quads->color[i];
+        note_quads->color[i] = tmp_color;
+        uint32_t tmp_outline = note_quads->outline_color[i + 1];
+        note_quads->outline_color[i + 1] = note_quads->outline_color[i];
+        note_quads->outline_color[i] = tmp_outline;
+        uint8_t tmp_strength = note_quads->gain[i + 1];
+        note_quads->gain[i + 1] = note_quads->gain[i];
+        note_quads->gain[i] = tmp_strength;
+        uint8_t tmp_voice = note_quads->voice[i + 1];
+        note_quads->voice[i + 1] = note_quads->voice[i];
+        note_quads->voice[i] = tmp_voice;
+        uint8_t tmp_hidden = note_quads->hidden[i + 1];
+        note_quads->hidden[i + 1] = note_quads->hidden[i];
+        note_quads->hidden[i] = tmp_hidden;
+        uint8_t tmp_mute = note_quads->mute[i + 1];
+        note_quads->mute[i + 1] = note_quads->mute[i];
+        note_quads->mute[i] = tmp_mute;
+        i++;
+    }
+}
+
+static inline void war_notes_delete(war_note_quads* note_quads,
+                                    uint32_t* note_quads_count,
+                                    war_producer_consumer* pc,
+                                    war_lua_context* ctx_lua,
+                                    war_window_render_context* ctx_wr,
+                                    war_undo_tree* undo_tree,
+                                    war_pool* pool_wr,
+                                    war_note_quad delete_quad,
+                                    uint8_t record_undo) {
+    if (*note_quads_count == 0) return;
+
+    // Find the index of the matching quad
+    int32_t i_delete = -1;
+    for (uint32_t i = 0; i < *note_quads_count; i++) {
+        if (note_quads->timestamp[i] == delete_quad.timestamp &&
+            note_quads->pos_x[i] == delete_quad.pos_x &&
+            note_quads->pos_y[i] == delete_quad.pos_y &&
+            note_quads->size_x[i] == delete_quad.size_x &&
+            note_quads->voice[i] == delete_quad.voice) {
+            i_delete = (int32_t)i;
+            break;
+        }
+    }
+
+    if (i_delete < 0) return; // Not found — nothing to delete
+
+    // --- same delete logic as before ---
+    double d_start_sec = note_quads->pos_x[i_delete] *
+                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
+    uint64_t start_frames =
+        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
+                            ((double)note_quads->size_x[i_delete]);
+    uint64_t duration_frames = (uint64_t)llround(
+        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
+
+    war_note_msg note_msg = {
+        .note_start_frames = start_frames,
+        .note_duration_frames = duration_frames,
+        .note_sample_index = note_quads->pos_y[i_delete],
+        .note_gain = 1.0f,
+        .note_attack = 0.0f,
+        .note_sustain = 1.0f,
+        .note_release = 0.0f,
+    };
+
+    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(note_msg), &note_msg);
+
+    war_note_quad note_quad = {
+        .size_x = note_quads->size_x[i_delete],
+        .size_x_numerator = note_quads->size_x_numerator[i_delete],
+        .size_x_denominator = note_quads->size_x_denominator[i_delete],
+        .timestamp = note_quads->timestamp[i_delete],
+        .pos_x = note_quads->pos_x[i_delete],
+        .pos_y = note_quads->pos_y[i_delete],
+        .navigation_x = note_quads->navigation_x[i_delete],
+        .navigation_x_numerator = note_quads->navigation_x_numerator[i_delete],
+        .navigation_x_denominator = note_quads->navigation_x_denominator[i_delete],
+        .color = note_quads->color[i_delete],
+        .outline_color = note_quads->outline_color[i_delete],
+        .gain = note_quads->gain[i_delete],
+        .voice = note_quads->voice[i_delete],
+        .hidden = note_quads->hidden[i_delete],
+        .mute = note_quads->mute[i_delete],
+    };
+
+    if (record_undo) {
+        // --- record undo node ---
+        war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
+        node->command = CMD_DELETE_NOTE;
+        node->payload.add_note.note_msg = note_msg;
+        node->payload.add_note.note_quad = note_quad;
+        node->cursor_pos_x = ctx_wr->cursor_pos_x;
+        node->cursor_pos_y = ctx_wr->cursor_pos_y;
+        node->left_col = ctx_wr->left_col;
+        node->right_col = ctx_wr->right_col;
+        node->top_row = ctx_wr->top_row;
+        node->bottom_row = ctx_wr->bottom_row;
+
+        node->timestamp = war_pool_alloc(
+            pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX));
+        war_get_local_time(node->timestamp, ctx_lua);
+
+        node->child_count = 0;
+        node->children = war_pool_alloc(pool_wr,
+                                        sizeof(war_undo_node*) *
+                                            atomic_load(&ctx_lua->WR_UNDO_NODES_CHILDREN_MAX));
+
+        if (undo_tree->current) {
+            node->parent = undo_tree->current;
+            undo_tree->current->children[undo_tree->current->child_count++] = node;
+        } else {
+            node->parent = NULL;
+            undo_tree->root = node;
+        }
+        undo_tree->current = node;
+    }
+
+    // --- perform in-place deletion swap ---
+    uint32_t last = *note_quads_count - 1;
+    note_quads->timestamp[i_delete] = note_quads->timestamp[last];
+    note_quads->pos_x[i_delete] = note_quads->pos_x[last];
+    note_quads->pos_y[i_delete] = note_quads->pos_y[last];
+    note_quads->navigation_x[i_delete] = note_quads->navigation_x[last];
+    note_quads->size_x[i_delete] = note_quads->size_x[last];
+    note_quads->navigation_x_numerator[i_delete] = note_quads->navigation_x_numerator[last];
+    note_quads->navigation_x_denominator[i_delete] = note_quads->navigation_x_denominator[last];
+    note_quads->size_x_numerator[i_delete] = note_quads->size_x_numerator[last];
+    note_quads->size_x_denominator[i_delete] = note_quads->size_x_denominator[last];
+    note_quads->color[i_delete] = note_quads->color[last];
+    note_quads->outline_color[i_delete] = note_quads->outline_color[last];
+    note_quads->gain[i_delete] = note_quads->gain[last];
+    note_quads->voice[i_delete] = note_quads->voice[last];
+    note_quads->hidden[i_delete] = note_quads->hidden[last];
+    note_quads->mute[i_delete] = note_quads->mute[last];
+    (*note_quads_count)--;
+
+    // --- re-sort for timestamp consistency ---
     int32_t i = i_delete;
     while (i > 0 && note_quads->timestamp[i] < note_quads->timestamp[i - 1]) {
         uint64_t tmp_time = note_quads->timestamp[i - 1];

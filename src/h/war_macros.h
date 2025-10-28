@@ -69,21 +69,19 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
         return -1;
     }
 
-#define LOAD_INT(field)                                           \
-    lua_getfield(L, -1, #field);                                  \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                         \
-        ctx_lua->field = (int)lua_tointeger(L, -1);               \
-        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field); \
-    }                                                             \
+#define LOAD_INT(field)                                                                                                                       \
+    lua_getfield(L, -1, #field);                                                                                                              \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                                                                                                     \
+        ctx_lua->field = (int)lua_tointeger(L, -1);                                                                                           \
+        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field);                                                                             \
+    }                                                                                                                                         \
     lua_pop(L, 1);
 
     // audio
     LOAD_INT(A_SAMPLE_RATE)
-    LOAD_INT(A_SAMPLE_DURATION)
     LOAD_INT(A_CHANNEL_COUNT)
     LOAD_INT(A_NOTE_COUNT)
     LOAD_INT(A_SAMPLES_PER_NOTE)
-    LOAD_INT(A_BPM)
     LOAD_INT(A_BASE_FREQUENCY)
     LOAD_INT(A_BASE_NOTE)
     LOAD_INT(A_EDO)
@@ -119,13 +117,41 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
 
 #undef LOAD_INT
 
+#define LOAD_FLOAT(field)                                                                                                                     \
+    lua_getfield(L, -1, #field);                                                                                                              \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                                                                                                     \
+        ctx_lua->field = (float)lua_tonumber(L, -1);                                                                                          \
+        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);                                                                             \
+    }                                                                                                                                         \
+    lua_pop(L, 1);
+
+    LOAD_FLOAT(A_DEFAULT_ATTACK)
+    LOAD_FLOAT(A_DEFAULT_SUSTAIN)
+    LOAD_FLOAT(A_DEFAULT_RELEASE)
+    LOAD_FLOAT(A_DEFAULT_GAIN)
+
+#undef LOAD_FLOAT
+
+#define LOAD_DOUBLE(field)                                                                                                                    \
+    lua_getfield(L, -1, #field);                                                                                                              \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                                                                                                     \
+        ctx_lua->field = (double)lua_tonumber(L, -1);                                                                                         \
+        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);                                                                             \
+    }                                                                                                                                         \
+    lua_pop(L, 1);
+
+    LOAD_DOUBLE(A_DEFAULT_COLUMNS_PER_BEAT)
+    LOAD_DOUBLE(A_BPM)
+    LOAD_DOUBLE(A_SAMPLE_DURATION)
+    LOAD_DOUBLE(WR_FPS)
+
+#undef LOAD_DOUBLE
+
     lua_close(L);
     return 0;
 }
 
-static inline size_t war_get_pool_a_size(war_pool* pool,
-                                         war_lua_context* ctx_lua,
-                                         const char* lua_file) {
+static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lua, const char* lua_file) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
@@ -200,9 +226,7 @@ static inline size_t war_get_pool_a_size(war_pool* pool,
     return total_size;
 }
 
-static inline size_t war_get_pool_wr_size(war_pool* pool,
-                                          war_lua_context* ctx_lua,
-                                          const char* lua_file) {
+static inline size_t war_get_pool_wr_size(war_pool* pool, war_lua_context* ctx_lua, const char* lua_file) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
@@ -317,64 +341,40 @@ static inline void* war_pool_alloc(war_pool* pool, size_t size) {
 
 static inline void war_get_top_text(war_window_render_context* ctx_wr) {
     memset(ctx_wr->text_top_status_bar, 0, MAX_STATUS_BAR_COLS);
-    memcpy(ctx_wr->text_top_status_bar,
-           "projects/demo.war",
-           sizeof("projects/test.war"));
+    memcpy(ctx_wr->text_top_status_bar, "projects/demo.war", sizeof("projects/test.war"));
     ctx_wr->text_top_status_bar_count += sizeof("projects/test.war");
     char tmp[MAX_STATUS_BAR_COLS];
     memset(tmp, 0, MAX_STATUS_BAR_COLS);
-    snprintf(tmp,
-             MAX_STATUS_BAR_COLS,
-             "%.0f,%.0f",
-             ctx_wr->cursor_pos_y,
-             ctx_wr->cursor_pos_x);
-    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
-           tmp,
-           sizeof(tmp));
+    snprintf(tmp, MAX_STATUS_BAR_COLS, "%.0f,%.0f", ctx_wr->cursor_pos_y, ctx_wr->cursor_pos_x);
+    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index, tmp, sizeof(tmp));
 }
 
-static inline void war_get_middle_text(war_window_render_context* ctx_wr,
-                                       war_views* views,
-                                       war_atomics* atomics,
-                                       war_lua_context* ctx_lua) {
+static inline void war_get_middle_text(war_window_render_context* ctx_wr, war_views* views, war_atomics* atomics, war_lua_context* ctx_lua) {
     memset(ctx_wr->text_middle_status_bar, 0, MAX_STATUS_BAR_COLS);
     switch (ctx_wr->mode) {
     case MODE_NORMAL:
         if (atomic_load(&atomics->repeat_section)) {
-            double start_frames =
-                (double)atomic_load(&atomics->repeat_start_frames);
-            double end_frames =
-                (double)atomic_load(&atomics->repeat_end_frames);
+            double start_frames = (double)atomic_load(&atomics->repeat_start_frames);
+            double end_frames = (double)atomic_load(&atomics->repeat_end_frames);
             double bpm = atomic_load(&ctx_lua->A_BPM);
             double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
-            uint32_t grid_start =
-                (uint32_t)((start_frames * bpm * 4.0) / (60.0 * sample_rate));
-            uint32_t grid_end =
-                (uint32_t)((end_frames * bpm * 4.0) / (60.0 * sample_rate));
+            uint32_t grid_start = (uint32_t)((start_frames * bpm * 4.0) / (60.0 * sample_rate));
+            uint32_t grid_end = (uint32_t)((end_frames * bpm * 4.0) / (60.0 * sample_rate));
             char tmp[MAX_STATUS_BAR_COLS];
             memset(tmp, 0, MAX_STATUS_BAR_COLS);
             snprintf(tmp, MAX_STATUS_BAR_COLS, "R:%u,%u", grid_start, grid_end);
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_middle_index,
-                   tmp,
-                   sizeof(tmp));
+            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, tmp, sizeof(tmp));
         }
         break;
     case MODE_VISUAL:
-        memcpy(ctx_wr->text_middle_status_bar,
-               "-- VISUAL --",
-               sizeof("-- VISUAL --"));
+        memcpy(ctx_wr->text_middle_status_bar, "-- VISUAL --", sizeof("-- VISUAL --"));
         break;
     case MODE_VIEWS:
         if (views->warpoon_mode == MODE_VISUAL_LINE) {
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- VIEWS -- -- VISUAL LINE --",
-                   sizeof("-- VIEWS -- -- VISUAL LINE --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- VIEWS -- -- VISUAL LINE --", sizeof("-- VIEWS -- -- VISUAL LINE --"));
             break;
         }
-        memcpy(ctx_wr->text_middle_status_bar,
-               "-- VIEWS --",
-               sizeof("-- VIEWS --"));
+        memcpy(ctx_wr->text_middle_status_bar, "-- VIEWS --", sizeof("-- VIEWS --"));
         break;
     case MODE_COMMAND:
         memcpy(ctx_wr->text_middle_status_bar, ":", sizeof(":"));
@@ -382,62 +382,39 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
     case MODE_MIDI: {
         switch (atomic_load(&atomics->state)) {
         case AUDIO_CMD_MIDI_RECORD_WAIT:
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- MIDI RECORD WAIT --",
-                   sizeof("-- MIDI RECORD WAIT --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI RECORD WAIT --", sizeof("-- MIDI RECORD WAIT --"));
             break;
         case AUDIO_CMD_MIDI_RECORD:
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- MIDI RECORD --",
-                   sizeof("-- MIDI RECORD --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI RECORD --", sizeof("-- MIDI RECORD --"));
             break;
         case AUDIO_CMD_MIDI_RECORD_MAP:
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- MIDI RECORD MAP --",
-                   sizeof("-- MIDI RECORD MAP --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI RECORD MAP --", sizeof("-- MIDI RECORD MAP --"));
             break;
         default:
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- MIDI --",
-                   sizeof("-- MIDI --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI --", sizeof("-- MIDI --"));
             break;
         }
         uint8_t loop = atomic_load(&atomics->loop);
         uint8_t midi_toggle = ctx_wr->midi_toggle;
         if (loop && midi_toggle) {
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_middle_index,
-                   "LOOP TOGGLE",
-                   sizeof("LOOP TOGGLE"));
+            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, "LOOP TOGGLE", sizeof("LOOP TOGGLE"));
         } else if (loop && !midi_toggle) {
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_middle_index,
-                   "LOOP",
-                   sizeof("LOOP"));
+            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, "LOOP", sizeof("LOOP"));
         } else if (!loop && midi_toggle) {
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_middle_index,
-                   "TOGGLE",
-                   sizeof("TOGGLE"));
+            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, "TOGGLE", sizeof("TOGGLE"));
         }
         break;
     }
     case MODE_RECORD:
         switch (atomic_load(&atomics->state)) {
         case AUDIO_CMD_RECORD_WAIT:
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- RECORD WAIT --",
-                   sizeof("-- RECORD WAIT --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- RECORD WAIT --", sizeof("-- RECORD WAIT --"));
             break;
         case AUDIO_CMD_RECORD:
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- RECORD --",
-                   sizeof("-- RECORD --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- RECORD --", sizeof("-- RECORD --"));
             break;
         case AUDIO_CMD_RECORD_MAP:
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- RECORD MAP --",
-                   sizeof("-- RECORD MAP --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- RECORD MAP --", sizeof("-- RECORD MAP --"));
             break;
         }
         break;
@@ -445,39 +422,23 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
         break;
     }
     if (ctx_wr->cursor_blink_state) {
-        memcpy(ctx_wr->text_middle_status_bar +
-                   ctx_wr->text_status_bar_end_index,
-               ctx_wr->input_sequence,
-               ctx_wr->num_chars_in_sequence);
-        uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ?
-                            sizeof("BLINK") :
-                            sizeof("BPM");
-        memcpy(ctx_wr->text_middle_status_bar +
-                   ctx_wr->text_status_bar_end_index + 2,
-               (size == sizeof("BLINK")) ? "BLINK" : "BPM",
-               size);
+        memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
+        uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ? sizeof("BLINK") : sizeof("BPM");
+        memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index + 2, (size == sizeof("BLINK")) ? "BLINK" : "BPM", size);
         return;
     }
-    memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index,
-           ctx_wr->input_sequence,
-           ctx_wr->num_chars_in_sequence);
+    memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
 }
 
-static inline void war_get_local_time(char* timestamp,
-                                      war_lua_context* ctx_lua) {
+static inline void war_get_local_time(char* timestamp, war_lua_context* ctx_lua) {
     time_t now = time(NULL);
     struct tm* tm_info = localtime(&now);
-    strftime(timestamp,
-             atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX),
-             "%H:%M:%S, %m-%d-%Y",
-             tm_info);
+    strftime(timestamp, atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX), "%H:%M:%S, %m-%d-%Y", tm_info);
 }
 
 static inline void war_get_bottom_text(war_window_render_context* ctx_wr) {
     memset(ctx_wr->text_bottom_status_bar, 0, MAX_STATUS_BAR_COLS);
-    memcpy(ctx_wr->text_bottom_status_bar,
-           "[WAR] 1:roll*",
-           sizeof("[WAR] 1:roll*"));
+    memcpy(ctx_wr->text_bottom_status_bar, "[WAR] 1:roll*", sizeof("[WAR] 1:roll*"));
 }
 
 static inline void war_get_warpoon_text(war_views* views) {
@@ -498,8 +459,7 @@ static inline void war_get_warpoon_text(war_views* views) {
     }
 }
 
-static inline void war_warpoon_delete_at_i(war_views* views,
-                                           uint32_t i_delete) {
+static inline void war_warpoon_delete_at_i(war_views* views, uint32_t i_delete) {
     if (i_delete >= views->views_count) return;
     uint32_t last = views->views_count - 1;
     // Shift all SoA arrays to the left to fill the gap
@@ -541,8 +501,7 @@ static inline void war_warpoon_shift_up(war_views* views) {
 }
 
 static inline void war_warpoon_shift_down(war_views* views) {
-    if (views->warpoon_row == 0)
-        return; // already at bottom in your indexing logic
+    if (views->warpoon_row == 0) return; // already at bottom in your indexing logic
 
     uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
     if (i_views + 1 >= views->views_count) return;
@@ -571,17 +530,13 @@ static inline void war_warpoon_shift_down(war_views* views) {
 
 // --------------------------
 // Writer: WR -> Audio (to_a)
-static inline bool war_pc_to_a(war_producer_consumer* pc,
-                               uint32_t header,
-                               uint32_t payload_size,
-                               const void* payload) {
+static inline bool war_pc_to_a(war_producer_consumer* pc, uint32_t header, uint32_t payload_size, const void* payload) {
     uint32_t total_size = 8 + payload_size; // header(4) + size(4) + payload
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
 
     // free bytes calculation (circular buffer)
-    uint32_t free_bytes =
-        (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
+    uint32_t free_bytes = (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
     if (free_bytes < total_size) return false;
 
     // --- write header (4) + size (4) allowing split ---
@@ -609,9 +564,7 @@ static inline bool war_pc_to_a(war_producer_consumer* pc,
         } else {
             // wrap
             memcpy(pc->to_a + payload_write_pos, payload, first_chunk);
-            memcpy(pc->to_a,
-                   (const uint8_t*)payload + first_chunk,
-                   payload_size - first_chunk);
+            memcpy(pc->to_a, (const uint8_t*)payload + first_chunk, payload_size - first_chunk);
         }
     }
 
@@ -622,15 +575,11 @@ static inline bool war_pc_to_a(war_producer_consumer* pc,
 
 // --------------------------
 // Reader: Audio <- WR (from_wr)
-static inline bool war_pc_from_wr(war_producer_consumer* pc,
-                                  uint32_t* out_header,
-                                  uint32_t* out_size,
-                                  void* out_payload) {
+static inline bool war_pc_from_wr(war_producer_consumer* pc, uint32_t* out_header, uint32_t* out_size, void* out_payload) {
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
 
-    uint32_t used_bytes =
-        (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
+    uint32_t used_bytes = (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
     if (used_bytes < 8) return false; // need at least header+size
 
     // read header+size (handle split)
@@ -657,9 +606,7 @@ static inline bool war_pc_from_wr(war_producer_consumer* pc,
             memcpy(out_payload, pc->to_a + payload_start, *out_size);
         } else {
             memcpy(out_payload, pc->to_a + payload_start, first_chunk);
-            memcpy((uint8_t*)out_payload + first_chunk,
-                   pc->to_a,
-                   *out_size - first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk, pc->to_a, *out_size - first_chunk);
         }
     }
 
@@ -670,16 +617,12 @@ static inline bool war_pc_from_wr(war_producer_consumer* pc,
 
 // --------------------------
 // Writer: Main -> WR (to_wr)
-static inline bool war_pc_to_wr(war_producer_consumer* pc,
-                                uint32_t header,
-                                uint32_t payload_size,
-                                const void* payload) {
+static inline bool war_pc_to_wr(war_producer_consumer* pc, uint32_t header, uint32_t payload_size, const void* payload) {
     uint32_t total_size = 8 + payload_size;
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
 
-    uint32_t free_bytes =
-        (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
+    uint32_t free_bytes = (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
     if (free_bytes < total_size) return false;
 
     // header+size
@@ -703,9 +646,7 @@ static inline bool war_pc_to_wr(war_producer_consumer* pc,
             memcpy(pc->to_wr + payload_write_pos, payload, payload_size);
         } else {
             memcpy(pc->to_wr + payload_write_pos, payload, first_chunk);
-            memcpy(pc->to_wr,
-                   (const uint8_t*)payload + first_chunk,
-                   payload_size - first_chunk);
+            memcpy(pc->to_wr, (const uint8_t*)payload + first_chunk, payload_size - first_chunk);
         }
     }
 
@@ -715,15 +656,11 @@ static inline bool war_pc_to_wr(war_producer_consumer* pc,
 
 // --------------------------
 // Reader: WR <- Main (from_a)
-static inline bool war_pc_from_a(war_producer_consumer* pc,
-                                 uint32_t* out_header,
-                                 uint32_t* out_size,
-                                 void* out_payload) {
+static inline bool war_pc_from_a(war_producer_consumer* pc, uint32_t* out_header, uint32_t* out_size, void* out_payload) {
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
 
-    uint32_t used_bytes =
-        (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
+    uint32_t used_bytes = (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
     if (used_bytes < 8) return false;
 
     uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
@@ -748,9 +685,7 @@ static inline bool war_pc_from_a(war_producer_consumer* pc,
             memcpy(out_payload, pc->to_wr + payload_start, *out_size);
         } else {
             memcpy(out_payload, pc->to_wr + payload_start, first_chunk);
-            memcpy((uint8_t*)out_payload + first_chunk,
-                   pc->to_wr,
-                   *out_size - first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk, pc->to_wr, *out_size - first_chunk);
         }
     }
 
@@ -781,20 +716,15 @@ static inline uint32_t war_pad_to_scale(float value, uint32_t scale) {
 }
 
 static inline uint64_t war_read_le64(const uint8_t* p) {
-    return ((uint64_t)p[0]) | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
-           ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) |
-           ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) |
-           ((uint64_t)p[7] << 56);
+    return ((uint64_t)p[0]) | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) | ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) |
+           ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) | ((uint64_t)p[7] << 56);
 }
 
 static inline uint32_t war_read_le32(const uint8_t* p) {
-    return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
-           ((uint32_t)p[3] << 24);
+    return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-static inline uint16_t war_read_le16(const uint8_t* p) {
-    return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8);
-}
+static inline uint16_t war_read_le16(const uint8_t* p) { return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8); }
 
 static inline void war_write_le64(uint8_t* p, uint64_t v) {
     p[0] = (uint8_t)(v);
@@ -819,46 +749,36 @@ static inline void war_write_le16(uint8_t* p, uint16_t v) {
     p[1] = (uint8_t)(v >> 8);
 }
 
-static inline uint32_t
-war_clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+static inline uint32_t war_clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t sum = (uint64_t)a + b;
     uint64_t mask = -(sum > max_value);
     return (uint32_t)((sum & ~mask) | ((uint64_t)max_value & mask));
 }
 
-static inline uint32_t
-war_clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
+static inline uint32_t war_clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
     uint32_t diff = a - b;
     uint32_t underflow_mask = -(a < b);
     uint32_t below_min_mask = -(diff < min_value);
-    uint32_t clamped_diff =
-        (diff & ~below_min_mask) | (min_value & below_min_mask);
+    uint32_t clamped_diff = (diff & ~below_min_mask) | (min_value & below_min_mask);
     return (clamped_diff & ~underflow_mask) | (min_value & underflow_mask);
 }
 
-static inline uint32_t
-war_clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+static inline uint32_t war_clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t prod = (uint64_t)a * (uint64_t)b;
     uint64_t mask = -(prod > max_value);
     return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
 }
 
-static inline uint32_t
-war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
+static inline uint32_t war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
     a = a < min_value ? min_value : a;
     a = a > max_value ? max_value : a;
     return a;
 }
 
-static inline uint64_t war_align64(uint64_t value) {
-    return (value + 63) & ~63ULL;
-}
+static inline uint64_t war_align64(uint64_t value) { return (value + 63) & ~63ULL; }
 
 static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
-    if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
-        (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) {
-        return (uint16_t)ks;
-    }
+    if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) || (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) { return (uint16_t)ks; }
     switch (ks) {
     case XKB_KEY_Escape:
         return KEYSYM_ESCAPE;
@@ -959,24 +879,20 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     case XKB_KEY_parenright:
         return XKB_KEY_0;
     default:
-        call_carmack("default: %u", ks);
         return KEYSYM_DEFAULT; // fallback / unknown
     }
 }
 
-static inline void
-war_get_frame_duration_us(war_window_render_context* ctx_wr) {
+static inline void war_get_frame_duration_us(war_window_render_context* ctx_wr) {
     const double microsecond_conversion = 1000000;
-    ctx_wr->frame_duration_us =
-        (uint64_t)round((1.0 / (double)ctx_wr->FPS) * microsecond_conversion);
+    ctx_wr->frame_duration_us = (uint64_t)round((1.0 / (double)ctx_wr->FPS) * microsecond_conversion);
 }
 
 static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
     char lowercase = ks;
     int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
     // Letters a-z or A-Z -> always lowercase
-    if (ks >= XKB_KEY_a && ks <= XKB_KEY_z)
-        return (char)ks - mod_shift_difference;
+    if (ks >= XKB_KEY_a && ks <= XKB_KEY_z) return (char)ks - mod_shift_difference;
     if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (char)(ks - XKB_KEY_A + 'a');
 
     // Numbers 0-9
@@ -1008,9 +924,7 @@ int war_compare_desc_uint32(const void* a, const void* b) {
     return 0;
 }
 
-static inline void war_wl_surface_set_opaque_region(int fd,
-                                                    uint32_t wl_surface_id,
-                                                    uint32_t wl_region_id) {
+static inline void war_wl_surface_set_opaque_region(int fd, uint32_t wl_surface_id, uint32_t wl_region_id) {
     uint8_t set_opaque_region[12];
     war_write_le32(set_opaque_region, wl_surface_id);
     war_write_le16(set_opaque_region + 4, 4);
@@ -1048,9 +962,7 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     };
     text_vertices[*text_vertices_count + 1] = (war_text_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_pos[0] + span[0],
-                bottom_left_pos[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1], bottom_left_pos[2]},
         .uv = {glyph_info->uv_x1, glyph_info->uv_y1},
         .glyph_size = {glyph_info->width, glyph_info->height},
         .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
@@ -1063,9 +975,7 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     };
     text_vertices[*text_vertices_count + 2] = (war_text_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_pos[0] + span[0],
-                bottom_left_pos[1] + span[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
         .uv = {glyph_info->uv_x1, glyph_info->uv_y0},
         .glyph_size = {glyph_info->width, glyph_info->height},
         .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
@@ -1078,9 +988,7 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     };
     text_vertices[*text_vertices_count + 3] = (war_text_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_pos[0],
-                bottom_left_pos[1] + span[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
         .uv = {glyph_info->uv_x0, glyph_info->uv_y0},
         .color = color,
         .glyph_size = {glyph_info->width, glyph_info->height},
@@ -1101,10 +1009,8 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     (*text_indices_count) += 6;
 }
 
-static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
-                                            uint16_t* text_indices,
-                                            uint32_t* text_vertices_count,
-                                            uint32_t* text_indices_count) {
+static inline void
+war_make_blank_text_quad(war_text_vertex* text_vertices, uint16_t* text_indices, uint32_t* text_vertices_count, uint32_t* text_indices_count) {
     text_vertices[*text_vertices_count] = (war_text_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
@@ -1190,9 +1096,7 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     };
     quad_vertices[*vertices_count + 1] = (war_quad_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_pos[0] + span[0],
-                bottom_left_pos[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1], bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1202,9 +1106,7 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     };
     quad_vertices[*vertices_count + 2] = (war_quad_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_pos[0] + span[0],
-                bottom_left_pos[1] + span[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1214,9 +1116,7 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     };
     quad_vertices[*vertices_count + 3] = (war_quad_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_pos[0],
-                bottom_left_pos[1] + span[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1234,18 +1134,17 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     (*indices_count) += 6;
 }
 
-static inline void
-war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
-                          uint16_t* transparent_quad_indices,
-                          uint32_t* vertices_count,
-                          uint32_t* indices_count,
-                          float bottom_left_pos[3],
-                          float span[2],
-                          uint32_t color,
-                          float outline_thickness,
-                          uint32_t outline_color,
-                          float line_thickness[2],
-                          uint32_t flags) {
+static inline void war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
+                                             uint16_t* transparent_quad_indices,
+                                             uint32_t* vertices_count,
+                                             uint32_t* indices_count,
+                                             float bottom_left_pos[3],
+                                             float span[2],
+                                             uint32_t color,
+                                             float outline_thickness,
+                                             uint32_t outline_color,
+                                             float line_thickness[2],
+                                             uint32_t flags) {
     transparent_quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
@@ -1258,9 +1157,7 @@ war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
     };
     transparent_quad_vertices[*vertices_count + 1] = (war_quad_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_pos[0] + span[0],
-                bottom_left_pos[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1], bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1270,9 +1167,7 @@ war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
     };
     transparent_quad_vertices[*vertices_count + 2] = (war_quad_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_pos[0] + span[0],
-                bottom_left_pos[1] + span[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1282,9 +1177,7 @@ war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
     };
     transparent_quad_vertices[*vertices_count + 3] = (war_quad_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_pos[0],
-                bottom_left_pos[1] + span[1],
-                bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1302,10 +1195,8 @@ war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
     (*indices_count) += 6;
 }
 
-static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
-                                       uint16_t* quad_indices,
-                                       uint32_t* vertices_count,
-                                       uint32_t* indices_count) {
+static inline void
+war_make_blank_quad(war_quad_vertex* quad_vertices, uint16_t* quad_indices, uint32_t* vertices_count, uint32_t* indices_count) {
     quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
@@ -1356,541 +1247,6 @@ static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
     (*indices_count) += 6;
 }
 
-static inline void war_notes_add(war_note_quads* note_quads,
-                                 uint32_t* note_quads_count,
-                                 war_producer_consumer* pc,
-                                 war_window_render_context* ctx_wr,
-                                 war_lua_context* ctx_lua,
-                                 uint32_t color,
-                                 uint32_t outline_color,
-                                 float gain,
-                                 uint32_t voice,
-                                 uint32_t hidden,
-                                 uint32_t mute) {
-    assert(*note_quads_count < max_note_quads);
-    note_quads->timestamp[*note_quads_count] = ctx_wr->now;
-    note_quads->pos_x[*note_quads_count] = ctx_wr->cursor_pos_x;
-    note_quads->pos_y[*note_quads_count] = ctx_wr->cursor_pos_y;
-    note_quads->navigation_x[*note_quads_count] = ctx_wr->cursor_navigation_x;
-    note_quads->size_x[*note_quads_count] = ctx_wr->cursor_size_x;
-    note_quads->navigation_x_numerator[*note_quads_count] =
-        ctx_wr->navigation_whole_number_col;
-    note_quads->navigation_x_denominator[*note_quads_count] =
-        ctx_wr->navigation_sub_cells_col;
-    note_quads->size_x_numerator[*note_quads_count] =
-        ctx_wr->cursor_width_whole_number;
-    note_quads->size_x_denominator[*note_quads_count] =
-        ctx_wr->cursor_width_sub_cells;
-    note_quads->color[*note_quads_count] = color;
-    note_quads->outline_color[*note_quads_count] = outline_color;
-    note_quads->gain[*note_quads_count] = gain;
-    note_quads->voice[*note_quads_count] = voice;
-    note_quads->hidden[*note_quads_count] = hidden;
-    note_quads->mute[*note_quads_count] = mute;
-    (*note_quads_count)++;
-
-    double d_start_sec =
-        ctx_wr->cursor_pos_x * ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
-    uint64_t start_frames =
-        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
-                            ((double)ctx_wr->cursor_size_x);
-    uint64_t duration_frames = (uint64_t)llround(
-        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    war_note_msg note_msg = {.note_start_frames = start_frames,
-                             .note_duration_frames = duration_frames,
-                             .note_sample_index = ctx_wr->cursor_pos_y,
-                             .note_gain = 1.0f,
-                             .note_attack = 0.0f,
-                             .note_sustain = 1.0f,
-                             .note_release = 0.0f};
-    war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note_msg), &note_msg);
-}
-
-static inline void war_note_quads_delete(war_note_quads* note_quads,
-                                         uint32_t* note_quads_count,
-                                         war_producer_consumer* pc,
-                                         war_window_render_context* ctx_wr) {
-    if (*note_quads_count == 0) return;
-
-    // Find the index of the freshest note at the given col/row
-    uint64_t freshest_time = 0;
-    int32_t freshest_index = -1;
-
-    for (uint32_t i = 0; i < *note_quads_count; i++) {
-        if (note_quads->pos_x[i] == ctx_wr->cursor_pos_x &&
-            note_quads->pos_y[i] == ctx_wr->cursor_pos_y &&
-            note_quads->timestamp[i] > freshest_time) {
-            freshest_time = note_quads->timestamp[i];
-            freshest_index = i;
-        }
-    }
-
-    if (freshest_index == -1) return; // no note found
-
-    // Swap-back delete the freshest note
-    uint32_t last = *note_quads_count - 1;
-    if ((uint32_t)freshest_index != last) {
-        note_quads->timestamp[freshest_index] = note_quads->timestamp[last];
-        note_quads->pos_x[freshest_index] = note_quads->pos_x[last];
-        note_quads->pos_y[freshest_index] = note_quads->pos_y[last];
-        note_quads->navigation_x[freshest_index] =
-            note_quads->navigation_x[last];
-        note_quads->size_x[freshest_index] = note_quads->size_x[last];
-        note_quads->navigation_x_numerator[freshest_index] =
-            note_quads->navigation_x_numerator[last];
-        note_quads->navigation_x_denominator[freshest_index] =
-            note_quads->navigation_x_denominator[last];
-        note_quads->size_x_numerator[freshest_index] =
-            note_quads->size_x_numerator[last];
-        note_quads->size_x_denominator[freshest_index] =
-            note_quads->size_x_denominator[last];
-        note_quads->color[freshest_index] = note_quads->color[last];
-        note_quads->outline_color[freshest_index] =
-            note_quads->outline_color[last];
-        note_quads->gain[freshest_index] = note_quads->gain[last];
-        note_quads->voice[freshest_index] = note_quads->voice[last];
-        note_quads->hidden[freshest_index] = note_quads->hidden[last];
-        note_quads->mute[freshest_index] = note_quads->mute[last];
-    }
-
-    (*note_quads_count)--;
-
-    // TODO: send delete command to audio thread
-}
-
-static inline void war_notes_delete_at_i(war_note_quads* note_quads,
-                                         uint32_t* note_quads_count,
-                                         war_producer_consumer* pc,
-                                         war_lua_context* ctx_lua,
-                                         war_window_render_context* ctx_wr,
-                                         war_undo_tree* undo_tree,
-                                         war_pool* pool_wr,
-                                         uint32_t i_delete,
-                                         uint8_t record_undo) {
-    if (*note_quads_count == 0 || i_delete >= *note_quads_count) return;
-    double d_start_sec = note_quads->pos_x[i_delete] *
-                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
-    uint64_t start_frames =
-        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
-                            ((double)note_quads->size_x[i_delete]);
-    uint64_t duration_frames = (uint64_t)llround(
-        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    war_note_msg note_msg = {.note_start_frames = start_frames,
-                             .note_duration_frames = duration_frames,
-                             .note_sample_index = note_quads->pos_y[i_delete],
-                             .note_gain = 1.0f,
-                             .note_attack = 0.0f,
-                             .note_sustain = 1.0f,
-                             .note_release = 0.0f};
-    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(note_msg), &note_msg);
-    war_note_quad note_quad = {
-        .size_x = note_quads->size_x[i_delete],
-        .size_x_numerator = note_quads->size_x_numerator[i_delete],
-        .size_x_denominator = note_quads->size_x_denominator[i_delete],
-        .timestamp = note_quads->timestamp[i_delete],
-        .pos_x = note_quads->pos_x[i_delete],
-        .pos_y = note_quads->pos_y[i_delete],
-        .navigation_x = note_quads->navigation_x[i_delete],
-        .navigation_x_numerator = note_quads->navigation_x_numerator[i_delete],
-        .navigation_x_denominator =
-            note_quads->navigation_x_denominator[i_delete],
-        .color = note_quads->color[i_delete],
-        .outline_color = note_quads->outline_color[i_delete],
-        .gain = note_quads->gain[i_delete],
-        .voice = note_quads->voice[i_delete],
-        .hidden = note_quads->hidden[i_delete],
-        .mute = note_quads->mute[i_delete],
-    };
-    if (record_undo) {
-        war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-        node->command = CMD_DELETE_NOTE;
-        node->payload.add_note.note_msg = note_msg;
-        node->payload.add_note.note_quad = note_quad;
-        node->cursor_pos_x = ctx_wr->cursor_pos_x;
-        node->cursor_pos_y = ctx_wr->cursor_pos_y;
-        node->left_col = ctx_wr->left_col;
-        node->right_col = ctx_wr->right_col;
-        node->top_row = ctx_wr->top_row;
-        node->bottom_row = ctx_wr->bottom_row;
-        node->timestamp = war_pool_alloc(
-            pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX));
-        war_get_local_time(node->timestamp, ctx_lua);
-        node->child_count = 0;
-        node->children =
-            war_pool_alloc(pool_wr,
-                           sizeof(war_undo_node*) *
-                               atomic_load(&ctx_lua->WR_UNDO_NODES_CHILDREN_MAX));
-        if (undo_tree->current) {
-            node->parent = undo_tree->current;
-            undo_tree->current->children[undo_tree->current->child_count++] = node;
-        } else {
-            node->parent = NULL;
-            undo_tree->root = node;
-        }
-        undo_tree->current = node;
-    }
-    uint32_t last = *note_quads_count - 1;
-    note_quads->timestamp[i_delete] = note_quads->timestamp[last];
-    note_quads->pos_x[i_delete] = note_quads->pos_x[last];
-    note_quads->pos_y[i_delete] = note_quads->pos_y[last];
-    note_quads->navigation_x[i_delete] = note_quads->navigation_x[last];
-    note_quads->size_x[i_delete] = note_quads->size_x[last];
-    note_quads->navigation_x_numerator[i_delete] =
-        note_quads->navigation_x_numerator[last];
-    note_quads->navigation_x_denominator[i_delete] =
-        note_quads->navigation_x_denominator[last];
-    note_quads->size_x_numerator[i_delete] = note_quads->size_x_numerator[last];
-    note_quads->size_x_denominator[i_delete] =
-        note_quads->size_x_denominator[last];
-    note_quads->color[i_delete] = note_quads->color[last];
-    note_quads->outline_color[i_delete] = note_quads->outline_color[last];
-    note_quads->gain[i_delete] = note_quads->gain[last];
-    note_quads->voice[i_delete] = note_quads->voice[last];
-    note_quads->hidden[i_delete] = note_quads->hidden[last];
-    note_quads->mute[i_delete] = note_quads->mute[last];
-    (*note_quads_count)--;
-    int32_t i = i_delete;
-    while (i > 0 && note_quads->timestamp[i] < note_quads->timestamp[i - 1]) {
-        uint64_t tmp_time = note_quads->timestamp[i - 1];
-        note_quads->timestamp[i - 1] = note_quads->timestamp[i];
-        note_quads->timestamp[i] = tmp_time;
-        double tmp_col = note_quads->pos_x[i - 1];
-        note_quads->pos_x[i - 1] = note_quads->pos_x[i];
-        note_quads->pos_x[i] = tmp_col;
-        double tmp_row = note_quads->pos_y[i - 1];
-        note_quads->pos_y[i - 1] = note_quads->pos_y[i];
-        note_quads->pos_y[i] = tmp_row;
-        double tmp_navigation_x = note_quads->navigation_x[i - 1];
-        note_quads->navigation_x[i - 1] = note_quads->navigation_x[i];
-        note_quads->navigation_x[i] = tmp_navigation_x;
-        double tmp_size_x = note_quads->size_x[i - 1];
-        note_quads->size_x[i - 1] = note_quads->size_x[i];
-        note_quads->size_x[i] = tmp_size_x;
-        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i - 1];
-        note_quads->size_x_numerator[i - 1] = note_quads->size_x_numerator[i];
-        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
-        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i - 1];
-        note_quads->size_x_denominator[i - 1] =
-            note_quads->size_x_denominator[i];
-        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
-        uint32_t tmp_navigation_x_numerator =
-            note_quads->navigation_x_numerator[i - 1];
-        note_quads->navigation_x_numerator[i - 1] =
-            note_quads->navigation_x_numerator[i];
-        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
-        uint32_t tmp_navigation_x_denominator =
-            note_quads->navigation_x_denominator[i - 1];
-        note_quads->navigation_x_denominator[i - 1] =
-            note_quads->navigation_x_denominator[i];
-        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
-        uint32_t tmp_color = note_quads->color[i - 1];
-        note_quads->color[i - 1] = note_quads->color[i];
-        note_quads->color[i] = tmp_color;
-        uint32_t tmp_outline = note_quads->outline_color[i - 1];
-        note_quads->outline_color[i - 1] = note_quads->outline_color[i];
-        note_quads->outline_color[i] = tmp_outline;
-        uint8_t tmp_strength = note_quads->gain[i - 1];
-        note_quads->gain[i - 1] = note_quads->gain[i];
-        note_quads->gain[i] = tmp_strength;
-        uint8_t tmp_voice = note_quads->voice[i - 1];
-        note_quads->voice[i - 1] = note_quads->voice[i];
-        note_quads->voice[i] = tmp_voice;
-        uint8_t tmp_hidden = note_quads->hidden[i - 1];
-        note_quads->hidden[i - 1] = note_quads->hidden[i];
-        note_quads->hidden[i] = tmp_hidden;
-        uint8_t tmp_mute = note_quads->mute[i - 1];
-        note_quads->mute[i - 1] = note_quads->mute[i];
-        note_quads->mute[i] = tmp_mute;
-        i--;
-    }
-    i = i_delete;
-    while (i < (int32_t)(*note_quads_count - 1) &&
-           note_quads->timestamp[i] > note_quads->timestamp[i + 1]) {
-        uint64_t tmp_time = note_quads->timestamp[i + 1];
-        note_quads->timestamp[i + 1] = note_quads->timestamp[i];
-        note_quads->timestamp[i] = tmp_time;
-        double tmp_col = note_quads->pos_x[i + 1];
-        note_quads->pos_x[i + 1] = note_quads->pos_x[i];
-        note_quads->pos_x[i] = tmp_col;
-        double tmp_row = note_quads->pos_y[i + 1];
-        note_quads->pos_y[i + 1] = note_quads->pos_y[i];
-        note_quads->pos_y[i] = tmp_row;
-        double tmp_navigation_x = note_quads->navigation_x[i + 1];
-        note_quads->navigation_x[i + 1] = note_quads->navigation_x[i];
-        note_quads->navigation_x[i] = tmp_navigation_x;
-        double tmp_size_x = note_quads->size_x[i + 1];
-        note_quads->size_x[i + 1] = note_quads->size_x[i];
-        note_quads->size_x[i] = tmp_size_x;
-        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i + 1];
-        note_quads->size_x_numerator[i + 1] = note_quads->size_x_numerator[i];
-        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
-        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i + 1];
-        note_quads->size_x_denominator[i + 1] =
-            note_quads->size_x_denominator[i];
-        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
-        uint32_t tmp_navigation_x_numerator =
-            note_quads->navigation_x_numerator[i + 1];
-        note_quads->navigation_x_numerator[i + 1] =
-            note_quads->navigation_x_numerator[i];
-        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
-        uint32_t tmp_navigation_x_denominator =
-            note_quads->navigation_x_denominator[i + 1];
-        note_quads->navigation_x_denominator[i + 1] =
-            note_quads->navigation_x_denominator[i];
-        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
-        uint32_t tmp_color = note_quads->color[i + 1];
-        note_quads->color[i + 1] = note_quads->color[i];
-        note_quads->color[i] = tmp_color;
-        uint32_t tmp_outline = note_quads->outline_color[i + 1];
-        note_quads->outline_color[i + 1] = note_quads->outline_color[i];
-        note_quads->outline_color[i] = tmp_outline;
-        uint8_t tmp_strength = note_quads->gain[i + 1];
-        note_quads->gain[i + 1] = note_quads->gain[i];
-        note_quads->gain[i] = tmp_strength;
-        uint8_t tmp_voice = note_quads->voice[i + 1];
-        note_quads->voice[i + 1] = note_quads->voice[i];
-        note_quads->voice[i] = tmp_voice;
-        uint8_t tmp_hidden = note_quads->hidden[i + 1];
-        note_quads->hidden[i + 1] = note_quads->hidden[i];
-        note_quads->hidden[i] = tmp_hidden;
-        uint8_t tmp_mute = note_quads->mute[i + 1];
-        note_quads->mute[i + 1] = note_quads->mute[i];
-        note_quads->mute[i] = tmp_mute;
-        i++;
-    }
-}
-
-static inline void war_notes_delete(war_note_quads* note_quads,
-                                    uint32_t* note_quads_count,
-                                    war_producer_consumer* pc,
-                                    war_lua_context* ctx_lua,
-                                    war_window_render_context* ctx_wr,
-                                    war_undo_tree* undo_tree,
-                                    war_pool* pool_wr,
-                                    war_note_quad delete_quad,
-                                    uint8_t record_undo) {
-    if (*note_quads_count == 0) return;
-
-    // Find the index of the matching quad
-    int32_t i_delete = -1;
-    for (uint32_t i = 0; i < *note_quads_count; i++) {
-        if (note_quads->timestamp[i] == delete_quad.timestamp &&
-            note_quads->pos_x[i] == delete_quad.pos_x &&
-            note_quads->pos_y[i] == delete_quad.pos_y &&
-            note_quads->size_x[i] == delete_quad.size_x &&
-            note_quads->voice[i] == delete_quad.voice) {
-            i_delete = (int32_t)i;
-            break;
-        }
-    }
-
-    if (i_delete < 0) return; // Not found — nothing to delete
-
-    // --- same delete logic as before ---
-    double d_start_sec = note_quads->pos_x[i_delete] *
-                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
-    uint64_t start_frames =
-        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
-                            ((double)note_quads->size_x[i_delete]);
-    uint64_t duration_frames = (uint64_t)llround(
-        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-
-    war_note_msg note_msg = {
-        .note_start_frames = start_frames,
-        .note_duration_frames = duration_frames,
-        .note_sample_index = note_quads->pos_y[i_delete],
-        .note_gain = 1.0f,
-        .note_attack = 0.0f,
-        .note_sustain = 1.0f,
-        .note_release = 0.0f,
-    };
-
-    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(note_msg), &note_msg);
-
-    war_note_quad note_quad = {
-        .size_x = note_quads->size_x[i_delete],
-        .size_x_numerator = note_quads->size_x_numerator[i_delete],
-        .size_x_denominator = note_quads->size_x_denominator[i_delete],
-        .timestamp = note_quads->timestamp[i_delete],
-        .pos_x = note_quads->pos_x[i_delete],
-        .pos_y = note_quads->pos_y[i_delete],
-        .navigation_x = note_quads->navigation_x[i_delete],
-        .navigation_x_numerator = note_quads->navigation_x_numerator[i_delete],
-        .navigation_x_denominator = note_quads->navigation_x_denominator[i_delete],
-        .color = note_quads->color[i_delete],
-        .outline_color = note_quads->outline_color[i_delete],
-        .gain = note_quads->gain[i_delete],
-        .voice = note_quads->voice[i_delete],
-        .hidden = note_quads->hidden[i_delete],
-        .mute = note_quads->mute[i_delete],
-    };
-
-    if (record_undo) {
-        // --- record undo node ---
-        war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-        node->command = CMD_DELETE_NOTE;
-        node->payload.add_note.note_msg = note_msg;
-        node->payload.add_note.note_quad = note_quad;
-        node->cursor_pos_x = ctx_wr->cursor_pos_x;
-        node->cursor_pos_y = ctx_wr->cursor_pos_y;
-        node->left_col = ctx_wr->left_col;
-        node->right_col = ctx_wr->right_col;
-        node->top_row = ctx_wr->top_row;
-        node->bottom_row = ctx_wr->bottom_row;
-
-        node->timestamp = war_pool_alloc(
-            pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX));
-        war_get_local_time(node->timestamp, ctx_lua);
-
-        node->child_count = 0;
-        node->children = war_pool_alloc(pool_wr,
-                                        sizeof(war_undo_node*) *
-                                            atomic_load(&ctx_lua->WR_UNDO_NODES_CHILDREN_MAX));
-
-        if (undo_tree->current) {
-            node->parent = undo_tree->current;
-            undo_tree->current->children[undo_tree->current->child_count++] = node;
-        } else {
-            node->parent = NULL;
-            undo_tree->root = node;
-        }
-        undo_tree->current = node;
-    }
-
-    // --- perform in-place deletion swap ---
-    uint32_t last = *note_quads_count - 1;
-    note_quads->timestamp[i_delete] = note_quads->timestamp[last];
-    note_quads->pos_x[i_delete] = note_quads->pos_x[last];
-    note_quads->pos_y[i_delete] = note_quads->pos_y[last];
-    note_quads->navigation_x[i_delete] = note_quads->navigation_x[last];
-    note_quads->size_x[i_delete] = note_quads->size_x[last];
-    note_quads->navigation_x_numerator[i_delete] = note_quads->navigation_x_numerator[last];
-    note_quads->navigation_x_denominator[i_delete] = note_quads->navigation_x_denominator[last];
-    note_quads->size_x_numerator[i_delete] = note_quads->size_x_numerator[last];
-    note_quads->size_x_denominator[i_delete] = note_quads->size_x_denominator[last];
-    note_quads->color[i_delete] = note_quads->color[last];
-    note_quads->outline_color[i_delete] = note_quads->outline_color[last];
-    note_quads->gain[i_delete] = note_quads->gain[last];
-    note_quads->voice[i_delete] = note_quads->voice[last];
-    note_quads->hidden[i_delete] = note_quads->hidden[last];
-    note_quads->mute[i_delete] = note_quads->mute[last];
-    (*note_quads_count)--;
-
-    // --- re-sort for timestamp consistency ---
-    int32_t i = i_delete;
-    while (i > 0 && note_quads->timestamp[i] < note_quads->timestamp[i - 1]) {
-        uint64_t tmp_time = note_quads->timestamp[i - 1];
-        note_quads->timestamp[i - 1] = note_quads->timestamp[i];
-        note_quads->timestamp[i] = tmp_time;
-        double tmp_col = note_quads->pos_x[i - 1];
-        note_quads->pos_x[i - 1] = note_quads->pos_x[i];
-        note_quads->pos_x[i] = tmp_col;
-        double tmp_row = note_quads->pos_y[i - 1];
-        note_quads->pos_y[i - 1] = note_quads->pos_y[i];
-        note_quads->pos_y[i] = tmp_row;
-        double tmp_navigation_x = note_quads->navigation_x[i - 1];
-        note_quads->navigation_x[i - 1] = note_quads->navigation_x[i];
-        note_quads->navigation_x[i] = tmp_navigation_x;
-        double tmp_size_x = note_quads->size_x[i - 1];
-        note_quads->size_x[i - 1] = note_quads->size_x[i];
-        note_quads->size_x[i] = tmp_size_x;
-        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i - 1];
-        note_quads->size_x_numerator[i - 1] = note_quads->size_x_numerator[i];
-        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
-        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i - 1];
-        note_quads->size_x_denominator[i - 1] =
-            note_quads->size_x_denominator[i];
-        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
-        uint32_t tmp_navigation_x_numerator =
-            note_quads->navigation_x_numerator[i - 1];
-        note_quads->navigation_x_numerator[i - 1] =
-            note_quads->navigation_x_numerator[i];
-        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
-        uint32_t tmp_navigation_x_denominator =
-            note_quads->navigation_x_denominator[i - 1];
-        note_quads->navigation_x_denominator[i - 1] =
-            note_quads->navigation_x_denominator[i];
-        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
-        uint32_t tmp_color = note_quads->color[i - 1];
-        note_quads->color[i - 1] = note_quads->color[i];
-        note_quads->color[i] = tmp_color;
-        uint32_t tmp_outline = note_quads->outline_color[i - 1];
-        note_quads->outline_color[i - 1] = note_quads->outline_color[i];
-        note_quads->outline_color[i] = tmp_outline;
-        uint8_t tmp_strength = note_quads->gain[i - 1];
-        note_quads->gain[i - 1] = note_quads->gain[i];
-        note_quads->gain[i] = tmp_strength;
-        uint8_t tmp_voice = note_quads->voice[i - 1];
-        note_quads->voice[i - 1] = note_quads->voice[i];
-        note_quads->voice[i] = tmp_voice;
-        uint8_t tmp_hidden = note_quads->hidden[i - 1];
-        note_quads->hidden[i - 1] = note_quads->hidden[i];
-        note_quads->hidden[i] = tmp_hidden;
-        uint8_t tmp_mute = note_quads->mute[i - 1];
-        note_quads->mute[i - 1] = note_quads->mute[i];
-        note_quads->mute[i] = tmp_mute;
-        i--;
-    }
-    i = i_delete;
-    while (i < (int32_t)(*note_quads_count - 1) &&
-           note_quads->timestamp[i] > note_quads->timestamp[i + 1]) {
-        uint64_t tmp_time = note_quads->timestamp[i + 1];
-        note_quads->timestamp[i + 1] = note_quads->timestamp[i];
-        note_quads->timestamp[i] = tmp_time;
-        double tmp_col = note_quads->pos_x[i + 1];
-        note_quads->pos_x[i + 1] = note_quads->pos_x[i];
-        note_quads->pos_x[i] = tmp_col;
-        double tmp_row = note_quads->pos_y[i + 1];
-        note_quads->pos_y[i + 1] = note_quads->pos_y[i];
-        note_quads->pos_y[i] = tmp_row;
-        double tmp_navigation_x = note_quads->navigation_x[i + 1];
-        note_quads->navigation_x[i + 1] = note_quads->navigation_x[i];
-        note_quads->navigation_x[i] = tmp_navigation_x;
-        double tmp_size_x = note_quads->size_x[i + 1];
-        note_quads->size_x[i + 1] = note_quads->size_x[i];
-        note_quads->size_x[i] = tmp_size_x;
-        uint32_t tmp_size_x_numerator = note_quads->size_x_numerator[i + 1];
-        note_quads->size_x_numerator[i + 1] = note_quads->size_x_numerator[i];
-        note_quads->size_x_numerator[i] = tmp_size_x_numerator;
-        uint32_t tmp_size_x_denominator = note_quads->size_x_denominator[i + 1];
-        note_quads->size_x_denominator[i + 1] =
-            note_quads->size_x_denominator[i];
-        note_quads->size_x_denominator[i] = tmp_size_x_denominator;
-        uint32_t tmp_navigation_x_numerator =
-            note_quads->navigation_x_numerator[i + 1];
-        note_quads->navigation_x_numerator[i + 1] =
-            note_quads->navigation_x_numerator[i];
-        note_quads->navigation_x_numerator[i] = tmp_navigation_x_numerator;
-        uint32_t tmp_navigation_x_denominator =
-            note_quads->navigation_x_denominator[i + 1];
-        note_quads->navigation_x_denominator[i + 1] =
-            note_quads->navigation_x_denominator[i];
-        note_quads->navigation_x_denominator[i] = tmp_navigation_x_denominator;
-        uint32_t tmp_color = note_quads->color[i + 1];
-        note_quads->color[i + 1] = note_quads->color[i];
-        note_quads->color[i] = tmp_color;
-        uint32_t tmp_outline = note_quads->outline_color[i + 1];
-        note_quads->outline_color[i + 1] = note_quads->outline_color[i];
-        note_quads->outline_color[i] = tmp_outline;
-        uint8_t tmp_strength = note_quads->gain[i + 1];
-        note_quads->gain[i + 1] = note_quads->gain[i];
-        note_quads->gain[i] = tmp_strength;
-        uint8_t tmp_voice = note_quads->voice[i + 1];
-        note_quads->voice[i + 1] = note_quads->voice[i];
-        note_quads->voice[i] = tmp_voice;
-        uint8_t tmp_hidden = note_quads->hidden[i + 1];
-        note_quads->hidden[i + 1] = note_quads->hidden[i];
-        note_quads->hidden[i] = tmp_hidden;
-        uint8_t tmp_mute = note_quads->mute[i + 1];
-        note_quads->mute[i + 1] = note_quads->mute[i];
-        note_quads->mute[i] = tmp_mute;
-        i++;
-    }
-}
-
 static inline uint32_t war_gcd(uint32_t a, uint32_t b) {
     while (b != 0) {
         uint32_t t = b;
@@ -1900,200 +1256,11 @@ static inline uint32_t war_gcd(uint32_t a, uint32_t b) {
     return a;
 }
 
-static inline uint32_t war_lcm(uint32_t a, uint32_t b) {
-    return a / war_gcd(a, b) * b;
-}
+static inline uint32_t war_lcm(uint32_t a, uint32_t b) { return a / war_gcd(a, b) * b; }
 
-static inline void war_notes_trim_right_at_i(war_note_quads* note_quads,
-                                             uint32_t* note_quads_count,
-                                             war_window_render_context* ctx_wr,
-                                             war_producer_consumer* pc,
-                                             war_lua_context* ctx_lua,
-                                             uint32_t i_trim) {
-    if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
-    double d_start_sec = note_quads->pos_x[i_trim] *
-                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
-    uint64_t start_frames =
-        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
-                            ((double)note_quads->size_x[i_trim]);
-    uint64_t duration_frames = (uint64_t)llround(
-        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    war_note_msg old_note_msg = {.note_start_frames = start_frames,
-                                 .note_duration_frames = duration_frames,
-                                 .note_sample_index = note_quads->pos_y[i_trim],
-                                 .note_gain = 1.0f,
-                                 .note_attack = 0.0f,
-                                 .note_sustain = 1.0f,
-                                 .note_release = 0.0f};
-    double new_size_x = ctx_wr->cursor_pos_x - note_quads->pos_x[i_trim];
-    double new_d_duration_sec =
-        ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) * (new_size_x);
-    uint64_t new_duration_frames = (uint64_t)llround(
-        new_d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    uint8_t payload[sizeof(war_note_msg) + sizeof(uint64_t)];
-    memcpy(payload, &old_note_msg, sizeof(war_note_msg));
-    memcpy(
-        payload + sizeof(war_note_msg), &new_duration_frames, sizeof(uint64_t));
-    war_pc_to_a(pc, AUDIO_CMD_REPLACE_NOTE_DURATION, sizeof(payload), payload);
-    note_quads->size_x[i_trim] = new_size_x;
-}
+static inline float war_midi_to_frequency(float midi_note) { return 440.0f * pow(2.0f, (midi_note - 69) / 12.0f); }
 
-static inline void war_notes_trim_left_at_i(war_note_quads* note_quads,
-                                            uint32_t* note_quads_count,
-                                            war_window_render_context* ctx_wr,
-                                            war_producer_consumer* pc,
-                                            war_lua_context* ctx_lua,
-                                            uint32_t i_trim) {
-    if (*note_quads_count == 0 || i_trim >= *note_quads_count) return;
-    double d_start_sec = note_quads->pos_x[i_trim] *
-                         ((60.0 / atomic_load(&ctx_lua->A_BPM) / 4.0));
-    uint64_t start_frames =
-        (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    double d_duration_sec = ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) *
-                            ((double)note_quads->size_x[i_trim]);
-    uint64_t duration_frames = (uint64_t)llround(
-        d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    war_note_msg old_note_msg = {.note_start_frames = start_frames,
-                                 .note_duration_frames = duration_frames,
-                                 .note_sample_index = note_quads->pos_y[i_trim],
-                                 .note_gain = 1.0f,
-                                 .note_attack = 0.0f,
-                                 .note_sustain = 1.0f,
-                                 .note_release = 0.0f};
-    double new_pos_x = ctx_wr->cursor_pos_x + ctx_wr->cursor_size_x;
-    double new_size_x =
-        note_quads->size_x[i_trim] - (new_pos_x - note_quads->pos_x[i_trim]);
-    double new_d_pos_seconds =
-        ((60.0 / atomic_load(&ctx_lua->A_BPM)) / 4.0) * (new_pos_x);
-    uint64_t new_start_frames = (uint64_t)llround(
-        new_d_pos_seconds * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-    uint64_t new_duration_frames =
-        duration_frames - (new_start_frames - start_frames);
-    war_note_msg new_note_msg = {
-        .note_start_frames = new_start_frames,
-        .note_duration_frames = new_duration_frames,
-        .note_sample_index = note_quads->pos_y[i_trim],
-    };
-    uint8_t payload[sizeof(war_note_msg) * 2];
-    memcpy(payload, &old_note_msg, sizeof(war_note_msg));
-    memcpy(payload + sizeof(war_note_msg), &new_note_msg, sizeof(war_note_msg));
-    war_pc_to_a(pc, AUDIO_CMD_REPLACE_NOTE, sizeof(payload), payload);
-    note_quads->pos_x[i_trim] = new_pos_x;
-    note_quads->size_x[i_trim] = new_size_x;
-}
-
-static inline void war_note_quads_in_view(war_note_quads* note_quads,
-                                          uint32_t note_quads_count,
-                                          war_window_render_context* ctx_wr,
-                                          uint32_t* out_indices,
-                                          uint32_t* out_indices_count) {
-    for (uint32_t i = 0; i < note_quads_count; i++) {
-        double leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
-                            ctx_wr->cell_width;
-        double note_pos_x = note_quads->pos_x[i];
-        double note_span_x = note_quads->size_x[i];
-        double note_pos_y = note_quads->pos_y[i];
-        double note_pos_x_end = note_pos_x + note_span_x;
-        double left_col = ctx_wr->left_col;
-        double right_col = ctx_wr->right_col + leftover_x + 1;
-        double bottom_row = ctx_wr->bottom_row;
-        double top_row = ctx_wr->top_row;
-        bool in_view = (note_pos_x <= right_col && note_pos_x_end > left_col) &&
-                       (note_pos_y >= bottom_row && note_pos_y <= top_row);
-        if (in_view) { out_indices[(*out_indices_count)++] = i; }
-    }
-}
-
-static inline void
-war_note_quads_outside_view(war_note_quads* note_quads,
-                            uint32_t note_quads_count,
-                            war_window_render_context* ctx_wr,
-                            uint32_t* out_indices,
-                            uint32_t* out_indices_count) {
-    for (uint32_t i = 0; i < note_quads_count; i++) {
-        double leftover_x = fmodf(ctx_wr->physical_width, ctx_wr->cell_width) /
-                            ctx_wr->cell_width;
-        double note_pos_x = note_quads->pos_x[i];
-        double note_span_x = note_quads->size_x[i];
-        double note_pos_y = note_quads->pos_y[i];
-        double note_pos_x_end = note_pos_x + note_span_x;
-        double left_col = ctx_wr->left_col;
-        double right_col = ctx_wr->right_col + leftover_x + 1;
-        double bottom_row = ctx_wr->bottom_row;
-        double top_row = ctx_wr->top_row;
-        bool outside_view =
-            !((note_pos_x <= right_col && note_pos_x_end > left_col) &&
-              (note_pos_y >= bottom_row && note_pos_y <= top_row));
-        if (outside_view) { out_indices[(*out_indices_count)++] = i; }
-    }
-}
-
-static inline void
-war_note_quads_under_cursor(war_note_quads* note_quads,
-                            uint32_t note_quads_count,
-                            war_window_render_context* ctx_wr,
-                            uint32_t* out_indices,
-                            uint32_t* out_indices_count) {
-    double cursor_pos_x = ctx_wr->cursor_pos_x;
-    double cursor_span_x = ctx_wr->cursor_size_x;
-    double cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    double cursor_pos_y = ctx_wr->cursor_pos_y;
-    double cursor_pos_y_end = cursor_pos_y + 1;
-    for (uint32_t i = 0; i < note_quads_count; i++) {
-        double note_pos_x = note_quads->pos_x[i];
-        double note_span_x = note_quads->size_x[i];
-        double note_pos_x_end = note_pos_x + note_span_x;
-        double note_pos_y = note_quads->pos_y[i];
-        double note_pos_y_end = note_pos_y + 1;
-        bool under_cursor =
-            (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x) &&
-            (note_pos_y == cursor_pos_y);
-        if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
-    }
-}
-
-static inline void war_note_quads_in_row(war_note_quads* note_quads,
-                                         uint32_t note_quads_count,
-                                         war_window_render_context* ctx_wr,
-                                         uint32_t* out_indices,
-                                         uint32_t* out_indices_count) {
-    uint32_t row = ctx_wr->cursor_pos_y;
-    for (uint32_t i = 0; i < note_quads_count; i++) {
-        if (row == note_quads->pos_y[i] && !note_quads->hidden[i]) {
-            out_indices[(*out_indices_count)++] = i;
-        }
-    }
-}
-
-static inline void war_note_quads_in_col(war_note_quads* note_quads,
-                                         uint32_t note_quads_count,
-                                         war_window_render_context* ctx_wr,
-                                         uint32_t* out_indices,
-                                         uint32_t* out_indices_count) {
-    double cursor_pos_x = ctx_wr->cursor_pos_x;
-    double cursor_span_x = ctx_wr->cursor_size_x;
-    double cursor_pos_x_end = cursor_pos_x + cursor_span_x;
-    double cursor_pos_y = ctx_wr->cursor_pos_y;
-    double cursor_pos_y_end = cursor_pos_y + 1;
-    for (uint32_t i = 0; i < note_quads_count; i++) {
-        double note_pos_x = note_quads->pos_x[i];
-        double note_span_x = note_quads->size_x[i];
-        double note_pos_x_end = note_pos_x + note_span_x;
-        double note_pos_y = note_quads->pos_y[i];
-        double note_pos_y_end = note_pos_y + 1;
-        bool under_cursor =
-            (note_pos_x < cursor_pos_x_end && note_pos_x_end > cursor_pos_x);
-        if (under_cursor) { out_indices[(*out_indices_count)++] = i; }
-    }
-}
-
-static inline float war_midi_to_frequency(float midi_note) {
-    return 440.0f * pow(2.0f, (midi_note - 69) / 12.0f);
-}
-
-static inline float war_sine_phase_increment(war_audio_context* ctx_a,
-                                             float frequency) {
+static inline float war_sine_phase_increment(war_audio_context* ctx_a, float frequency) {
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
 

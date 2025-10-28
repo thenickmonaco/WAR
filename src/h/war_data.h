@@ -153,8 +153,52 @@ enum war_commands_enum {
     CMD_DELETE_NOTE = 1,
 };
 
+typedef struct war_notes {
+    uint64_t* ids;
+    uint64_t* notes_start_frames;
+    uint64_t* notes_duration_frames;
+    uint32_t* notes_sample_index;
+    float* notes_phase_increment;
+    float* notes_gain;
+    float* notes_attack;
+    float* notes_sustain;
+    float* notes_release;
+    uint32_t notes_count;
+} war_notes;
+
+typedef struct war_note {
+    uint64_t id;
+    uint64_t note_start_frames;
+    uint64_t note_duration_frames;
+    uint32_t note_sample_index;
+    float note_phase_increment;
+    float note_gain;
+    float note_attack;
+    float note_sustain;
+    float note_release;
+} war_note;
+
+typedef struct war_note_quads {
+    uint64_t* ids;
+    double* pos_x;
+    double* pos_y;
+    double* size_x;
+    double* navigation_x;
+    uint32_t* navigation_x_numerator;
+    uint32_t* navigation_x_denominator;
+    uint32_t* size_x_numerator;
+    uint32_t* size_x_denominator;
+    uint32_t* color;
+    uint32_t* outline_color;
+    float* gain;
+    uint32_t* voice;
+    uint32_t* hidden;
+    uint32_t* mute;
+    uint32_t count;
+} war_note_quads;
+
 typedef struct war_note_quad {
-    uint64_t timestamp;
+    uint64_t id;
     double pos_x;
     double pos_y;
     double size_x;
@@ -171,27 +215,27 @@ typedef struct war_note_quad {
     uint32_t mute;
 } war_note_quad;
 
-typedef struct war_note_msg {
-    uint64_t note_start_frames;
-    uint64_t note_duration_frames;
-    uint32_t note_sample_index;
-    float note_gain;
-    float note_attack;
-    float note_sustain;
-    float note_release;
-} war_note_msg;
-
 typedef struct war_payload_add_note {
-    war_note_msg note_msg;
+    war_note note;
     war_note_quad note_quad;
 } war_payload_add_note;
 
+typedef struct war_payload_delete_note {
+    uint32_t id;
+} war_payload_delete_note;
+
 typedef union war_payload_union {
     war_payload_add_note add_note;
+    war_payload_delete_note delete_note;
 } war_payload_union;
 
 typedef struct war_undo_node {
+    uint64_t id;
+    uint64_t seq_num;
+    uint32_t branch_id;
     int command;
+    int selected_child;
+    int last_undone_child;
     war_payload_union payload;
     double cursor_pos_x;
     double cursor_pos_y;
@@ -208,20 +252,28 @@ typedef struct war_undo_node {
 typedef struct war_undo_tree {
     war_undo_node* root;
     war_undo_node* current;
+    uint64_t next_id;
+    uint64_t next_seq_num;
+    uint32_t next_branch_id;
 } war_undo_tree;
 
 typedef struct war_lua_context {
     // audio
     _Atomic int A_SAMPLE_RATE;
-    _Atomic int A_SAMPLE_DURATION;
+    _Atomic double A_SAMPLE_DURATION;
     _Atomic int A_CHANNEL_COUNT;
     _Atomic int A_NOTE_COUNT;
     _Atomic int A_SAMPLES_PER_NOTE;
-    _Atomic int A_BPM;
+    _Atomic double A_BPM;
     _Atomic int A_BASE_FREQUENCY;
     _Atomic int A_BASE_NOTE;
     _Atomic int A_EDO;
     _Atomic int A_NOTES_MAX;
+    _Atomic float A_DEFAULT_ATTACK;
+    _Atomic float A_DEFAULT_SUSTAIN;
+    _Atomic float A_DEFAULT_RELEASE;
+    _Atomic float A_DEFAULT_GAIN;
+    _Atomic double A_DEFAULT_COLUMNS_PER_BEAT;
     // window render
     _Atomic int WR_VIEWS_SAVED;
     _Atomic int WR_WARPOON_TEXT_COLS;
@@ -245,6 +297,7 @@ typedef struct war_lua_context {
     _Atomic int WR_REPEAT_DELAY_US;
     _Atomic int WR_REPEAT_RATE_US;
     _Atomic int WR_CURSOR_BLINK_DURATION_US;
+    _Atomic double WR_FPS;
     // pool
     _Atomic int POOL_ALIGNMENT;
     // cmd
@@ -281,24 +334,6 @@ typedef struct war_rgba_t {
     float b;
     float a;
 } war_rgba_t;
-
-typedef struct war_note_quads {
-    uint64_t* timestamp;
-    double* pos_x;
-    double* pos_y;
-    double* size_x;
-    double* navigation_x;
-    uint32_t* navigation_x_numerator;
-    uint32_t* navigation_x_denominator;
-    uint32_t* size_x_numerator;
-    uint32_t* size_x_denominator;
-    uint32_t* color;
-    uint32_t* outline_color;
-    float* gain;
-    uint32_t* voice;
-    uint32_t* hidden;
-    uint32_t* mute;
-} war_note_quads;
 
 typedef struct war_views {
     uint32_t* col;
@@ -400,6 +435,7 @@ typedef struct war_atomics {
     _Atomic uint64_t repeat_end_frames;
     _Atomic uint8_t start_war;
     _Atomic uint8_t resample;
+    _Atomic uint64_t note_next_id;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -417,18 +453,6 @@ typedef struct war_pool {
     size_t pool_size;
     size_t pool_alignment;
 } war_pool;
-
-typedef struct war_notes {
-    uint64_t* notes_start_frames;
-    uint64_t* notes_duration_frames;
-    uint32_t* notes_sample_index;
-    float* notes_phase_increment;
-    float* notes_gain;
-    float* notes_attack;
-    float* notes_sustain;
-    float* notes_release;
-    uint32_t notes_count;
-} war_notes;
 
 typedef struct war_samples {
     int16_t** samples;
@@ -555,12 +579,11 @@ typedef struct war_window_render_context {
     char input_sequence[MAX_SEQUENCE_LENGTH];
     uint8_t num_chars_in_sequence;
     war_note_quads note_quads;
-    uint32_t note_quads_count;
     float layers[LAYER_COUNT];
     float layer_count;
     float playback_bar_pos_x;
     float playback_bar_pos_x_increment;
-    float FPS;
+    double FPS;
     uint64_t frame_duration_us;
     bool sleep;
     uint64_t sleep_duration_us;

@@ -54,45 +54,51 @@
 ---@type ctx_lua
 ctx_lua = {
     -- audio
-    A_BASE_FREQUENCY = 440,
-    A_BASE_NOTE = 69, -- A4
-    A_EDO = 12,
-    A_SAMPLE_RATE = 44100,
-    A_BPM = 100,
-    A_SAMPLE_DURATION = 30,
-    A_CHANNEL_COUNT = 2,
-    A_NOTE_COUNT = 128,
-    A_SAMPLES_PER_NOTE = 128,
-    A_NOTES_MAX = 20000,
+    A_BASE_FREQUENCY            = 440,
+    A_BASE_NOTE                 = 69, -- A4
+    A_EDO                       = 12,
+    A_SAMPLE_RATE               = 44100,
+    A_BPM                       = 100.0,
+    A_SAMPLE_DURATION           = 30.0,
+    A_CHANNEL_COUNT             = 2,
+    A_NOTE_COUNT                = 128,
+    A_SAMPLES_PER_NOTE          = 128,
+    A_NOTES_MAX                 = 20000,
+    A_DEFAULT_ATTACK            = 0.0,
+    A_DEFAULT_SUSTAIN           = 1.0,
+    A_DEFAULT_RELEASE           = 0.0,
+    A_DEFAULT_GAIN              = 1.0,
+    A_DEFAULT_COLUMNS_PER_BEAT  = 4.0,
     -- window render
-    WR_VIEWS_SAVED = 13,
-    WR_WARPOON_TEXT_COLS = 25,
-    WR_STATES = 256,
-    WR_SEQUENCE_COUNT = 0,
-    WR_SEQUENCE_LENGTH_MAX = 0,
-    WR_MODE_COUNT = 10,
-    WR_KEYSYM_COUNT = 512,
-    WR_MOD_COUNT = 16,
-    WR_NOTE_QUADS_MAX = 20000,
-    WR_STATUS_BAR_COLS_MAX = 200,
-    WR_TEXT_QUADS_MAX = 20000,
-    WR_QUADS_MAX = 20000,
-    WR_LEADER = "<Space>",
-    WR_WAYLAND_MSG_BUFFER_SIZE = 4096,
-    WR_WAYLAND_MAX_OBJECTS = 1000,
-    WR_WAYLAND_MAX_OP_CODES = 20,
-    WR_UNDO_NODES_MAX = 10000,
-    WR_UNDO_NODES_CHILDREN_MAX = 5,
-    WR_TIMESTAMP_LENGTH_MAX = 33,
-    WR_REPEAT_DELAY_US = 150000,          -- 150000
-    WR_REPEAT_RATE_US = 40000,            -- 40000
+    WR_VIEWS_SAVED              = 13,
+    WR_WARPOON_TEXT_COLS        = 25,
+    WR_STATES                   = 256,
+    WR_SEQUENCE_COUNT           = 0,
+    WR_SEQUENCE_LENGTH_MAX      = 0,
+    WR_MODE_COUNT               = 10,
+    WR_KEYSYM_COUNT             = 512,
+    WR_MOD_COUNT                = 16,
+    WR_NOTE_QUADS_MAX           = 20000,
+    WR_STATUS_BAR_COLS_MAX      = 200,
+    WR_TEXT_QUADS_MAX           = 20000,
+    WR_QUADS_MAX                = 20000,
+    WR_LEADER                   = "<Space>",
+    WR_WAYLAND_MSG_BUFFER_SIZE  = 4096,
+    WR_WAYLAND_MAX_OBJECTS      = 1000,
+    WR_WAYLAND_MAX_OP_CODES     = 20,
+    WR_UNDO_NODES_MAX           = 10000,
+    WR_UNDO_NODES_CHILDREN_MAX  = 5,
+    WR_TIMESTAMP_LENGTH_MAX     = 33,
+    WR_REPEAT_DELAY_US          = 150000, -- 150000
+    WR_REPEAT_RATE_US           = 40000,  -- 40000
     WR_CURSOR_BLINK_DURATION_US = 700000, -- 700000
+    WR_FPS                      = 240.0,
     -- pool
-    POOL_ALIGNMENT = 256,
+    POOL_ALIGNMENT              = 256,
     -- cmd
-    CMD_COUNT = 25,
+    CMD_COUNT                   = 25,
     -- pc
-    PC_BUFFER_SIZE = 4096,
+    PC_BUFFER_SIZE              = 4096,
 }
 
 keymap_flags = {
@@ -2091,6 +2097,7 @@ pool_a = {
 
     -- war_notes
     { name = "notes",                                    type = "war_notes",         count = 1 },
+    { name = "notes.id",                                 type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_start_frames",                 type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_duration_frames",              type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_phase_increment",              type = "float",             count = ctx_lua.A_NOTES_MAX },
@@ -2164,7 +2171,7 @@ pool_wr = {
     ---------------------------------------------------------------------------
     -- Note Quads (war_note_quads)
     ---------------------------------------------------------------------------
-    { name = "note_quads.timestamp",                type = "uint64_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.id",                       type = "uint64_t",        count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.pos_x",                    type = "double",          count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.pos_y",                    type = "double",          count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.size_x",                   type = "double",          count = ctx_lua.WR_NOTE_QUADS_MAX },

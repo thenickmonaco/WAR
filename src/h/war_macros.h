@@ -103,7 +103,6 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(WR_WAYLAND_MAX_OBJECTS)
     LOAD_INT(WR_WAYLAND_MAX_OP_CODES)
     LOAD_INT(WR_UNDO_NODES_MAX)
-    LOAD_INT(WR_UNDO_NODES_CHILDREN_MAX)
     LOAD_INT(WR_TIMESTAMP_LENGTH_MAX)
     LOAD_INT(WR_CURSOR_BLINK_DURATION_US)
     LOAD_INT(WR_REPEAT_DELAY_US)
@@ -280,9 +279,12 @@ static inline size_t war_get_pool_wr_size(war_pool* pool, war_lua_context* ctx_l
                 type_size = sizeof(char);
             else if (strcmp(type, "char*") == 0)
                 type_size = sizeof(char*);
-            else if (strcmp(type, "bool") == 0) {
+            else if (strcmp(type, "bool") == 0)
                 type_size = sizeof(bool);
-            }
+            else if (strcmp(type, "war_undo_node*") == 0)
+                type_size = sizeof(war_undo_node*);
+            else if (strcmp(type, "war_undo_node") == 0)
+                type_size = sizeof(war_undo_node);
 
             /* --- WR-specific structs --- */
             else if (strcmp(type, "war_fsm_state") == 0)
@@ -297,6 +299,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool, war_lua_context* ctx_l
                 type_size = sizeof(war_samples);
             else if (strcmp(type, "war_undo_tree") == 0)
                 type_size = sizeof(war_undo_tree);
+            else if (strcmp(type, "war_payload_union") == 0)
+                type_size = sizeof(war_payload_union);
 
             /* --- Pointer variants (optional but useful if you define them in
              * Lua) --- */
@@ -798,6 +802,10 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return KEYSYM_TAB;
     case XKB_KEY_minus:
         return KEYSYM_MINUS;
+    case XKB_KEY_equal:
+        return KEYSYM_EQUAL;
+    case XKB_KEY_plus:
+        return KEYSYM_PLUS;
     case XKB_KEY_bracketleft:
         return KEYSYM_LEFTBRACKET;
     case XKB_KEY_bracketright:

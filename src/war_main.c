@@ -91,7 +91,7 @@ int main() {
         .repeat_section = 0,
         .repeat_start_frames = 0,
         .repeat_end_frames = 0,
-        .note_next_id = 0,
+        .note_next_id = 1,
     };
     war_pool pool_wr;
     war_pool pool_a;
@@ -167,6 +167,8 @@ void* war_window_render(void* args) {
     uint32_t num_cols_for_line_numbers = 3;
     uint32_t viewport_cols = (uint32_t)(physical_width / ctx_vk.cell_width);
     uint32_t viewport_rows = (uint32_t)(physical_height / ctx_vk.cell_height);
+    double viewport_bound_x = physical_width / ctx_vk.cell_width;
+    double viewport_bound_y = physical_height / ctx_vk.cell_height;
     uint32_t visible_rows = (uint32_t)((physical_height - ((float)num_rows_for_status_bars * ctx_vk.cell_height)) / ctx_vk.cell_height);
     war_audio_context ctx_a = {
         .sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
@@ -486,6 +488,8 @@ void* war_window_render(void* args) {
 
     // --- WAR_NOTE_QUADS ALLOCATION ---
     war_note_quads note_quads;
+    note_quads.alive = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.id = war_pool_alloc(pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
     note_quads.pos_x = war_pool_alloc(pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
     note_quads.pos_y = war_pool_alloc(pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
     note_quads.size_x = war_pool_alloc(pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
@@ -1029,16 +1033,49 @@ void* war_window_render(void* args) {
                 // QUAD PIPELINE
                 //---------------------------------------------------------
                 vkCmdBindPipeline(ctx_vk.cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx_vk.quad_pipeline);
-                // draw cursor quads
-                // note_quads_in_x_count = 0;
                 uint32_t cursor_color = ctx_wr.color_cursor;
                 float alpha_factor = ctx_wr.alpha_scale_cursor;
                 uint8_t color_alpha = (ctx_wr.color_cursor_transparent >> 24) & 0xFF;
                 uint32_t cursor_color_transparent =
                     ((uint8_t)(color_alpha * alpha_factor) << 24) | (ctx_wr.color_cursor_transparent & 0x00FFFFFF);
-                // cursor_color = (note_quads_in_x_count) ?
-                //                    cursor_color_transparent :
-                //                    cursor_color;
+                // draw note quads and figure out if cursor should be transparent
+                for (uint32_t i = 0; i < note_quads.count; i++) {
+                    if (note_quads.alive[i] == 0 || note_quads.hidden[i]) { continue; }
+                    double cursor_pos_x = ctx_wr.cursor_pos_x;
+                    double cursor_pos_y = ctx_wr.cursor_pos_y;
+                    double cursor_end_x = cursor_pos_x + ctx_wr.cursor_size_x;
+                    double pos_x = note_quads.pos_x[i];
+                    double pos_y = note_quads.pos_y[i];
+                    double size_x = note_quads.size_x[i];
+                    double end_x = pos_x + size_x;
+                    double left_bound = ctx_wr.left_col;
+                    double right_bound = ctx_wr.right_col + 1;
+                    double top_bound = ctx_wr.top_row + 1;
+                    double bottom_bound = ctx_wr.bottom_row;
+                    if (pos_y > top_bound || pos_y < bottom_bound || pos_x > right_bound || end_x < left_bound) { continue; }
+                    uint32_t color = note_quads.color[i];
+                    uint32_t outline_color = note_quads.outline_color[i];
+                    if (note_quads.mute[i]) {
+                        float alpha_factor = ctx_wr.alpha_scale;
+                        uint8_t color_alpha = (color >> 24) & 0xFF;
+                        uint8_t outline_color_alpha = (outline_color >> 24) & 0xFF;
+                        color = ((uint8_t)(color_alpha * alpha_factor) << 24) | (color & 0x00FFFFFF);
+                        outline_color = ((uint8_t)(outline_color_alpha * alpha_factor) << 24) | (outline_color & 0x00FFFFFF);
+                    }
+                    war_make_quad(quad_vertices,
+                                  quad_indices,
+                                  &quad_vertices_count,
+                                  &quad_indices_count,
+                                  (float[3]){(float)pos_x, (float)note_quads.pos_y[i], ctx_wr.layers[LAYER_NOTES]},
+                                  (float[2]){(float)size_x, 1},
+                                  color,
+                                  default_outline_thickness,
+                                  outline_color,
+                                  (float[2]){0.0f, 0.0f},
+                                  QUAD_GRID);
+                    if (cursor_pos_y != pos_y || cursor_pos_x >= end_x || cursor_end_x <= pos_x) { continue; }
+                    cursor_color = cursor_color_transparent;
+                }
                 if (ctx_wr.mode == MODE_NORMAL && !ctx_wr.cursor_blinking) {
                     war_make_transparent_quad(transparent_quad_vertices,
                                               transparent_quad_indices,
@@ -1155,59 +1192,6 @@ void* war_window_render(void* args) {
                         }
                     }
                 }
-                // draw note quads
-                // note_quads_in_x_count = 0;
-                // for (uint32_t i = 0; i < note_quads_in_x_count; i++) {
-                //    uint32_t i_in_view = note_quads_in_x[i];
-                //    double pos_x = note_quads.pos_x[i_in_view];
-                //    double span_x = note_quads.size_x[i_in_view];
-                //    uint32_t color = note_quads.color[i_in_view];
-                //    uint32_t outline_color =
-                //        note_quads.outline_color[i_in_view];
-                //    bool hidden = note_quads.hidden[i_in_view];
-                //    bool mute = note_quads.mute[i_in_view];
-                //    if (!hidden && !mute) {
-                //        war_make_quad(
-                //            quad_vertices,
-                //            quad_indices,
-                //            &quad_vertices_count,
-                //            &quad_indices_count,
-                //            (float[3]){(float)pos_x,
-                //                       (float)note_quads.pos_y[i_in_view],
-                //                       ctx_wr.layers[LAYER_NOTES]},
-                //            (float[2]){(float)span_x, 1},
-                //            color,
-                //            default_outline_thickness,
-                //            outline_color,
-                //            (float[2]){0.0f, 0.0f},
-                //            QUAD_GRID);
-                //    } else if (!hidden && mute) {
-                //        float alpha_factor = ctx_wr.alpha_scale;
-                //        uint8_t color_alpha = (color >> 24) & 0xFF;
-                //        uint8_t outline_color_alpha =
-                //            (outline_color >> 24) & 0xFF;
-                //        color = ((uint8_t)(color_alpha * alpha_factor) << 24) |
-                //                (color & 0x00FFFFFF);
-                //        outline_color =
-                //            ((uint8_t)(outline_color_alpha * alpha_factor)
-                //             << 24) |
-                //            (outline_color & 0x00FFFFFF);
-                //        war_make_quad(
-                //            quad_vertices,
-                //            quad_indices,
-                //            &quad_vertices_count,
-                //            &quad_indices_count,
-                //            (float[3]){pos_x,
-                //                       (float)note_quads.pos_y[i_in_view],
-                //                       ctx_wr.layers[LAYER_NOTES]},
-                //            (float[2]){span_x, 1},
-                //            color,
-                //            default_outline_thickness,
-                //            outline_color,
-                //            (float[2]){0.0f, 0.0f},
-                //            QUAD_GRID);
-                //    }
-                //}
                 // draw playback bar
                 uint32_t playback_bar_color = ctx_wr.red_hex;
                 float span_y = ctx_wr.viewport_rows;
@@ -2334,6 +2318,10 @@ void* war_window_render(void* args) {
                                         keysym = KEYSYM_RETURN;
                                     else if (strcmp(buf, "Space") == 0)
                                         keysym = KEYSYM_SPACE;
+                                    else if (strcmp(buf, "-") == 0)
+                                        keysym = KEYSYM_MINUS;
+                                    else if (strcmp(buf, "=") == 0)
+                                        keysym = KEYSYM_EQUAL;
                                     else if (strcmp(buf, "Tab") == 0)
                                         keysym = KEYSYM_TAB;
                                     else if (strcmp(buf, "Esc") == 0)
@@ -3597,15 +3585,15 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_ctrl_0:
                 call_carmack("cmd_normal_ctrl_0");
-                ctx_wr.zoom_scale = 1.0f;
-                ctx_wr.left_col = 0;
-                ctx_wr.bottom_row = 0;
-                ctx_wr.right_col =
-                    (uint32_t)((ctx_wr.physical_width - ((float)ctx_wr.num_cols_for_line_numbers * ctx_wr.cell_width)) / ctx_wr.cell_width) -
-                    1;
-                ctx_wr.top_row =
-                    (uint32_t)((ctx_wr.physical_height - ((float)ctx_wr.num_rows_for_status_bars * ctx_wr.cell_height)) / ctx_wr.cell_height) -
-                    1;
+                // ctx_wr.zoom_scale = 1.0f;
+                // ctx_wr.left_col = 0;
+                // ctx_wr.bottom_row = 0;
+                // ctx_wr.right_col =
+                //     (uint32_t)((ctx_wr.physical_width - ((float)ctx_wr.num_cols_for_line_numbers * ctx_wr.cell_width)) / ctx_wr.cell_width)
+                //     - 1;
+                // ctx_wr.top_row =
+                //     (uint32_t)((ctx_wr.physical_height - ((float)ctx_wr.num_rows_for_status_bars * ctx_wr.cell_height)) /
+                //     ctx_wr.cell_height) - 1;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -3758,14 +3746,10 @@ void* war_window_render(void* args) {
             cmd_normal_return:
             cmd_normal_z: {
                 call_carmack("cmd_normal_z");
-                if (note_quads.count >= (uint32_t)atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                uint64_t note_id = atomic_fetch_add(&atomics->note_next_id, 1);
+                uint64_t id = atomic_fetch_add(&atomics->note_next_id, 1);
                 war_note_quad note_quad = {
-                    .id = note_id,
+                    .alive = 1,
+                    .id = id,
                     .pos_x = ctx_wr.cursor_pos_x,
                     .pos_y = ctx_wr.cursor_pos_y,
                     .size_x = ctx_wr.cursor_size_x,
@@ -3783,66 +3767,20 @@ void* war_window_render(void* args) {
                 double bpm = atomic_load(&ctx_lua->A_BPM);
                 double frames_per_beat = sample_rate * 60.0 / bpm;
                 war_note note;
-                double start_beats = ctx_wr.cursor_pos_x / 4.0;
+                double start_beats = note_quad.pos_x / 4.0;
                 note.note_start_frames = (uint64_t)(start_beats * frames_per_beat + 0.5);
-                double duration_beats = ctx_wr.cursor_size_x / 4.0;
+                double duration_beats = note_quad.size_x / 4.0;
                 note.note_duration_frames = (uint64_t)(duration_beats * frames_per_beat + 0.5);
-                note.note_sample_index = (uint32_t)ctx_wr.cursor_pos_y;
+                note.note_sample_index = (uint32_t)note_quad.pos_y;
                 note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
                 note.note_sustain = atomic_load(&ctx_lua->A_DEFAULT_SUSTAIN);
                 note.note_release = atomic_load(&ctx_lua->A_DEFAULT_RELEASE);
                 note.note_gain = atomic_load(&ctx_lua->A_DEFAULT_GAIN);
                 note.note_phase_increment = 0;
-                note.id = note_id;
+                note.alive = note_quad.alive;
+                note.id = note_quad.id;
                 if (ctx_wr.numeric_prefix) {
-                    for (uint32_t i = 0; i < ctx_wr.numeric_prefix; i++) {
-                        note_quads.pos_x[note_quads.count] = note_quad.pos_x;
-                        note_quads.pos_y[note_quads.count] = note_quad.pos_y;
-                        note_quads.size_x[note_quads.count] = note_quad.size_x;
-                        note_quads.size_x_numerator[note_quads.count] = note_quad.size_x_numerator;
-                        note_quads.size_x_denominator[note_quads.count] = note_quad.size_x_denominator;
-                        note_quads.navigation_x[note_quads.count] = note_quad.navigation_x;
-                        note_quads.navigation_x_numerator[note_quads.count] = note_quad.navigation_x_numerator;
-                        note_quads.navigation_x_denominator[note_quads.count] = note_quad.navigation_x_denominator;
-                        note_quads.color[note_quads.count] = note_quad.color;
-                        note_quads.outline_color[note_quads.count] = note_quad.outline_color;
-                        note_quads.gain[note_quads.count] = note_quad.gain;
-                        note_quads.voice[note_quads.count] = note_quad.voice;
-                        note_quads.ids[note_quads.count] = note_id;
-                        note_quads.count++;
-                        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note), &note);
-                        war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-                        memset(node, 0, sizeof(war_undo_node));
-                        node->id = undo_tree->next_id++;
-                        node->seq_num = undo_tree->next_seq_num++;
-                        node->command = CMD_ADD_NOTE;
-                        node->payload.add_note.note = note;
-                        node->payload.add_note.note_quad = note_quad;
-                        node->cursor_pos_x = ctx_wr.cursor_pos_x;
-                        node->cursor_pos_y = ctx_wr.cursor_pos_y;
-                        node->left_col = ctx_wr.left_col;
-                        node->right_col = ctx_wr.right_col;
-                        node->top_row = ctx_wr.top_row;
-                        node->bottom_row = ctx_wr.bottom_row;
-                        node->selected_child = -1;
-                        node->last_undone_child = -1;
-                        if (!undo_tree->root) {
-                            undo_tree->root = node;
-                            node->branch_id = undo_tree->next_branch_id++;
-                            node->parent = NULL;
-                        } else {
-                            node->parent = undo_tree->current;
-                            if (undo_tree->current->child_count > 0) {
-                                node->branch_id = undo_tree->next_branch_id++; // new branch
-                            } else {
-                                node->branch_id = undo_tree->current->branch_id; // same branch
-                            }
-                            assert(undo_tree->current->child_count < atomic_load(&ctx_lua->WR_UNDO_NODES_CHILDREN_MAX));
-                            undo_tree->current->children[undo_tree->current->child_count++] = node;
-                        }
-                        undo_tree->current = node;
-                        note_id = atomic_fetch_add(&atomics->note_next_id, 1);
-                    }
+                    // TODO batch add
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
@@ -3859,8 +3797,13 @@ void* war_window_render(void* args) {
                 note_quads.outline_color[note_quads.count] = note_quad.outline_color;
                 note_quads.gain[note_quads.count] = note_quad.gain;
                 note_quads.voice[note_quads.count] = note_quad.voice;
-                note_quads.ids[note_quads.count] = note_id;
+                note_quads.alive[note_quads.count] = note_quad.alive;
+                note_quads.id[note_quads.count] = note_quad.id;
                 note_quads.count++;
+                uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
+                if (note_quads.count >= note_quads_max) {
+                    // apply compaction
+                }
                 war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note), &note);
                 war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
                 memset(node, 0, sizeof(war_undo_node));
@@ -3875,23 +3818,29 @@ void* war_window_render(void* args) {
                 node->right_col = ctx_wr.right_col;
                 node->top_row = ctx_wr.top_row;
                 node->bottom_row = ctx_wr.bottom_row;
-                node->selected_child = -1;
-                node->last_undone_child = -1;
+                node->parent = NULL;
+                node->next = NULL;
+                node->prev = NULL;
+                node->alt_next = NULL;
+                node->alt_prev = NULL;
                 if (!undo_tree->root) {
+                    node->branch_id = undo_tree->next_branch_id++;
                     undo_tree->root = node;
+                    undo_tree->current = node;
+                } else if (!undo_tree->current) {
                     node->branch_id = undo_tree->next_branch_id++;
                     node->parent = NULL;
+                    undo_tree->root = node;
+                    undo_tree->current = node;
                 } else {
-                    node->parent = undo_tree->current;
-                    if (undo_tree->current->child_count > 0) {
-                        node->branch_id = undo_tree->next_branch_id++; // new branch
-                    } else {
-                        node->branch_id = undo_tree->current->branch_id; // same branch
-                    }
-                    assert(undo_tree->current->child_count < atomic_load(&ctx_lua->WR_UNDO_NODES_CHILDREN_MAX));
-                    undo_tree->current->children[undo_tree->current->child_count++] = node;
+                    war_undo_node* cur = undo_tree->current;
+                    if (cur->next) { cur->next = NULL; }
+                    node->parent = cur;
+                    node->branch_id = cur->branch_id;
+                    cur->next = node;
+                    node->prev = cur;
+                    undo_tree->current = node;
                 }
-                undo_tree->current = node;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -3909,19 +3858,101 @@ void* war_window_render(void* args) {
             }
             cmd_normal_d: {
                 call_carmack("cmd_normal_d");
-                if (ctx_wr.numeric_prefix) {
-                    for (uint32_t i = 0; i < ctx_wr.numeric_prefix; i++) {}
+                if (note_quads.count == 0) {
+                    ctx_wr.numeric_prefix = 0;
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
                 }
+                if (ctx_wr.numeric_prefix) {
+                    // TODO batch delete
+                }
+                int32_t delete_idx = -1; // overflow impossible
                 for (uint32_t i = 0; i < note_quads.count; i++) {
-                    double cursor_size_x = ctx_wr.cursor_size_x;
+                    if (note_quads.alive[i] == 0 || note_quads.hidden[i]) { continue; }
                     double cursor_pos_x = ctx_wr.cursor_pos_x;
                     double cursor_pos_y = ctx_wr.cursor_pos_y;
-                    double cursor_pos_end_x = cursor_pos_x + cursor_size_x;
-                    double note_size_x = note_quads.size_x[i];
+                    double cursor_end_x = cursor_pos_x + ctx_wr.cursor_size_x;
                     double note_pos_x = note_quads.pos_x[i];
                     double note_pos_y = note_quads.pos_y[i];
-                    double note_pos_end_x = note_pos_x + note_size_x;
-                    if (cursor_pos_y == note_pos_y && cursor_pos_x < note_pos_end_x && cursor_pos_end_x > note_pos_x) {}
+                    double note_end_x = note_pos_x + note_quads.size_x[i];
+                    if (cursor_pos_y != note_pos_y || cursor_pos_x >= note_end_x || cursor_end_x <= note_pos_x) { continue; }
+                    delete_idx = i;
+                }
+                if (delete_idx == -1) {
+                    ctx_wr.numeric_prefix = 0;
+                    ctx_wr.num_chars_in_sequence = 0;
+                    goto cmd_done;
+                }
+                war_note_quad note_quad;
+                note_quad.alive = note_quads.alive[delete_idx];
+                note_quad.id = note_quads.id[delete_idx];
+                note_quad.pos_x = note_quads.pos_x[delete_idx];
+                note_quad.pos_y = note_quads.pos_y[delete_idx];
+                note_quad.size_x = note_quads.size_x[delete_idx];
+                note_quad.navigation_x = note_quads.navigation_x[delete_idx];
+                note_quad.navigation_x_numerator = note_quads.navigation_x_numerator[delete_idx];
+                note_quad.navigation_x_denominator = note_quads.navigation_x_denominator[delete_idx];
+                note_quad.size_x_numerator = note_quads.size_x_numerator[delete_idx];
+                note_quad.size_x_denominator = note_quads.size_x_denominator[delete_idx];
+                note_quad.color = note_quads.color[delete_idx];
+                note_quad.outline_color = note_quads.outline_color[delete_idx];
+                note_quad.gain = note_quads.gain[delete_idx];
+                note_quad.voice = note_quads.voice[delete_idx];
+                note_quad.hidden = note_quads.hidden[delete_idx];
+                note_quad.mute = note_quads.mute[delete_idx];
+                double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
+                double bpm = atomic_load(&ctx_lua->A_BPM);
+                double frames_per_beat = sample_rate * 60.0 / bpm;
+                war_note note;
+                double start_beats = note_quad.pos_x / 4.0;
+                note.note_start_frames = (uint64_t)(start_beats * frames_per_beat + 0.5);
+                double duration_beats = note_quad.size_x / 4.0;
+                note.note_duration_frames = (uint64_t)(duration_beats * frames_per_beat + 0.5);
+                note.note_sample_index = (uint32_t)note_quad.pos_y;
+                note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
+                note.note_sustain = atomic_load(&ctx_lua->A_DEFAULT_SUSTAIN);
+                note.note_release = atomic_load(&ctx_lua->A_DEFAULT_RELEASE);
+                note.note_gain = atomic_load(&ctx_lua->A_DEFAULT_GAIN);
+                note.note_phase_increment = 0;
+                note.id = note_quad.id;
+                note.alive = note_quad.alive;
+                note_quads.alive[delete_idx] = 0;
+                war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(uint32_t), &delete_idx);
+                war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
+                memset(node, 0, sizeof(war_undo_node));
+                node->id = undo_tree->next_id++;
+                node->seq_num = undo_tree->next_seq_num++;
+                node->command = CMD_DELETE_NOTE;
+                node->payload.delete_note.note = note;
+                node->payload.delete_note.note_quad = note_quad;
+                node->cursor_pos_x = ctx_wr.cursor_pos_x;
+                node->cursor_pos_y = ctx_wr.cursor_pos_y;
+                node->left_col = ctx_wr.left_col;
+                node->right_col = ctx_wr.right_col;
+                node->top_row = ctx_wr.top_row;
+                node->bottom_row = ctx_wr.bottom_row;
+                node->parent = NULL;
+                node->next = NULL;
+                node->prev = NULL;
+                node->alt_next = NULL;
+                node->alt_prev = NULL;
+                if (!undo_tree->root) {
+                    node->branch_id = undo_tree->next_branch_id++;
+                    undo_tree->root = node;
+                    undo_tree->current = node;
+                } else if (!undo_tree->current) {
+                    node->branch_id = undo_tree->next_branch_id++;
+                    node->parent = NULL;
+                    undo_tree->root = node;
+                    undo_tree->current = node;
+                } else {
+                    war_undo_node* cur = undo_tree->current;
+                    if (cur->next) { cur->next = NULL; }
+                    node->parent = cur;
+                    node->branch_id = cur->branch_id;
+                    cur->next = node;
+                    node->prev = cur;
+                    undo_tree->current = node;
                 }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -4467,12 +4498,247 @@ void* war_window_render(void* args) {
             }
             cmd_normal_u: {
                 call_carmack("cmd_normal_u");
+                assert(undo_tree != NULL);
+                if (undo_tree->current) {
+                    war_undo_node* node = undo_tree->current;
+                    assert(node != NULL);
+                    switch (node->command) {
+                    case CMD_ADD_NOTE: {
+                        int32_t delete_idx = -1;
+                        for (uint32_t i = 0; i < note_quads.count; i++) {
+                            assert(i < note_quads.count); // bounds check
+                            if (note_quads.id[i] == node->payload.add_note.note.id) {
+                                note_quads.alive[i] = 0;
+                                delete_idx = i;
+                                break;
+                            }
+                        }
+                        war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(int32_t), &delete_idx);
+                        break;
+                    }
+                    case CMD_DELETE_NOTE: {
+                        war_note_quad note_quad = node->payload.delete_note.note_quad;
+                        war_note note = node->payload.delete_note.note;
+                        // --- Binary search for existing note ---
+                        uint32_t left = 0;
+                        uint32_t right = note_quads.count;
+                        bool already_in = false;
+                        while (left < right) {
+                            uint32_t mid = left + (right - left) / 2;
+                            if (note_quads.id[mid] == note.id) {
+                                note_quads.alive[mid] = 1; // revive existing note
+                                already_in = true;
+                                // send message undo add
+                                break;
+                            } else if (note_quads.id[mid] < note.id) {
+                                left = mid + 1;
+                            } else {
+                                right = mid;
+                            }
+                        }
+                        if (already_in) { break; } // nothing more to do
+                        uint32_t insert_idx = left;
+                        uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
+                        // --- Compaction if needed ---
+                        if (note_quads.count + 1 >= note_quads_max) {
+                            // send undo compact message
+                            uint32_t write_idx = 0;
+                            uint32_t new_insert_idx = 0xFFFFFFFF; // invalid sentinel
+                            for (uint32_t read_idx = 0; read_idx < note_quads.count; read_idx++) {
+                                if (note_quads.alive[read_idx]) {
+                                    if (write_idx != read_idx) {
+                                        // Copy all fields
+                                        note_quads.pos_x[write_idx] = note_quads.pos_x[read_idx];
+                                        note_quads.pos_y[write_idx] = note_quads.pos_y[read_idx];
+                                        note_quads.size_x[write_idx] = note_quads.size_x[read_idx];
+                                        note_quads.size_x_numerator[write_idx] = note_quads.size_x_numerator[read_idx];
+                                        note_quads.size_x_denominator[write_idx] = note_quads.size_x_denominator[read_idx];
+                                        note_quads.navigation_x[write_idx] = note_quads.navigation_x[read_idx];
+                                        note_quads.navigation_x_numerator[write_idx] = note_quads.navigation_x_numerator[read_idx];
+                                        note_quads.navigation_x_denominator[write_idx] = note_quads.navigation_x_denominator[read_idx];
+                                        note_quads.color[write_idx] = note_quads.color[read_idx];
+                                        note_quads.outline_color[write_idx] = note_quads.outline_color[read_idx];
+                                        note_quads.gain[write_idx] = note_quads.gain[read_idx];
+                                        note_quads.voice[write_idx] = note_quads.voice[read_idx];
+                                        note_quads.alive[write_idx] = note_quads.alive[read_idx];
+                                        note_quads.id[write_idx] = note_quads.id[read_idx];
+                                    }
+                                    // Track new insert index
+                                    if (note_quads.id[write_idx] < note.id) { new_insert_idx = write_idx + 1; }
+                                    write_idx++;
+                                }
+                            }
+                            assert(write_idx < note_quads_max);
+                            note_quads.count = write_idx;
+                            // Update insert_idx after compaction
+                            insert_idx = (new_insert_idx != 0xFFFFFFFF) ? new_insert_idx : note_quads.count;
+                        }
+                        // --- Shift elements forward to make space ---
+                        for (uint32_t i = note_quads.count; i > insert_idx; i--) {
+                            note_quads.pos_x[i] = note_quads.pos_x[i - 1];
+                            note_quads.pos_y[i] = note_quads.pos_y[i - 1];
+                            note_quads.size_x[i] = note_quads.size_x[i - 1];
+                            note_quads.size_x_numerator[i] = note_quads.size_x_numerator[i - 1];
+                            note_quads.size_x_denominator[i] = note_quads.size_x_denominator[i - 1];
+                            note_quads.navigation_x[i] = note_quads.navigation_x[i - 1];
+                            note_quads.navigation_x_numerator[i] = note_quads.navigation_x_numerator[i - 1];
+                            note_quads.navigation_x_denominator[i] = note_quads.navigation_x_denominator[i - 1];
+                            note_quads.color[i] = note_quads.color[i - 1];
+                            note_quads.outline_color[i] = note_quads.outline_color[i - 1];
+                            note_quads.gain[i] = note_quads.gain[i - 1];
+                            note_quads.voice[i] = note_quads.voice[i - 1];
+                            note_quads.alive[i] = note_quads.alive[i - 1];
+                            note_quads.id[i] = note_quads.id[i - 1];
+                        }
+                        // --- Insert new note ---
+                        note_quads.pos_x[insert_idx] = note_quad.pos_x;
+                        note_quads.pos_y[insert_idx] = note_quad.pos_y;
+                        note_quads.size_x[insert_idx] = note_quad.size_x;
+                        note_quads.size_x_numerator[insert_idx] = note_quad.size_x_numerator;
+                        note_quads.size_x_denominator[insert_idx] = note_quad.size_x_denominator;
+                        note_quads.navigation_x[insert_idx] = note_quad.navigation_x;
+                        note_quads.navigation_x_numerator[insert_idx] = note_quad.navigation_x_numerator;
+                        note_quads.navigation_x_denominator[insert_idx] = note_quad.navigation_x_denominator;
+                        note_quads.color[insert_idx] = note_quad.color;
+                        note_quads.outline_color[insert_idx] = note_quad.outline_color;
+                        note_quads.gain[insert_idx] = note_quad.gain;
+                        note_quads.voice[insert_idx] = note_quad.voice;
+                        note_quads.alive[insert_idx] = 1;
+                        note_quads.id[insert_idx] = note_quad.id;
+                        note_quads.count++;
+                        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note), &note);
+                        break;
+                    }
+                    }
+                    undo_tree->current = node->prev ? node->prev : NULL;
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_normal_ctrl_r: {
                 call_carmack("cmd_normal_ctrl_r");
+                assert(undo_tree != NULL);
+                war_undo_node* next_node = NULL;
+                if (!undo_tree->current) {
+                    next_node = undo_tree->root;
+                } else if (undo_tree->current->next) {
+                    next_node = undo_tree->current->next;
+                } else if (undo_tree->current->alt_next) {
+                    next_node = undo_tree->current->alt_next;
+                }
+                if (next_node) {
+                    assert(next_node != NULL);
+                    switch (next_node->command) {
+                    case CMD_ADD_NOTE: {
+                        war_note_quad note_quad = next_node->payload.delete_note.note_quad;
+                        war_note note = next_node->payload.delete_note.note;
+                        // --- Binary search for existing note ---
+                        uint32_t left = 0;
+                        uint32_t right = note_quads.count;
+                        bool already_in = false;
+                        while (left < right) {
+                            uint32_t mid = left + (right - left) / 2;
+                            if (note_quads.id[mid] == note.id) {
+                                note_quads.alive[mid] = 1; // revive existing note
+                                already_in = true;
+                                // send message undo add
+                                break;
+                            } else if (note_quads.id[mid] < note.id) {
+                                left = mid + 1;
+                            } else {
+                                right = mid;
+                            }
+                        }
+                        if (already_in) { break; } // nothing more to do
+                        uint32_t insert_idx = left;
+                        uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
+                        // --- Compaction if needed ---
+                        if (note_quads.count + 1 >= note_quads_max) {
+                            // send undo compact message
+                            uint32_t write_idx = 0;
+                            uint32_t new_insert_idx = 0xFFFFFFFF; // invalid sentinel
+                            for (uint32_t read_idx = 0; read_idx < note_quads.count; read_idx++) {
+                                if (note_quads.alive[read_idx]) {
+                                    if (write_idx != read_idx) {
+                                        // Copy all fields
+                                        note_quads.pos_x[write_idx] = note_quads.pos_x[read_idx];
+                                        note_quads.pos_y[write_idx] = note_quads.pos_y[read_idx];
+                                        note_quads.size_x[write_idx] = note_quads.size_x[read_idx];
+                                        note_quads.size_x_numerator[write_idx] = note_quads.size_x_numerator[read_idx];
+                                        note_quads.size_x_denominator[write_idx] = note_quads.size_x_denominator[read_idx];
+                                        note_quads.navigation_x[write_idx] = note_quads.navigation_x[read_idx];
+                                        note_quads.navigation_x_numerator[write_idx] = note_quads.navigation_x_numerator[read_idx];
+                                        note_quads.navigation_x_denominator[write_idx] = note_quads.navigation_x_denominator[read_idx];
+                                        note_quads.color[write_idx] = note_quads.color[read_idx];
+                                        note_quads.outline_color[write_idx] = note_quads.outline_color[read_idx];
+                                        note_quads.gain[write_idx] = note_quads.gain[read_idx];
+                                        note_quads.voice[write_idx] = note_quads.voice[read_idx];
+                                        note_quads.alive[write_idx] = note_quads.alive[read_idx];
+                                        note_quads.id[write_idx] = note_quads.id[read_idx];
+                                    }
+                                    // Track new insert index
+                                    if (note_quads.id[write_idx] < note.id) { new_insert_idx = write_idx + 1; }
+                                    write_idx++;
+                                }
+                            }
+                            assert(write_idx < note_quads_max);
+                            note_quads.count = write_idx;
+                            // Update insert_idx after compaction
+                            insert_idx = (new_insert_idx != 0xFFFFFFFF) ? new_insert_idx : note_quads.count;
+                        }
+                        // --- Shift elements forward to make space ---
+                        for (uint32_t i = note_quads.count; i > insert_idx; i--) {
+                            note_quads.pos_x[i] = note_quads.pos_x[i - 1];
+                            note_quads.pos_y[i] = note_quads.pos_y[i - 1];
+                            note_quads.size_x[i] = note_quads.size_x[i - 1];
+                            note_quads.size_x_numerator[i] = note_quads.size_x_numerator[i - 1];
+                            note_quads.size_x_denominator[i] = note_quads.size_x_denominator[i - 1];
+                            note_quads.navigation_x[i] = note_quads.navigation_x[i - 1];
+                            note_quads.navigation_x_numerator[i] = note_quads.navigation_x_numerator[i - 1];
+                            note_quads.navigation_x_denominator[i] = note_quads.navigation_x_denominator[i - 1];
+                            note_quads.color[i] = note_quads.color[i - 1];
+                            note_quads.outline_color[i] = note_quads.outline_color[i - 1];
+                            note_quads.gain[i] = note_quads.gain[i - 1];
+                            note_quads.voice[i] = note_quads.voice[i - 1];
+                            note_quads.alive[i] = note_quads.alive[i - 1];
+                            note_quads.id[i] = note_quads.id[i - 1];
+                        }
+                        // --- Insert new note ---
+                        note_quads.pos_x[insert_idx] = note_quad.pos_x;
+                        note_quads.pos_y[insert_idx] = note_quad.pos_y;
+                        note_quads.size_x[insert_idx] = note_quad.size_x;
+                        note_quads.size_x_numerator[insert_idx] = note_quad.size_x_numerator;
+                        note_quads.size_x_denominator[insert_idx] = note_quad.size_x_denominator;
+                        note_quads.navigation_x[insert_idx] = note_quad.navigation_x;
+                        note_quads.navigation_x_numerator[insert_idx] = note_quad.navigation_x_numerator;
+                        note_quads.navigation_x_denominator[insert_idx] = note_quad.navigation_x_denominator;
+                        note_quads.color[insert_idx] = note_quad.color;
+                        note_quads.outline_color[insert_idx] = note_quad.outline_color;
+                        note_quads.gain[insert_idx] = note_quad.gain;
+                        note_quads.voice[insert_idx] = note_quad.voice;
+                        note_quads.alive[insert_idx] = 1;
+                        note_quads.id[insert_idx] = note_quad.id;
+                        note_quads.count++;
+                        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note), &note);
+                        break;
+                    }
+                    case CMD_DELETE_NOTE: {
+                        int32_t delete_idx = -1;
+                        for (uint32_t i = 0; i < note_quads.count; i++) {
+                            assert(i < note_quads.count); // bounds check
+                            if (note_quads.id[i] == next_node->payload.add_note.note.id) {
+                                note_quads.alive[i] = 0;
+                                delete_idx = i;
+                                break;
+                            }
+                        }
+                        war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(int32_t), &delete_idx);
+                        break;
+                    }
+                    }
+                    undo_tree->current = next_node;
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5844,6 +6110,7 @@ static void war_play(void* userdata) {
         uint32_t A_SAMPLES_PER_NOTE = atomic_load(&ctx_lua->A_SAMPLES_PER_NOTE);
         uint8_t loop_note_global = atomic_load(&atomics->loop);
         for (uint32_t i = 0; i < notes->notes_count; i++) {
+            if (notes->alive[i] == 0) { continue; }
             // --- Convert start/duration to frames using double precision
             double d_note_start_sec = (double)notes->notes_start_frames[i] / ctx_a->sample_rate;
             double d_note_duration_sec = (double)notes->notes_duration_frames[i] / ctx_a->sample_rate;
@@ -6349,11 +6616,13 @@ void* war_audio(void* args) {
     // WAR_NOTES
     //-------------------------------------------------------------------------
     war_notes* notes = war_pool_alloc(pool_a, sizeof(war_notes));
+    notes->alive = war_pool_alloc(pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->id = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
     notes->notes_start_frames = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
     notes->notes_duration_frames = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_sample_index = war_pool_alloc(pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
     notes->notes_phase_increment = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
     notes->notes_gain = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_sample_index = war_pool_alloc(pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
     notes->notes_attack = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
     notes->notes_sustain = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
     notes->notes_release = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
@@ -6470,55 +6739,30 @@ pc_pause:
 pc_get_frames:
     goto pc_audio_done;
 pc_add_note: {
-    call_carmack("from wr: add_note"); // already there
-
+    call_carmack("from wr: add_note");
     war_note note;
     memcpy(&note, payload, size);
-
-    uint32_t* notes_count = &notes->notes_count;
-    notes->notes_start_frames[*notes_count] = note.note_start_frames;
-    notes->notes_duration_frames[*notes_count] = note.note_duration_frames;
-    notes->notes_sample_index[*notes_count] = note.note_sample_index;
-    notes->notes_gain[*notes_count] = note.note_gain;
-    notes->notes_attack[*notes_count] = note.note_attack;
-    notes->notes_sustain[*notes_count] = note.note_sustain;
-    notes->notes_release[*notes_count] = note.note_release;
-
-    (*notes_count)++;
-
-    if (*notes_count >= (uint32_t)atomic_load(&ctx_lua->A_NOTES_MAX)) {
-        *notes_count = 0;
-        call_carmack("WARN: notes_count wrapped (max=%u)", atomic_load(&ctx_lua->A_NOTES_MAX));
+    notes->notes_start_frames[notes->notes_count] = note.note_start_frames;
+    notes->notes_duration_frames[notes->notes_count] = note.note_duration_frames;
+    notes->notes_sample_index[notes->notes_count] = note.note_sample_index;
+    notes->notes_gain[notes->notes_count] = note.note_gain;
+    notes->notes_attack[notes->notes_count] = note.note_attack;
+    notes->notes_sustain[notes->notes_count] = note.note_sustain;
+    notes->notes_release[notes->notes_count] = note.note_release;
+    notes->id[notes->notes_count] = note.id;
+    notes->alive[notes->notes_count] = note.alive;
+    notes->notes_count++;
+    uint32_t note_quads_max = atomic_load(&ctx_lua->A_NOTES_MAX);
+    if (notes->notes_count >= note_quads_max) {
+        // compaction
     }
-
     goto pc_audio_done;
 }
 pc_delete_note: {
     call_carmack("from wr: delete_note");
-    war_note note;
-    memcpy(&note, payload, size);
-    uint32_t* count = &notes->notes_count;
-    if (*count == 0) goto pc_audio_done;
-    uint64_t target_start = note.note_start_frames;
-    uint64_t target_duration = note.note_duration_frames;
-    uint32_t target_sample = note.note_sample_index;
-    for (int32_t i = (int32_t)(*count) - 1; i >= 0; i--) {
-        if (notes->notes_start_frames[i] == target_start && notes->notes_duration_frames[i] == target_duration &&
-            notes->notes_sample_index[i] == target_sample) {
-            uint32_t last = *count - 1;
-            if ((uint32_t)i != last) {
-                notes->notes_start_frames[i] = notes->notes_start_frames[last];
-                notes->notes_duration_frames[i] = notes->notes_duration_frames[last];
-                notes->notes_sample_index[i] = notes->notes_sample_index[last];
-                notes->notes_gain[i] = notes->notes_gain[last];
-                notes->notes_attack[i] = notes->notes_attack[last];
-                notes->notes_sustain[i] = notes->notes_sustain[last];
-                notes->notes_release[i] = notes->notes_release[last];
-            }
-            (*count)--;
-            break;
-        }
-    }
+    uint32_t delete_idx;
+    memcpy(&delete_idx, payload, size);
+    notes->alive[delete_idx] = 0;
     goto pc_audio_done;
 }
 pc_delete_all_notes: {

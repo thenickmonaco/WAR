@@ -59,6 +59,8 @@ enum war_keysyms {
     KEYSYM_LEFTBRACKET = 265,
     KEYSYM_RIGHTBRACKET = 266,
     KEYSYM_SEMICOLON = 267,
+    KEYSYM_PLUS = 268,
+    KEYSYM_EQUAL = 269,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -154,7 +156,8 @@ enum war_commands_enum {
 };
 
 typedef struct war_notes {
-    uint64_t* ids;
+    uint8_t* alive;
+    uint64_t* id;
     uint64_t* notes_start_frames;
     uint64_t* notes_duration_frames;
     uint32_t* notes_sample_index;
@@ -167,6 +170,7 @@ typedef struct war_notes {
 } war_notes;
 
 typedef struct war_note {
+    uint8_t alive;
     uint64_t id;
     uint64_t note_start_frames;
     uint64_t note_duration_frames;
@@ -179,7 +183,8 @@ typedef struct war_note {
 } war_note;
 
 typedef struct war_note_quads {
-    uint64_t* ids;
+    uint8_t* alive;
+    uint64_t* id;
     double* pos_x;
     double* pos_y;
     double* size_x;
@@ -198,6 +203,7 @@ typedef struct war_note_quads {
 } war_note_quads;
 
 typedef struct war_note_quad {
+    uint8_t alive;
     uint64_t id;
     double pos_x;
     double pos_y;
@@ -221,7 +227,8 @@ typedef struct war_payload_add_note {
 } war_payload_add_note;
 
 typedef struct war_payload_delete_note {
-    uint32_t id;
+    war_note note;
+    war_note_quad note_quad;
 } war_payload_delete_note;
 
 typedef union war_payload_union {
@@ -233,9 +240,7 @@ typedef struct war_undo_node {
     uint64_t id;
     uint64_t seq_num;
     uint32_t branch_id;
-    int command;
-    int selected_child;
-    int last_undone_child;
+    uint32_t command;
     war_payload_union payload;
     double cursor_pos_x;
     double cursor_pos_y;
@@ -245,8 +250,10 @@ typedef struct war_undo_node {
     uint32_t bottom_row;
     char* timestamp;
     struct war_undo_node* parent;
-    struct war_undo_node** children;
-    int child_count;
+    struct war_undo_node* next;
+    struct war_undo_node* prev;
+    struct war_undo_node* alt_next;
+    struct war_undo_node* alt_prev;
 } war_undo_node;
 
 typedef struct war_undo_tree {

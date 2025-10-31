@@ -1,4 +1,4 @@
-# WAR - make music with vim motions
+# WAR
 
 ![WAR](/assets/images/WAR-over-rose-circle-white.jpg)
 

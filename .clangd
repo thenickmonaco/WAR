@@ -15,5 +15,6 @@ CompileFlags:
     -DDMABUF=1,
     -DWL_SHM=1,
     -D_REENTRANT,
+    -Wno-vla
   ]
 

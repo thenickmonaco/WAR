@@ -22,6 +22,7 @@ build.zig
 *.bak
 *.tmp
 *.un~
+.*tgpt*
 alsa_output.pci-*
 alsa_input.*
 

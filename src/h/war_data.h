@@ -150,9 +150,15 @@ enum war_cursor {
     DEFAULT_CURSOR_BLINK_DURATION = 700000,
 };
 
-enum war_commands_enum {
+enum war_undo_commands_enum {
     CMD_ADD_NOTE = 0,
     CMD_DELETE_NOTE = 1,
+    CMD_ADD_NOTES = 2,
+    CMD_DELETE_NOTES = 3,
+    CMD_SWAP_ADD_NOTES = 4,
+    CMD_SWAP_DELETE_NOTES = 5,
+    CMD_ADD_NOTES_SAME = 6,
+    CMD_DELETE_NOTES_SAME = 7,
 };
 
 typedef struct war_notes {
@@ -231,9 +237,51 @@ typedef struct war_payload_delete_note {
     war_note_quad note_quad;
 } war_payload_delete_note;
 
+typedef struct war_payload_add_notes {
+    war_note* note;
+    war_note_quad* note_quad;
+    uint32_t count;
+} war_payload_add_notes;
+
+typedef struct war_payload_delete_notes {
+    war_note* note;
+    war_note_quad* note_quad;
+    uint32_t count;
+} war_payload_delete_notes;
+
+typedef struct war_payload_add_notes_same {
+    war_note note;
+    war_note_quad note_quad;
+    uint64_t* ids;
+    uint32_t count;
+} war_payload_add_notes_same;
+
+typedef struct war_payload_delete_notes_same {
+    war_note note;
+    war_note_quad note_quad;
+    uint64_t* ids;
+    uint32_t count;
+} war_payload_delete_notes_same;
+
+typedef struct war_payload_swap_add_notes {
+    char* fname;
+    uint32_t count;
+} war_payload_swap_add_notes;
+
+typedef struct war_payload_swap_delete_notes {
+    char* fname;
+    uint32_t count;
+} war_payload_swap_delete_notes;
+
 typedef union war_payload_union {
     war_payload_add_note add_note;
     war_payload_delete_note delete_note;
+    war_payload_add_notes add_notes;
+    war_payload_delete_notes delete_notes;
+    war_payload_add_notes_same add_notes_same;
+    war_payload_delete_notes_same delete_notes_same;
+    war_payload_swap_add_notes swap_add_notes;
+    war_payload_swap_delete_notes swap_delete_notes;
 } war_payload_union;
 
 typedef struct war_undo_node {
@@ -305,6 +353,7 @@ typedef struct war_lua_context {
     _Atomic int WR_REPEAT_RATE_US;
     _Atomic int WR_CURSOR_BLINK_DURATION_US;
     _Atomic double WR_FPS;
+    _Atomic int WR_UNDO_NOTES_BATCH_MAX;
     // pool
     _Atomic int POOL_ALIGNMENT;
     // cmd
@@ -412,6 +461,13 @@ enum war_audio {
     AUDIO_CMD_REPLACE_NOTE_DURATION = 23,
     AUDIO_CMD_REPLACE_NOTE_START = 24,
     AUDIO_CMD_REPEAT_SECTION = 25,
+    AUDIO_CMD_INSERT_NOTE = 26,
+    AUDIO_CMD_COMPACT = 27,
+    AUDIO_CMD_ADD_NOTE_ALREADY_IN = 28,
+    AUDIO_CMD_ADD_NOTES = 29,
+    AUDIO_CMD_DELETE_NOTES = 30,
+    AUDIO_CMD_ADD_NOTES_SAME = 31,
+    AUDIO_CMD_DELETE_NOTES_SAME = 32,
     //
     AUDIO_VOICE_GRAND_PIANO = 0,
     AUDIO_VOICE_COUNT = 128,

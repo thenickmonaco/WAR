@@ -539,27 +539,26 @@ static inline bool war_pc_to_a(war_producer_consumer* pc, uint32_t header, uint3
     uint32_t total_size = 8 + payload_size; // header(4) + size(4) + payload
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
-
     // free bytes calculation (circular buffer)
     uint32_t free_bytes = (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
     if (free_bytes < total_size) return false;
-
     // --- write header (4) + size (4) allowing split ---
-    uint8_t tmp_hdr[8];
-    memcpy(tmp_hdr, &header, 4);
-    memcpy(tmp_hdr + 4, &payload_size, 4);
-
     uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
-
     if (cont_bytes >= 8) {
         // contiguous place for header+size
-        memcpy(pc->to_a + write_index, tmp_hdr, 8);
+        *(uint32_t*)(pc->to_a + write_index) = header;
+        *(uint32_t*)(pc->to_a + write_index + 4) = payload_size;
     } else {
         // split header+size across end -> wrap
-        memcpy(pc->to_a + write_index, tmp_hdr, cont_bytes);
-        memcpy(pc->to_a, tmp_hdr + cont_bytes, 8 - cont_bytes);
+        if (cont_bytes >= 4) {
+            *(uint32_t*)(pc->to_a + write_index) = header;
+            *(uint32_t*)pc->to_a = payload_size;
+        } else {
+            *(uint16_t*)(pc->to_a + write_index) = (uint16_t)header;
+            *(uint16_t*)(pc->to_a + write_index + 2) = (uint16_t)(header >> 16);
+            *(uint32_t*)pc->to_a = payload_size;
+        }
     }
-
     // --- write payload (may be zero length) allowing split ---
     if (payload_size) {
         uint32_t payload_write_pos = (write_index + 8) & (PC_BUFFER_SIZE - 1);
@@ -572,7 +571,6 @@ static inline bool war_pc_to_a(war_producer_consumer* pc, uint32_t header, uint3
             memcpy(pc->to_a, (const uint8_t*)payload + first_chunk, payload_size - first_chunk);
         }
     }
-
     // commit write index
     pc->i_to_a = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
     return true;
@@ -583,26 +581,26 @@ static inline bool war_pc_to_a(war_producer_consumer* pc, uint32_t header, uint3
 static inline bool war_pc_from_wr(war_producer_consumer* pc, uint32_t* out_header, uint32_t* out_size, void* out_payload) {
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
-
     uint32_t used_bytes = (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
     if (used_bytes < 8) return false; // need at least header+size
-
     // read header+size (handle split)
     uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
     if (cont_bytes >= 8) {
-        memcpy(out_header, pc->to_a + read_index, 4);
-        memcpy(out_size, pc->to_a + read_index + 4, 4);
+        *out_header = *(uint32_t*)(pc->to_a + read_index);
+        *out_size = *(uint32_t*)(pc->to_a + read_index + 4);
     } else {
-        uint8_t tmp[8];
-        memcpy(tmp, pc->to_a + read_index, cont_bytes);
-        memcpy(tmp + cont_bytes, pc->to_a, 8 - cont_bytes);
-        memcpy(out_header, tmp, 4);
-        memcpy(out_size, tmp + 4, 4);
+        if (cont_bytes >= 4) {
+            *out_header = *(uint32_t*)(pc->to_a + read_index);
+            *out_size = *(uint32_t*)pc->to_a;
+        } else {
+            uint16_t low = *(uint16_t*)(pc->to_a + read_index);
+            uint16_t high = *(uint16_t*)(pc->to_a + read_index + 2);
+            *out_header = (uint32_t)high << 16 | low;
+            *out_size = *(uint32_t*)pc->to_a;
+        }
     }
-
     uint32_t total_size = 8 + *out_size;
     if (used_bytes < total_size) return false; // not all payload present yet
-
     // read payload (if any)
     if (*out_size) {
         uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
@@ -614,7 +612,6 @@ static inline bool war_pc_from_wr(war_producer_consumer* pc, uint32_t* out_heade
             memcpy((uint8_t*)out_payload + first_chunk, pc->to_a, *out_size - first_chunk);
         }
     }
-
     // commit read index
     pc->i_from_wr = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
     return true;
@@ -626,23 +623,23 @@ static inline bool war_pc_to_wr(war_producer_consumer* pc, uint32_t header, uint
     uint32_t total_size = 8 + payload_size;
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
-
     uint32_t free_bytes = (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
     if (free_bytes < total_size) return false;
-
     // header+size
-    uint8_t tmp_hdr[8];
-    memcpy(tmp_hdr, &header, 4);
-    memcpy(tmp_hdr + 4, &payload_size, 4);
-
     uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
     if (cont_bytes >= 8) {
-        memcpy(pc->to_wr + write_index, tmp_hdr, 8);
+        *(uint32_t*)(pc->to_wr + write_index) = header;
+        *(uint32_t*)(pc->to_wr + write_index + 4) = payload_size;
     } else {
-        memcpy(pc->to_wr + write_index, tmp_hdr, cont_bytes);
-        memcpy(pc->to_wr, tmp_hdr + cont_bytes, 8 - cont_bytes);
+        if (cont_bytes >= 4) {
+            *(uint32_t*)(pc->to_wr + write_index) = header;
+            *(uint32_t*)pc->to_wr = payload_size;
+        } else {
+            *(uint16_t*)(pc->to_wr + write_index) = (uint16_t)header;
+            *(uint16_t*)(pc->to_wr + write_index + 2) = (uint16_t)(header >> 16);
+            *(uint32_t*)pc->to_wr = payload_size;
+        }
     }
-
     // payload
     if (payload_size) {
         uint32_t payload_write_pos = (write_index + 8) & (PC_BUFFER_SIZE - 1);
@@ -654,7 +651,6 @@ static inline bool war_pc_to_wr(war_producer_consumer* pc, uint32_t header, uint
             memcpy(pc->to_wr, (const uint8_t*)payload + first_chunk, payload_size - first_chunk);
         }
     }
-
     pc->i_to_wr = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
     return true;
 }
@@ -664,25 +660,25 @@ static inline bool war_pc_to_wr(war_producer_consumer* pc, uint32_t header, uint
 static inline bool war_pc_from_a(war_producer_consumer* pc, uint32_t* out_header, uint32_t* out_size, void* out_payload) {
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
-
     uint32_t used_bytes = (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
     if (used_bytes < 8) return false;
-
     uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
     if (cont_bytes >= 8) {
-        memcpy(out_header, pc->to_wr + read_index, 4);
-        memcpy(out_size, pc->to_wr + read_index + 4, 4);
+        *out_header = *(uint32_t*)(pc->to_wr + read_index);
+        *out_size = *(uint32_t*)(pc->to_wr + read_index + 4);
     } else {
-        uint8_t tmp[8];
-        memcpy(tmp, pc->to_wr + read_index, cont_bytes);
-        memcpy(tmp + cont_bytes, pc->to_wr, 8 - cont_bytes);
-        memcpy(out_header, tmp, 4);
-        memcpy(out_size, tmp + 4, 4);
+        if (cont_bytes >= 4) {
+            *out_header = *(uint32_t*)(pc->to_wr + read_index);
+            *out_size = *(uint32_t*)pc->to_wr;
+        } else {
+            uint16_t low = *(uint16_t*)(pc->to_wr + read_index);
+            uint16_t high = *(uint16_t*)(pc->to_wr + read_index + 2);
+            *out_header = (uint32_t)high << 16 | low;
+            *out_size = *(uint32_t*)pc->to_wr;
+        }
     }
-
     uint32_t total_size = 8 + *out_size;
     if (used_bytes < total_size) return false;
-
     if (*out_size) {
         uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
         uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
@@ -693,7 +689,6 @@ static inline bool war_pc_from_a(war_producer_consumer* pc, uint32_t* out_header
             memcpy((uint8_t*)out_payload + first_chunk, pc->to_wr, *out_size - first_chunk);
         }
     }
-
     pc->i_from_a = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
     return true;
 }
@@ -1273,7 +1268,8 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a, float fre
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
 
-static inline void war_undo_add_note(war_undo_node* node, war_lua_context* ctx_lua, war_note_quads* note_quads, war_producer_consumer* pc) {
+static inline void
+war_undo_add_note(war_undo_node* node, war_lua_context* ctx_lua, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
     war_note_quad note_quad = node->payload.delete_note.note_quad;
     war_note note = node->payload.delete_note.note;
     // --- Binary search for existing note ---
@@ -1366,10 +1362,9 @@ static inline void war_undo_add_note(war_undo_node* node, war_lua_context* ctx_l
     note_quads->alive[insert_idx] = 1;
     note_quads->id[insert_idx] = note_quad.id;
     note_quads->count++;
-    uint8_t payload[sizeof(note) + sizeof(insert_idx)];
-    memcpy(payload, &note, sizeof(note));
-    memcpy(payload + sizeof(note), &insert_idx, sizeof(insert_idx));
-    war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(note) + sizeof(insert_idx), &payload);
+    *(war_note*)(tmp_payload) = note;
+    *(uint32_t*)(tmp_payload + sizeof(war_note)) = insert_idx;
+    war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(note) + sizeof(insert_idx), tmp_payload);
 }
 
 static inline void war_undo_delete_note(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc) {
@@ -1385,7 +1380,7 @@ static inline void war_undo_delete_note(war_undo_node* node, war_note_quads* not
     war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(int32_t), &delete_idx);
 }
 
-static inline void war_undo_delete_notes(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc) {
+static inline void war_undo_delete_notes(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
     uint32_t delete_count = node->payload.delete_notes.count;
     war_note_quad* note_quad = node->payload.delete_notes.note_quad;
     uint32_t count = 0;
@@ -1393,9 +1388,11 @@ static inline void war_undo_delete_notes(war_undo_node* node, war_note_quads* no
         if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
         if (note_quads->id[i] != note_quad[count].id) { continue; }
         note_quads->alive[i] = 0;
+        *(uint32_t*)(tmp_payload + sizeof(uint32_t) * (count + 1)) = i;
         count++;
     }
-    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(0), 0);
+    *(uint32_t*)(tmp_payload) = delete_count;
+    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (delete_count + 1), tmp_payload);
 }
 
 #endif // WAR_MACROS_H

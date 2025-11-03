@@ -601,8 +601,8 @@ void* war_window_render(void* args) {
         goto pc_window_render;
     pc_note_off: {
         call_carmack("from a: NOTE_OFF");
-        int note;
-        memcpy(&note, payload, size);
+        uint32_t note;
+        note = *(uint32_t*)(payload);
         ctx_wr.skip_release = 1;
         goto pc_window_render;
     }
@@ -1831,14 +1831,14 @@ void* war_window_render(void* args) {
                 }
                 goto wayland_done;
             xdg_toplevel_close:
-                dump_bytes("xdg_toplevel_close event", msg_buffer + msg_buffer_offset, size);
+                // dump_bytes("xdg_toplevel_close event", msg_buffer + msg_buffer_offset, size);
 
                 uint8_t xdg_toplevel_destroy[8];
                 war_write_le32(xdg_toplevel_destroy, xdg_toplevel_id);
                 war_write_le16(xdg_toplevel_destroy + 4, 0);
                 war_write_le16(xdg_toplevel_destroy + 6, 8);
                 ssize_t xdg_toplevel_destroy_written = write(fd, xdg_toplevel_destroy, 8);
-                dump_bytes("xdg_toplevel::destroy request", xdg_toplevel_destroy, 8);
+                // dump_bytes("xdg_toplevel::destroy request", xdg_toplevel_destroy, 8);
                 assert(xdg_toplevel_destroy_written == 8);
 
                 uint8_t xdg_surface_destroy[8];
@@ -1846,7 +1846,7 @@ void* war_window_render(void* args) {
                 war_write_le16(xdg_surface_destroy + 4, 0);
                 war_write_le16(xdg_surface_destroy + 6, 8);
                 ssize_t xdg_surface_destroy_written = write(fd, xdg_surface_destroy, 8);
-                dump_bytes("xdg_surface::destroy request", xdg_surface_destroy, 8);
+                // dump_bytes("xdg_surface::destroy request", xdg_surface_destroy, 8);
                 assert(xdg_surface_destroy_written == 8);
 
                 uint8_t wl_buffer_destroy[8];
@@ -1854,7 +1854,7 @@ void* war_window_render(void* args) {
                 war_write_le16(wl_buffer_destroy + 4, 0);
                 war_write_le16(wl_buffer_destroy + 6, 8);
                 ssize_t wl_buffer_destroy_written = write(fd, wl_buffer_destroy, 8);
-                dump_bytes("wl_buffer::destroy request", wl_buffer_destroy, 8);
+                // dump_bytes("wl_buffer::destroy request", wl_buffer_destroy, 8);
                 assert(wl_buffer_destroy_written == 8);
 
                 uint8_t wl_region_destroy[8];
@@ -1862,7 +1862,7 @@ void* war_window_render(void* args) {
                 war_write_le16(wl_region_destroy + 4, 0);
                 war_write_le16(wl_region_destroy + 6, 8);
                 ssize_t wl_region_destroy_written = write(fd, wl_region_destroy, 8);
-                dump_bytes("wl_region::destroy request", wl_region_destroy, 8);
+                // dump_bytes("wl_region::destroy request", wl_region_destroy, 8);
                 assert(wl_region_destroy_written == 8);
 
                 uint8_t wl_surface_destroy[8];
@@ -1870,7 +1870,7 @@ void* war_window_render(void* args) {
                 war_write_le16(wl_surface_destroy + 4, 0);
                 war_write_le16(wl_surface_destroy + 6, 8);
                 ssize_t wl_surface_destroy_written = write(fd, wl_surface_destroy, 8);
-                dump_bytes("wl_surface::destroy request", wl_surface_destroy, 8);
+                // dump_bytes("wl_surface::destroy request", wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
                 atomic_store(&atomics->state, AUDIO_CMD_END_WAR);
@@ -3895,8 +3895,8 @@ void* war_window_render(void* args) {
                     }
                     note_quads.count += ctx_wr.numeric_prefix;
                     // note, count, ids
-                    memcpy(tmp_payload, &note, sizeof(note));
-                    memcpy(tmp_payload + sizeof(note), &ctx_wr.numeric_prefix, sizeof(ctx_wr.numeric_prefix));
+                    *(war_note*)(tmp_payload) = note;
+                    *(uint32_t*)(tmp_payload + sizeof(war_note)) = ctx_wr.numeric_prefix;
                     memcpy(tmp_payload + sizeof(note) + sizeof(ctx_wr.numeric_prefix),
                            node->payload.add_notes_same.ids,
                            sizeof(uint64_t) * ctx_wr.numeric_prefix);
@@ -4115,7 +4115,7 @@ void* war_window_render(void* args) {
                         }
                         if (delete_count >= ctx_wr.numeric_prefix) { break; }
                     }
-                    memcpy(tmp_payload, &delete_count, sizeof(uint32_t));
+                    *(uint32_t*)(tmp_payload) = delete_count;
                     war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (delete_count + 1), tmp_payload);
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
@@ -4765,11 +4765,11 @@ void* war_window_render(void* args) {
                         break;
                     }
                     case CMD_DELETE_NOTE: {
-                        war_undo_add_note(node, ctx_lua, &note_quads, pc);
+                        war_undo_add_note(node, ctx_lua, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_ADD_NOTES: {
-                        war_undo_delete_notes(node, &note_quads, pc);
+                        war_undo_delete_notes(node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_DELETE_NOTES: {
@@ -4797,7 +4797,7 @@ void* war_window_render(void* args) {
                     assert(next_node != NULL);
                     switch (next_node->command) {
                     case CMD_ADD_NOTE: {
-                        war_undo_add_note(next_node, ctx_lua, &note_quads, pc);
+                        war_undo_add_note(next_node, ctx_lua, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_DELETE_NOTE: {
@@ -6816,10 +6816,8 @@ pc_get_frames:
     goto pc_audio_done;
 pc_add_notes_same: {
     call_carmack("from wr: add_notes_same");
-    war_note note;
-    memcpy(&note, payload, sizeof(note));
-    uint32_t count;
-    memcpy(&count, payload + sizeof(note), sizeof(count));
+    war_note note = *(war_note*)(payload);
+    uint32_t count = *(uint32_t*)(payload + sizeof(war_note));
     memcpy(tmp_payload, payload + sizeof(note) + sizeof(count), sizeof(uint64_t) * count);
     uint64_t* ids = (uint64_t*)tmp_payload;
     for (uint32_t i = 0; i < count; i++) {
@@ -6842,8 +6840,7 @@ pc_delete_notes_same: {
 }
 pc_add_note: {
     call_carmack("from wr: add_note");
-    war_note note;
-    memcpy(&note, payload, size);
+    war_note note = *(war_note*)(payload);
     notes->notes_start_frames[notes->notes_count] = note.note_start_frames;
     notes->notes_duration_frames[notes->notes_count] = note.note_duration_frames;
     notes->notes_sample_index[notes->notes_count] = note.note_sample_index;
@@ -6862,8 +6859,7 @@ pc_add_note: {
 }
 pc_delete_note: {
     call_carmack("from wr: delete_note");
-    uint32_t delete_idx;
-    memcpy(&delete_idx, payload, size);
+    uint32_t delete_idx = *(uint32_t*)(payload);
     notes->alive[delete_idx] = 0;
     goto pc_audio_done;
 }
@@ -6873,8 +6869,7 @@ pc_add_notes: {
 }
 pc_delete_notes: {
     call_carmack("from wr: pc_delete_notes");
-    uint32_t delete_count;
-    memcpy(&delete_count, payload, sizeof(uint32_t));
+    uint32_t delete_count = *(uint32_t*)(payload);
     memcpy(tmp_payload, payload + sizeof(uint32_t), sizeof(uint32_t) * delete_count);
     uint32_t* delete_indices = (uint32_t*)tmp_payload;
     for (uint32_t i = 0; i < delete_count; i++) { notes->alive[delete_indices[i]] = 0; }
@@ -6912,10 +6907,8 @@ pc_compact: {
 }
 pc_insert_note: {
     call_carmack("from wr: INSERT_NOTE");
-    war_note note;
-    uint32_t insert_idx;
-    memcpy(&note, payload, sizeof(note));
-    memcpy(&insert_idx, payload + sizeof(note), sizeof(insert_idx));
+    war_note note = *(war_note*)(payload);
+    uint32_t insert_idx = *(uint32_t*)(payload + sizeof(war_note));
     // --- Shift elements forward to make space ---
     for (uint32_t i = notes->notes_count; i > insert_idx; i--) {
         notes->alive[i] = notes->alive[i - 1];
@@ -6945,19 +6938,16 @@ pc_insert_note: {
 }
 pc_add_note_already_in: {
     call_carmack("from wr: ADD_NOTE_ALREADY_IN");
-    uint32_t idx;
-    memcpy(&idx, payload, size);
+    uint32_t idx = *(uint32_t*)(payload);
     notes->alive[idx] = 1;
     goto pc_audio_done;
 }
 pc_replace_note: {
     call_carmack("from wr: replace_note");
-    war_note old_note;
-    memcpy(&old_note, payload, sizeof(war_note));
+    war_note old_note = *(war_note*)payload;
     uint32_t* count = &notes->notes_count;
     if (*count == 0) goto pc_audio_done;
-    war_note new_note;
-    memcpy(&new_note, payload + sizeof(war_note), sizeof(war_note));
+    war_note new_note = *(war_note*)(payload + sizeof(war_note));
     uint64_t target_start = old_note.note_start_frames;
     uint64_t target_duration = old_note.note_duration_frames;
     uint32_t target_sample = old_note.note_sample_index;
@@ -6974,49 +6964,17 @@ pc_replace_note: {
 }
 pc_replace_note_duration: {
     call_carmack("from wr: replace_note_duration");
-    war_note note;
-    memcpy(&note, payload, sizeof(war_note));
-    uint32_t* count = &notes->notes_count;
-    if (*count == 0) goto pc_audio_done;
-    uint64_t new_duration_frames;
-    memcpy(&new_duration_frames, payload + sizeof(war_note), sizeof(uint64_t));
-    uint64_t target_start = note.note_start_frames;
-    uint64_t target_duration = note.note_duration_frames;
-    uint32_t target_sample = note.note_sample_index;
-    for (int32_t i = (int32_t)(*count) - 1; i >= 0; i--) {
-        if (notes->notes_start_frames[i] == target_start && notes->notes_duration_frames[i] == target_duration &&
-            notes->notes_sample_index[i] == target_sample) {
-            notes->notes_duration_frames[i] = new_duration_frames;
-            break;
-        }
-    }
     goto pc_audio_done;
 }
 pc_replace_note_start: {
     call_carmack("from wr: replace_note_duration");
-    war_note note;
-    memcpy(&note, payload, sizeof(war_note));
-    uint32_t* count = &notes->notes_count;
-    if (*count == 0) goto pc_audio_done;
-    uint64_t new_start_frames;
-    memcpy(&new_start_frames, payload + sizeof(war_note), sizeof(uint64_t));
-    uint64_t target_start = note.note_start_frames;
-    uint64_t target_duration = note.note_duration_frames;
-    uint32_t target_sample = note.note_sample_index;
-    for (int32_t i = (int32_t)(*count) - 1; i >= 0; i--) {
-        if (notes->notes_start_frames[i] == target_start && notes->notes_duration_frames[i] == target_duration &&
-            notes->notes_sample_index[i] == target_sample) {
-            notes->notes_start_frames[i] = new_start_frames;
-            break;
-        }
-    }
     goto pc_audio_done;
 }
 pc_end_war:
     goto pc_audio_done;
 pc_seek:
-    uint64_t seek_frames;
-    memcpy(&seek_frames, payload, size);
+    call_carmack("from wr: SEEK");
+    uint64_t seek_frames = *(uint64_t*)payload;
     atomic_store(&atomics->play_frames, seek_frames);
     goto pc_audio_done;
 pc_record_wait:
@@ -7050,15 +7008,13 @@ pc_record_map:
 pc_set_threshold:
     goto pc_audio_done;
 pc_note_on: {
-    int note;
-    memcpy(&note, payload, size);
+    uint32_t note = *(uint32_t*)payload;
     atomic_store(&atomics->notes_on_previous[note], atomic_load(&atomics->notes_on[note]));
     atomic_store(&atomics->notes_on[note], 1);
     goto pc_audio_done;
 }
 pc_note_off: {
-    int note;
-    memcpy(&note, payload, size);
+    uint32_t note = *(uint32_t*)payload;
     atomic_store(&atomics->notes_on_previous[note], atomic_load(&atomics->notes_on[note]));
     atomic_store(&atomics->notes_on[note], 0);
     goto pc_audio_done;
@@ -7160,7 +7116,7 @@ pc_midi_record_map: {
     goto pc_audio_done;
 }
 pc_save: {
-    call_carmack("saving");
+    call_carmack("from wr: SAVE");
     goto pc_audio_done;
 }
 pc_audio_done:

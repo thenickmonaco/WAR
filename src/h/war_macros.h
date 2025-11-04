@@ -1270,8 +1270,8 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a, float fre
 
 static inline void
 war_undo_add_note(war_undo_node* node, war_lua_context* ctx_lua, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
-    war_note_quad note_quad = node->payload.delete_note.note_quad;
-    war_note note = node->payload.delete_note.note;
+    war_note_quad note_quad = node->payload.add_note.note_quad;
+    war_note note = node->payload.add_note.note;
     // --- Binary search for existing note ---
     uint32_t left = 0;
     uint32_t right = note_quads->count;
@@ -1362,7 +1362,7 @@ war_undo_add_note(war_undo_node* node, war_lua_context* ctx_lua, war_note_quads*
     note_quads->alive[insert_idx] = 1;
     note_quads->id[insert_idx] = note_quad.id;
     note_quads->count++;
-    *(war_note*)(tmp_payload) = note;
+    *(war_note*)tmp_payload = note;
     *(uint32_t*)(tmp_payload + sizeof(war_note)) = insert_idx;
     war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(note) + sizeof(insert_idx), tmp_payload);
 }
@@ -1371,7 +1371,7 @@ static inline void war_undo_delete_note(war_undo_node* node, war_note_quads* not
     int32_t delete_idx = -1;
     for (uint32_t i = 0; i < note_quads->count; i++) {
         assert(i < note_quads->count); // bounds check
-        if (note_quads->id[i] == node->payload.add_note.note.id) {
+        if (note_quads->id[i] == node->payload.delete_note.note.id) {
             note_quads->alive[i] = 0;
             delete_idx = i;
             break;
@@ -1384,7 +1384,7 @@ static inline void war_undo_delete_notes(war_undo_node* node, war_note_quads* no
     uint32_t delete_count = node->payload.delete_notes.count;
     war_note_quad* note_quad = node->payload.delete_notes.note_quad;
     uint32_t count = 0;
-    for (uint32_t i = 0; i < note_quads->count && count < delete_count; i++) {
+    for (int32_t i = note_quads->count - 1; i >= 0 && count < delete_count; i--) {
         if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
         if (note_quads->id[i] != note_quad[count].id) { continue; }
         note_quads->alive[i] = 0;
@@ -1393,6 +1393,298 @@ static inline void war_undo_delete_notes(war_undo_node* node, war_note_quads* no
     }
     *(uint32_t*)(tmp_payload) = delete_count;
     war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (delete_count + 1), tmp_payload);
+}
+
+static inline void war_undo_add_notes(
+    war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload, war_lua_context* ctx_lua) {
+    war_note* note = node->payload.add_notes.note;
+    war_note_quad* note_quad = node->payload.add_notes.note_quad;
+    uint32_t count = node->payload.add_notes.count;
+    // --- Binary search for existing note ---
+    uint32_t already_in_count = 0;
+    uint32_t insert_indices_count = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t left = 0;
+        uint32_t right = note_quads->count;
+        while (left < right) {
+            uint32_t mid = left + (right - left) / 2;
+            if (note_quads->id[mid] == note[i].id) {
+                note_quads->alive[mid] = 1; // revive existing note
+                *(uint32_t*)(tmp_payload + (already_in_count + 1) * sizeof(uint32_t)) = mid;
+                already_in_count++;
+                break;
+            } else if (note_quads->id[mid] < note[i].id) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        *(uint32_t*)(tmp_payload + (count + 1 + insert_indices_count) * sizeof(uint32_t)) = left; // not sture if right
+        insert_indices_count++;
+    }
+    *(uint32_t*)tmp_payload = already_in_count;
+    *(uint32_t*)(tmp_payload + count * sizeof(uint32_t)) = insert_indices_count;
+    if (already_in_count == count) {
+        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTES_ALREADY_IN, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
+        return;
+    } else if (already_in_count > 0) {
+        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTES_ALREADY_IN, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
+    }
+    uint32_t* insert_indices = (uint32_t*)(tmp_payload + (count + 1) * sizeof(uint32_t));
+    uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
+    // --- Compaction if needed ---
+    if (note_quads->count + insert_indices_count >= note_quads_max) { // Check against actual new notes count
+        war_pc_to_a(pc, AUDIO_CMD_COMPACT, 0, NULL);
+        uint32_t write_idx = 0;
+        for (uint32_t read_idx = 0; read_idx < note_quads->count; read_idx++) {
+            if (note_quads->alive[read_idx]) {
+                if (write_idx != read_idx) {
+                    // Copy all fields (same as original)
+                    note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
+                    note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
+                    note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
+                    note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
+                    note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
+                    note_quads->navigation_x[write_idx] = note_quads->navigation_x[read_idx];
+                    note_quads->navigation_x_numerator[write_idx] = note_quads->navigation_x_numerator[read_idx];
+                    note_quads->navigation_x_denominator[write_idx] = note_quads->navigation_x_denominator[read_idx];
+                    note_quads->color[write_idx] = note_quads->color[read_idx];
+                    note_quads->outline_color[write_idx] = note_quads->outline_color[read_idx];
+                    note_quads->gain[write_idx] = note_quads->gain[read_idx];
+                    note_quads->voice[write_idx] = note_quads->voice[read_idx];
+                    note_quads->alive[write_idx] = note_quads->alive[read_idx];
+                    note_quads->id[write_idx] = note_quads->id[read_idx];
+                }
+                write_idx++;
+            }
+        }
+        if (write_idx + insert_indices_count >= note_quads_max) {
+            call_carmack("TODO: implement spillover swapfile");
+            return; // Or return, depending on context
+        }
+        note_quads->count = write_idx;
+
+        // Update all insert_indices after compaction
+        for (uint32_t i = 0; i < insert_indices_count; i++) {
+            uint32_t left = 0;
+            uint32_t right = note_quads->count;
+            while (left < right) {
+                uint32_t mid = left + (right - left) / 2;
+                if (note_quads->id[mid] < note[i].id) {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+            insert_indices[i] = left;
+        }
+    }
+    // After compaction... issues here probably
+    // Collect new notes (not already-in) and their indices
+    uint32_t new_notes_count = 0;
+    uint32_t* new_note_indices = (uint32_t*)(tmp_payload + (count + 1) * sizeof(uint32_t));             // Reuse space
+    uint32_t* final_insert_indices = (uint32_t*)(tmp_payload + (count + 1 + count) * sizeof(uint32_t)); // After potential max
+    for (uint32_t i = 0; i < count; i++) {
+        bool is_already_in = false;
+        for (uint32_t j = 0; j < already_in_count; j++) {
+            if (*(uint32_t*)(tmp_payload + (j + 1) * sizeof(uint32_t)) ==
+                i) { // Check if i is in already_in (assuming payload tracks original indices)
+                is_already_in = true;
+                break;
+            }
+        }
+        if (!is_already_in) {
+            new_note_indices[new_notes_count] = i;
+            final_insert_indices[new_notes_count] = insert_indices[i];
+            new_notes_count++;
+        }
+    }
+    insert_indices_count = new_notes_count; // Update count
+    *(uint32_t*)(tmp_payload + count * sizeof(uint32_t)) = insert_indices_count;
+    // Sort new notes by descending insert index
+    for (uint32_t p = 0; p < new_notes_count - 1; p++) {
+        for (uint32_t q = p + 1; q < new_notes_count; q++) {
+            if (final_insert_indices[p] < final_insert_indices[q]) {
+                // Swap
+                uint32_t temp_idx = final_insert_indices[p];
+                uint32_t temp_note = new_note_indices[p];
+                final_insert_indices[p] = final_insert_indices[q];
+                new_note_indices[p] = new_note_indices[q];
+                final_insert_indices[q] = temp_idx;
+                new_note_indices[q] = temp_note;
+            }
+        }
+    }
+    // Insert in descending order
+    for (uint32_t k = 0; k < new_notes_count; k++) {
+        uint32_t insert_idx = final_insert_indices[k];
+        uint32_t note_idx = new_note_indices[k];
+
+        // Shift elements forward
+        for (uint32_t i = note_quads->count; i > insert_idx; i--) {
+            note_quads->pos_x[i] = note_quads->pos_x[i - 1];
+            note_quads->pos_y[i] = note_quads->pos_y[i - 1];
+            note_quads->size_x[i] = note_quads->size_x[i - 1];
+            note_quads->size_x_numerator[i] = note_quads->size_x_numerator[i - 1];
+            note_quads->size_x_denominator[i] = note_quads->size_x_denominator[i - 1];
+            note_quads->navigation_x[i] = note_quads->navigation_x[i - 1];
+            note_quads->navigation_x_numerator[i] = note_quads->navigation_x_numerator[i - 1];
+            note_quads->navigation_x_denominator[i] = note_quads->navigation_x_denominator[i - 1];
+            note_quads->color[i] = note_quads->color[i - 1];
+            note_quads->outline_color[i] = note_quads->outline_color[i - 1];
+            note_quads->gain[i] = note_quads->gain[i - 1];
+            note_quads->voice[i] = note_quads->voice[i - 1];
+            note_quads->alive[i] = note_quads->alive[i - 1];
+            note_quads->id[i] = note_quads->id[i - 1];
+        }
+
+        // Insert new note
+        note_quads->pos_x[insert_idx] = note_quad[note_idx].pos_x;
+        note_quads->pos_y[insert_idx] = note_quad[note_idx].pos_y;
+        note_quads->size_x[insert_idx] = note_quad[note_idx].size_x;
+        note_quads->size_x_numerator[insert_idx] = note_quad[note_idx].size_x_numerator;
+        note_quads->size_x_denominator[insert_idx] = note_quad[note_idx].size_x_denominator;
+        note_quads->navigation_x[insert_idx] = note_quad[note_idx].navigation_x;
+        note_quads->navigation_x_numerator[insert_idx] = note_quad[note_idx].navigation_x_numerator;
+        note_quads->navigation_x_denominator[insert_idx] = note_quad[note_idx].navigation_x_denominator;
+        note_quads->color[insert_idx] = note_quad[note_idx].color;
+        note_quads->outline_color[insert_idx] = note_quad[note_idx].outline_color;
+        note_quads->gain[insert_idx] = note_quad[note_idx].gain;
+        note_quads->voice[insert_idx] = note_quad[note_idx].voice;
+        note_quads->alive[insert_idx] = 1;
+        note_quads->id[insert_idx] = note_quad[note_idx].id;
+        note_quads->count++;
+
+        // Send insert command
+        *(war_note*)(tmp_payload) = note[note_idx];
+        *(uint32_t*)(tmp_payload + sizeof(war_note)) = insert_idx;
+        war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(war_note) + sizeof(uint32_t), tmp_payload);
+    }
+}
+
+static inline void war_undo_add_notes_same(
+    war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload, war_lua_context* ctx_lua) {
+    war_note note = node->payload.add_notes_same.note;
+    war_note_quad note_quad = node->payload.add_notes_same.note_quad;
+    uint64_t* ids = node->payload.add_notes_same.ids;
+    uint32_t count = node->payload.add_notes_same.count;
+    for (uint32_t i = 0; i < count; i++) {
+        war_note_quad nq = note_quad;
+        nq.id = ids[i];
+        war_note n = note;
+        n.id = ids[i];
+        // --- Binary search for existing note ---
+        uint32_t left = 0;
+        uint32_t right = note_quads->count;
+        bool already_in = false;
+        while (left < right) {
+            uint32_t mid = left + (right - left) / 2;
+            if (note_quads->id[mid] == n.id) {
+                note_quads->alive[mid] = 1; // revive existing note
+                already_in = true;
+                war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE_ALREADY_IN, sizeof(mid), &mid);
+                break;
+            } else if (note_quads->id[mid] < n.id) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        if (already_in) { continue; } // nothing more to do
+        uint32_t insert_idx = left;
+        uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
+        // --- Compaction if needed ---
+        if (note_quads->count + 1 >= note_quads_max) {
+            war_pc_to_a(pc, AUDIO_CMD_COMPACT, 0, NULL);
+            uint32_t write_idx = 0;
+            uint32_t new_insert_idx = 0xFFFFFFFF; // invalid sentinel
+            for (uint32_t read_idx = 0; read_idx < note_quads->count; read_idx++) {
+                if (note_quads->alive[read_idx]) {
+                    if (write_idx != read_idx) {
+                        // Copy all fields
+                        note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
+                        note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
+                        note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
+                        note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
+                        note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
+                        note_quads->navigation_x[write_idx] = note_quads->navigation_x[read_idx];
+                        note_quads->navigation_x_numerator[write_idx] = note_quads->navigation_x_numerator[read_idx];
+                        note_quads->navigation_x_denominator[write_idx] = note_quads->navigation_x_denominator[read_idx];
+                        note_quads->color[write_idx] = note_quads->color[read_idx];
+                        note_quads->outline_color[write_idx] = note_quads->outline_color[read_idx];
+                        note_quads->gain[write_idx] = note_quads->gain[read_idx];
+                        note_quads->voice[write_idx] = note_quads->voice[read_idx];
+                        note_quads->alive[write_idx] = note_quads->alive[read_idx];
+                        note_quads->id[write_idx] = note_quads->id[read_idx];
+                    }
+                    // Track new insert index
+                    if (note_quads->id[write_idx] < n.id) { new_insert_idx = write_idx + 1; }
+                    write_idx++;
+                }
+            }
+            if (write_idx >= note_quads_max) {
+                call_carmack("TODO: implement spillover swapfile");
+                continue;
+            };
+            note_quads->count = write_idx;
+            // Update insert_idx after compaction
+            insert_idx = (new_insert_idx != 0xFFFFFFFF) ? new_insert_idx : note_quads->count;
+        }
+        // --- Shift elements forward to make space ---
+        for (uint32_t j = note_quads->count; j > insert_idx; j--) {
+            note_quads->pos_x[j] = note_quads->pos_x[j - 1];
+            note_quads->pos_y[j] = note_quads->pos_y[j - 1];
+            note_quads->size_x[j] = note_quads->size_x[j - 1];
+            note_quads->size_x_numerator[j] = note_quads->size_x_numerator[j - 1];
+            note_quads->size_x_denominator[j] = note_quads->size_x_denominator[j - 1];
+            note_quads->navigation_x[j] = note_quads->navigation_x[j - 1];
+            note_quads->navigation_x_numerator[j] = note_quads->navigation_x_numerator[j - 1];
+            note_quads->navigation_x_denominator[j] = note_quads->navigation_x_denominator[j - 1];
+            note_quads->color[j] = note_quads->color[j - 1];
+            note_quads->outline_color[j] = note_quads->outline_color[j - 1];
+            note_quads->gain[j] = note_quads->gain[j - 1];
+            note_quads->voice[j] = note_quads->voice[j - 1];
+            note_quads->alive[j] = note_quads->alive[j - 1];
+            note_quads->id[j] = note_quads->id[j - 1];
+        }
+        // --- Insert new note ---
+        note_quads->pos_x[insert_idx] = nq.pos_x;
+        note_quads->pos_y[insert_idx] = nq.pos_y;
+        note_quads->size_x[insert_idx] = nq.size_x;
+        note_quads->size_x_numerator[insert_idx] = nq.size_x_numerator;
+        note_quads->size_x_denominator[insert_idx] = nq.size_x_denominator;
+        note_quads->navigation_x[insert_idx] = nq.navigation_x;
+        note_quads->navigation_x_numerator[insert_idx] = nq.navigation_x_numerator;
+        note_quads->navigation_x_denominator[insert_idx] = nq.navigation_x_denominator;
+        note_quads->color[insert_idx] = nq.color;
+        note_quads->outline_color[insert_idx] = nq.outline_color;
+        note_quads->gain[insert_idx] = nq.gain;
+        note_quads->voice[insert_idx] = nq.voice;
+        note_quads->alive[insert_idx] = 1;
+        note_quads->id[insert_idx] = nq.id;
+        note_quads->count++;
+        *(war_note*)(tmp_payload) = n;
+        *(uint32_t*)(tmp_payload + sizeof(war_note)) = insert_idx;
+        war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(n) + sizeof(insert_idx), tmp_payload);
+    }
+}
+
+static inline void
+war_undo_delete_notes_same(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
+    war_note note = node->payload.delete_notes_same.note;
+    war_note_quad note_quad = node->payload.delete_notes_same.note_quad;
+    uint64_t* ids = node->payload.delete_notes_same.ids;
+    uint32_t delete_count = node->payload.delete_notes_same.count;
+    uint32_t count = 0;
+    for (int32_t i = note_quads->count - 1; i >= 0 && count < delete_count; i--) {
+        if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
+        if (note_quads->id[i] != ids[count]) { continue; }
+        note_quads->alive[i] = 0;
+        *(uint32_t*)(tmp_payload + sizeof(uint32_t) * (count + 1)) = i;
+        count++;
+    }
+    *(uint32_t*)tmp_payload = count;
+    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES_SAME, sizeof(uint32_t) * (count + 1), tmp_payload);
 }
 
 #endif // WAR_MACROS_H

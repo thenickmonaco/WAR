@@ -98,7 +98,7 @@ ctx_lua = {
     -- cmd
     CMD_COUNT                   = 32,
     -- pc
-    PC_BUFFER_SIZE              = 4096,
+    PC_BUFFER_SIZE              = 32864, -- 32864
 }
 
 keymap_flags = {

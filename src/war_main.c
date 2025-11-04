@@ -4773,7 +4773,15 @@ void* war_window_render(void* args) {
                         break;
                     }
                     case CMD_DELETE_NOTES: {
+                        war_undo_add_notes(node, &note_quads, pc, tmp_payload, ctx_lua);
                         break;
+                    }
+                    case CMD_DELETE_NOTES_SAME: {
+                        war_undo_add_notes_same(node, &note_quads, pc, tmp_payload, ctx_lua);
+                        break;
+                    }
+                    case CMD_ADD_NOTES_SAME: {
+                        war_undo_delete_notes_same(node, &note_quads, pc, tmp_payload);
                     }
                     }
                     undo_tree->current = node->prev ? node->prev : NULL;
@@ -4802,6 +4810,21 @@ void* war_window_render(void* args) {
                     }
                     case CMD_DELETE_NOTE: {
                         war_undo_delete_note(next_node, &note_quads, pc);
+                        break;
+                    }
+                    case CMD_ADD_NOTES: {
+                        war_undo_add_notes(next_node, &note_quads, pc, tmp_payload, ctx_lua);
+                        break;
+                    }
+                    case CMD_DELETE_NOTES: {
+                        war_undo_delete_notes(next_node, &note_quads, pc, tmp_payload);
+                        break;
+                    }
+                    case CMD_ADD_NOTES_SAME: {
+                        war_undo_add_notes_same(next_node, &note_quads, pc, tmp_payload, ctx_lua);
+                    }
+                    case CMD_DELETE_NOTES_SAME: {
+                        war_undo_delete_notes_same(next_node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     }
@@ -6801,6 +6824,7 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_DELETE_NOTES] = &&pc_delete_notes;
     pc_audio[AUDIO_CMD_ADD_NOTES_SAME] = &&pc_add_notes_same;
     pc_audio[AUDIO_CMD_DELETE_NOTES_SAME] = &&pc_delete_notes_same;
+    pc_audio[AUDIO_CMD_ADD_NOTES_ALREADY_IN] = &&pc_add_notes_already_in;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -6834,8 +6858,18 @@ pc_add_notes_same: {
     notes->notes_count += count;
     goto pc_audio_done;
 }
+pc_add_notes_already_in: {
+    call_carmack("from wr: add_notes_already_in");
+    uint32_t* indices = (uint32_t*)(payload + sizeof(uint32_t));
+    uint32_t count = *(uint32_t*)(payload);
+    for (uint32_t i = 0; i < count; i++) { notes->alive[indices[i]] = 1; }
+    goto pc_audio_done;
+}
 pc_delete_notes_same: {
     call_carmack("from wr: delete_notes_same");
+    uint32_t count = *(uint32_t*)payload;
+    uint32_t* indices = (uint32_t*)(payload + sizeof(uint32_t));
+    for (uint32_t i = 0; i < count; i++) { notes->alive[indices[i]] = 0; }
     goto pc_audio_done;
 }
 pc_add_note: {

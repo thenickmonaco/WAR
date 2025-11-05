@@ -1268,8 +1268,9 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a, float fre
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
 
-static inline void
-war_undo_add_note(war_undo_node* node, war_lua_context* ctx_lua, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
+static inline void war_undo_tree_add_note(
+    war_undo_node* node, war_lua_context* ctx_lua, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
+    call_carmack("undo_add_note");
     war_note_quad note_quad = node->payload.add_note.note_quad;
     war_note note = node->payload.add_note.note;
     // --- Binary search for existing note ---
@@ -1281,7 +1282,7 @@ war_undo_add_note(war_undo_node* node, war_lua_context* ctx_lua, war_note_quads*
         if (note_quads->id[mid] == note.id) {
             note_quads->alive[mid] = 1; // revive existing note
             already_in = true;
-            war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE_ALREADY_IN, sizeof(mid), &mid);
+            war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTE, sizeof(mid), &mid);
             break;
         } else if (note_quads->id[mid] < note.id) {
             left = mid + 1;
@@ -1367,7 +1368,8 @@ war_undo_add_note(war_undo_node* node, war_lua_context* ctx_lua, war_note_quads*
     war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(note) + sizeof(insert_idx), tmp_payload);
 }
 
-static inline void war_undo_delete_note(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc) {
+static inline void war_undo_tree_delete_note(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc) {
+    call_carmack("undo_delete_note");
     int32_t delete_idx = -1;
     for (uint32_t i = 0; i < note_quads->count; i++) {
         assert(i < note_quads->count); // bounds check
@@ -1380,23 +1382,28 @@ static inline void war_undo_delete_note(war_undo_node* node, war_note_quads* not
     war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(int32_t), &delete_idx);
 }
 
-static inline void war_undo_delete_notes(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
+static inline void
+war_undo_tree_delete_notes(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
+    call_carmack("undo_delete_notes");
     uint32_t delete_count = node->payload.delete_notes.count;
     war_note_quad* note_quad = node->payload.delete_notes.note_quad;
     uint32_t count = 0;
     for (int32_t i = note_quads->count - 1; i >= 0 && count < delete_count; i--) {
-        if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
-        if (note_quads->id[i] != note_quad[count].id) { continue; }
-        note_quads->alive[i] = 0;
-        *(uint32_t*)(tmp_payload + sizeof(uint32_t) * (count + 1)) = i;
-        count++;
+        for (uint32_t k = 0; k < delete_count; k++) {
+            if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
+            if (note_quads->id[i] != note_quad[k].id) { continue; }
+            note_quads->alive[i] = 0;
+            *(uint32_t*)(tmp_payload + sizeof(uint32_t) * (count + 1)) = i;
+            count++;
+        }
     }
-    *(uint32_t*)(tmp_payload) = delete_count;
-    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (delete_count + 1), tmp_payload);
+    *(uint32_t*)(tmp_payload) = count;
+    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (count + 1), tmp_payload);
 }
 
-static inline void war_undo_add_notes(
+static inline void war_undo_tree_add_notes(
     war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload, war_lua_context* ctx_lua) {
+    call_carmack("undo_add_notes");
     war_note* note = node->payload.add_notes.note;
     war_note_quad* note_quad = node->payload.add_notes.note_quad;
     uint32_t count = node->payload.add_notes.count;
@@ -1425,10 +1432,10 @@ static inline void war_undo_add_notes(
     *(uint32_t*)tmp_payload = already_in_count;
     *(uint32_t*)(tmp_payload + count * sizeof(uint32_t)) = insert_indices_count;
     if (already_in_count == count) {
-        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTES_ALREADY_IN, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
+        war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTES, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
         return;
     } else if (already_in_count > 0) {
-        war_pc_to_a(pc, AUDIO_CMD_ADD_NOTES_ALREADY_IN, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
+        war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTES, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
     }
     uint32_t* insert_indices = (uint32_t*)(tmp_payload + (count + 1) * sizeof(uint32_t));
     uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
@@ -1562,8 +1569,9 @@ static inline void war_undo_add_notes(
     }
 }
 
-static inline void war_undo_add_notes_same(
+static inline void war_undo_tree_add_notes_same(
     war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload, war_lua_context* ctx_lua) {
+    call_carmack("undo_add_notes_same");
     war_note note = node->payload.add_notes_same.note;
     war_note_quad note_quad = node->payload.add_notes_same.note_quad;
     uint64_t* ids = node->payload.add_notes_same.ids;
@@ -1582,7 +1590,7 @@ static inline void war_undo_add_notes_same(
             if (note_quads->id[mid] == n.id) {
                 note_quads->alive[mid] = 1; // revive existing note
                 already_in = true;
-                war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE_ALREADY_IN, sizeof(mid), &mid);
+                war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTE, sizeof(mid), &mid);
                 break;
             } else if (note_quads->id[mid] < n.id) {
                 left = mid + 1;
@@ -1670,15 +1678,14 @@ static inline void war_undo_add_notes_same(
 }
 
 static inline void
-war_undo_delete_notes_same(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
-    war_note note = node->payload.delete_notes_same.note;
-    war_note_quad note_quad = node->payload.delete_notes_same.note_quad;
+war_undo_tree_delete_notes_same(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
+    call_carmack("undo_delete_notes_same");
     uint64_t* ids = node->payload.delete_notes_same.ids;
     uint32_t delete_count = node->payload.delete_notes_same.count;
     uint32_t count = 0;
     for (int32_t i = note_quads->count - 1; i >= 0 && count < delete_count; i--) {
         if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
-        if (note_quads->id[i] != ids[count]) { continue; }
+        if (note_quads->id[i] != ids[delete_count - count - 1]) { continue; }
         note_quads->alive[i] = 0;
         *(uint32_t*)(tmp_payload + sizeof(uint32_t) * (count + 1)) = i;
         count++;

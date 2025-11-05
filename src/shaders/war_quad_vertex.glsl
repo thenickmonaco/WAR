@@ -60,13 +60,13 @@ void main() {
          (in_corner.y == 0u ? -1.0 : 1.0) // bottom -> -1, top -> +1
     );
     vec2 offsets = quad_grid ? pc.cell_offsets : vec2(0.0);
-    offsets += (quad_line ? vec2(corner_sign * in_line_thickness) : vec2(0.0));
-    vec2 ndc = vec2((in_pos.x + offsets.x - pc.bottom_left.x) * pc.cell_size.x / pc.physical_size.x * 2.0 - 1.0, 
-            1.0 - (in_pos.y + offsets.y - pc.bottom_left.y) * pc.cell_size.y / pc.physical_size.y * 2.0);
+    offsets += (quad_line ? vec2(corner_sign * in_line_thickness * (1.0 / pc.zoom)) : vec2(0.0));
+    vec2 ndc = vec2((in_pos.x + offsets.x - pc.bottom_left.x) * pc.cell_size.x * pc.zoom / pc.physical_size.x * 2.0 - 1.0, 
+            1.0 - (in_pos.y + offsets.y - pc.bottom_left.y) * pc.cell_size.y * pc.zoom / pc.physical_size.y * 2.0);
     gl_Position = vec4(ndc, in_pos.z, 1.0);
     frag_color = in_color;
     frag_outline_thickness = in_outline_thickness * pc.cell_size.x;
     frag_outline_color = in_outline_color;
     frag_uv = in_corner;
-    frag_span = in_span * pc.cell_size;
+    frag_span = in_span * pc.cell_size * pc.zoom;
 }

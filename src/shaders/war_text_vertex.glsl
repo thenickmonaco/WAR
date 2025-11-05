@@ -70,7 +70,7 @@ void main() {
     float glyph_offset_y_top = corner_sign.y * (pc.baseline - in_glyph_bearing.y);
     float glyph_offset_y = mix(glyph_offset_y_bottom, glyph_offset_y_top, float(in_corner.y));
 
-    vec2 pixel_pos = cell_origin * pc.cell_size + vec2(glyph_offset_x, glyph_offset_y);
+    vec2 pixel_pos = cell_origin * pc.cell_size * pc.zoom + vec2(glyph_offset_x * pc.zoom, glyph_offset_y * pc.zoom);
 
     vec2 ndc = vec2(
             (pixel_pos.x / pc.physical_size.x) * 2.0 - 1.0,

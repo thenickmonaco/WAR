@@ -553,7 +553,7 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
     pc_window_render[AUDIO_CMD_INSERT_NOTE] = &&pc_insert_note;
     pc_window_render[AUDIO_CMD_COMPACT] = &&pc_compact;
-    pc_window_render[AUDIO_CMD_ADD_NOTE_ALREADY_IN] = &&pc_add_note_already_in;
+    pc_window_render[AUDIO_CMD_REVIVE_NOTE] = &&pc_add_note_already_in;
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
     while (atomics->state != AUDIO_CMD_END_WAR) {
     pc_window_render:
@@ -3543,32 +3543,38 @@ void* war_window_render(void* args) {
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_ctrl_equal:
+            cmd_normal_ctrl_equal: {
                 call_carmack("cmd_normal_ctrl_equal");
-                // ctx_wr.zoom_scale +=
-                // ctx_wr.zoom_increment; if
-                // (ctx_wr.zoom_scale > 5.0f) {
-                // ctx_wr.zoom_scale = 5.0f; }
-                // ctx_wr.panning_x = ctx_wr.anchor_ndc_x
-                // - ctx_wr.anchor_x * ctx_wr.zoom_scale;
-                // ctx_wr.panning_y = ctx_wr.anchor_ndc_y
-                // - ctx_wr.anchor_y * ctx_wr.zoom_scale;
+                ctx_wr.zoom_scale += ctx_wr.zoom_increment;
+                if (ctx_wr.zoom_scale > 5.0f) { ctx_wr.zoom_scale = 5.0f; }
+                float viewport_cols_f = ctx_wr.physical_width / (ctx_wr.cell_width * ctx_wr.zoom_scale);
+                float viewport_rows_f = ctx_wr.physical_height / (ctx_wr.cell_height * ctx_wr.zoom_scale);
+                int viewport_cols = fmax(5, (int)round(viewport_cols_f));
+                int viewport_rows = fmax(5, (int)round(viewport_rows_f));
+                ctx_wr.viewport_cols = viewport_cols;
+                ctx_wr.viewport_rows = viewport_rows;
+                ctx_wr.right_col = fmin(ctx_wr.max_col, ctx_wr.left_col + viewport_cols - 1 - ctx_wr.num_cols_for_line_numbers);
+                ctx_wr.top_row = fmin(ctx_wr.max_row, ctx_wr.bottom_row + viewport_rows - 1 - ctx_wr.num_rows_for_status_bars);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_ctrl_minus:
+            }
+            cmd_normal_ctrl_minus: {
                 call_carmack("cmd_normal_ctrl_minus");
-                // ctx_wr.zoom_scale -=
-                // ctx_wr.zoom_increment; if
-                // (ctx_wr.zoom_scale < 0.1f) {
-                // ctx_wr.zoom_scale = 0.1f; }
-                // ctx_wr.panning_x = ctx_wr.anchor_ndc_x
-                // - ctx_wr.anchor_x * ctx_wr.zoom_scale;
-                // ctx_wr.panning_y = ctx_wr.anchor_ndc_y
-                // - ctx_wr.anchor_y * ctx_wr.zoom_scale;
+                ctx_wr.zoom_scale -= ctx_wr.zoom_increment;
+                if (ctx_wr.zoom_scale <= 0.1f) { ctx_wr.zoom_scale = 0.1f; }
+                float viewport_cols_f = ctx_wr.physical_width / (ctx_wr.cell_width * ctx_wr.zoom_scale);
+                float viewport_rows_f = ctx_wr.physical_height / (ctx_wr.cell_height * ctx_wr.zoom_scale);
+                int viewport_cols = fmax(5, (int)round(viewport_cols_f));
+                int viewport_rows = fmax(5, (int)round(viewport_rows_f));
+                ctx_wr.viewport_cols = viewport_cols;
+                ctx_wr.viewport_rows = viewport_rows;
+                ctx_wr.right_col = fmin(ctx_wr.max_col, ctx_wr.left_col + viewport_cols - 1 - ctx_wr.num_cols_for_line_numbers);
+                ctx_wr.top_row = fmin(ctx_wr.max_row, ctx_wr.bottom_row + viewport_rows - 1 - ctx_wr.num_rows_for_status_bars);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
             cmd_normal_ctrl_alt_equal:
                 call_carmack("cmd_normal_ctrl_alt_equal");
                 // ctx_wr.zoom_scale +=
@@ -3595,20 +3601,17 @@ void* war_window_render(void* args) {
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
-            cmd_normal_ctrl_0:
+            cmd_normal_ctrl_0: {
                 call_carmack("cmd_normal_ctrl_0");
-                // ctx_wr.zoom_scale = 1.0f;
-                // ctx_wr.left_col = 0;
-                // ctx_wr.bottom_row = 0;
-                // ctx_wr.right_col =
-                //     (uint32_t)((ctx_wr.physical_width - ((float)ctx_wr.num_cols_for_line_numbers * ctx_wr.cell_width)) / ctx_wr.cell_width)
-                //     - 1;
-                // ctx_wr.top_row =
-                //     (uint32_t)((ctx_wr.physical_height - ((float)ctx_wr.num_rows_for_status_bars * ctx_wr.cell_height)) /
-                //     ctx_wr.cell_height) - 1;
+                ctx_wr.zoom_scale = 1.0f;
+                ctx_wr.viewport_cols = (uint32_t)(physical_width / ctx_vk.cell_width);
+                ctx_wr.viewport_rows = (uint32_t)(physical_height / ctx_vk.cell_height);
+                ctx_wr.right_col = fmin(ctx_wr.max_col, ctx_wr.left_col + viewport_cols - 1 - ctx_wr.num_cols_for_line_numbers);
+                ctx_wr.top_row = fmin(ctx_wr.max_row, ctx_wr.bottom_row + viewport_rows - 1 - ctx_wr.num_rows_for_status_bars);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            }
             cmd_normal_esc: {
                 call_carmack("cmd_normal_esc");
                 if (timeout_state_index) {
@@ -3621,7 +3624,6 @@ void* war_window_render(void* args) {
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
-                call_carmack("hi");
                 goto cmd_done;
             }
             cmd_normal_s: {
@@ -3840,11 +3842,11 @@ void* war_window_render(void* args) {
                     memset(node, 0, sizeof(war_undo_node));
                     node->id = undo_tree->next_id++;
                     node->seq_num = undo_tree->next_seq_num++;
-                    node->command = CMD_ADD_NOTES;
-                    node->payload.add_notes_same.note = note;
-                    node->payload.add_notes_same.note_quad = note_quad;
-                    node->payload.add_notes_same.ids = war_pool_alloc(pool_wr, sizeof(uint64_t) * ctx_wr.numeric_prefix);
-                    node->payload.add_notes_same.count = ctx_wr.numeric_prefix;
+                    node->command = CMD_ADD_NOTES_SAME;
+                    node->payload.delete_notes_same.note = note;
+                    node->payload.delete_notes_same.note_quad = note_quad;
+                    node->payload.delete_notes_same.ids = war_pool_alloc(pool_wr, sizeof(uint64_t) * ctx_wr.numeric_prefix);
+                    node->payload.delete_notes_same.count = ctx_wr.numeric_prefix;
                     node->cursor_pos_x = ctx_wr.cursor_pos_x;
                     node->cursor_pos_y = ctx_wr.cursor_pos_y;
                     node->left_col = ctx_wr.left_col;
@@ -3890,7 +3892,7 @@ void* war_window_render(void* args) {
                         note_quads.voice[note_quads.count + i] = note_quad.voice;
                         note_quads.alive[note_quads.count + i] = note_quad.alive;
                         note_quads.id[note_quads.count + i] = id;
-                        node->payload.add_notes_same.ids[i] = id;
+                        node->payload.delete_notes_same.ids[i] = id;
                         id = atomic_fetch_add(&atomics->note_next_id, 1);
                     }
                     note_quads.count += ctx_wr.numeric_prefix;
@@ -3898,7 +3900,7 @@ void* war_window_render(void* args) {
                     *(war_note*)(tmp_payload) = note;
                     *(uint32_t*)(tmp_payload + sizeof(war_note)) = ctx_wr.numeric_prefix;
                     memcpy(tmp_payload + sizeof(note) + sizeof(ctx_wr.numeric_prefix),
-                           node->payload.add_notes_same.ids,
+                           node->payload.delete_notes_same.ids,
                            sizeof(uint64_t) * ctx_wr.numeric_prefix);
                     war_pc_to_a(pc,
                                 AUDIO_CMD_ADD_NOTES_SAME,
@@ -3961,8 +3963,8 @@ void* war_window_render(void* args) {
                 node->id = undo_tree->next_id++;
                 node->seq_num = undo_tree->next_seq_num++;
                 node->command = CMD_ADD_NOTE;
-                node->payload.add_note.note = note;
-                node->payload.add_note.note_quad = note_quad;
+                node->payload.delete_note.note = note;
+                node->payload.delete_note.note_quad = note_quad;
                 node->cursor_pos_x = ctx_wr.cursor_pos_x;
                 node->cursor_pos_y = ctx_wr.cursor_pos_y;
                 node->left_col = ctx_wr.left_col;
@@ -4036,8 +4038,8 @@ void* war_window_render(void* args) {
                             node->id = undo_tree->next_id++;
                             node->seq_num = undo_tree->next_seq_num++;
                             node->command = CMD_DELETE_NOTES;
-                            node->payload.delete_notes.note = war_pool_alloc(pool_wr, sizeof(war_note) * undo_notes_batch_max);
-                            node->payload.delete_notes.note_quad = war_pool_alloc(pool_wr, sizeof(war_note_quad) * undo_notes_batch_max);
+                            node->payload.add_notes.note = war_pool_alloc(pool_wr, sizeof(war_note) * undo_notes_batch_max);
+                            node->payload.add_notes.note_quad = war_pool_alloc(pool_wr, sizeof(war_note_quad) * undo_notes_batch_max);
                             node->cursor_pos_x = ctx_wr.cursor_pos_x;
                             node->cursor_pos_y = ctx_wr.cursor_pos_y;
                             node->left_col = ctx_wr.left_col;
@@ -4102,8 +4104,8 @@ void* war_window_render(void* args) {
                         note.note_phase_increment = 0;
                         note.id = note_quad.id;
                         note.alive = note_quad.alive;
-                        node->payload.delete_notes.note[delete_count] = note;
-                        node->payload.delete_notes.note_quad[delete_count] = note_quad;
+                        node->payload.add_notes.note[delete_count] = note;
+                        node->payload.add_notes.note_quad[delete_count] = note_quad;
                         note_quads.alive[i] = 0;
                         *(uint32_t*)(tmp_payload + (delete_count + 1) * sizeof(uint32_t)) = i;
                         delete_count++;
@@ -4116,6 +4118,7 @@ void* war_window_render(void* args) {
                         if (delete_count >= ctx_wr.numeric_prefix) { break; }
                     }
                     *(uint32_t*)(tmp_payload) = delete_count;
+                    node->payload.add_notes.count = delete_count;
                     war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (delete_count + 1), tmp_payload);
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
@@ -4179,8 +4182,8 @@ void* war_window_render(void* args) {
                 node->id = undo_tree->next_id++;
                 node->seq_num = undo_tree->next_seq_num++;
                 node->command = CMD_DELETE_NOTE;
-                node->payload.delete_note.note = note;
-                node->payload.delete_note.note_quad = note_quad;
+                node->payload.add_note.note = note;
+                node->payload.add_note.note_quad = note_quad;
                 node->cursor_pos_x = ctx_wr.cursor_pos_x;
                 node->cursor_pos_y = ctx_wr.cursor_pos_y;
                 node->left_col = ctx_wr.left_col;
@@ -4761,27 +4764,28 @@ void* war_window_render(void* args) {
                     assert(node != NULL);
                     switch (node->command) {
                     case CMD_ADD_NOTE: {
-                        war_undo_delete_note(node, &note_quads, pc);
+                        war_undo_tree_delete_note(node, &note_quads, pc);
                         break;
                     }
                     case CMD_DELETE_NOTE: {
-                        war_undo_add_note(node, ctx_lua, &note_quads, pc, tmp_payload);
+                        war_undo_tree_add_note(node, ctx_lua, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_ADD_NOTES: {
-                        war_undo_delete_notes(node, &note_quads, pc, tmp_payload);
+                        war_undo_tree_delete_notes(node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_DELETE_NOTES: {
-                        war_undo_add_notes(node, &note_quads, pc, tmp_payload, ctx_lua);
-                        break;
-                    }
-                    case CMD_DELETE_NOTES_SAME: {
-                        war_undo_add_notes_same(node, &note_quads, pc, tmp_payload, ctx_lua);
+                        war_undo_tree_add_notes(node, &note_quads, pc, tmp_payload, ctx_lua);
                         break;
                     }
                     case CMD_ADD_NOTES_SAME: {
-                        war_undo_delete_notes_same(node, &note_quads, pc, tmp_payload);
+                        war_undo_tree_delete_notes_same(node, &note_quads, pc, tmp_payload);
+                        break;
+                    }
+                    case CMD_DELETE_NOTES_SAME: {
+                        war_undo_tree_add_notes_same(node, &note_quads, pc, tmp_payload, ctx_lua);
+                        break;
                     }
                     }
                     undo_tree->current = node->prev ? node->prev : NULL;
@@ -4805,26 +4809,27 @@ void* war_window_render(void* args) {
                     assert(next_node != NULL);
                     switch (next_node->command) {
                     case CMD_ADD_NOTE: {
-                        war_undo_add_note(next_node, ctx_lua, &note_quads, pc, tmp_payload);
+                        war_undo_tree_add_note(next_node, ctx_lua, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_DELETE_NOTE: {
-                        war_undo_delete_note(next_node, &note_quads, pc);
+                        war_undo_tree_delete_note(next_node, &note_quads, pc);
                         break;
                     }
                     case CMD_ADD_NOTES: {
-                        war_undo_add_notes(next_node, &note_quads, pc, tmp_payload, ctx_lua);
+                        war_undo_tree_add_notes(next_node, &note_quads, pc, tmp_payload, ctx_lua);
                         break;
                     }
                     case CMD_DELETE_NOTES: {
-                        war_undo_delete_notes(next_node, &note_quads, pc, tmp_payload);
+                        war_undo_tree_delete_notes(next_node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_ADD_NOTES_SAME: {
-                        war_undo_add_notes_same(next_node, &note_quads, pc, tmp_payload, ctx_lua);
+                        war_undo_tree_add_notes_same(next_node, &note_quads, pc, tmp_payload, ctx_lua);
+                        break;
                     }
                     case CMD_DELETE_NOTES_SAME: {
-                        war_undo_delete_notes_same(next_node, &note_quads, pc, tmp_payload);
+                        war_undo_tree_delete_notes_same(next_node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     }
@@ -6819,12 +6824,12 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_REPLACE_NOTE_START] = &&pc_replace_note_start;
     pc_audio[AUDIO_CMD_COMPACT] = &&pc_compact;
     pc_audio[AUDIO_CMD_INSERT_NOTE] = &&pc_insert_note;
-    pc_audio[AUDIO_CMD_ADD_NOTE_ALREADY_IN] = &&pc_add_note_already_in;
+    pc_audio[AUDIO_CMD_REVIVE_NOTE] = &&pc_revive_note;
     pc_audio[AUDIO_CMD_ADD_NOTES] = &&pc_add_notes;
     pc_audio[AUDIO_CMD_DELETE_NOTES] = &&pc_delete_notes;
     pc_audio[AUDIO_CMD_ADD_NOTES_SAME] = &&pc_add_notes_same;
     pc_audio[AUDIO_CMD_DELETE_NOTES_SAME] = &&pc_delete_notes_same;
-    pc_audio[AUDIO_CMD_ADD_NOTES_ALREADY_IN] = &&pc_add_notes_already_in;
+    pc_audio[AUDIO_CMD_REVIVE_NOTES] = &&pc_revive_notes;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -6858,7 +6863,7 @@ pc_add_notes_same: {
     notes->notes_count += count;
     goto pc_audio_done;
 }
-pc_add_notes_already_in: {
+pc_revive_notes: {
     call_carmack("from wr: add_notes_already_in");
     uint32_t* indices = (uint32_t*)(payload + sizeof(uint32_t));
     uint32_t count = *(uint32_t*)(payload);
@@ -6970,7 +6975,7 @@ pc_insert_note: {
     notes->notes_count++;
     goto pc_audio_done;
 }
-pc_add_note_already_in: {
+pc_revive_note: {
     call_carmack("from wr: ADD_NOTE_ALREADY_IN");
     uint32_t idx = *(uint32_t*)(payload);
     notes->alive[idx] = 1;

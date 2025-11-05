@@ -96,7 +96,7 @@ ctx_lua = {
     -- pool
     POOL_ALIGNMENT              = 256,
     -- cmd
-    CMD_COUNT                   = 32,
+    CMD_COUNT                   = 33,
     -- pc
     PC_BUFFER_SIZE              = 32864, -- 32864
 }

@@ -51,15 +51,12 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
+war_vulkan_context war_vulkan_init(war_lua_context* ctx_lua, uint32_t width, uint32_t height) {
     header("war_vulkan_init");
     uint32_t instance_extension_count = 0;
-    vkEnumerateInstanceExtensionProperties(
-        NULL, &instance_extension_count, NULL);
-    VkExtensionProperties* instance_extensions_properties =
-        malloc(sizeof(VkExtensionProperties) * instance_extension_count);
-    vkEnumerateInstanceExtensionProperties(
-        NULL, &instance_extension_count, instance_extensions_properties);
+    vkEnumerateInstanceExtensionProperties(NULL, &instance_extension_count, NULL);
+    VkExtensionProperties* instance_extensions_properties = malloc(sizeof(VkExtensionProperties) * instance_extension_count);
+    vkEnumerateInstanceExtensionProperties(NULL, &instance_extension_count, instance_extensions_properties);
 
     const char* validation_layers[] = {
         "VK_LAYER_KHRONOS_validation",
@@ -82,8 +79,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             },
         .enabledLayerCount = 1,
         .ppEnabledLayerNames = validation_layers,
-        .enabledExtensionCount =
-            sizeof(instance_extensions) / sizeof(instance_extensions[0]),
+        .enabledExtensionCount = sizeof(instance_extensions) / sizeof(instance_extensions[0]),
         .ppEnabledExtensionNames = instance_extensions,
     };
     VkInstance instance;
@@ -101,11 +97,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkPhysicalDeviceProperties device_props;
     for (uint32_t i = 0; i < gpu_count; i++) {
         vkGetPhysicalDeviceProperties(physical_devices[i], &device_props);
-        call_carmack("Found GPU %u: %s (vendorID=0x%x, deviceID=0x%x)",
-                     i,
-                     device_props.deviceName,
-                     device_props.vendorID,
-                     device_props.deviceID);
+        call_carmack(
+            "Found GPU %u: %s (vendorID=0x%x, deviceID=0x%x)", i, device_props.deviceName, device_props.vendorID, device_props.deviceID);
         if (device_props.vendorID == 0x8086) {
             physical_device = physical_devices[i];
             call_carmack("Selected Intel GPU: %s", device_props.deviceName);
@@ -115,20 +108,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     if (physical_device == VK_NULL_HANDLE) {
         physical_device = physical_devices[0];
         vkGetPhysicalDeviceProperties(physical_device, &device_props);
-        call_carmack("Fallback GPU selected: %s (vendorID=0x%x)",
-                     device_props.deviceName,
-                     device_props.vendorID);
+        call_carmack("Fallback GPU selected: %s (vendorID=0x%x)", device_props.deviceName, device_props.vendorID);
     }
     assert(physical_device != VK_NULL_HANDLE);
     uint32_t device_extension_count = 0;
-    vkEnumerateDeviceExtensionProperties(
-        physical_device, NULL, &device_extension_count, NULL);
-    VkExtensionProperties* device_extensions_properties =
-        malloc(sizeof(VkExtensionProperties) * device_extension_count);
-    vkEnumerateDeviceExtensionProperties(physical_device,
-                                         NULL,
-                                         &device_extension_count,
-                                         device_extensions_properties);
+    vkEnumerateDeviceExtensionProperties(physical_device, NULL, &device_extension_count, NULL);
+    VkExtensionProperties* device_extensions_properties = malloc(sizeof(VkExtensionProperties) * device_extension_count);
+    vkEnumerateDeviceExtensionProperties(physical_device, NULL, &device_extension_count, device_extensions_properties);
     const char* device_extensions[] = {
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
@@ -136,28 +122,17 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
     };
     uint32_t extension_count = 0;
-    vkEnumerateDeviceExtensionProperties(
-        physical_device, NULL, &extension_count, NULL);
-    VkExtensionProperties* available_extensions =
-        malloc(sizeof(VkExtensionProperties) * extension_count);
-    vkEnumerateDeviceExtensionProperties(
-        physical_device, NULL, &extension_count, available_extensions);
+    vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, NULL);
+    VkExtensionProperties* available_extensions = malloc(sizeof(VkExtensionProperties) * extension_count);
+    vkEnumerateDeviceExtensionProperties(physical_device, NULL, &extension_count, available_extensions);
 #if DEBUG
-    for (uint32_t i = 0; i < extension_count; i++) {
-        call_carmack("%s", available_extensions[i].extensionName);
-    }
+    for (uint32_t i = 0; i < extension_count; i++) { call_carmack("%s", available_extensions[i].extensionName); }
 #endif
     uint8_t has_external_memory = 0;
     uint8_t has_external_memory_fd = 0;
     for (uint32_t i = 0; i < extension_count; i++) {
-        if (strcmp(available_extensions[i].extensionName,
-                   VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) == 0) {
-            has_external_memory = 1;
-        }
-        if (strcmp(available_extensions[i].extensionName,
-                   VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME) == 0) {
-            has_external_memory_fd = 1;
-        }
+        if (strcmp(available_extensions[i].extensionName, VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) == 0) { has_external_memory = 1; }
+        if (strcmp(available_extensions[i].extensionName, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME) == 0) { has_external_memory_fd = 1; }
     }
     free(available_extensions);
     assert(has_external_memory && has_external_memory_fd);
@@ -165,14 +140,10 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         max_family_count = 16,
     };
     uint32_t queue_family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        physical_device, &queue_family_count, NULL);
-    if (queue_family_count > max_family_count) {
-        queue_family_count = max_family_count;
-    }
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, NULL);
+    if (queue_family_count > max_family_count) { queue_family_count = max_family_count; }
     VkQueueFamilyProperties queue_families[max_family_count];
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        physical_device, &queue_family_count, queue_families);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_families);
     uint32_t graphics_family_index = UINT32_MAX;
     for (uint32_t i = 0; i < queue_family_count; i++) {
         if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
@@ -211,26 +182,21 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                 VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
     VkImage quad_depth_image;
-    VkResult r =
-        vkCreateImage(device, &quad_depth_image_info, NULL, &quad_depth_image);
+    VkResult r = vkCreateImage(device, &quad_depth_image_info, NULL, &quad_depth_image);
     assert(r == VK_SUCCESS);
     VkMemoryRequirements quad_depth_mem_reqs;
-    vkGetImageMemoryRequirements(
-        device, quad_depth_image, &quad_depth_mem_reqs);
+    vkGetImageMemoryRequirements(device, quad_depth_image, &quad_depth_mem_reqs);
     VkPhysicalDeviceMemoryProperties quad_depth_mem_props;
     vkGetPhysicalDeviceMemoryProperties(physical_device, &quad_depth_mem_props);
     int quad_depth_memory_type_index = -1;
     for (uint32_t i = 0; i < quad_depth_mem_props.memoryTypeCount; i++) {
         if ((quad_depth_mem_reqs.memoryTypeBits & (1u << i)) &&
-            (quad_depth_mem_props.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ==
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+            (quad_depth_mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
             quad_depth_memory_type_index = i;
             break;
         }
@@ -242,8 +208,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = quad_depth_memory_type_index,
     };
     VkDeviceMemory quad_depth_image_memory;
-    r = vkAllocateMemory(
-        device, &quad_depth_alloc_info, NULL, &quad_depth_image_memory);
+    r = vkAllocateMemory(device, &quad_depth_alloc_info, NULL, &quad_depth_image_memory);
     assert(r == VK_SUCCESS);
     r = vkBindImageMemory(device, quad_depth_image, quad_depth_image_memory, 0);
     assert(r == VK_SUCCESS);
@@ -263,8 +228,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             },
     };
     VkImageView quad_depth_image_view;
-    r = vkCreateImageView(
-        device, &quad_depth_view_info, NULL, &quad_depth_image_view);
+    r = vkCreateImageView(device, &quad_depth_view_info, NULL, &quad_depth_image_view);
     assert(r == VK_SUCCESS);
     VkAttachmentDescription quad_depth_attachment = {
         .format = quad_depth_format,
@@ -310,8 +274,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_LINEAR,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
@@ -332,12 +295,10 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     call_carmack("Looking for memory type with properties: 0x%x", properties);
     call_carmack("Available memory types:");
     for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++) {
-        VkMemoryPropertyFlags flags =
-            mem_properties.memoryTypes[i].propertyFlags;
+        VkMemoryPropertyFlags flags = mem_properties.memoryTypes[i].propertyFlags;
         call_carmack("Type %u: flags=0x%x", i, flags);
 
-        if ((mem_reqs.memoryTypeBits & (1 << i)) &&
-            (flags & properties) == properties) {
+        if ((mem_reqs.memoryTypeBits & (1 << i)) && (flags & properties) == properties) {
             call_carmack("-> Selected memory type %u", i);
             memory_type = i;
             found_memory_type = 1;
@@ -362,8 +323,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
     };
     int dmabuf_fd;
-    PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR =
-        (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr(device, "vkGetMemoryFdKHR");
+    PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vkGetDeviceProcAddr(device, "vkGetMemoryFdKHR");
     result = vkGetMemoryFdKHR(device, &get_fd_info, &dmabuf_fd);
     assert(result == VK_SUCCESS);
     assert(dmabuf_fd > 0);
@@ -380,8 +340,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
     };
-    VkAttachmentDescription quad_attachments[2] = {color_attachment,
-                                                   quad_depth_attachment};
+    VkAttachmentDescription quad_attachments[2] = {color_attachment, quad_depth_attachment};
     VkAttachmentReference color_attachment_ref = {
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -434,8 +393,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .layers = 1,
     };
     VkFramebuffer frame_buffer;
-    result =
-        vkCreateFramebuffer(device, &frame_buffer_info, NULL, &frame_buffer);
+    result = vkCreateFramebuffer(device, &frame_buffer_info, NULL, &frame_buffer);
     assert(result == VK_SUCCESS);
 
     uint32_t* vertex_code;
@@ -445,20 +403,16 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     fseek(vertex_spv, 0, SEEK_END);
     long vertex_size = ftell(vertex_spv);
     fseek(vertex_spv, 0, SEEK_SET);
-    assert(vertex_size > 0 &&
-           (vertex_size % 4 == 0)); // SPIR-V is 4-byte aligned
+    assert(vertex_size > 0 && (vertex_size % 4 == 0)); // SPIR-V is 4-byte aligned
     vertex_code = malloc(vertex_size);
     assert(vertex_code);
     size_t vertex_spv_read = fread(vertex_code, 1, vertex_size, vertex_spv);
     assert(vertex_spv_read == (size_t)vertex_size);
     fclose(vertex_spv);
     VkShaderModuleCreateInfo vertex_shader_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = vertex_size,
-        .pCode = vertex_code};
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = vertex_size, .pCode = vertex_code};
     VkShaderModule vertex_shader;
-    result =
-        vkCreateShaderModule(device, &vertex_shader_info, NULL, &vertex_shader);
+    result = vkCreateShaderModule(device, &vertex_shader_info, NULL, &vertex_shader);
     assert(result == VK_SUCCESS);
     free(vertex_code);
     uint32_t* fragment_code;
@@ -468,21 +422,16 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     fseek(fragment_spv, 0, SEEK_END);
     long fragment_size = ftell(fragment_spv);
     fseek(fragment_spv, 0, SEEK_SET);
-    assert(fragment_size > 0 &&
-           (fragment_size % 4 == 0)); // SPIR-V is 4-byte aligned
+    assert(fragment_size > 0 && (fragment_size % 4 == 0)); // SPIR-V is 4-byte aligned
     fragment_code = malloc(fragment_size);
     assert(fragment_code);
-    size_t fragment_spv_read =
-        fread(fragment_code, 1, fragment_size, fragment_spv);
+    size_t fragment_spv_read = fread(fragment_code, 1, fragment_size, fragment_spv);
     assert(fragment_spv_read == (size_t)fragment_size);
     fclose(fragment_spv);
     VkShaderModuleCreateInfo fragment_shader_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = fragment_size,
-        .pCode = fragment_code};
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = fragment_size, .pCode = fragment_code};
     VkShaderModule fragment_shader;
-    result = vkCreateShaderModule(
-        device, &fragment_shader_info, NULL, &fragment_shader);
+    result = vkCreateShaderModule(device, &fragment_shader_info, NULL, &fragment_shader);
     assert(result == VK_SUCCESS);
     free(fragment_code);
     VkDescriptorSetLayoutBinding sampler_binding = {
@@ -498,21 +447,19 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pBindings = &sampler_binding,
     };
     VkDescriptorSetLayout descriptor_set_layout;
-    vkCreateDescriptorSetLayout(
-        device, &descriptor_layout_info, NULL, &descriptor_set_layout);
-    VkPipelineShaderStageCreateInfo shader_stages[2] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = VK_SHADER_STAGE_VERTEX_BIT,
-            .module = vertex_shader,
-            .pName = "main",
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = fragment_shader,
-            .pName = "main",
-        }};
+    vkCreateDescriptorSetLayout(device, &descriptor_layout_info, NULL, &descriptor_set_layout);
+    VkPipelineShaderStageCreateInfo shader_stages[2] = {{
+                                                            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                                            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                                                            .module = vertex_shader,
+                                                            .pName = "main",
+                                                        },
+                                                        {
+                                                            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                                            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                                                            .module = fragment_shader,
+                                                            .pName = "main",
+                                                        }};
     VkPushConstantRange push_constant_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset = 0,
@@ -528,8 +475,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pPushConstantRanges = &push_constant_range,
     };
     VkPipelineLayout pipeline_layout;
-    result =
-        vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline_layout);
+    result = vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline_layout);
     assert(result == VK_SUCCESS);
     VkVertexInputBindingDescription quad_vertex_binding = {
         .binding = 0,
@@ -593,45 +539,26 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     uint32_t num_quad_vertex_attrs = 8;
     VkVertexInputAttributeDescription quad_instance_attrs[] = {
-        (VkVertexInputAttributeDescription){.location = num_quad_vertex_attrs,
-                                            .binding = 1,
-                                            .format = VK_FORMAT_R32_UINT,
-                                            .offset =
-                                                offsetof(war_quad_instance, x)},
         (VkVertexInputAttributeDescription){
-            .location = num_quad_vertex_attrs + 1,
-            .binding = 1,
-            .format = VK_FORMAT_R32_UINT,
-            .offset = offsetof(war_quad_instance, y)},
+            .location = num_quad_vertex_attrs, .binding = 1, .format = VK_FORMAT_R32_UINT, .offset = offsetof(war_quad_instance, x)},
         (VkVertexInputAttributeDescription){
-            .location = num_quad_vertex_attrs + 2,
-            .binding = 1,
-            .format = VK_FORMAT_R32_UINT,
-            .offset = offsetof(war_quad_instance, color)},
+            .location = num_quad_vertex_attrs + 1, .binding = 1, .format = VK_FORMAT_R32_UINT, .offset = offsetof(war_quad_instance, y)},
         (VkVertexInputAttributeDescription){
-            .location = num_quad_vertex_attrs + 3,
-            .binding = 1,
-            .format = VK_FORMAT_R32_UINT,
-            .offset = offsetof(war_quad_instance, flags)},
+            .location = num_quad_vertex_attrs + 2, .binding = 1, .format = VK_FORMAT_R32_UINT, .offset = offsetof(war_quad_instance, color)},
+        (VkVertexInputAttributeDescription){
+            .location = num_quad_vertex_attrs + 3, .binding = 1, .format = VK_FORMAT_R32_UINT, .offset = offsetof(war_quad_instance, flags)},
     };
     uint32_t num_quad_instance_attrs = 4;
     VkVertexInputAttributeDescription* all_attrs =
-        malloc(sizeof(VkVertexInputAttributeDescription) *
-               (num_quad_vertex_attrs + num_quad_instance_attrs));
-    memcpy(all_attrs,
-           quad_vertex_attrs,
-           sizeof(VkVertexInputAttributeDescription) * num_quad_vertex_attrs);
-    memcpy(all_attrs + num_quad_vertex_attrs,
-           quad_instance_attrs,
-           sizeof(VkVertexInputAttributeDescription) * num_quad_instance_attrs);
-    VkVertexInputBindingDescription all_bindings[] = {quad_vertex_binding,
-                                                      quad_instance_binding};
+        malloc(sizeof(VkVertexInputAttributeDescription) * (num_quad_vertex_attrs + num_quad_instance_attrs));
+    memcpy(all_attrs, quad_vertex_attrs, sizeof(VkVertexInputAttributeDescription) * num_quad_vertex_attrs);
+    memcpy(all_attrs + num_quad_vertex_attrs, quad_instance_attrs, sizeof(VkVertexInputAttributeDescription) * num_quad_instance_attrs);
+    VkVertexInputBindingDescription all_bindings[] = {quad_vertex_binding, quad_instance_binding};
     VkPipelineVertexInputStateCreateInfo quad_vertex_input = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 2,
         .pVertexBindingDescriptions = all_bindings,
-        .vertexAttributeDescriptionCount =
-            num_quad_instance_attrs + num_quad_vertex_attrs,
+        .vertexAttributeDescriptionCount = num_quad_instance_attrs + num_quad_vertex_attrs,
         .pVertexAttributeDescriptions = all_attrs,
     };
     VkViewport viewport = {
@@ -660,8 +587,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pVertexInputState = &quad_vertex_input,
         .pInputAssemblyState =
             &(VkPipelineInputAssemblyStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                 .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
             },
         .pViewportState =
@@ -675,8 +601,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pDepthStencilState = &depth_stencil,
         .pRasterizationState =
             &(VkPipelineRasterizationStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
                 .polygonMode = VK_POLYGON_MODE_FILL,
                 .cullMode = VK_CULL_MODE_NONE,
                 .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
@@ -684,36 +609,28 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             },
         .pMultisampleState =
             &(VkPipelineMultisampleStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
                 .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
             },
         .pColorBlendState =
             &(VkPipelineColorBlendStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                 .attachmentCount = 1,
                 .pAttachments =
                     (VkPipelineColorBlendAttachmentState[]){
                         {
-                            .blendEnable = VK_TRUE, // enable blending
-                            .srcColorBlendFactor =
-                                VK_BLEND_FACTOR_SRC_ALPHA, // source color
-                                                           // weight
-                            .dstColorBlendFactor =
-                                VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // dest
-                                                                     // color
-                                                                     // weight
-                            .colorBlendOp = VK_BLEND_OP_ADD, // combine src+dst
-                            .srcAlphaBlendFactor =
-                                VK_BLEND_FACTOR_ONE, // source alpha
-                            .dstAlphaBlendFactor =
-                                VK_BLEND_FACTOR_ZERO,        // dest alpha
-                            .alphaBlendOp = VK_BLEND_OP_ADD, // combine alpha
-                            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                              VK_COLOR_COMPONENT_G_BIT |
-                                              VK_COLOR_COMPONENT_B_BIT |
-                                              VK_COLOR_COMPONENT_A_BIT,
+                            .blendEnable = VK_TRUE,                                     // enable blending
+                            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,           // source color
+                                                                                        // weight
+                            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // dest
+                                                                                        // color
+                                                                                        // weight
+                            .colorBlendOp = VK_BLEND_OP_ADD,                            // combine src+dst
+                            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,                 // source alpha
+                            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,                // dest alpha
+                            .alphaBlendOp = VK_BLEND_OP_ADD,                            // combine alpha
+                            .colorWriteMask =
+                                VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
                         },
                     },
             },
@@ -723,8 +640,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pDynamicState = NULL,
     };
     VkPipeline pipeline;
-    result = vkCreateGraphicsPipelines(
-        device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
+    result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
     assert(result == VK_SUCCESS);
     VkImageMemoryBarrier barrier = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -753,28 +669,24 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .image = quad_depth_image, // <-- the depth VkImage you created
         .subresourceRange =
             {
-                .aspectMask =
-                    VK_IMAGE_ASPECT_DEPTH_BIT, // use DEPTH_BIT, add STENCIL_BIT
-                                               // if format has stencil
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, // use DEPTH_BIT, add STENCIL_BIT
+                                                         // if format has stencil
                 .baseMipLevel = 0,
                 .levelCount = 1,
                 .baseArrayLayer = 0,
                 .layerCount = 1,
             },
         .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
     };
     VkImageMemoryBarrier quad_barriers[2] = {barrier, quad_depth_barrier};
-    vkBeginCommandBuffer(
-        cmd_buffer,
-        &(VkCommandBufferBeginInfo){
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        });
+    vkBeginCommandBuffer(cmd_buffer,
+                         &(VkCommandBufferBeginInfo){
+                             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                         });
     vkCmdPipelineBarrier(cmd_buffer,
                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                          0,
                          0,
                          NULL,
@@ -798,10 +710,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     VkSemaphore image_available_semaphore;
     VkSemaphore render_finished_semaphore;
-    vkCreateSemaphore(
-        device, &semaphore_info, NULL, &image_available_semaphore);
-    vkCreateSemaphore(
-        device, &semaphore_info, NULL, &render_finished_semaphore);
+    vkCreateSemaphore(device, &semaphore_info, NULL, &image_available_semaphore);
+    vkCreateSemaphore(device, &semaphore_info, NULL, &render_finished_semaphore);
     VkFenceCreateInfo fence_info = {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
@@ -818,8 +728,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     VkBuffer quads_vertex_buffer;
-    result = vkCreateBuffer(
-        device, &quads_vertex_buffer_info, NULL, &quads_vertex_buffer);
+    result = vkCreateBuffer(device, &quads_vertex_buffer_info, NULL, &quads_vertex_buffer);
     assert(result == VK_SUCCESS);
     VkBufferCreateInfo quads_index_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -828,31 +737,25 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     VkBuffer quads_index_buffer;
-    result = vkCreateBuffer(
-        device, &quads_index_buffer_info, NULL, &quads_index_buffer);
+    result = vkCreateBuffer(device, &quads_index_buffer_info, NULL, &quads_index_buffer);
     assert(result == VK_SUCCESS);
     VkBufferCreateInfo quads_instance_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = max_quads * max_instances_per_quad * sizeof(war_quad_instance) *
-                max_frames,
+        .size = max_quads * max_instances_per_quad * sizeof(war_quad_instance) * max_frames,
         .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     VkBuffer quads_instance_buffer;
-    result = vkCreateBuffer(
-        device, &quads_instance_buffer_info, NULL, &quads_instance_buffer);
+    result = vkCreateBuffer(device, &quads_instance_buffer_info, NULL, &quads_instance_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements quads_vertex_mem_reqs;
-    vkGetBufferMemoryRequirements(
-        device, quads_vertex_buffer, &quads_vertex_mem_reqs);
+    vkGetBufferMemoryRequirements(device, quads_vertex_buffer, &quads_vertex_mem_reqs);
     uint32_t quads_vertex_memory_type_index = UINT32_MAX;
     VkPhysicalDeviceMemoryProperties quads_vertex_mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &quads_vertex_mem_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &quads_vertex_mem_properties);
     for (uint32_t i = 0; i < quads_vertex_mem_properties.memoryTypeCount; i++) {
         if ((quads_vertex_mem_reqs.memoryTypeBits & (1 << i)) &&
-            (quads_vertex_mem_properties.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            (quads_vertex_mem_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             quads_vertex_memory_type_index = i;
             break;
         }
@@ -864,23 +767,18 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = quads_vertex_memory_type_index,
     };
     VkDeviceMemory quads_vertex_buffer_memory;
-    result = vkAllocateMemory(
-        device, &quads_vertex_alloc_info, NULL, &quads_vertex_buffer_memory);
+    result = vkAllocateMemory(device, &quads_vertex_alloc_info, NULL, &quads_vertex_buffer_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindBufferMemory(
-        device, quads_vertex_buffer, quads_vertex_buffer_memory, 0);
+    result = vkBindBufferMemory(device, quads_vertex_buffer, quads_vertex_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements quads_index_mem_reqs;
-    vkGetBufferMemoryRequirements(
-        device, quads_index_buffer, &quads_index_mem_reqs);
+    vkGetBufferMemoryRequirements(device, quads_index_buffer, &quads_index_mem_reqs);
     uint32_t quads_index_memory_type_index = UINT32_MAX;
     VkPhysicalDeviceMemoryProperties quads_index_mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &quads_index_mem_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &quads_index_mem_properties);
     for (uint32_t i = 0; i < quads_index_mem_properties.memoryTypeCount; i++) {
         if ((quads_index_mem_reqs.memoryTypeBits & (1 << i)) &&
-            (quads_index_mem_properties.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            (quads_index_mem_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             quads_index_memory_type_index = i;
             break;
         }
@@ -892,24 +790,18 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = quads_index_memory_type_index,
     };
     VkDeviceMemory quads_index_buffer_memory;
-    result = vkAllocateMemory(
-        device, &quads_index_alloc_info, NULL, &quads_index_buffer_memory);
+    result = vkAllocateMemory(device, &quads_index_alloc_info, NULL, &quads_index_buffer_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindBufferMemory(
-        device, quads_index_buffer, quads_index_buffer_memory, 0);
+    result = vkBindBufferMemory(device, quads_index_buffer, quads_index_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements quads_instance_mem_reqs;
-    vkGetBufferMemoryRequirements(
-        device, quads_instance_buffer, &quads_instance_mem_reqs);
+    vkGetBufferMemoryRequirements(device, quads_instance_buffer, &quads_instance_mem_reqs);
     uint32_t quads_instance_memory_type_index = UINT32_MAX;
     VkPhysicalDeviceMemoryProperties quads_instance_mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &quads_instance_mem_properties);
-    for (uint32_t i = 0; i < quads_instance_mem_properties.memoryTypeCount;
-         i++) {
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &quads_instance_mem_properties);
+    for (uint32_t i = 0; i < quads_instance_mem_properties.memoryTypeCount; i++) {
         if ((quads_instance_mem_reqs.memoryTypeBits & (1 << i)) &&
-            (quads_instance_mem_properties.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            (quads_instance_mem_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             quads_instance_memory_type_index = i;
             break;
         }
@@ -921,13 +813,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = quads_instance_memory_type_index,
     };
     VkDeviceMemory quads_instance_buffer_memory;
-    result = vkAllocateMemory(device,
-                              &quads_instance_alloc_info,
-                              NULL,
-                              &quads_instance_buffer_memory);
+    result = vkAllocateMemory(device, &quads_instance_alloc_info, NULL, &quads_instance_buffer_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindBufferMemory(
-        device, quads_instance_buffer, quads_instance_buffer_memory, 0);
+    result = vkBindBufferMemory(device, quads_instance_buffer, quads_instance_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkImageCreateInfo texture_image_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -945,16 +833,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkImage texture_image;
     vkCreateImage(device, &texture_image_info, NULL, &texture_image);
     VkMemoryRequirements texture_image_mem_reqs;
-    vkGetImageMemoryRequirements(
-        device, texture_image, &texture_image_mem_reqs);
+    vkGetImageMemoryRequirements(device, texture_image, &texture_image_mem_reqs);
     VkPhysicalDeviceMemoryProperties texture_image_mem_props;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &texture_image_mem_props);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &texture_image_mem_props);
     uint32_t texture_image_memory_type_index = UINT32_MAX;
     for (uint32_t i = 0; i < texture_image_mem_props.memoryTypeCount; i++) {
         if ((texture_image_mem_reqs.memoryTypeBits & (1 << i)) &&
-            (texture_image_mem_props.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            (texture_image_mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
             texture_image_memory_type_index = i;
             break;
         }
@@ -966,8 +851,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = texture_image_memory_type_index,
     };
     VkDeviceMemory texture_memory;
-    result = vkAllocateMemory(
-        device, &texture_image_alloc_info, NULL, &texture_memory);
+    result = vkAllocateMemory(device, &texture_image_alloc_info, NULL, &texture_memory);
     assert(result == VK_SUCCESS);
     result = vkBindImageMemory(device, texture_image, texture_memory, 0);
     assert(result == VK_SUCCESS);
@@ -1019,8 +903,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .maxSets = 1,
     };
     VkDescriptorPool descriptor_pool;
-    vkCreateDescriptorPool(
-        device, &descriptor_pool_info, NULL, &descriptor_pool);
+    vkCreateDescriptorPool(device, &descriptor_pool_info, NULL, &descriptor_pool);
     VkDescriptorSetAllocateInfo alloc_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .descriptorPool = descriptor_pool,
@@ -1045,25 +928,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, NULL);
     void* quads_vertex_buffer_mapped;
-    vkMapMemory(device,
-                quads_vertex_buffer_memory,
-                0,
-                sizeof(war_quad_vertex) * max_quads * 4 * max_frames,
-                0,
-                &quads_vertex_buffer_mapped);
+    vkMapMemory(device, quads_vertex_buffer_memory, 0, sizeof(war_quad_vertex) * max_quads * 4 * max_frames, 0, &quads_vertex_buffer_mapped);
     void* quads_index_buffer_mapped;
-    vkMapMemory(device,
-                quads_index_buffer_memory,
-                0,
-                sizeof(uint16_t) * max_quads * 6 * max_frames,
-                0,
-                &quads_index_buffer_mapped);
+    vkMapMemory(device, quads_index_buffer_memory, 0, sizeof(uint16_t) * max_quads * 6 * max_frames, 0, &quads_index_buffer_mapped);
     void* quads_instance_buffer_mapped;
     vkMapMemory(device,
                 quads_instance_buffer_memory,
                 0,
-                sizeof(war_quad_instance) * max_quads * max_instances_per_quad *
-                    max_frames,
+                sizeof(war_quad_instance) * max_quads * max_instances_per_quad * max_frames,
                 0,
                 &quads_instance_buffer_mapped);
 
@@ -1074,8 +946,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     FT_Init_FreeType(&ft_library);
     FT_Face ft_regular;
     FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
-    float font_pixel_height = 69.0f;
-    FT_Set_Pixel_Sizes(ft_regular, 0, (int)font_pixel_height);
+    // font config
+    float font_pixel_height = atomic_load(&ctx_lua->VK_FONT_PIXEL_HEIGHT);
+    FT_Set_Pixel_Sizes(ft_regular, 0, (int)atomic_load(&ctx_lua->VK_FONT_PIXEL_HEIGHT));
     float ascent = ft_regular->size->metrics.ascender / 64.0f;
     float descent = ft_regular->size->metrics.descender / 64.0f;
     float cell_height = ft_regular->size->metrics.height / 64.0f;
@@ -1083,6 +956,8 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     float line_gap = cell_height - font_height;
     float baseline = ascent + line_gap / 2.0f;
     float cell_width = 0;
+    int atlas_width = atomic_load(&ctx_lua->VK_ATLAS_WIDTH);
+    int atlas_height = atomic_load(&ctx_lua->VK_ATLAS_HEIGHT);
     uint8_t* atlas_pixels = malloc(atlas_width * atlas_height);
     assert(atlas_pixels);
     war_glyph_info glyphs[128];
@@ -1102,10 +977,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             row_height = 0;
         }
         for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                atlas_pixels[(pen_x + x) + (pen_y + y) * atlas_width] =
-                    bmp->buffer[x + y * bmp->width];
-            }
+            for (int x = 0; x < w; x++) { atlas_pixels[(pen_x + x) + (pen_y + y) * atlas_width] = bmp->buffer[x + y * bmp->width]; }
         }
         glyphs[c].advance_x = ft_regular->glyph->advance.x / 64.0f;
         glyphs[c].advance_y = ft_regular->glyph->advance.y / 64.0f;
@@ -1118,8 +990,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         glyphs[c].uv_x1 = (float)(pen_x + w) / atlas_width;
         glyphs[c].uv_y1 = (float)(pen_y + h) / atlas_height;
         glyphs[c].ascent = ft_regular->glyph->metrics.horiBearingY / 64.0f;
-        glyphs[c].descent =
-            (ft_regular->glyph->metrics.height / 64.0f) - glyphs[c].ascent;
+        glyphs[c].descent = (ft_regular->glyph->metrics.height / 64.0f) - glyphs[c].ascent;
         pen_x += w + 1;
         if (h > row_height) { row_height = h; }
     }
@@ -1143,13 +1014,11 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     VkMemoryRequirements sdf_memory_requirements;
     vkGetImageMemoryRequirements(device, text_image, &sdf_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_image_memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &sdf_image_memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &sdf_image_memory_properties);
     uint32_t sdf_image_memory_type_index = UINT32_MAX;
     for (uint32_t i = 0; i < sdf_image_memory_properties.memoryTypeCount; i++) {
         if ((sdf_memory_requirements.memoryTypeBits & (1 << i)) &&
-            (sdf_image_memory_properties.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            (sdf_image_memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
             sdf_image_memory_type_index = i;
             break;
         }
@@ -1161,8 +1030,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = sdf_image_memory_type_index,
     };
     VkDeviceMemory text_image_memory;
-    result = vkAllocateMemory(
-        device, &sdf_image_allocate_info, NULL, &text_image_memory);
+    result = vkAllocateMemory(device, &sdf_image_allocate_info, NULL, &text_image_memory);
     assert(result == VK_SUCCESS);
     result = vkBindImageMemory(device, text_image, text_image_memory, 0);
     assert(result == VK_SUCCESS);
@@ -1214,17 +1082,13 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     vkCreateBuffer(device, &sdf_buffer_info, NULL, &sdf_staging_buffer);
     VkMemoryRequirements sdf_buffer_memory_requirements;
-    vkGetBufferMemoryRequirements(
-        device, sdf_staging_buffer, &sdf_buffer_memory_requirements);
+    vkGetBufferMemoryRequirements(device, sdf_staging_buffer, &sdf_buffer_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_buffer_memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &sdf_buffer_memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &sdf_buffer_memory_properties);
     uint32_t sdf_buffer_memory_type = UINT32_MAX;
-    for (uint32_t i = 0; i < sdf_buffer_memory_properties.memoryTypeCount;
-         i++) {
+    for (uint32_t i = 0; i < sdf_buffer_memory_properties.memoryTypeCount; i++) {
         if ((sdf_buffer_memory_requirements.memoryTypeBits & (1 << i)) &&
-            (sdf_buffer_memory_properties.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            (sdf_buffer_memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             sdf_buffer_memory_type = i;
             break;
         }
@@ -1235,19 +1099,12 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .allocationSize = sdf_buffer_memory_requirements.size,
         .memoryTypeIndex = sdf_buffer_memory_type,
     };
-    result = vkAllocateMemory(
-        device, &sdf_buffer_allocate_info, NULL, &sdf_staging_buffer_memory);
+    result = vkAllocateMemory(device, &sdf_buffer_allocate_info, NULL, &sdf_staging_buffer_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindBufferMemory(
-        device, sdf_staging_buffer, sdf_staging_buffer_memory, 0);
+    result = vkBindBufferMemory(device, sdf_staging_buffer, sdf_staging_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     void* sdf_buffer_data;
-    vkMapMemory(device,
-                sdf_staging_buffer_memory,
-                0,
-                sdf_image_size,
-                0,
-                &sdf_buffer_data);
+    vkMapMemory(device, sdf_staging_buffer_memory, 0, sdf_image_size, 0, &sdf_buffer_data);
     memcpy(sdf_buffer_data, atlas_pixels, (size_t)sdf_image_size);
     vkUnmapMemory(device, sdf_staging_buffer_memory);
     VkCommandBufferAllocateInfo sdf_command_buffer_allocate_info = {
@@ -1257,8 +1114,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .commandBufferCount = 1,
     };
     VkCommandBuffer sdf_copy_command_buffer;
-    vkAllocateCommandBuffers(
-        device, &sdf_command_buffer_allocate_info, &sdf_copy_command_buffer);
+    vkAllocateCommandBuffers(device, &sdf_command_buffer_allocate_info, &sdf_copy_command_buffer);
     VkCommandBufferBeginInfo sdf_begin_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -1311,12 +1167,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
                 .depth = 1,
             },
     };
-    vkCmdCopyBufferToImage(sdf_copy_command_buffer,
-                           sdf_staging_buffer,
-                           text_image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           1,
-                           &sdf_region);
+    vkCmdCopyBufferToImage(sdf_copy_command_buffer, sdf_staging_buffer, text_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &sdf_region);
     VkImageMemoryBarrier barrier_to_shader_read = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -1368,8 +1219,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pBindings = &sdf_binding,
     };
     VkDescriptorSetLayout font_descriptor_set_layout;
-    vkCreateDescriptorSetLayout(
-        device, &sdf_layout_info, NULL, &font_descriptor_set_layout);
+    vkCreateDescriptorSetLayout(device, &sdf_layout_info, NULL, &font_descriptor_set_layout);
     VkDescriptorPoolSize sdf_pool_size = {
         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 1,
@@ -1389,8 +1239,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pSetLayouts = &font_descriptor_set_layout,
     };
     VkDescriptorSet font_descriptor_set;
-    vkAllocateDescriptorSets(
-        device, &sdf_descriptor_set_allocate_info, &font_descriptor_set);
+    vkAllocateDescriptorSets(device, &sdf_descriptor_set_allocate_info, &font_descriptor_set);
     VkDescriptorImageInfo sdf_descriptor_info = {
         .sampler = text_sampler,
         .imageView = text_image_view,
@@ -1412,21 +1261,16 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     fseek(sdf_vertex_spv, 0, SEEK_END);
     long sdf_vertex_size = ftell(sdf_vertex_spv);
     fseek(sdf_vertex_spv, 0, SEEK_SET);
-    assert(sdf_vertex_size > 0 &&
-           (sdf_vertex_size % 4 == 0)); // SPIR-V is 4-byte aligned
+    assert(sdf_vertex_size > 0 && (sdf_vertex_size % 4 == 0)); // SPIR-V is 4-byte aligned
     sdf_vertex_code = malloc(sdf_vertex_size);
     assert(sdf_vertex_code);
-    size_t sdf_vertex_spv_read =
-        fread(sdf_vertex_code, 1, sdf_vertex_size, sdf_vertex_spv);
+    size_t sdf_vertex_spv_read = fread(sdf_vertex_code, 1, sdf_vertex_size, sdf_vertex_spv);
     assert(sdf_vertex_spv_read == (size_t)sdf_vertex_size);
     fclose(sdf_vertex_spv);
     VkShaderModuleCreateInfo sdf_vertex_shader_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sdf_vertex_size,
-        .pCode = sdf_vertex_code};
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = sdf_vertex_size, .pCode = sdf_vertex_code};
     VkShaderModule text_vertex_shader;
-    result = vkCreateShaderModule(
-        device, &sdf_vertex_shader_info, NULL, &text_vertex_shader);
+    result = vkCreateShaderModule(device, &sdf_vertex_shader_info, NULL, &text_vertex_shader);
     assert(result == VK_SUCCESS);
     free(sdf_vertex_code);
     uint32_t* sdf_fragment_code;
@@ -1436,21 +1280,16 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     fseek(sdf_fragment_spv, 0, SEEK_END);
     long sdf_fragment_size = ftell(sdf_fragment_spv);
     fseek(sdf_fragment_spv, 0, SEEK_SET);
-    assert(sdf_fragment_size > 0 &&
-           (sdf_fragment_size % 4 == 0)); // SPIR-V is 4-byte aligned
+    assert(sdf_fragment_size > 0 && (sdf_fragment_size % 4 == 0)); // SPIR-V is 4-byte aligned
     sdf_fragment_code = malloc(sdf_fragment_size);
     assert(sdf_fragment_code);
-    size_t sdf_fragment_spv_read =
-        fread(sdf_fragment_code, 1, sdf_fragment_size, sdf_fragment_spv);
+    size_t sdf_fragment_spv_read = fread(sdf_fragment_code, 1, sdf_fragment_size, sdf_fragment_spv);
     assert(sdf_fragment_spv_read == (size_t)sdf_fragment_size);
     fclose(sdf_fragment_spv);
     VkShaderModuleCreateInfo sdf_fragment_shader_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = sdf_fragment_size,
-        .pCode = sdf_fragment_code};
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = sdf_fragment_size, .pCode = sdf_fragment_code};
     VkShaderModule text_fragment_shader;
-    result = vkCreateShaderModule(
-        device, &sdf_fragment_shader_info, NULL, &text_fragment_shader);
+    result = vkCreateShaderModule(device, &sdf_fragment_shader_info, NULL, &text_fragment_shader);
     assert(result == VK_SUCCESS);
     free(sdf_fragment_code);
     VkPushConstantRange text_push_constant_range = {
@@ -1466,8 +1305,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pPushConstantRanges = &text_push_constant_range,
     };
     VkPipelineLayout text_pipeline_layout;
-    result = vkCreatePipelineLayout(
-        device, &sdf_pipeline_layout_info, NULL, &text_pipeline_layout);
+    result = vkCreatePipelineLayout(device, &sdf_pipeline_layout_info, NULL, &text_pipeline_layout);
     assert(result == VK_SUCCESS);
     VkPipelineShaderStageCreateInfo sdf_shader_stages[] = {
         {
@@ -1483,32 +1321,24 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             .pName = "main",
         },
     };
-    VkDeviceSize sdf_vertex_buffer_size =
-        sizeof(war_text_vertex) * max_text_quads * 4 * max_frames;
+    VkDeviceSize sdf_vertex_buffer_size = sizeof(war_text_vertex) * max_text_quads * 4 * max_frames;
     VkBufferCreateInfo sdf_vertex_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_vertex_buffer_size,
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     VkBuffer text_vertex_buffer;
-    result = vkCreateBuffer(
-        device, &sdf_vertex_buffer_info, NULL, &text_vertex_buffer);
+    result = vkCreateBuffer(device, &sdf_vertex_buffer_info, NULL, &text_vertex_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements sdf_vertex_buffer_memory_requirements;
-    vkGetBufferMemoryRequirements(
-        device, text_vertex_buffer, &sdf_vertex_buffer_memory_requirements);
+    vkGetBufferMemoryRequirements(device, text_vertex_buffer, &sdf_vertex_buffer_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_vertex_buffer_memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &sdf_vertex_buffer_memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &sdf_vertex_buffer_memory_properties);
     uint32_t sdf_vertex_buffer_memory_type = UINT32_MAX;
-    for (uint32_t i = 0;
-         i < sdf_vertex_buffer_memory_properties.memoryTypeCount;
-         i++) {
+    for (uint32_t i = 0; i < sdf_vertex_buffer_memory_properties.memoryTypeCount; i++) {
         if ((sdf_vertex_buffer_memory_requirements.memoryTypeBits & (1 << i)) &&
-            (sdf_vertex_buffer_memory_properties.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            (sdf_vertex_buffer_memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             sdf_vertex_buffer_memory_type = i;
             break;
         }
@@ -1520,39 +1350,28 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = sdf_vertex_buffer_memory_type,
     };
     VkDeviceMemory text_vertex_buffer_memory;
-    result = vkAllocateMemory(device,
-                              &sdf_vertex_buffer_allocate_info,
-                              NULL,
-                              &text_vertex_buffer_memory);
+    result = vkAllocateMemory(device, &sdf_vertex_buffer_allocate_info, NULL, &text_vertex_buffer_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindBufferMemory(
-        device, text_vertex_buffer, text_vertex_buffer_memory, 0);
+    result = vkBindBufferMemory(device, text_vertex_buffer, text_vertex_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-    VkDeviceSize sdf_index_buffer_size =
-        sizeof(uint16_t) * max_text_quads * 6 * max_frames;
+    VkDeviceSize sdf_index_buffer_size = sizeof(uint16_t) * max_text_quads * 6 * max_frames;
     VkBufferCreateInfo sdf_index_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_index_buffer_size,
-        .usage =
-            VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     VkBuffer text_index_buffer;
-    result = vkCreateBuffer(
-        device, &sdf_index_buffer_info, NULL, &text_index_buffer);
+    result = vkCreateBuffer(device, &sdf_index_buffer_info, NULL, &text_index_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements sdf_index_buffer_memory_requirements;
-    vkGetBufferMemoryRequirements(
-        device, text_index_buffer, &sdf_index_buffer_memory_requirements);
+    vkGetBufferMemoryRequirements(device, text_index_buffer, &sdf_index_buffer_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_index_buffer_memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &sdf_index_buffer_memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &sdf_index_buffer_memory_properties);
     uint32_t sdf_index_buffer_memory_type = UINT32_MAX;
-    for (uint32_t i = 0; i < sdf_index_buffer_memory_properties.memoryTypeCount;
-         i++) {
+    for (uint32_t i = 0; i < sdf_index_buffer_memory_properties.memoryTypeCount; i++) {
         if ((sdf_index_buffer_memory_requirements.memoryTypeBits & (1 << i)) &&
-            (sdf_index_buffer_memory_properties.memoryTypes[i].propertyFlags &
-             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+            (sdf_index_buffer_memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             sdf_index_buffer_memory_type = i;
             break;
         }
@@ -1564,43 +1383,28 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = sdf_index_buffer_memory_type,
     };
     VkDeviceMemory text_index_buffer_memory;
-    result = vkAllocateMemory(device,
-                              &sdf_index_buffer_allocate_info,
-                              NULL,
-                              &text_index_buffer_memory);
+    result = vkAllocateMemory(device, &sdf_index_buffer_allocate_info, NULL, &text_index_buffer_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindBufferMemory(
-        device, text_index_buffer, text_index_buffer_memory, 0);
+    result = vkBindBufferMemory(device, text_index_buffer, text_index_buffer_memory, 0);
     assert(result == VK_SUCCESS);
-    VkDeviceSize sdf_instance_buffer_size =
-        sizeof(war_text_instance) * max_text_quads *
-        max_instances_per_sdf_quad * max_frames;
+    VkDeviceSize sdf_instance_buffer_size = sizeof(war_text_instance) * max_text_quads * max_instances_per_sdf_quad * max_frames;
     VkBufferCreateInfo sdf_instance_buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = sdf_instance_buffer_size,
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     VkBuffer text_instance_buffer;
-    result = vkCreateBuffer(
-        device, &sdf_instance_buffer_info, NULL, &text_instance_buffer);
+    result = vkCreateBuffer(device, &sdf_instance_buffer_info, NULL, &text_instance_buffer);
     assert(result == VK_SUCCESS);
     VkMemoryRequirements sdf_instance_buffer_memory_requirements;
-    vkGetBufferMemoryRequirements(
-        device, text_instance_buffer, &sdf_instance_buffer_memory_requirements);
+    vkGetBufferMemoryRequirements(device, text_instance_buffer, &sdf_instance_buffer_memory_requirements);
     VkPhysicalDeviceMemoryProperties sdf_instance_buffer_memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(physical_device,
-                                        &sdf_instance_buffer_memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &sdf_instance_buffer_memory_properties);
     uint32_t sdf_instance_buffer_memory_type = UINT32_MAX;
-    for (uint32_t i = 0;
-         i < sdf_instance_buffer_memory_properties.memoryTypeCount;
-         i++) {
-        if ((sdf_instance_buffer_memory_requirements.memoryTypeBits &
-             (1 << i)) &&
-            (sdf_instance_buffer_memory_properties.memoryTypes[i]
-                 .propertyFlags &
-             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+    for (uint32_t i = 0; i < sdf_instance_buffer_memory_properties.memoryTypeCount; i++) {
+        if ((sdf_instance_buffer_memory_requirements.memoryTypeBits & (1 << i)) &&
+            (sdf_instance_buffer_memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
             sdf_instance_buffer_memory_type = i;
             break;
         }
@@ -1612,13 +1416,9 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .memoryTypeIndex = sdf_instance_buffer_memory_type,
     };
     VkDeviceMemory text_instance_buffer_memory;
-    result = vkAllocateMemory(device,
-                              &sdf_instance_buffer_allocate_info,
-                              NULL,
-                              &text_instance_buffer_memory);
+    result = vkAllocateMemory(device, &sdf_instance_buffer_allocate_info, NULL, &text_instance_buffer_memory);
     assert(result == VK_SUCCESS);
-    result = vkBindBufferMemory(
-        device, text_instance_buffer, text_instance_buffer_memory, 0);
+    result = vkBindBufferMemory(device, text_instance_buffer, text_instance_buffer_memory, 0);
     assert(result == VK_SUCCESS);
     VkVertexInputBindingDescription sdf_vertex_binding_desc = {
         .binding = 0,
@@ -1635,10 +1435,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(war_text_vertex, pos)},
         {2, 0, VK_FORMAT_R8G8B8A8_UNORM, offsetof(war_text_vertex, color)},
         {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, uv)},
-        {4,
-         0,
-         VK_FORMAT_R32G32_SFLOAT,
-         offsetof(war_text_vertex, glyph_bearing)},
+        {4, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, glyph_bearing)},
         {5, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(war_text_vertex, glyph_size)},
         {6, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, ascent)},
         {7, 0, VK_FORMAT_R32_SFLOAT, offsetof(war_text_vertex, descent)},
@@ -1648,57 +1445,26 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
     };
     uint32_t num_sdf_vertex_attrs = 11;
     VkVertexInputAttributeDescription sdf_instance_attribute_descs[] = {
-        {num_sdf_vertex_attrs,
-         1,
-         VK_FORMAT_R32G32_UINT,
-         offsetof(war_text_instance, x)},
-        {num_sdf_vertex_attrs + 1,
-         1,
-         VK_FORMAT_R32G32_UINT,
-         offsetof(war_text_instance, y)},
-        {num_sdf_vertex_attrs + 2,
-         1,
-         VK_FORMAT_R8G8B8A8_UINT,
-         offsetof(war_text_instance, color)},
-        {num_sdf_vertex_attrs + 3,
-         1,
-         VK_FORMAT_R32_SFLOAT,
-         offsetof(war_text_instance, uv_x)},
-        {num_sdf_vertex_attrs + 4,
-         1,
-         VK_FORMAT_R32_SFLOAT,
-         offsetof(war_text_instance, uv_y)},
-        {num_sdf_vertex_attrs + 5,
-         1,
-         VK_FORMAT_R32_SFLOAT,
-         offsetof(war_text_instance, thickness)},
-        {num_sdf_vertex_attrs + 6,
-         1,
-         VK_FORMAT_R32_SFLOAT,
-         offsetof(war_text_instance, feather)},
-        {num_sdf_vertex_attrs + 7,
-         1,
-         VK_FORMAT_R32G32_UINT,
-         offsetof(war_text_instance, flags)},
+        {num_sdf_vertex_attrs, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, x)},
+        {num_sdf_vertex_attrs + 1, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, y)},
+        {num_sdf_vertex_attrs + 2, 1, VK_FORMAT_R8G8B8A8_UINT, offsetof(war_text_instance, color)},
+        {num_sdf_vertex_attrs + 3, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, uv_x)},
+        {num_sdf_vertex_attrs + 4, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, uv_y)},
+        {num_sdf_vertex_attrs + 5, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, thickness)},
+        {num_sdf_vertex_attrs + 6, 1, VK_FORMAT_R32_SFLOAT, offsetof(war_text_instance, feather)},
+        {num_sdf_vertex_attrs + 7, 1, VK_FORMAT_R32G32_UINT, offsetof(war_text_instance, flags)},
     };
     uint32_t num_sdf_instance_attrs = 8;
     VkVertexInputAttributeDescription* sdf_all_attrs =
-        malloc((num_sdf_vertex_attrs + num_sdf_instance_attrs) *
-               sizeof(VkVertexInputAttributeDescription));
-    memcpy(sdf_all_attrs,
-           sdf_vertex_attribute_descs,
-           sizeof(sdf_vertex_attribute_descs));
-    memcpy(sdf_all_attrs + num_sdf_vertex_attrs,
-           sdf_instance_attribute_descs,
-           sizeof(sdf_instance_attribute_descs));
-    VkVertexInputBindingDescription sdf_all_bindings[] = {
-        sdf_vertex_binding_desc, sdf_instance_binding_desc};
+        malloc((num_sdf_vertex_attrs + num_sdf_instance_attrs) * sizeof(VkVertexInputAttributeDescription));
+    memcpy(sdf_all_attrs, sdf_vertex_attribute_descs, sizeof(sdf_vertex_attribute_descs));
+    memcpy(sdf_all_attrs + num_sdf_vertex_attrs, sdf_instance_attribute_descs, sizeof(sdf_instance_attribute_descs));
+    VkVertexInputBindingDescription sdf_all_bindings[] = {sdf_vertex_binding_desc, sdf_instance_binding_desc};
     VkPipelineVertexInputStateCreateInfo sdf_vertex_input_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = 2,
         .pVertexBindingDescriptions = sdf_all_bindings,
-        .vertexAttributeDescriptionCount =
-            num_sdf_vertex_attrs + num_sdf_instance_attrs,
+        .vertexAttributeDescriptionCount = num_sdf_vertex_attrs + num_sdf_instance_attrs,
         .pVertexAttributeDescriptions = sdf_all_attrs,
     };
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {
@@ -1748,16 +1514,14 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
     };
     VkPipelineColorBlendAttachmentState color_blend_attachment = {
-        .blendEnable = VK_TRUE,                           // enable blending
-        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA, // source color weight
-        .dstColorBlendFactor =
-            VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,     // dest color weight
-        .colorBlendOp = VK_BLEND_OP_ADD,             // combine src+dst
-        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,  // source alpha
-        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO, // dest alpha
-        .alphaBlendOp = VK_BLEND_OP_ADD,             // combine alpha
-        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+        .blendEnable = VK_TRUE,                                     // enable blending
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,           // source color weight
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // dest color weight
+        .colorBlendOp = VK_BLEND_OP_ADD,                            // combine src+dst
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,                 // source alpha
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,                // dest alpha
+        .alphaBlendOp = VK_BLEND_OP_ADD,                            // combine alpha
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
     };
     VkPipelineColorBlendStateCreateInfo color_blending = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -1785,8 +1549,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pColorAttachments = &sdf_color_attachment_ref,
         .pDepthStencilAttachment = &quad_depth_ref,
     };
-    VkAttachmentDescription sdf_attachments[2] = {sdf_color_attachment,
-                                                  quad_depth_attachment};
+    VkAttachmentDescription sdf_attachments[2] = {sdf_color_attachment, quad_depth_attachment};
     VkRenderPassCreateInfo sdf_render_pass_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = 2,
@@ -1795,8 +1558,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pSubpasses = &sdf_subpass,
     };
     VkRenderPass text_render_pass;
-    result = vkCreateRenderPass(
-        device, &sdf_render_pass_info, NULL, &text_render_pass);
+    result = vkCreateRenderPass(device, &sdf_render_pass_info, NULL, &text_render_pass);
     assert(result == VK_SUCCESS);
     VkGraphicsPipelineCreateInfo sdf_pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -1824,31 +1586,20 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .basePipelineIndex = -1,
     };
     VkPipeline text_pipeline;
-    result = vkCreateGraphicsPipelines(
-        device, VK_NULL_HANDLE, 1, &sdf_pipeline_info, NULL, &text_pipeline);
+    result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &sdf_pipeline_info, NULL, &text_pipeline);
     assert(result == VK_SUCCESS);
     war_glyph_info* heap_glyphs = malloc(sizeof(war_glyph_info) * 128);
     memcpy(heap_glyphs, glyphs, sizeof(war_glyph_info) * 128);
     void* text_vertex_buffer_mapped;
-    vkMapMemory(device,
-                text_vertex_buffer_memory,
-                0,
-                sizeof(war_text_vertex) * max_text_quads * 4 * max_frames,
-                0,
-                &text_vertex_buffer_mapped);
+    vkMapMemory(
+        device, text_vertex_buffer_memory, 0, sizeof(war_text_vertex) * max_text_quads * 4 * max_frames, 0, &text_vertex_buffer_mapped);
     void* text_index_buffer_mapped;
-    vkMapMemory(device,
-                text_index_buffer_memory,
-                0,
-                sizeof(uint16_t) * max_text_quads * 6 * max_frames,
-                0,
-                &text_index_buffer_mapped);
+    vkMapMemory(device, text_index_buffer_memory, 0, sizeof(uint16_t) * max_text_quads * 6 * max_frames, 0, &text_index_buffer_mapped);
     void* text_instance_buffer_mapped;
     vkMapMemory(device,
                 text_instance_buffer_memory,
                 0,
-                sizeof(war_text_instance) * max_text_quads *
-                    max_instances_per_sdf_quad * max_frames,
+                sizeof(war_text_instance) * max_text_quads * max_instances_per_sdf_quad * max_frames,
                 0,
                 &text_instance_buffer_mapped);
 
@@ -1866,8 +1617,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pVertexInputState = &quad_vertex_input,
         .pInputAssemblyState =
             &(VkPipelineInputAssemblyStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                 .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
             },
         .pViewportState =
@@ -1881,8 +1631,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pDepthStencilState = &transparent_depth_stencil,
         .pRasterizationState =
             &(VkPipelineRasterizationStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
                 .polygonMode = VK_POLYGON_MODE_FILL,
                 .cullMode = VK_CULL_MODE_NONE,
                 .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
@@ -1890,36 +1639,28 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
             },
         .pMultisampleState =
             &(VkPipelineMultisampleStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
                 .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
             },
         .pColorBlendState =
             &(VkPipelineColorBlendStateCreateInfo){
-                .sType =
-                    VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                 .attachmentCount = 1,
                 .pAttachments =
                     (VkPipelineColorBlendAttachmentState[]){
                         {
-                            .blendEnable = VK_TRUE, // enable blending
-                            .srcColorBlendFactor =
-                                VK_BLEND_FACTOR_SRC_ALPHA, // source color
-                                                           // weight
-                            .dstColorBlendFactor =
-                                VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // dest
-                                                                     // color
-                                                                     // weight
-                            .colorBlendOp = VK_BLEND_OP_ADD, // combine src+dst
-                            .srcAlphaBlendFactor =
-                                VK_BLEND_FACTOR_ONE, // source alpha
-                            .dstAlphaBlendFactor =
-                                VK_BLEND_FACTOR_ZERO,        // dest alpha
-                            .alphaBlendOp = VK_BLEND_OP_ADD, // combine alpha
-                            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                              VK_COLOR_COMPONENT_G_BIT |
-                                              VK_COLOR_COMPONENT_B_BIT |
-                                              VK_COLOR_COMPONENT_A_BIT,
+                            .blendEnable = VK_TRUE,                                     // enable blending
+                            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,           // source color
+                                                                                        // weight
+                            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, // dest
+                                                                                        // color
+                                                                                        // weight
+                            .colorBlendOp = VK_BLEND_OP_ADD,                            // combine src+dst
+                            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,                 // source alpha
+                            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,                // dest alpha
+                            .alphaBlendOp = VK_BLEND_OP_ADD,                            // combine alpha
+                            .colorWriteMask =
+                                VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
                         },
                     },
             },
@@ -1929,12 +1670,7 @@ war_vulkan_context war_vulkan_init(uint32_t width, uint32_t height) {
         .pDynamicState = NULL,
     };
     VkPipeline transparent_quad_pipeline;
-    result = vkCreateGraphicsPipelines(device,
-                                       VK_NULL_HANDLE,
-                                       1,
-                                       &transparent_quad_pipeline_info,
-                                       NULL,
-                                       &transparent_quad_pipeline);
+    result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &transparent_quad_pipeline_info, NULL, &transparent_quad_pipeline);
     assert(result == VK_SUCCESS);
 
     return (war_vulkan_context){

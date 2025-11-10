@@ -15,6 +15,9 @@ build.zig
 /build/
 .cache/
 
+# tmp
+/sounds/
+
 # neovim swap and backup files
 *.swp
 *.swo

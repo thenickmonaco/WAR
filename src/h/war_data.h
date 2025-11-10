@@ -61,6 +61,9 @@ enum war_keysyms {
     KEYSYM_SEMICOLON = 267,
     KEYSYM_PLUS = 268,
     KEYSYM_EQUAL = 269,
+    KEYSYM_BACKSPACE = 270,
+    KEYSYM_APOSTROPHE = 271,
+    KEYSYM_COMMA = 272,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -85,9 +88,10 @@ enum war_misc {
     MAX_GRIDLINE_SPLITS = 4,
     MAX_VIEWS_SAVED = 13,
     MAX_WARPOON_TEXT_COLS = 25,
-    atlas_width = 8192,
-    atlas_height = 8192,
     MAX_STATUS_BAR_COLS = 200,
+    PROMPT_LAYER = 1,
+    PROMPT_NOTE = 2,
+    PROMPT_NAME = 3,
 };
 
 enum war_layers {
@@ -160,6 +164,28 @@ enum war_undo_commands_enum {
     CMD_ADD_NOTES_SAME = 6,
     CMD_DELETE_NOTES_SAME = 7,
 };
+
+typedef struct war_riff_header {
+    char chunk_id[4];
+    uint32_t chunk_size;
+    char format[4];
+} war_riff_header;
+
+typedef struct war_fmt_chunk {
+    char subchunk1_id[4];
+    uint32_t subchunk1_size;
+    uint16_t audio_format;
+    uint16_t num_channels;
+    uint32_t sample_rate;
+    uint32_t byte_rate;
+    uint16_t block_align;
+    uint16_t bits_per_sample;
+} war_fmt_chunk;
+
+typedef struct war_data_chunk {
+    char subchunk2_id[4];
+    uint32_t subchunk2_size;
+} war_data_chunk;
 
 typedef struct war_notes {
     uint8_t* alive;
@@ -318,7 +344,8 @@ typedef struct war_lua_context {
     _Atomic double A_SAMPLE_DURATION;
     _Atomic int A_CHANNEL_COUNT;
     _Atomic int A_NOTE_COUNT;
-    _Atomic int A_SAMPLES_PER_NOTE;
+    _Atomic int A_LAYER_COUNT;
+    _Atomic int A_LAYERS_IN_RAM;
     _Atomic double A_BPM;
     _Atomic int A_BASE_FREQUENCY;
     _Atomic int A_BASE_NOTE;
@@ -329,6 +356,10 @@ typedef struct war_lua_context {
     _Atomic float A_DEFAULT_RELEASE;
     _Atomic float A_DEFAULT_GAIN;
     _Atomic double A_DEFAULT_COLUMNS_PER_BEAT;
+    _Atomic int A_USERDATA;
+    _Atomic int A_CACHE_SIZE;
+    _Atomic int A_PATH_LIMIT;
+    _Atomic int A_WARMUP_FRAMES_FACTOR;
     // window render
     _Atomic int WR_VIEWS_SAVED;
     _Atomic int WR_WARPOON_TEXT_COLS;
@@ -354,12 +385,27 @@ typedef struct war_lua_context {
     _Atomic int WR_CURSOR_BLINK_DURATION_US;
     _Atomic double WR_FPS;
     _Atomic int WR_UNDO_NOTES_BATCH_MAX;
+    _Atomic int WR_INPUT_SEQUENCE_LENGTH_MAX;
     // pool
     _Atomic int POOL_ALIGNMENT;
     // cmd
     _Atomic int CMD_COUNT;
     // pc
     _Atomic int PC_BUFFER_SIZE;
+    // vk
+    _Atomic int VK_ATLAS_WIDTH;
+    _Atomic int VK_ATLAS_HEIGHT;
+    _Atomic float VK_FONT_PIXEL_HEIGHT;
+    // misc
+    _Atomic float DEFAULT_ALPHA_SCALE;
+    _Atomic float DEFAULT_CURSOR_ALPHA_SCALE;
+    _Atomic float DEFAULT_PLAYBACK_BAR_THICKNESS;
+    _Atomic float DEFAULT_TEXT_FEATHER;
+    _Atomic float DEFAULT_TEXT_THICKNESS;
+    _Atomic float WINDOWED_TEXT_FEATHER;
+    _Atomic float WINDOWED_TEXT_THICKNESS;
+    _Atomic float DEFAULT_WINDOWED_ALPHA_SCALE;
+    _Atomic float DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE;
 } war_lua_context;
 
 typedef struct war_fsm_state {
@@ -434,7 +480,6 @@ enum war_audio {
     AUDIO_DEFAULT_BPM = 100,
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
     AUDIO_DEFAULT_SAMPLE_DURATION = 30,
-    AUDIO_DEFAULT_WARMUP_FRAMES_FACTOR = 800,
     // cmds
     AUDIO_CMD_STOP = 1,
     AUDIO_CMD_PLAY = 2,
@@ -487,6 +532,7 @@ typedef struct war_atomics {
     _Atomic uint8_t play;
     _Atomic float bpm;
     _Atomic int16_t map_note;
+    _Atomic int16_t layer;
     _Atomic uint8_t map;
     _Atomic uint8_t record_monitor;
     _Atomic float play_gain;
@@ -518,28 +564,13 @@ typedef struct war_pool {
     size_t pool_alignment;
 } war_pool;
 
-typedef struct war_samples {
-    int16_t** samples;
-    uint64_t* samples_frames_start;
-    uint64_t* samples_frames_duration;
-    uint64_t* samples_frames;
-    uint64_t* samples_frames_trim_start;
-    uint64_t* samples_frames_trim_end;
-    uint8_t* samples_active;
-    float* samples_attack;
-    float* samples_sustain;
-    float* samples_release;
-    float* samples_gain;
-    float* notes_attack;
-    float* notes_sustain;
-    float* notes_release;
-    float* notes_gain;
-    uint64_t* notes_frames_start;
-    uint64_t* notes_frames_duration;
-    uint64_t* notes_frames_trim_start;
-    uint64_t* notes_frames_trim_end;
-    uint32_t* samples_count;
-} war_samples;
+typedef struct war_cache {
+    char* path;
+    int16_t* note;
+    int16_t* layer;
+    int16_t* sample;
+    uint32_t write_index;
+} war_cache;
 
 typedef struct war_audio_context {
     double BPM;
@@ -640,7 +671,7 @@ typedef struct war_window_render_context {
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
     uint32_t mode;
-    char input_sequence[MAX_SEQUENCE_LENGTH];
+    char* input_sequence;
     uint8_t num_chars_in_sequence;
     war_note_quads note_quads;
     float layers[LAYER_COUNT];
@@ -694,6 +725,9 @@ typedef struct war_window_render_context {
     float midi_note;
     bool midi_toggle;
     bool skip_release;
+    uint8_t prompt;
+    uint32_t num_chars_in_prompt;
+    uint32_t cursor_pos_x_command_mode;
 } war_window_render_context;
 
 enum war_producer_consumer_enum {

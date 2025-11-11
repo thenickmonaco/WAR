@@ -165,6 +165,21 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
 
 #undef LOAD_DOUBLE
 
+#define LOAD_STRING(field)                                                                                                                    \
+    lua_getfield(L, -1, #field);                                                                                                              \
+    if (lua_isstring(L, -1)) {                                                                                                                \
+        char* str = strdup(lua_tostring(L, -1));                                                                                              \
+        if (str) {                                                                                                                            \
+            atomic_store(&ctx_lua->field, str);                                                                                               \
+            call_carmack("ctx_lua: %s = %s", #field, atomic_load(&ctx_lua->field));                                                           \
+        }                                                                                                                                     \
+    }                                                                                                                                         \
+    lua_pop(L, 1);
+
+    LOAD_STRING(CWD)
+
+#undef LOAD_STRING
+
     lua_close(L);
     return 0;
 }
@@ -219,8 +234,10 @@ static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lu
                 type_size = sizeof(void*);
             else if (strcmp(type, "war_audio_context") == 0)
                 type_size = sizeof(war_audio_context);
-            else if (strcmp(type, "war_cache") == 0)
-                type_size = sizeof(war_cache);
+            else if (strcmp(type, "war_cache_audio") == 0)
+                type_size = sizeof(war_cache_audio);
+            else if (strcmp(type, "war_sequencer") == 0)
+                type_size = sizeof(war_cache_audio);
             else if (strcmp(type, "char*") == 0)
                 type_size = sizeof(char*);
             else if (strcmp(type, "char") == 0)
@@ -233,6 +250,16 @@ static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lu
                 type_size = sizeof(int16_t**);
             else if (strcmp(type, "uint32_t") == 0)
                 type_size = sizeof(uint32_t);
+            else if (strcmp(type, "int") == 0)
+                type_size = sizeof(int);
+            else if (strcmp(type, "size_t") == 0)
+                type_size = sizeof(size_t);
+            else if (strcmp(type, "war_riff_header") == 0)
+                type_size = sizeof(war_riff_header);
+            else if (strcmp(type, "war_fmt_chunk") == 0)
+                type_size = sizeof(war_fmt_chunk);
+            else if (strcmp(type, "war_data_chunk") == 0)
+                type_size = sizeof(war_data_chunk);
             else if (strcmp(type, "war_notes") == 0) {
                 type_size = sizeof(war_notes);
             } else if (strcmp(type, "bool") == 0) {
@@ -328,6 +355,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool, war_lua_context* ctx_l
                 type_size = sizeof(war_text_vertex);
             else if (strcmp(type, "war_audio_context") == 0)
                 type_size = sizeof(war_audio_context);
+            else if (strcmp(type, "war_cache_window_render") == 0)
+                type_size = sizeof(war_cache_window_render);
             else if (strcmp(type, "war_undo_tree") == 0)
                 type_size = sizeof(war_undo_tree);
             else if (strcmp(type, "war_payload_union") == 0)
@@ -377,7 +406,7 @@ static inline void* war_pool_alloc(war_pool* pool, size_t size) {
 static inline void war_get_top_text(war_window_render_context* ctx_wr, war_lua_context* ctx_lua, char* tmp_str, char* prompt) {
     memset(ctx_wr->text_top_status_bar, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    if (getcwd(tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX)) != NULL) {
+    if (getcwd(tmp_str, atomic_load(&ctx_lua->A_PATH_LIMIT)) != NULL) {
         memcpy(ctx_wr->text_top_status_bar, tmp_str + 1, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     }
     memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));

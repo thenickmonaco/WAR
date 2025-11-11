@@ -397,7 +397,7 @@ war_vulkan_context war_vulkan_init(war_lua_context* ctx_lua, uint32_t width, uin
     assert(result == VK_SUCCESS);
 
     uint32_t* vertex_code;
-    const char* vertex_path = "build/shaders/war_quad_vertex.spv";
+    const char* vertex_path = "../build/shaders/war_quad_vertex.spv";
     FILE* vertex_spv = fopen(vertex_path, "rb");
     assert(vertex_spv);
     fseek(vertex_spv, 0, SEEK_END);
@@ -416,7 +416,7 @@ war_vulkan_context war_vulkan_init(war_lua_context* ctx_lua, uint32_t width, uin
     assert(result == VK_SUCCESS);
     free(vertex_code);
     uint32_t* fragment_code;
-    const char* fragment_path = "build/shaders/war_quad_fragment.spv";
+    const char* fragment_path = "../build/shaders/war_quad_fragment.spv";
     FILE* fragment_spv = fopen(fragment_path, "rb");
     assert(fragment_spv);
     fseek(fragment_spv, 0, SEEK_END);
@@ -945,7 +945,7 @@ war_vulkan_context war_vulkan_init(war_lua_context* ctx_lua, uint32_t width, uin
     FT_Library ft_library;
     FT_Init_FreeType(&ft_library);
     FT_Face ft_regular;
-    FT_New_Face(ft_library, "assets/fonts/FreeMono.otf", 0, &ft_regular);
+    FT_New_Face(ft_library, "../assets/fonts/FreeMono.otf", 0, &ft_regular);
     // font config
     float font_pixel_height = atomic_load(&ctx_lua->VK_FONT_PIXEL_HEIGHT);
     FT_Set_Pixel_Sizes(ft_regular, 0, (int)atomic_load(&ctx_lua->VK_FONT_PIXEL_HEIGHT));
@@ -1255,7 +1255,7 @@ war_vulkan_context war_vulkan_init(war_lua_context* ctx_lua, uint32_t width, uin
     };
     vkUpdateDescriptorSets(device, 1, &write_descriptor_sets, 0, NULL);
     uint32_t* sdf_vertex_code;
-    const char* sdf_vertex_path = "build/shaders/war_text_vertex.spv";
+    const char* sdf_vertex_path = "../build/shaders/war_text_vertex.spv";
     FILE* sdf_vertex_spv = fopen(sdf_vertex_path, "rb");
     assert(sdf_vertex_spv);
     fseek(sdf_vertex_spv, 0, SEEK_END);
@@ -1274,7 +1274,7 @@ war_vulkan_context war_vulkan_init(war_lua_context* ctx_lua, uint32_t width, uin
     assert(result == VK_SUCCESS);
     free(sdf_vertex_code);
     uint32_t* sdf_fragment_code;
-    const char* sdf_fragment_path = "build/shaders/war_text_fragment.spv";
+    const char* sdf_fragment_path = "../build/shaders/war_text_fragment.spv";
     FILE* sdf_fragment_spv = fopen(sdf_fragment_path, "rb");
     assert(sdf_fragment_spv);
     fseek(sdf_fragment_spv, 0, SEEK_END);

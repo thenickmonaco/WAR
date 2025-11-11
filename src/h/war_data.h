@@ -165,13 +165,13 @@ enum war_undo_commands_enum {
     CMD_DELETE_NOTES_SAME = 7,
 };
 
-typedef struct war_riff_header {
+typedef struct __attribute__((packed)) war_riff_header {
     char chunk_id[4];
     uint32_t chunk_size;
     char format[4];
 } war_riff_header;
 
-typedef struct war_fmt_chunk {
+typedef struct __attribute__((packed)) war_fmt_chunk {
     char subchunk1_id[4];
     uint32_t subchunk1_size;
     uint16_t audio_format;
@@ -182,7 +182,7 @@ typedef struct war_fmt_chunk {
     uint16_t bits_per_sample;
 } war_fmt_chunk;
 
-typedef struct war_data_chunk {
+typedef struct __attribute__((packed)) war_data_chunk {
     char subchunk2_id[4];
     uint32_t subchunk2_size;
 } war_data_chunk;
@@ -406,6 +406,7 @@ typedef struct war_lua_context {
     _Atomic float WINDOWED_TEXT_THICKNESS;
     _Atomic float DEFAULT_WINDOWED_ALPHA_SCALE;
     _Atomic float DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE;
+    _Atomic(char*) CWD;
 } war_lua_context;
 
 typedef struct war_fsm_state {
@@ -546,6 +547,8 @@ typedef struct war_atomics {
     _Atomic uint8_t start_war;
     _Atomic uint8_t resample;
     _Atomic uint64_t note_next_id;
+    _Atomic uint64_t capture_write_index;
+    _Atomic uint64_t cache_next_id;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -564,13 +567,40 @@ typedef struct war_pool {
     size_t pool_alignment;
 } war_pool;
 
-typedef struct war_cache {
-    char* path;
+typedef struct war_cache_audio {
+    uint64_t* id;
+    int* fd;
+    void** map;
+    size_t* size;
+    war_riff_header* riff;
+    war_fmt_chunk* fmt;
+    war_data_chunk* data_chunk;
+    int16_t** sample;
+    char** fname;
     int16_t* note;
     int16_t* layer;
-    int16_t* sample;
-    uint32_t write_index;
-} war_cache;
+    size_t count;
+} war_cache_audio;
+
+typedef struct war_cache_window_render {
+    uint64_t* id;
+    int* fd;
+    void** map;
+    size_t* size;
+    war_riff_header* riff;
+    war_fmt_chunk* fmt;
+    war_data_chunk* data_chunk;
+    int16_t** sample;
+    char** fname;
+    int16_t* note;
+    int16_t* layer;
+    size_t count;
+} war_cache_window_render;
+
+typedef struct war_sequencer {
+    uint64_t* id;
+    char** fname;
+} war_sequencer;
 
 typedef struct war_audio_context {
     double BPM;

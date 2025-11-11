@@ -92,6 +92,7 @@ enum war_misc {
     PROMPT_LAYER = 1,
     PROMPT_NOTE = 2,
     PROMPT_NAME = 3,
+    ALL_NOTE_LAYERS = -13,
 };
 
 enum war_layers {
@@ -124,7 +125,7 @@ enum war_modes {
     MODE_NORMAL = 0,
     MODE_VIEWS = 1,
     MODE_VISUAL_LINE = 2,
-    MODE_RECORD = 3,
+    MODE_CAPTURE = 3,
     MODE_MIDI = 4,
     MODE_COMMAND = 5,
     MODE_VISUAL_BLOCK = 6,
@@ -192,7 +193,8 @@ typedef struct war_notes {
     uint64_t* id;
     uint64_t* notes_start_frames;
     uint64_t* notes_duration_frames;
-    uint32_t* notes_sample_index;
+    int16_t* note;
+    uint64_t* layer;
     float* notes_phase_increment;
     float* notes_gain;
     float* notes_attack;
@@ -206,7 +208,8 @@ typedef struct war_note {
     uint64_t id;
     uint64_t note_start_frames;
     uint64_t note_duration_frames;
-    uint32_t note_sample_index;
+    int16_t note;
+    uint64_t layer;
     float note_phase_increment;
     float note_gain;
     float note_attack;
@@ -219,6 +222,7 @@ typedef struct war_note_quads {
     uint64_t* id;
     double* pos_x;
     double* pos_y;
+    uint64_t* layer;
     double* size_x;
     double* navigation_x;
     uint32_t* navigation_x_numerator;
@@ -239,6 +243,7 @@ typedef struct war_note_quad {
     uint64_t id;
     double pos_x;
     double pos_y;
+    uint64_t layer;
     double size_x;
     double navigation_x;
     uint32_t navigation_x_numerator;
@@ -362,6 +367,7 @@ typedef struct war_lua_context {
     _Atomic int A_WARMUP_FRAMES_FACTOR;
     // window render
     _Atomic int WR_VIEWS_SAVED;
+    _Atomic float WR_COLOR_STEP;
     _Atomic int WR_WARPOON_TEXT_COLS;
     _Atomic int WR_STATES;
     _Atomic int WR_SEQUENCE_COUNT;
@@ -524,20 +530,19 @@ enum war_audio {
 typedef struct war_atomics {
     _Atomic uint64_t play_clock;
     _Atomic uint64_t play_frames;
-    _Atomic uint64_t record_frames;
+    _Atomic uint64_t capture_frames;
     _Atomic uint8_t state;
-    _Atomic float record_threshold;
-    _Atomic uint8_t record;
-    _Atomic uint8_t midi_record;
-    _Atomic uint64_t midi_record_frames;
+    _Atomic float capture_threshold;
+    _Atomic uint8_t capture;
     _Atomic uint8_t play;
     _Atomic float bpm;
     _Atomic int16_t map_note;
-    _Atomic int16_t layer;
+    _Atomic uint64_t layer;
+    _Atomic uint64_t map_layer;
     _Atomic uint8_t map;
-    _Atomic uint8_t record_monitor;
+    _Atomic uint8_t capture_monitor;
     _Atomic float play_gain;
-    _Atomic float record_gain;
+    _Atomic float capture_gain;
     _Atomic uint8_t* notes_on;
     _Atomic uint8_t* notes_on_previous;
     _Atomic uint8_t loop;
@@ -547,7 +552,6 @@ typedef struct war_atomics {
     _Atomic uint8_t start_war;
     _Atomic uint8_t resample;
     _Atomic uint64_t note_next_id;
-    _Atomic uint64_t capture_write_index;
     _Atomic uint64_t cache_next_id;
 } war_atomics;
 
@@ -578,8 +582,8 @@ typedef struct war_cache_audio {
     int16_t** sample;
     char** fname;
     int16_t* note;
-    int16_t* layer;
-    size_t count;
+    uint64_t* layer;
+    uint32_t count;
 } war_cache_audio;
 
 typedef struct war_cache_window_render {
@@ -593,7 +597,7 @@ typedef struct war_cache_window_render {
     int16_t** sample;
     char** fname;
     int16_t* note;
-    int16_t* layer;
+    uint64_t* layer;
     size_t count;
 } war_cache_window_render;
 
@@ -616,8 +620,8 @@ typedef struct war_audio_context {
     // PipeWire
     struct pw_loop* pw_loop;
     struct pw_stream* play_stream;
-    struct pw_stream* record_stream;
-    int16_t* record_buffer;
+    struct pw_stream* capture_stream;
+    int16_t* capture_buffer;
     int16_t* resample_buffer;
     float phase;
     uint8_t over_threshold;
@@ -631,6 +635,8 @@ typedef struct war_audio_context {
 
 typedef struct war_window_render_context {
     uint64_t now;
+    char* layers_active;
+    int layers_active_count;
     double cursor_pos_x;
     double cursor_pos_y;
     double cursor_size_x;

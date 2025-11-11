@@ -147,6 +147,7 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_FLOAT(WINDOWED_TEXT_THICKNESS);
     LOAD_FLOAT(DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE);
     LOAD_FLOAT(DEFAULT_WINDOWED_ALPHA_SCALE);
+    LOAD_FLOAT(WR_COLOR_STEP)
 
 #undef LOAD_FLOAT
 
@@ -413,6 +414,7 @@ static inline void war_get_top_text(war_window_render_context* ctx_wr, war_lua_c
     snprintf(tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX), "%.0f,%.0f", ctx_wr->cursor_pos_y, ctx_wr->cursor_pos_x);
     memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index, tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_middle_index, ctx_wr->layers_active, ctx_wr->layers_active_count);
 }
 
 static inline void war_get_middle_text(
@@ -458,13 +460,13 @@ static inline void war_get_middle_text(
     case MODE_MIDI: {
         switch (atomic_load(&atomics->state)) {
         case AUDIO_CMD_MIDI_RECORD_WAIT:
-            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI RECORD WAIT --", sizeof("-- MIDI RECORD WAIT --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI CAPTURE WAIT --", sizeof("-- MIDI CAPTURE WAIT --"));
             break;
         case AUDIO_CMD_MIDI_RECORD:
-            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI RECORD --", sizeof("-- MIDI RECORD --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI CAPTURE --", sizeof("-- MIDI CAPTURE --"));
             break;
         case AUDIO_CMD_MIDI_RECORD_MAP:
-            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI RECORD MAP --", sizeof("-- MIDI RECORD MAP --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI CAPTURE MAP --", sizeof("-- MIDI CAPTURE MAP --"));
             break;
         default:
             memcpy(ctx_wr->text_middle_status_bar, "-- MIDI --", sizeof("-- MIDI --"));
@@ -481,16 +483,16 @@ static inline void war_get_middle_text(
         }
         break;
     }
-    case MODE_RECORD:
+    case MODE_CAPTURE:
         switch (atomic_load(&atomics->state)) {
         case AUDIO_CMD_RECORD_WAIT:
-            memcpy(ctx_wr->text_middle_status_bar, "-- RECORD WAIT --", sizeof("-- RECORD WAIT --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- CAPTURE WAIT --", sizeof("-- CAPTURE WAIT --"));
             break;
         case AUDIO_CMD_RECORD:
-            memcpy(ctx_wr->text_middle_status_bar, "-- RECORD --", sizeof("-- RECORD --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- CAPTURE --", sizeof("-- CAPTURE --"));
             break;
         case AUDIO_CMD_RECORD_MAP:
-            memcpy(ctx_wr->text_middle_status_bar, "-- RECORD MAP --", sizeof("-- RECORD MAP --"));
+            memcpy(ctx_wr->text_middle_status_bar, "-- CAPTURE MAP --", sizeof("-- CAPTURE MAP --"));
             break;
         }
         break;
@@ -1390,6 +1392,7 @@ static inline void war_undo_tree_add_note(
                     // Copy all fields
                     note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
                     note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
+                    note_quads->layer[write_idx] = note_quads->layer[read_idx];
                     note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
                     note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
                     note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
@@ -1420,6 +1423,7 @@ static inline void war_undo_tree_add_note(
     for (uint32_t i = note_quads->count; i > insert_idx; i--) {
         note_quads->pos_x[i] = note_quads->pos_x[i - 1];
         note_quads->pos_y[i] = note_quads->pos_y[i - 1];
+        note_quads->layer[i] = note_quads->layer[i - 1];
         note_quads->size_x[i] = note_quads->size_x[i - 1];
         note_quads->size_x_numerator[i] = note_quads->size_x_numerator[i - 1];
         note_quads->size_x_denominator[i] = note_quads->size_x_denominator[i - 1];
@@ -1436,6 +1440,7 @@ static inline void war_undo_tree_add_note(
     // --- Insert new note ---
     note_quads->pos_x[insert_idx] = note_quad.pos_x;
     note_quads->pos_y[insert_idx] = note_quad.pos_y;
+    note_quads->layer[insert_idx] = note_quad.layer;
     note_quads->size_x[insert_idx] = note_quad.size_x;
     note_quads->size_x_numerator[insert_idx] = note_quad.size_x_numerator;
     note_quads->size_x_denominator[insert_idx] = note_quad.size_x_denominator;
@@ -1535,6 +1540,7 @@ static inline void war_undo_tree_add_notes(
                     // Copy all fields (same as original)
                     note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
                     note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
+                    note_quads->layer[write_idx] = note_quads->layer[read_idx];
                     note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
                     note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
                     note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
@@ -1617,6 +1623,7 @@ static inline void war_undo_tree_add_notes(
         for (uint32_t i = note_quads->count; i > insert_idx; i--) {
             note_quads->pos_x[i] = note_quads->pos_x[i - 1];
             note_quads->pos_y[i] = note_quads->pos_y[i - 1];
+            note_quads->layer[i] = note_quads->layer[i - 1];
             note_quads->size_x[i] = note_quads->size_x[i - 1];
             note_quads->size_x_numerator[i] = note_quads->size_x_numerator[i - 1];
             note_quads->size_x_denominator[i] = note_quads->size_x_denominator[i - 1];
@@ -1634,6 +1641,7 @@ static inline void war_undo_tree_add_notes(
         // Insert new note
         note_quads->pos_x[insert_idx] = note_quad[note_idx].pos_x;
         note_quads->pos_y[insert_idx] = note_quad[note_idx].pos_y;
+        note_quads->layer[insert_idx] = note_quad[note_idx].layer;
         note_quads->size_x[insert_idx] = note_quad[note_idx].size_x;
         note_quads->size_x_numerator[insert_idx] = note_quad[note_idx].size_x_numerator;
         note_quads->size_x_denominator[insert_idx] = note_quad[note_idx].size_x_denominator;
@@ -1698,6 +1706,7 @@ static inline void war_undo_tree_add_notes_same(
                         // Copy all fields
                         note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
                         note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
+                        note_quads->layer[write_idx] = note_quads->layer[read_idx];
                         note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
                         note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
                         note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
@@ -1728,6 +1737,7 @@ static inline void war_undo_tree_add_notes_same(
         for (uint32_t j = note_quads->count; j > insert_idx; j--) {
             note_quads->pos_x[j] = note_quads->pos_x[j - 1];
             note_quads->pos_y[j] = note_quads->pos_y[j - 1];
+            note_quads->layer[j] = note_quads->layer[j - 1];
             note_quads->size_x[j] = note_quads->size_x[j - 1];
             note_quads->size_x_numerator[j] = note_quads->size_x_numerator[j - 1];
             note_quads->size_x_denominator[j] = note_quads->size_x_denominator[j - 1];
@@ -1744,6 +1754,7 @@ static inline void war_undo_tree_add_notes_same(
         // --- Insert new note ---
         note_quads->pos_x[insert_idx] = nq.pos_x;
         note_quads->pos_y[insert_idx] = nq.pos_y;
+        note_quads->layer[insert_idx] = nq.layer;
         note_quads->size_x[insert_idx] = nq.size_x;
         note_quads->size_x_numerator[insert_idx] = nq.size_x_numerator;
         note_quads->size_x_denominator[insert_idx] = nq.size_x_denominator;

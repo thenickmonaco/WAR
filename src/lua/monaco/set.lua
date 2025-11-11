@@ -21,35 +21,6 @@
 -------------------------------------------------------------------------------
 
 ---@class ctx_lua
--- audio
----@field A_BASE_FREQUENCY number
----@field A_BASE_NOTE number
----@field A_EDO number
----@field A_SAMPLE_RATE number
----@field A_BPM number
----@field A_SAMPLE_DURATION number
----@field A_CHANNEL_COUNT number
----@field A_NOTE_COUNT number
----@field A_LAYER_COUNT number
--- window render
----@field WR_VIEWS_SAVED number
----@field WR_WARPOON_TEXT_COLS number
----@field WR_STATES number
----@field WR_SEQUENCE_COUNT number
----@field WR_SEQUENCE_LENGTH_MAX number
----@field WR_MODE_COUNT number
----@field WR_KEYSYM_COUNT number
----@field WR_MOD_COUNT number
----@field WR_NOTE_QUADS_MAX number
----@field WR_STATUS_BAR_COLS_MAX number
----@field WR_TEXT_QUADS_MAX number
----@field WR_QUADS_MAX number
----@field WR_LEADER string
----@field WR_WAYLAND_MSG_BUFFER_SIZE number
----@field WR_WAYLAND_MAX_OBJECTS number
----@field WR_WAYLAND_MAX_OP_CODES number
--- pool
----@field POOL_ALIGNMENT number
 ---@diagnostic disable: lowercase-global
 ---@type ctx_lua
 ctx_lua = {
@@ -64,7 +35,7 @@ ctx_lua = {
     A_NOTE_COUNT                        = 128,
     A_LAYERS_IN_RAM                     = 13,
     A_LAYER_COUNT                       = 9,
-    A_USERDATA                          = 7,
+    A_USERDATA                          = 6,
     A_WARMUP_FRAMES_FACTOR              = 1000, -- bigger value means less recording warmup frames
     A_NOTES_MAX                         = 20000,
     A_DEFAULT_ATTACK                    = 0.0,
@@ -72,10 +43,11 @@ ctx_lua = {
     A_DEFAULT_RELEASE                   = 0.0,
     A_DEFAULT_GAIN                      = 1.0,
     A_DEFAULT_COLUMNS_PER_BEAT          = 4.0,
-    A_CACHE_SIZE                        = 13,
+    A_CACHE_SIZE                        = 100,
     A_PATH_LIMIT                        = 4096,
     -- window render
     WR_VIEWS_SAVED                      = 13,
+    WR_COLOR_STEP                       = 43.2,
     WR_WARPOON_TEXT_COLS                = 25,
     WR_STATES                           = 256,
     WR_SEQUENCE_COUNT                   = 0,
@@ -174,7 +146,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_k",
-                mode = "record",
+                mode = "capture",
             },
         },
     },
@@ -205,7 +177,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_j",
-                mode = "record",
+                mode = "capture",
             },
         },
     },
@@ -331,7 +303,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_0",
-                mode = "record",
+                mode = "capture",
             },
         },
     },
@@ -379,7 +351,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_1",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_1",
@@ -398,7 +370,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_2",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_2",
@@ -417,7 +389,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_3",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_3",
@@ -436,7 +408,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_4",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_4",
@@ -455,7 +427,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_5",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_5",
@@ -474,7 +446,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_6",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_6",
@@ -493,7 +465,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_7",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_7",
@@ -512,7 +484,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_8",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_8",
@@ -531,7 +503,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_9",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_9",
@@ -550,7 +522,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_9",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_9",
@@ -639,7 +611,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_esc",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_esc",
@@ -673,7 +645,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_t",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_t",
@@ -1316,6 +1288,116 @@ keymap = {
     },
     {
         sequences = {
+            "<A-S-1>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_1",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-2>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_2",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-3>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_3",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-4>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_4",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-5>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_5",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-6>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_6",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-7>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_7",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-8>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_8",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-9>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_9",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-0>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_shift_0",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
             "<leader>d<leader>a",
         },
         commands = {
@@ -1425,7 +1507,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_w",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_w",
@@ -1456,7 +1538,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_e",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_e",
@@ -1579,7 +1661,7 @@ keymap = {
             },
             {
                 cmd = "cmd_normal_tab",
-                mode = "record",
+                mode = "capture",
             },
         },
     },
@@ -1668,7 +1750,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_K",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_K",
@@ -1691,7 +1773,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_J",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_J",
@@ -1732,7 +1814,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_q",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_q",
@@ -1752,7 +1834,7 @@ keymap = {
             },
             {
                 cmd = "cmd_record_Q",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_Q",
@@ -1767,7 +1849,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_r",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_r",
@@ -1783,7 +1865,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_y",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_y",
@@ -1799,7 +1881,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_u",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_u",
@@ -1815,7 +1897,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_i",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_i",
@@ -1831,7 +1913,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_o",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_o",
@@ -1847,7 +1929,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_p",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_p",
@@ -1863,7 +1945,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_leftbracket",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_leftbracket",
@@ -1879,7 +1961,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_rightbracket",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_rightbracket",
@@ -1895,7 +1977,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_minus",
-                mode = "record",
+                mode = "capture",
             },
             {
                 cmd = "cmd_midi_minus",
@@ -1943,7 +2025,7 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_record_space",
-                mode = "record",
+                mode = "capture",
                 handle_repeat = 0,
             },
             {
@@ -2095,7 +2177,7 @@ pool_a = {
     { name = "cache.sample",                         type = "int16_t*",          count = ctx_lua.A_CACHE_SIZE },
     { name = "cache.fname",                          type = "char*",             count = ctx_lua.A_CACHE_SIZE },
     { name = "cache.note",                           type = "int16_t",           count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.layer",                          type = "int16_t",           count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache.layer",                          type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
 
     -- Atoms
     { name = "atomics.notes_on",                     type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT },
@@ -2117,7 +2199,8 @@ pool_a = {
     { name = "notes.notes_duration_frames",          type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_phase_increment",          type = "float",             count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_velocity",                 type = "float",             count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_sample_index",             type = "uint32_t",          count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_sample_index",             type = "int16_",            count = ctx_lua.A_NOTES_MAX },
+    { name = "notes.notes_layer",                    type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_attack",                   type = "float",             count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_sustain",                  type = "float",             count = ctx_lua.A_NOTES_MAX },
     { name = "notes.notes_release",                  type = "float",             count = ctx_lua.A_NOTES_MAX },
@@ -2148,8 +2231,12 @@ pool_a = {
 }
 
 pool_wr = {
+    -- layres active
+    { name = "layers_active",                       type = "char",                    count = ctx_lua.A_LAYER_COUNT },
     -- Cache
     { name = "cache",                               type = "war_cache_window_render", count = 1 },
+    -- Colors
+    { name = "colors",                              type = "uint32_t",                count = ctx_lua.A_LAYER_COUNT },
     ---------------------------------------------------------------------------
     -- Views (war_views)
     ---------------------------------------------------------------------------
@@ -2204,6 +2291,7 @@ pool_wr = {
     { name = "note_quads.id",                       type = "uint64_t",                count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.pos_x",                    type = "double",                  count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.pos_y",                    type = "double",                  count = ctx_lua.WR_NOTE_QUADS_MAX },
+    { name = "note_quads.layer",                    type = "uint64_t",                count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.size_x",                   type = "double",                  count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.navigation_x",             type = "double",                  count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.navigation_x_numerator",   type = "uint32_t",                count = ctx_lua.WR_NOTE_QUADS_MAX },

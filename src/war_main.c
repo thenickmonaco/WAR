@@ -193,19 +193,13 @@ void* war_window_render(void* args) {
         uint8_t B = (uint8_t)(b * 255);
         colors[i] = (0xFF << 24) | (B << 16) | (G << 8) | R;
     }
-    const uint32_t red_orange_hex = 0xFF003ADE;
-    const uint32_t orange_hex = 0xFF0075DE;
-    const uint32_t yellow_orange_hex = 0xFF00AFDE;
-    const uint32_t yellow_hex = 0xFF00E8DE;
-    const uint32_t yellow_green_hex = 0xFFAF00DE;
-    const uint32_t green_hex = 0xFFDE00DE;
-    const uint32_t blue_green_hex = 0xFFDE00AF;
-    const uint32_t purple_hex = 0xFF7500DE;
     const uint32_t white_hex = 0xFFB1D9E9; // nvim status text
     const uint32_t black_hex = 0xFF000000;
     const uint32_t full_white_hex = 0xFFFFFFFF;
-    const float default_horizontal_line_thickness = 0.018;
-    const float default_vertical_line_thickness = 0.018; // default: 0.018
+    const uint32_t super_light_gray_hex = 0xFFD0D0D0;
+    const float default_horizontal_line_thickness = 0.013;
+    const float piano_horizontal_line_thickness = 0.010;
+    const float default_vertical_line_thickness = 0.013; // default: 0.018
     const float default_outline_thickness = 0.04;        // 0.027 is minimum for preventing 1/4, 1/7, 1/9, max = 0.075f
                                                          // sub_cursor right outline from disappearing
                                                          // defualt outline = 0.04f
@@ -1389,7 +1383,10 @@ void* war_window_render(void* args) {
                 case HUD_PIANO_AND_LINE_NUMBERS:
                 case HUD_PIANO:
                     float span_y = ctx_wr.viewport_rows;
-                    if (ctx_wr.top_row == atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) { span_y -= ctx_wr.num_rows_for_status_bars; }
+                    if (ctx_wr.top_row == ctx_wr.max_row) {
+                        span_y -= ctx_wr.num_rows_for_status_bars;
+                        call_carmack("hi");
+                    }
                     war_make_quad(quad_vertices,
                                   quad_indices,
                                   &quad_vertices_count,
@@ -1402,6 +1399,19 @@ void* war_window_render(void* args) {
                                   (float[2]){0.0f, 0.0f},
                                   0);
                     for (uint32_t row = ctx_wr.bottom_row; row <= ctx_wr.top_row; row++) {
+                        if (row < ctx_wr.max_row) {
+                            war_make_quad(quad_vertices,
+                                          quad_indices,
+                                          &quad_vertices_count,
+                                          &quad_indices_count,
+                                          (float[3]){ctx_wr.left_col, row + ctx_wr.num_rows_for_status_bars + 1, ctx_wr.layers[LAYER_HUD]},
+                                          (float[2]){3 - gutter_end_span_inset, 0},
+                                          super_light_gray_hex,
+                                          0,
+                                          0,
+                                          (float[2]){0.0f, piano_horizontal_line_thickness},
+                                          QUAD_LINE);
+                        }
                         uint32_t note = row % 12;
                         if (note == 1 || note == 3 || note == 6 || note == 8 || note == 10) {
                             war_make_quad(quad_vertices,
@@ -1437,6 +1447,21 @@ void* war_window_render(void* args) {
                                   0,
                                   (float[2]){0.0f, 0.0f},
                                   0);
+                    for (uint32_t row = ctx_wr.bottom_row; row <= ctx_wr.top_row; row++) {
+                        if (row >= ctx_wr.max_row) { continue; }
+                        war_make_quad(
+                            quad_vertices,
+                            quad_indices,
+                            &quad_vertices_count,
+                            &quad_indices_count,
+                            (float[3]){ctx_wr.left_col + ln_offset, row + ctx_wr.num_rows_for_status_bars + 1, ctx_wr.layers[LAYER_HUD]},
+                            (float[2]){3 - gutter_end_span_inset, 0},
+                            ctx_wr.full_white_hex,
+                            0,
+                            0,
+                            (float[2]){0.0f, piano_horizontal_line_thickness},
+                            QUAD_LINE);
+                    }
                 }
                 // draw gridline quads
                 for (uint32_t row = ctx_wr.bottom_row + 1; row <= ctx_wr.top_row + 1; row++) {

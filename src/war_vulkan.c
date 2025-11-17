@@ -53,6 +53,7 @@
 
 war_vulkan_context war_vulkan_init(war_lua_context* ctx_lua, uint32_t width, uint32_t height) {
     header("war_vulkan_init");
+    chdir(atomic_load(&ctx_lua->CWD));
     uint32_t instance_extension_count = 0;
     vkEnumerateInstanceExtensionProperties(NULL, &instance_extension_count, NULL);
     VkExtensionProperties* instance_extensions_properties = malloc(sizeof(VkExtensionProperties) * instance_extension_count);

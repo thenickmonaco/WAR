@@ -553,6 +553,7 @@ typedef struct war_atomics {
     _Atomic uint8_t resample;
     _Atomic uint64_t note_next_id;
     _Atomic uint64_t cache_next_id;
+    _Atomic uint64_t cache_next_timestamp;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -573,18 +574,19 @@ typedef struct war_pool {
 
 typedef struct war_cache_audio {
     uint64_t* id;
-    int* fd;
-    void** map;
-    size_t* size;
-    war_riff_header* riff;
-    war_fmt_chunk* fmt;
-    war_data_chunk* data_chunk;
-    int16_t** sample;
-    char** fname;
+    uint64_t* timestamp;
+    void* wav;
+    ssize_t* size;
+    char* fname;
     int16_t* note;
     uint64_t* layer;
+    int* fd;
     uint32_t count;
 } war_cache_audio;
+
+typedef struct war_midi_context {
+    uint64_t* start_frames;
+} war_midi_context;
 
 typedef struct war_cache_window_render {
     uint64_t* id;
@@ -603,7 +605,7 @@ typedef struct war_cache_window_render {
 
 typedef struct war_sequencer {
     uint64_t* id;
-    char** fname;
+    char* fname;
 } war_sequencer;
 
 typedef struct war_audio_context {
@@ -632,6 +634,12 @@ typedef struct war_audio_context {
     uint8_t* previous_note_states;
     uint64_t* note_play_start;
 } war_audio_context;
+
+typedef struct war_color_context {
+    uint32_t white_hex;
+    uint32_t full_white_hex;
+    uint32_t* colors;
+} war_color_context;
 
 typedef struct war_window_render_context {
     uint64_t now;
@@ -764,6 +772,7 @@ typedef struct war_window_render_context {
     uint8_t prompt;
     uint32_t num_chars_in_prompt;
     uint32_t cursor_pos_x_command_mode;
+    uint8_t layer_flux;
 } war_window_render_context;
 
 enum war_producer_consumer_enum {

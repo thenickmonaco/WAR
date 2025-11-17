@@ -243,6 +243,10 @@ static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lu
                 type_size = sizeof(char*);
             else if (strcmp(type, "char") == 0)
                 type_size = sizeof(char);
+            else if (strcmp(type, "war_midi_context") == 0)
+                type_size = sizeof(war_midi_context);
+            else if (strcmp(type, "ssize_t") == 0)
+                type_size = sizeof(ssize_t);
             else if (strcmp(type, "int16_t*") == 0)
                 type_size = sizeof(int16_t*);
             else if (strcmp(type, "int16_t*") == 0)
@@ -358,6 +362,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool, war_lua_context* ctx_l
                 type_size = sizeof(war_audio_context);
             else if (strcmp(type, "war_cache_window_render") == 0)
                 type_size = sizeof(war_cache_window_render);
+            else if (strcmp(type, "war_color_context") == 0)
+                type_size = sizeof(war_color_context);
             else if (strcmp(type, "war_undo_tree") == 0)
                 type_size = sizeof(war_undo_tree);
             else if (strcmp(type, "war_payload_union") == 0)
@@ -417,12 +423,48 @@ static inline void war_get_top_text(war_window_render_context* ctx_wr, war_lua_c
     memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_middle_index, ctx_wr->layers_active, ctx_wr->layers_active_count);
 }
 
+static inline void
+war_layer_flux(war_window_render_context* ctx_wr, war_atomics* atomics, uint64_t* note_layers, war_color_context* ctx_color) {
+    uint64_t layer = note_layers[(int)ctx_wr->cursor_pos_y];
+    atomic_store(&atomics->layer, layer);
+    ctx_wr->layers_active_count = __builtin_popcountll(layer);
+    switch (ctx_wr->layers_active_count) {
+    case 0: {
+        ctx_wr->color_cursor = ctx_color->white_hex;
+        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
+        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
+        break;
+    }
+    case 1: {
+        int active = __builtin_ctzll(layer);
+        ctx_wr->color_cursor = ctx_color->colors[active];
+        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
+        ctx_wr->color_note_outline_default = ctx_color->white_hex;
+        ctx_wr->layers_active[0] = (active + 1) + '0';
+        break;
+    }
+    default: {
+        int count = 0;
+        while (layer) {
+            int active = __builtin_ctzll(layer);
+            ctx_wr->layers_active[count++] = (active + 1) + '0';
+            layer &= layer - 1;
+        }
+        ctx_wr->color_cursor = ctx_color->full_white_hex;
+        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
+        ctx_wr->color_note_outline_default = ctx_color->white_hex;
+        break;
+    }
+    }
+}
+
 static inline void war_get_middle_text(
     war_window_render_context* ctx_wr, war_views* views, war_atomics* atomics, war_lua_context* ctx_lua, char* tmp_str, char* prompt) {
     memset(ctx_wr->text_middle_status_bar, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     switch (ctx_wr->mode) {
     case MODE_NORMAL:
-        if (atomic_load(&atomics->repeat_section)) {
+        uint8_t repeat = atomic_load(&atomics->repeat_section);
+        if (repeat) {
             double start_frames = (double)atomic_load(&atomics->repeat_start_frames);
             double end_frames = (double)atomic_load(&atomics->repeat_end_frames);
             double bpm = atomic_load(&ctx_lua->A_BPM);
@@ -433,6 +475,10 @@ static inline void war_get_middle_text(
             snprintf(tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX), "R:%u,%u", grid_start, grid_end);
             memcpy(
                 ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        }
+        if (ctx_wr->layer_flux) {
+            int offset = (repeat) ? 6 : 0;
+            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index + offset, "FLUX", sizeof("FLUX"));
         }
         break;
     case MODE_VISUAL:

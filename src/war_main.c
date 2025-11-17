@@ -640,25 +640,28 @@ void* war_window_render(void* args) {
     pc_window_render[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
     pc_window_render[AUDIO_CMD_INSERT_NOTE] = &&pc_insert_note;
     pc_window_render[AUDIO_CMD_COMPACT] = &&pc_compact;
-    pc_window_render[AUDIO_CMD_REVIVE_NOTE] = &&pc_add_note_already_in;
+    pc_window_render[AUDIO_CMD_REVIVE_NOTE] = &&pc_revive_note;
+    pc_window_render[AUDIO_CMD_WRITE] = &&pc_write;
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
     while (atomics->state != AUDIO_CMD_END_WAR) {
     pc_window_render:
         if (war_pc_from_a(pc, &header, &size, payload)) { goto* pc_window_render[header]; }
         goto pc_window_render_done;
-    pc_stop:
-    pc_compact: { goto pc_window_render; }
-    pc_insert_note: { goto pc_window_render; }
-    pc_add_note_already_in: { goto pc_window_render; }
+    pc_stop: {
         call_carmack("from a: STOP");
         atomic_store(&atomics->state, AUDIO_CMD_STOP);
         goto pc_window_render;
-    pc_play:
+    }
+    pc_compact: { goto pc_window_render; }
+    pc_insert_note: { goto pc_window_render; }
+    pc_revive_note: { goto pc_window_render; }
+    pc_play: {
         call_carmack("from a: PLAY");
         ctx_wr.cursor_blink_previous_us = ctx_wr.now;
         ctx_wr.cursor_blinking = false;
         ctx_wr.cursor_blink_duration_us = (uint64_t)round((60.0 / ((double)ctx_a.BPM)) * microsecond_conversion);
         goto pc_window_render;
+    }
     pc_pause:
         call_carmack("from a: PAUSE");
         goto pc_window_render;
@@ -700,6 +703,15 @@ void* war_window_render(void* args) {
         call_carmack("from a: MIDI_RECORD");
         atomic_store(&atomics->state, AUDIO_CMD_MIDI_RECORD);
         goto pc_window_render;
+    pc_write: {
+        call_carmack("from a: WRITE");
+        uint32_t fname_size = *(uint32_t*)payload;
+        char* fname = (char*)(payload + sizeof(uint32_t));
+        uint32_t written = *(uint32_t*)(payload + sizeof(uint32_t) + fname_size);
+        int len = snprintf(NULL, 0, "NAME: %.*s, %u B", fname_size, fname, written);
+        snprintf(ctx_wr.text_middle_status_bar, len + 1, "NAME: %.*s, %u B", fname_size, fname, written);
+        goto pc_window_render;
+    }
     pc_midi_record_wait:
         call_carmack("from a: MIDI_RECORD_WAIT");
         goto pc_window_render;
@@ -8402,8 +8414,6 @@ pc_record_map: {
         war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
         goto pc_audio_done;
     }
-    for (uint32_t i = 0; i < (uint32_t)atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
-    }
     uint32_t idx = cache->count;
     if (idx >= (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) {
         idx = 0;
@@ -8465,7 +8475,10 @@ pc_record_map: {
     memcpy(sequencer->fname + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx) * atomic_load(&ctx_lua->A_PATH_LIMIT), fname, size);
     *(uint64_t*)(sequencer->id + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx)) = *(uint64_t*)(cache->id + idx);
     if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { cache->count++; }
-    war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
+    memcpy(tmp_payload, &size, sizeof(uint32_t));
+    memcpy(tmp_payload + sizeof(uint32_t), fname, size);
+    memcpy(tmp_payload + sizeof(uint32_t) + size, file_size, sizeof(uint32_t));
+    war_pc_to_wr(pc, AUDIO_CMD_WRITE, sizeof(uint32_t) + size + sizeof(uint32_t), tmp_payload);
     goto pc_audio_done;
 }
 pc_set_threshold:

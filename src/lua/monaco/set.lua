@@ -43,7 +43,7 @@ ctx_lua = {
     A_DEFAULT_RELEASE                   = 0.0,
     A_DEFAULT_GAIN                      = 1.0,
     A_DEFAULT_COLUMNS_PER_BEAT          = 4.0,
-    A_CACHE_SIZE                        = 100,
+    A_CACHE_SIZE                        = 3,
     A_PATH_LIMIT                        = 4096,
     -- window render
     WR_VIEWS_SAVED                      = 13,
@@ -53,7 +53,7 @@ ctx_lua = {
     WR_SEQUENCE_COUNT                   = 0,
     WR_SEQUENCE_LENGTH_MAX              = 0,
     WR_INPUT_SEQUENCE_LENGTH_MAX        = 256,
-    WR_MODE_COUNT                       = 10,
+    WR_MODE_COUNT                       = 11,
     WR_KEYSYM_COUNT                     = 512,
     WR_MOD_COUNT                        = 16,
     WR_NOTE_QUADS_MAX                   = 20000,
@@ -74,7 +74,7 @@ ctx_lua = {
     -- pool
     POOL_ALIGNMENT                      = 256,
     -- cmd
-    CMD_COUNT                           = 33,
+    CMD_COUNT                           = 35,
     -- pc
     PC_BUFFER_SIZE                      = 32864, -- 32864
     -- vk
@@ -654,6 +654,10 @@ keymap = {
                 cmd = "cmd_command_esc",
                 mode = "command",
             },
+            {
+                cmd = "cmd_wav_esc",
+                mode = "wav",
+            },
         },
     },
     {
@@ -663,6 +667,17 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_normal_f",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-f>",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_alt_f",
                 mode = "normal",
             },
         },
@@ -746,6 +761,17 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_normal_gt",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "gd",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_gd",
                 mode = "normal",
             },
         },
@@ -2281,6 +2307,7 @@ pool_a = {
     { name = "sequencer",             type = "war_sequencer",    count = 1 },
     { name = "sequencer.id",          type = "uint64_t",         count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
     { name = "sequencer.fname",       type = "char",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT * ctx_lua.A_PATH_LIMIT },
+    { name = "sequencer.fname_size",  type = "uint32_t",         count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
 
     -- Cache
     { name = "cache",                 type = "war_cache_audio",  count = 1 },
@@ -2299,6 +2326,7 @@ pool_a = {
     },
     { name = "cache.size",                           type = "ssize_t",           count = ctx_lua.A_CACHE_SIZE },
     { name = "cache.fname",                          type = "char",              count = ctx_lua.A_CACHE_SIZE * ctx_lua.A_PATH_LIMIT },
+    { name = "cache.fname_size",                     type = "uint32_t",          count = ctx_lua.A_CACHE_SIZE },
     { name = "cache.note",                           type = "int16_t",           count = ctx_lua.A_CACHE_SIZE },
     { name = "cache.layer",                          type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
 

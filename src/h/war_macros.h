@@ -238,7 +238,7 @@ static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lu
             else if (strcmp(type, "war_cache_audio") == 0)
                 type_size = sizeof(war_cache_audio);
             else if (strcmp(type, "war_sequencer") == 0)
-                type_size = sizeof(war_cache_audio);
+                type_size = sizeof(war_sequencer);
             else if (strcmp(type, "char*") == 0)
                 type_size = sizeof(char*);
             else if (strcmp(type, "char") == 0)
@@ -460,6 +460,7 @@ war_layer_flux(war_window_render_context* ctx_wr, war_atomics* atomics, uint64_t
 
 static inline void war_get_middle_text(
     war_window_render_context* ctx_wr, war_views* views, war_atomics* atomics, war_lua_context* ctx_lua, char* tmp_str, char* prompt) {
+    memset(ctx_wr->text_middle_status_bar, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     switch (ctx_wr->mode) {
     case MODE_NORMAL:
         uint8_t repeat = atomic_load(&atomics->repeat_section);
@@ -471,7 +472,6 @@ static inline void war_get_middle_text(
             uint32_t grid_start = (uint32_t)((start_frames * bpm * 4.0) / (60.0 * sample_rate));
             uint32_t grid_end = (uint32_t)((end_frames * bpm * 4.0) / (60.0 * sample_rate));
             memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-            memset(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
             snprintf(tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX), "R:%u,%u", grid_start, grid_end);
             memcpy(
                 ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
@@ -480,6 +480,13 @@ static inline void war_get_middle_text(
             int offset = (repeat) ? 6 : 0;
             memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index + offset, "FLUX", sizeof("FLUX"));
         }
+        if (ctx_wr->cursor_blink_state) {
+            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
+            uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ? sizeof("BLINK") : sizeof("BPM");
+            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index + 2, (size == sizeof("BLINK")) ? "BLINK" : "BPM", size);
+        }
+        int offset = ctx_wr->text_status_bar_end_index;
+        memcpy(ctx_wr->text_middle_status_bar + offset, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
         break;
     case MODE_VISUAL:
         memcpy(ctx_wr->text_middle_status_bar, "-- VISUAL --", sizeof("-- VISUAL --"));
@@ -493,7 +500,6 @@ static inline void war_get_middle_text(
         break;
     case MODE_COMMAND: {
         memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        memset(ctx_wr->text_middle_status_bar, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
         uint32_t max_cols = atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX);
         if (ctx_wr->num_chars_in_prompt > 0) {
             snprintf(tmp_str, ctx_wr->num_chars_in_sequence + ctx_wr->num_chars_in_prompt + 3, "%s: %s", prompt, ctx_wr->input_sequence);
@@ -543,18 +549,6 @@ static inline void war_get_middle_text(
             break;
         }
         break;
-    default:
-        break;
-    }
-    if (ctx_wr->cursor_blink_state && ctx_wr->mode != MODE_COMMAND) {
-        memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
-        uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ? sizeof("BLINK") : sizeof("BPM");
-        memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index + 2, (size == sizeof("BLINK")) ? "BLINK" : "BPM", size);
-        return;
-    }
-    if (ctx_wr->mode != MODE_COMMAND) {
-        int offset = ctx_wr->text_status_bar_end_index;
-        memcpy(ctx_wr->text_middle_status_bar + offset, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
     }
 }
 

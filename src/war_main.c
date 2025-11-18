@@ -51,6 +51,7 @@
 #include <spa-0.2/spa/utils/string.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -214,9 +215,9 @@ void* war_window_render(void* args) {
     //     uint8_t B = (uint8_t)(b * 255);
     //     colors[i] = (0xFF << 24) | (B << 16) | (G << 8) | R;
     // }
-    const float default_horizontal_line_thickness = 0.013;
-    const float piano_horizontal_line_thickness = 0.010;
-    const float default_vertical_line_thickness = 0.013; // default: 0.018
+    const float default_horizontal_line_thickness = 0.018;
+    const float piano_horizontal_line_thickness = 0.018;
+    const float default_vertical_line_thickness = 0.018; // default: 0.018
     const float default_outline_thickness = 0.04;        // 0.027 is minimum for preventing 1/4, 1/7, 1/9, max = 0.075f
                                                          // sub_cursor right outline from disappearing
                                                          // defualt outline = 0.04f
@@ -709,7 +710,7 @@ void* war_window_render(void* args) {
         char* fname = (char*)(payload + sizeof(uint32_t));
         uint32_t written = *(uint32_t*)(payload + sizeof(uint32_t) + fname_size);
         int len = snprintf(NULL, 0, "NAME: %.*s, %u B", fname_size, fname, written);
-        snprintf(ctx_wr.text_middle_status_bar, len + 1, "NAME: %.*s, %u B", fname_size, fname, written);
+        call_carmack("NAME: %.*s, %u B", fname_size, fname, written);
         goto pc_window_render;
     }
     pc_midi_record_wait:
@@ -1131,7 +1132,7 @@ void* war_window_render(void* args) {
             wl_registry_global_remove:
                 dump_bytes("global_rm event", msg_buffer + msg_buffer_offset, size);
                 goto wayland_done;
-            wl_callback_done:
+            wl_callback_done: {
                 //-------------------------------------------------------------
                 // RENDERING WITH VULKAN
                 //-------------------------------------------------------------
@@ -1834,6 +1835,7 @@ void* war_window_render(void* args) {
                 //                          physical_width,
                 //                          physical_height);
                 goto wayland_done;
+            }
             wl_display_error:
                 dump_bytes("wl_display::error event", msg_buffer + msg_buffer_offset, size);
                 goto wayland_done;
@@ -2692,6 +2694,8 @@ void* war_window_render(void* args) {
                                     mode_idx = MODE_O;
                                 else if (strcmp(mode_name, "visual") == 0)
                                     mode_idx = MODE_VISUAL;
+                                else if (strcmp(mode_name, "wav") == 0)
+                                    mode_idx = MODE_WAV;
                                 else {
                                     call_carmack("Unknown mode: %s", mode_name);
                                     lua_pop(L, 1);
@@ -2830,6 +2834,8 @@ void* war_window_render(void* args) {
                                     cmd_ptr = &&cmd_command_esc;
                                 } else if (strcmp(cmd_name, "cmd_normal_f") == 0) {
                                     cmd_ptr = &&cmd_normal_f;
+                                } else if (strcmp(cmd_name, "cmd_normal_alt_f") == 0) {
+                                    cmd_ptr = &&cmd_normal_alt_f;
                                 } else if (strcmp(cmd_name, "cmd_normal_t") == 0) {
                                     cmd_ptr = &&cmd_normal_t;
                                 } else if (strcmp(cmd_name, "cmd_record_t") == 0) {
@@ -2850,6 +2856,10 @@ void* war_window_render(void* args) {
                                     cmd_ptr = &&cmd_normal_gb;
                                 } else if (strcmp(cmd_name, "cmd_normal_gt") == 0) {
                                     cmd_ptr = &&cmd_normal_gt;
+                                } else if (strcmp(cmd_name, "cmd_normal_gd") == 0) {
+                                    cmd_ptr = &&cmd_normal_gd;
+                                } else if (strcmp(cmd_name, "cmd_wav_esc") == 0) {
+                                    cmd_ptr = &&cmd_wav_esc;
                                 } else if (strcmp(cmd_name, "cmd_normal_gm") == 0) {
                                     cmd_ptr = &&cmd_normal_gm;
                                 } else if (strcmp(cmd_name, "cmd_normal_s") == 0) {
@@ -3681,6 +3691,20 @@ void* war_window_render(void* args) {
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
+            cmd_normal_gd: {
+                call_carmack("cmd_normal_gd");
+                ctx_wr.mode = MODE_WAV;
+                ctx_wr.numeric_prefix = 0;
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
+            cmd_wav_esc: {
+                call_carmack("cmd_wav_esc");
+                ctx_wr.mode = MODE_NORMAL;
+                ctx_wr.numeric_prefix = 0;
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_normal_K: {
                 call_carmack("cmd_normal_K");
                 float gain = atomic_load(&atomics->play_gain) + ctx_wr.gain_increment;
@@ -4228,6 +4252,13 @@ void* war_window_render(void* args) {
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
+            cmd_normal_alt_f: {
+                call_carmack("cmd_normal_alt_f");
+                war_pc_to_a(pc, AUDIO_CMD_GET_NOTE_DURATION, 0, NULL);
+                ctx_wr.numeric_prefix = 0;
+                ctx_wr.num_chars_in_sequence = 0;
+                goto cmd_done;
+            }
             cmd_normal_gb:
                 call_carmack("cmd_normal_gb");
                 ctx_wr.cursor_pos_y = ctx_wr.min_row;
@@ -7686,16 +7717,65 @@ static void war_play(void* userdata) {
                     continue;
                 }
                 int16_t* sample_ptr = NULL;
-                size_t size;
+                size_t size = 0;
                 for (uint32_t k = 0; k < cache->count; k++) {
-                    if (cache->id[k] != id) { continue; }
+                    if (cache->id[k] != id || cache->layer[k] != (uint64_t)layer_i) { continue; }
                     sample_ptr = cache->wav +
                                  k * (44 + sizeof(int16_t) * ctx_a->channel_count * ctx_a->sample_rate * ctx_a->sample_duration_seconds) + 44;
                     size = cache->size[k];
+                    cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
+                    break;
                 }
-                if (sample_ptr == NULL || size < 44) {
-                    layer &= layer - 1;
-                    continue;
+                if (size < 44) {
+                    uint32_t oldest_cache_idx = 0;
+                    for (uint32_t l = 0; l < cache->count; l++) {
+                        if (cache->timestamp[l] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = l; }
+                    }
+                    char* fname = &sequencer->fname[samples_i * atomic_load(&ctx_lua->A_PATH_LIMIT)];
+                    uint32_t* fname_size = &sequencer->fname_size[samples_i];
+                    call_carmack("%.*s", fname_size, fname);
+                    uint32_t* idx = &oldest_cache_idx;
+                    if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { idx = &cache->count; }
+                    int* fd = &cache->fd[*idx];
+                    if (*fd != -1) { close(*fd); }
+                    *fd = open(fname, O_RDWR);
+                    if (*fd == -1) {
+                        call_carmack("failed to open file: %s", fname);
+                        cache->size[*idx] = 0;
+                        cache->id[*idx] = 0;
+                        layer &= layer - 1;
+                        continue;
+                    }
+                    struct stat st;
+                    ssize_t* cache_size_ptr = &cache->size[*idx];
+                    *cache_size_ptr = 0;
+                    if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
+                    ssize_t read_bytes = read(*fd, &cache->wav[*idx], *cache_size_ptr);
+                    if (read_bytes != *cache_size_ptr) {
+                        if (read_bytes == -1) {
+                            call_carmack("read failed");
+                        } else {
+                            call_carmack("partial read: %zd/%u bytes", read_bytes, *cache_size_ptr);
+                        }
+                        call_carmack("closing fd");
+                        close(*fd);
+                        cache->size[*idx] = 0;
+                        cache->id[*idx] = 0;
+                        layer &= layer - 1;
+                        continue;
+                    }
+                    memset(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
+                    memcpy(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], fname, *fname_size);
+                    cache->fname_size[*idx] = *fname_size;
+                    cache->layer[*idx] = layer_i;
+                    cache->note[*idx] = map_note;
+                    cache->id[*idx] = id;
+                    cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
+                    sample_ptr = cache->wav +
+                                 *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count) +
+                                 44;
+                    size = *cache_size_ptr;
+                    (*idx)++;
                 }
                 uint64_t sample_start = 0;
                 uint64_t sample_duration = (size - 44) / (sizeof(int16_t) * ctx_a->channel_count);
@@ -7790,16 +7870,63 @@ static void war_play(void* userdata) {
                 continue;
             }
             int16_t* sample_ptr = NULL;
-            size_t size;
+            size_t size = 0;
             for (uint32_t k = 0; k < cache->count; k++) {
                 if (cache->id[k] != id) { continue; }
                 sample_ptr =
                     cache->wav + k * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->channel_count * ctx_a->sample_duration_seconds) + 44;
                 size = cache->size[k];
+                cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
+                break;
             }
-            if (sample_ptr == NULL || size < 44) {
-                layer &= layer - 1;
-                continue;
+            if (size < 44) {
+                uint32_t oldest_cache_idx = 0;
+                for (uint32_t l = 0; l < cache->count; l++) {
+                    if (cache->timestamp[l] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = l; }
+                }
+                char* fname = &sequencer->fname[samples_i * atomic_load(&ctx_lua->A_PATH_LIMIT)];
+                uint32_t* fname_size = &sequencer->fname_size[samples_i];
+                uint32_t* idx = &oldest_cache_idx;
+                if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { idx = &cache->count; }
+                int* fd = &cache->fd[*idx];
+                if (*fd != -1) { close(*fd); }
+                *fd = open(fname, O_RDWR);
+                if (*fd == -1) {
+                    call_carmack("failed to open file: %s", fname);
+                    cache->size[*idx] = 0;
+                    cache->id[*idx] = 0;
+                    layer &= layer - 1;
+                    continue;
+                }
+                struct stat st;
+                ssize_t* cache_size_ptr = &cache->size[*idx];
+                *cache_size_ptr = 0;
+                if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
+                ssize_t read_bytes = read(*fd, &cache->wav[*idx], *cache_size_ptr);
+                if (read_bytes != *cache_size_ptr) {
+                    if (read_bytes == -1) {
+                        call_carmack("read failed");
+                    } else {
+                        call_carmack("partial read: %zd/%u bytes", read_bytes, *cache_size_ptr);
+                    }
+                    call_carmack("closing fd");
+                    close(*fd);
+                    cache->size[*idx] = 0;
+                    cache->id[*idx] = 0;
+                    layer &= layer - 1;
+                    continue;
+                }
+                memset(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
+                memcpy(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], fname, *fname_size);
+                cache->fname_size[*idx] = *fname_size;
+                cache->layer[*idx] = layer_i;
+                cache->note[*idx] = note;
+                cache->id[*idx] = id;
+                cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
+                sample_ptr = cache->wav +
+                             *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count) + 44;
+                size = *cache_size_ptr;
+                (*idx)++;
             }
             uint64_t note_duration = (size - 44) / (sizeof(int16_t) * ctx_a->channel_count);
             // --- Mix each sample
@@ -8042,6 +8169,11 @@ void* war_audio(void* args) {
     sequencer->fname = war_pool_alloc(pool_a,
                                       sizeof(char) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT) *
                                           atomic_load(&ctx_lua->A_PATH_LIMIT));
+    memset(sequencer->fname,
+           0,
+           sizeof(char) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT) * atomic_load(&ctx_lua->A_PATH_LIMIT));
+    sequencer->fname_size =
+        war_pool_alloc(pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
     //-------------------------------------------------------------------------
     // MIDI CONTEXT
     //-------------------------------------------------------------------------
@@ -8065,6 +8197,8 @@ void* war_audio(void* args) {
                atomic_load(&ctx_lua->A_CACHE_SIZE));
     cache->size = war_pool_alloc(pool_a, sizeof(size_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
     cache->fname = war_pool_alloc(pool_a, sizeof(char) * atomic_load(&ctx_lua->A_CACHE_SIZE) * atomic_load(&ctx_lua->A_PATH_LIMIT));
+    memset(cache->fname, 0, sizeof(char) * atomic_load(&ctx_lua->A_CACHE_SIZE) * atomic_load(&ctx_lua->A_PATH_LIMIT));
+    cache->fname_size = war_pool_alloc(pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
     cache->note = war_pool_alloc(pool_a, sizeof(int16_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
     memset(cache->note, -1, sizeof(int16_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
     cache->layer = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
@@ -8196,6 +8330,7 @@ void* war_audio(void* args) {
     pc_audio[AUDIO_CMD_ADD_NOTES_SAME] = &&pc_add_notes_same;
     pc_audio[AUDIO_CMD_DELETE_NOTES_SAME] = &&pc_delete_notes_same;
     pc_audio[AUDIO_CMD_REVIVE_NOTES] = &&pc_revive_notes;
+    pc_audio[AUDIO_CMD_GET_NOTE_DURATION] = &&pc_get_note_duration;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
 pc_audio:
@@ -8209,6 +8344,10 @@ pc_pause:
     goto pc_audio_done;
 pc_get_frames:
     goto pc_audio_done;
+pc_get_note_duration: {
+    call_carmack("from wr: GET_NOTE_DURATION");
+    goto pc_audio_done;
+}
 pc_add_notes_same: {
     call_carmack("from wr: add_notes_same");
     war_note note = *(war_note*)(payload);
@@ -8404,6 +8543,7 @@ pc_record_map: {
         goto pc_audio_done;
     }
     if (size == 0) {
+        call_carmack("size is 0");
         war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
         goto pc_audio_done;
     }
@@ -8411,21 +8551,25 @@ pc_record_map: {
     uint64_t layer = atomic_exchange(&atomics->map_layer, -1);
     ctx_a->over_threshold = 0;
     if (note == -1 || layer == 0) {
+        call_carmack("invalid note or layer");
         war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
         goto pc_audio_done;
     }
     uint32_t idx = cache->count;
     if (idx >= (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) {
         idx = 0;
-        for (uint32_t i = 1; i < cache->count; i++) {
+        for (uint32_t i = 0; i < cache->count; i++) {
             uint64_t ts = cache->timestamp[i];
             if (ts <= cache->timestamp[idx]) { idx = i; }
         }
     }
+    int layer_idx = __builtin_ctzll(layer);
+    if (layer == 0) { layer_idx = 0; } // for now just do this
     *(uint64_t*)(cache->id + idx) = atomic_fetch_add(&atomics->cache_next_id, 1);
     *(uint64_t*)(cache->timestamp + idx) = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
     *(int16_t*)(cache->note + idx) = note;
-    *(uint64_t*)(cache->layer + idx) = layer;
+    *(uint64_t*)(cache->layer + idx) = layer_idx;
+    *(uint32_t*)(cache->fname_size + idx) = size;
     char* fname = (char*)(cache->fname + idx * atomic_load(&ctx_lua->A_PATH_LIMIT));
     memcpy(fname, payload, size);
     int* fd = (int*)(cache->fd + idx);
@@ -8470,10 +8614,9 @@ pc_record_map: {
         close(*fd);
         goto pc_audio_done;
     }
-    int layer_idx = __builtin_ctzll(layer);
-    if (layer == 0) { layer_idx = 0; }
     memcpy(sequencer->fname + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx) * atomic_load(&ctx_lua->A_PATH_LIMIT), fname, size);
     *(uint64_t*)(sequencer->id + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx)) = *(uint64_t*)(cache->id + idx);
+    *(uint32_t*)(sequencer->fname_size + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx)) = *(uint32_t*)(cache->fname_size + idx);
     if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { cache->count++; }
     memcpy(tmp_payload, &size, sizeof(uint32_t));
     memcpy(tmp_payload + sizeof(uint32_t), fname, size);

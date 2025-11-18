@@ -121,7 +121,6 @@ enum war_hud {
 };
 
 enum war_modes {
-    MODE_COUNT = 10,
     MODE_NORMAL = 0,
     MODE_VIEWS = 1,
     MODE_VISUAL_LINE = 2,
@@ -132,6 +131,7 @@ enum war_modes {
     MODE_INSERT = 7,
     MODE_O = 8,
     MODE_VISUAL = 9,
+    MODE_WAV = 10,
 };
 
 enum war_fsm {
@@ -522,6 +522,7 @@ enum war_audio {
     AUDIO_CMD_DELETE_NOTES_SAME = 32,
     AUDIO_CMD_REVIVE_NOTES = 33,
     AUDIO_CMD_WRITE = 34,
+    AUDIO_CMD_GET_NOTE_DURATION = 35,
     //
     AUDIO_VOICE_GRAND_PIANO = 0,
     AUDIO_VOICE_COUNT = 128,
@@ -579,11 +580,18 @@ typedef struct war_cache_audio {
     void* wav;
     ssize_t* size;
     char* fname;
+    uint32_t* fname_size;
     int16_t* note;
     uint64_t* layer;
     int* fd;
     uint32_t count;
 } war_cache_audio;
+
+typedef struct war_sequencer {
+    uint64_t* id;
+    char* fname;
+    uint32_t* fname_size;
+} war_sequencer;
 
 typedef struct war_midi_context {
     uint64_t* start_frames;
@@ -603,11 +611,6 @@ typedef struct war_cache_window_render {
     uint64_t* layer;
     size_t count;
 } war_cache_window_render;
-
-typedef struct war_sequencer {
-    uint64_t* id;
-    char* fname;
-} war_sequencer;
 
 typedef struct war_audio_context {
     double BPM;

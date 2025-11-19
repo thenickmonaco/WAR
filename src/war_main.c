@@ -3366,7 +3366,7 @@ void* war_window_render(void* args) {
                             uint64_t layer = 0;
                             bool valid = true;
                             int layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
-                            if (ctx_wr.num_chars_in_sequence < 1 || ctx_wr.num_chars_in_sequence > 9) {
+                            if (ctx_wr.num_chars_in_sequence > 1 || ctx_wr.num_chars_in_sequence == 0) {
                                 valid = false;
                             } else {
                                 for (size_t i = 0; i < ctx_wr.num_chars_in_sequence; i++) {
@@ -3385,7 +3385,7 @@ void* war_window_render(void* args) {
                                         layer = (1ULL << layer_count) - 1;
                                         break;
                                     }
-                                    layer |= (1ULL << (l - 1)); // Set bit for layer (0-based index)
+                                    layer = (1ULL << (l - 1)); // Set bit for layer (0-based index)
                                 }
                             }
                             if (!valid) {
@@ -7718,22 +7718,18 @@ static void war_play(void* userdata) {
                 }
                 int16_t* sample_ptr = NULL;
                 size_t size = 0;
+                uint32_t oldest_cache_idx = 0;
                 for (uint32_t k = 0; k < cache->count; k++) {
-                    if (cache->id[k] != id || cache->layer[k] != (uint64_t)layer_i) { continue; }
+                    if (cache->timestamp[k] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = k; }
+                    if (cache->id[k] != id) { continue; }
                     sample_ptr = cache->wav +
                                  k * (44 + sizeof(int16_t) * ctx_a->channel_count * ctx_a->sample_rate * ctx_a->sample_duration_seconds) + 44;
                     size = cache->size[k];
                     cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-                    break;
                 }
                 if (size < 44) {
-                    uint32_t oldest_cache_idx = 0;
-                    for (uint32_t l = 0; l < cache->count; l++) {
-                        if (cache->timestamp[l] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = l; }
-                    }
                     char* fname = &sequencer->fname[samples_i * atomic_load(&ctx_lua->A_PATH_LIMIT)];
                     uint32_t* fname_size = &sequencer->fname_size[samples_i];
-                    call_carmack("%.*s", fname_size, fname);
                     uint32_t* idx = &oldest_cache_idx;
                     if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { idx = &cache->count; }
                     int* fd = &cache->fd[*idx];
@@ -7750,7 +7746,10 @@ static void war_play(void* userdata) {
                     ssize_t* cache_size_ptr = &cache->size[*idx];
                     *cache_size_ptr = 0;
                     if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
-                    ssize_t read_bytes = read(*fd, &cache->wav[*idx], *cache_size_ptr);
+                    ssize_t read_bytes = read(*fd,
+                                              cache->wav + *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->channel_count *
+                                                                            ctx_a->sample_duration_seconds),
+                                              *cache_size_ptr);
                     if (read_bytes != *cache_size_ptr) {
                         if (read_bytes == -1) {
                             call_carmack("read failed");
@@ -7767,7 +7766,7 @@ static void war_play(void* userdata) {
                     memset(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
                     memcpy(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], fname, *fname_size);
                     cache->fname_size[*idx] = *fname_size;
-                    cache->layer[*idx] = layer_i;
+                    cache->layer[*idx] = 1ULL << layer_i;
                     cache->note[*idx] = map_note;
                     cache->id[*idx] = id;
                     cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
@@ -7871,19 +7870,16 @@ static void war_play(void* userdata) {
             }
             int16_t* sample_ptr = NULL;
             size_t size = 0;
+            uint32_t oldest_cache_idx = 0;
             for (uint32_t k = 0; k < cache->count; k++) {
+                if (cache->timestamp[k] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = k; }
                 if (cache->id[k] != id) { continue; }
                 sample_ptr =
                     cache->wav + k * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->channel_count * ctx_a->sample_duration_seconds) + 44;
                 size = cache->size[k];
                 cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-                break;
             }
             if (size < 44) {
-                uint32_t oldest_cache_idx = 0;
-                for (uint32_t l = 0; l < cache->count; l++) {
-                    if (cache->timestamp[l] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = l; }
-                }
                 char* fname = &sequencer->fname[samples_i * atomic_load(&ctx_lua->A_PATH_LIMIT)];
                 uint32_t* fname_size = &sequencer->fname_size[samples_i];
                 uint32_t* idx = &oldest_cache_idx;
@@ -7902,7 +7898,10 @@ static void war_play(void* userdata) {
                 ssize_t* cache_size_ptr = &cache->size[*idx];
                 *cache_size_ptr = 0;
                 if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
-                ssize_t read_bytes = read(*fd, &cache->wav[*idx], *cache_size_ptr);
+                ssize_t read_bytes = read(
+                    *fd,
+                    cache->wav + *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count),
+                    *cache_size_ptr);
                 if (read_bytes != *cache_size_ptr) {
                     if (read_bytes == -1) {
                         call_carmack("read failed");
@@ -7919,7 +7918,7 @@ static void war_play(void* userdata) {
                 memset(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
                 memcpy(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], fname, *fname_size);
                 cache->fname_size[*idx] = *fname_size;
-                cache->layer[*idx] = layer_i;
+                cache->layer[*idx] = 1ULL << layer_i;
                 cache->note[*idx] = note;
                 cache->id[*idx] = id;
                 cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
@@ -8563,12 +8562,10 @@ pc_record_map: {
             if (ts <= cache->timestamp[idx]) { idx = i; }
         }
     }
-    int layer_idx = __builtin_ctzll(layer);
-    if (layer == 0) { layer_idx = 0; } // for now just do this
     *(uint64_t*)(cache->id + idx) = atomic_fetch_add(&atomics->cache_next_id, 1);
     *(uint64_t*)(cache->timestamp + idx) = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
     *(int16_t*)(cache->note + idx) = note;
-    *(uint64_t*)(cache->layer + idx) = layer_idx;
+    *(uint64_t*)(cache->layer + idx) = layer;
     *(uint32_t*)(cache->fname_size + idx) = size;
     char* fname = (char*)(cache->fname + idx * atomic_load(&ctx_lua->A_PATH_LIMIT));
     memcpy(fname, payload, size);
@@ -8614,6 +8611,8 @@ pc_record_map: {
         close(*fd);
         goto pc_audio_done;
     }
+    int layer_idx = __builtin_ctzll(layer);
+    if (layer == 0) { layer_idx = 0; } // for now just do this
     memcpy(sequencer->fname + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx) * atomic_load(&ctx_lua->A_PATH_LIMIT), fname, size);
     *(uint64_t*)(sequencer->id + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx)) = *(uint64_t*)(cache->id + idx);
     *(uint32_t*)(sequencer->fname_size + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx)) = *(uint32_t*)(cache->fname_size + idx);

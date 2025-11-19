@@ -43,7 +43,7 @@ ctx_lua = {
     A_DEFAULT_RELEASE                   = 0.0,
     A_DEFAULT_GAIN                      = 1.0,
     A_DEFAULT_COLUMNS_PER_BEAT          = 4.0,
-    A_CACHE_SIZE                        = 3,
+    A_CACHE_SIZE                        = 100,
     A_PATH_LIMIT                        = 4096,
     -- window render
     WR_VIEWS_SAVED                      = 13,

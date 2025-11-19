@@ -2298,33 +2298,25 @@ end
 war_flattened = war_flatten_keymap(keymap)
 
 pool_a = {
-    -- capture wav
-    { name = "capture_wav",           type = "int16_t",          count = ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_SAMPLE_RATE * ctx_lua.A_CHANNEL_COUNT },
+    { name = "capture_wav",                          type = "war_wav",           count = 1 },
+    { name = "capture_wav.fname",                    type = "char",              count = ctx_lua.A_PATH_LIMIT },
     -- midi
-    { name = "ctx_midi",              type = "war_midi_context", count = 1 },
-    { name = "ctx_midi.start_frames", type = "uint64_t",         count = ctx_lua.A_NOTE_COUNT },
+    { name = "ctx_midi",                             type = "war_midi_context",  count = 1 },
+    { name = "ctx_midi.start_frames",                type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
     -- sequencer
-    { name = "sequencer",             type = "war_sequencer",    count = 1 },
-    { name = "sequencer.id",          type = "uint64_t",         count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
-    { name = "sequencer.fname",       type = "char",             count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT * ctx_lua.A_PATH_LIMIT },
-    { name = "sequencer.fname_size",  type = "uint32_t",         count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
+    { name = "sequencer",                            type = "war_sequencer",     count = 1 },
+    { name = "sequencer.id",                         type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
+    { name = "sequencer.fname",                      type = "char",              count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT * ctx_lua.A_PATH_LIMIT },
+    { name = "sequencer.fname_size",                 type = "uint32_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
 
     -- Cache
-    { name = "cache",                 type = "war_cache_audio",  count = 1 },
-    { name = "cache.id",              type = "uint64_t",         count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.timestamp",       type = "uint64_t",         count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.fd",              type = "int",              count = ctx_lua.A_CACHE_SIZE },
-    {
-        name = "cache.wav.header",
-        type = "uint8_t",
-        count = 44 * ctx_lua.A_CACHE_SIZE
-    },
-    {
-        name = "cache.wav.samples",
-        type = "int16_t",
-        count = ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT * ctx_lua.A_CACHE_SIZE
-    },
-    { name = "cache.size",                           type = "ssize_t",           count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache",                                type = "war_cache_audio",   count = 1 },
+    { name = "cache.id",                             type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache.timestamp",                      type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache.fd",                             type = "int",               count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache.wav",                            type = "void*",             count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache.size",                           type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache.size",                           type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
     { name = "cache.fname",                          type = "char",              count = ctx_lua.A_CACHE_SIZE * ctx_lua.A_PATH_LIMIT },
     { name = "cache.fname_size",                     type = "uint32_t",          count = ctx_lua.A_CACHE_SIZE },
     { name = "cache.note",                           type = "int16_t",           count = ctx_lua.A_CACHE_SIZE },

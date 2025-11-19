@@ -7655,7 +7655,7 @@ static void war_play(void* userdata) {
     war_atomics* atomics = data[2];
     war_lua_context* ctx_lua = data[3];
     war_notes* notes = data[4];
-    void* capture_wav = data[5];
+    war_wav* capture_wav = data[5];
     war_sequencer* sequencer = data[6];
     war_cache_audio* cache = data[7];
     war_midi_context* ctx_midi = data[8];
@@ -7722,8 +7722,7 @@ static void war_play(void* userdata) {
                 for (uint32_t k = 0; k < cache->count; k++) {
                     if (cache->timestamp[k] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = k; }
                     if (cache->id[k] != id) { continue; }
-                    sample_ptr = cache->wav +
-                                 k * (44 + sizeof(int16_t) * ctx_a->channel_count * ctx_a->sample_rate * ctx_a->sample_duration_seconds) + 44;
+                    sample_ptr = *(cache->wav + k) + 44;
                     size = cache->size[k];
                     cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
                 }
@@ -7732,6 +7731,10 @@ static void war_play(void* userdata) {
                     uint32_t* fname_size = &sequencer->fname_size[samples_i];
                     uint32_t* idx = &oldest_cache_idx;
                     if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { idx = &cache->count; }
+                    if (cache->wav[*idx] != NULL) {
+                        munmap(cache->wav[*idx], cache->capacity[*idx]);
+                        cache->wav[*idx] = NULL;
+                    }
                     int* fd = &cache->fd[*idx];
                     if (*fd != -1) { close(*fd); }
                     *fd = open(fname, O_RDWR);
@@ -7743,21 +7746,15 @@ static void war_play(void* userdata) {
                         continue;
                     }
                     struct stat st;
-                    ssize_t* cache_size_ptr = &cache->size[*idx];
+                    uint64_t* cache_size_ptr = &cache->size[*idx];
                     *cache_size_ptr = 0;
                     if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
-                    ssize_t read_bytes = read(*fd,
-                                              cache->wav + *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->channel_count *
-                                                                            ctx_a->sample_duration_seconds),
-                                              *cache_size_ptr);
-                    if (read_bytes != *cache_size_ptr) {
-                        if (read_bytes == -1) {
-                            call_carmack("read failed");
-                        } else {
-                            call_carmack("partial read: %zd/%u bytes", read_bytes, *cache_size_ptr);
-                        }
-                        call_carmack("closing fd");
+                    cache->wav[*idx] = mmap(NULL, *cache_size_ptr, PROT_READ | PROT_WRITE, MAP_PRIVATE, *fd, 0);
+                    if (cache->wav[*idx] == MAP_FAILED) {
+                        call_carmack("map failed");
                         close(*fd);
+                        cache->fd[*idx] = -1;
+                        cache->wav[*idx] = NULL;
                         cache->size[*idx] = 0;
                         cache->id[*idx] = 0;
                         layer &= layer - 1;
@@ -7770,9 +7767,7 @@ static void war_play(void* userdata) {
                     cache->note[*idx] = map_note;
                     cache->id[*idx] = id;
                     cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-                    sample_ptr = cache->wav +
-                                 *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count) +
-                                 44;
+                    sample_ptr = *(cache->wav + *idx) + 44;
                     size = *cache_size_ptr;
                     (*idx)++;
                 }
@@ -7874,8 +7869,7 @@ static void war_play(void* userdata) {
             for (uint32_t k = 0; k < cache->count; k++) {
                 if (cache->timestamp[k] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = k; }
                 if (cache->id[k] != id) { continue; }
-                sample_ptr =
-                    cache->wav + k * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->channel_count * ctx_a->sample_duration_seconds) + 44;
+                sample_ptr = *(cache->wav + k) + 44;
                 size = cache->size[k];
                 cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
             }
@@ -7895,14 +7889,11 @@ static void war_play(void* userdata) {
                     continue;
                 }
                 struct stat st;
-                ssize_t* cache_size_ptr = &cache->size[*idx];
+                uint64_t* cache_size_ptr = &cache->size[*idx];
                 *cache_size_ptr = 0;
                 if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
-                ssize_t read_bytes = read(
-                    *fd,
-                    cache->wav + *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count),
-                    *cache_size_ptr);
-                if (read_bytes != *cache_size_ptr) {
+                ssize_t read_bytes = read(*fd, *(cache->wav + *idx), *cache_size_ptr);
+                if ((uint64_t)read_bytes != *cache_size_ptr) {
                     if (read_bytes == -1) {
                         call_carmack("read failed");
                     } else {
@@ -7922,8 +7913,7 @@ static void war_play(void* userdata) {
                 cache->note[*idx] = note;
                 cache->id[*idx] = id;
                 cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-                sample_ptr = cache->wav +
-                             *idx * (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count) + 44;
+                sample_ptr = *(cache->wav + *idx) + 44;
                 size = *cache_size_ptr;
                 (*idx)++;
             }
@@ -7995,7 +7985,7 @@ static void war_capture(void* userdata) {
     war_atomics* atomics = data[2];
     war_lua_context* ctx_lua = data[3];
     war_notes* notes = data[4];
-    void* capture_wav = data[5];
+    war_wav* capture_wav = data[5];
     war_sequencer* sequencer = data[6];
     war_cache_audio* cache = data[7];
     war_midi_context* ctx_midi = data[8];
@@ -8045,7 +8035,7 @@ static void war_capture(void* userdata) {
     uint64_t first_part = buffer_frames - start_frame;
     if (first_part > n_frames_in) first_part = n_frames_in;
     uint64_t second_part = n_frames_in - first_part;
-    int16_t* capture_wav_samples = (int16_t*)(capture_wav + 44);
+    int16_t* capture_wav_samples = (int16_t*)(capture_wav->wav + 44);
     for (uint64_t i = 0; i < first_part * ctx_a->channel_count; i++) {
         capture_wav_samples[start_frame * ctx_a->channel_count + i] = (int16_t)(src[i] * gain);
     }
@@ -8128,36 +8118,43 @@ void* war_audio(void* args) {
     assert(ctx_a->resample_buffer);
     void* tmp_payload = war_pool_alloc(pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->PC_BUFFER_SIZE));
     //-------------------------------------------------------------------------
-    // FILE I/O CAPTURE (preallocated)
+    // MMAP CAPTURE_WAV
     //-------------------------------------------------------------------------
     chdir(atomic_load(&ctx_lua->CWD));
-    uint32_t wav_file_size_max = 44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count;
-    void* capture_wav = war_pool_alloc(pool_a, wav_file_size_max);
-    memset(capture_wav, 0, wav_file_size_max);
-    const char* capture_wav_fname = "capture.wav";
-    int capture_wav_fd = open(capture_wav_fname, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    assert(capture_wav_fd >= 0);
-    int wav_result = ftruncate(capture_wav_fd, wav_file_size_max);
+    uint64_t wav_file_size_max = 44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count;
+    war_wav* capture_wav = war_pool_alloc(pool_a, sizeof(war_wav));
+    capture_wav->fname = war_pool_alloc(pool_a, atomic_load(&ctx_lua->A_PATH_LIMIT));
+    memset(capture_wav->fname, 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
+    memcpy(capture_wav->fname, "capture.wav", sizeof("capture.wav"));
+    capture_wav->fname_size = 11;
+    capture_wav->capacity = wav_file_size_max;
+    capture_wav->fd = open(capture_wav->fname, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    assert(capture_wav->fd >= 0);
+    int wav_result = ftruncate(capture_wav->fd, capture_wav->capacity);
     assert(wav_result >= 0);
-    *(war_riff_header*)capture_wav = (war_riff_header){"RIFF", wav_file_size_max, "WAVE"};
-    *(war_fmt_chunk*)(capture_wav + sizeof(war_riff_header)) = (war_fmt_chunk){"fmt ",
-                                                                               16,
-                                                                               1,
-                                                                               ctx_a->channel_count,
-                                                                               ctx_a->sample_rate,
-                                                                               ctx_a->sample_rate * ctx_a->channel_count * sizeof(int16_t),
-                                                                               ctx_a->channel_count * sizeof(int16_t),
-                                                                               16};
-    *(war_data_chunk*)(capture_wav + sizeof(war_riff_header) + sizeof(war_fmt_chunk)) = (war_data_chunk){"data", wav_file_size_max - 44};
-    ssize_t wav_written = write(capture_wav_fd, capture_wav, wav_file_size_max);
-    if (wav_written != wav_file_size_max) {
+    capture_wav->wav = mmap(NULL, capture_wav->capacity, PROT_READ | PROT_WRITE, MAP_PRIVATE, capture_wav->fd, 0);
+    if (capture_wav->wav == MAP_FAILED) { call_carmack("map failed"); }
+    *(war_riff_header*)capture_wav->wav = (war_riff_header){"RIFF", capture_wav->capacity - 8, "WAVE"};
+    *(war_fmt_chunk*)(capture_wav->wav + sizeof(war_riff_header)) =
+        (war_fmt_chunk){"fmt ",
+                        16,
+                        1,
+                        ctx_a->channel_count,
+                        ctx_a->sample_rate,
+                        ctx_a->sample_rate * ctx_a->channel_count * sizeof(int16_t),
+                        ctx_a->channel_count * sizeof(int16_t),
+                        16};
+    *(war_data_chunk*)(capture_wav->wav + sizeof(war_riff_header) + sizeof(war_fmt_chunk)) =
+        (war_data_chunk){"data", capture_wav->capacity - 44};
+    ssize_t wav_written = write(capture_wav->fd, capture_wav->wav, capture_wav->capacity);
+    if ((uint64_t)wav_written != wav_file_size_max) {
         if (wav_written == -1) {
             call_carmack("write failed");
         } else {
-            call_carmack("partial write: %zd/%u bytes", wav_written, wav_file_size_max);
+            call_carmack("partial write: %zd/%u bytes", wav_written, capture_wav->capacity);
         }
         call_carmack("closing fd");
-        close(capture_wav_fd);
+        close(capture_wav->fd);
     }
     //-----------------------------------------------------------------------------
     //  SEQUENCER
@@ -8187,14 +8184,11 @@ void* war_audio(void* args) {
     memset(cache->id, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
     cache->timestamp = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
     memset(cache->timestamp, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->wav = war_pool_alloc(pool_a,
-                                (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count) *
-                                    atomic_load(&ctx_lua->A_CACHE_SIZE));
-    memset(cache->wav,
-           0,
-           (44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count) *
-               atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->size = war_pool_alloc(pool_a, sizeof(size_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache->wav = war_pool_alloc(pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    memset(cache->wav, 0, sizeof(void*) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache->size = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache->capacity = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    memset(cache->capacity, wav_file_size_max, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
     cache->fname = war_pool_alloc(pool_a, sizeof(char) * atomic_load(&ctx_lua->A_CACHE_SIZE) * atomic_load(&ctx_lua->A_PATH_LIMIT));
     memset(cache->fname, 0, sizeof(char) * atomic_load(&ctx_lua->A_CACHE_SIZE) * atomic_load(&ctx_lua->A_PATH_LIMIT));
     cache->fname_size = war_pool_alloc(pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
@@ -8515,29 +8509,30 @@ pc_record:
     goto pc_audio_done;
 pc_record_map: {
     uint64_t capture_frames = atomic_load(&atomics->capture_frames);
-    uint32_t capture_wav_file_size = 44 + capture_frames * ctx_a->channel_count * sizeof(int16_t);
-    *(war_riff_header*)capture_wav = (war_riff_header){"RIFF", capture_wav_file_size, "WAVE"};
-    *(war_fmt_chunk*)(capture_wav + sizeof(war_riff_header)) = (war_fmt_chunk){"fmt ",
-                                                                               16,
-                                                                               1,
-                                                                               ctx_a->channel_count,
-                                                                               ctx_a->sample_rate,
-                                                                               ctx_a->sample_rate * ctx_a->channel_count * sizeof(int16_t),
-                                                                               ctx_a->channel_count * sizeof(int16_t),
-                                                                               16};
-    *(war_data_chunk*)(capture_wav + sizeof(war_riff_header) + sizeof(war_fmt_chunk)) = (war_data_chunk){"data", capture_wav_file_size - 44};
-    wav_result = ftruncate(capture_wav_fd, capture_wav_file_size);
+    capture_wav->size = 44 + capture_frames * ctx_a->channel_count * sizeof(int16_t);
+    *(war_riff_header*)capture_wav->wav = (war_riff_header){"RIFF", capture_wav->size - 8, "WAVE"};
+    *(war_fmt_chunk*)(capture_wav->wav + sizeof(war_riff_header)) =
+        (war_fmt_chunk){"fmt ",
+                        16,
+                        1,
+                        ctx_a->channel_count,
+                        ctx_a->sample_rate,
+                        ctx_a->sample_rate * ctx_a->channel_count * sizeof(int16_t),
+                        ctx_a->channel_count * sizeof(int16_t),
+                        16};
+    *(war_data_chunk*)(capture_wav->wav + sizeof(war_riff_header) + sizeof(war_fmt_chunk)) = (war_data_chunk){"data", capture_wav->size - 44};
+    wav_result = ftruncate(capture_wav->fd, capture_wav->size);
     if (wav_result == -1) {
-        call_carmack("ftruncate failed with file_size: %u", capture_wav_file_size);
+        call_carmack("ftruncate failed with file_size: %u", capture_wav->size);
         war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
         goto pc_audio_done;
     }
-    wav_written = pwrite(capture_wav_fd, capture_wav, capture_wav_file_size, 0);
-    if (wav_written != capture_wav_file_size) {
+    wav_written = pwrite(capture_wav->fd, capture_wav->wav, capture_wav->size, 0);
+    if ((uint64_t)wav_written != capture_wav->size) {
         if (wav_written == -1) {
             call_carmack("write failed");
         } else {
-            call_carmack("partial write: %zd/%u bytes", wav_written, capture_wav_file_size);
+            call_carmack("partial write: %zd/%u bytes", wav_written, capture_wav->size);
         }
         goto pc_audio_done;
     }
@@ -8581,7 +8576,7 @@ pc_record_map: {
     capture_frames = atomic_load(&atomics->capture_frames);
     uint32_t* file_size = (uint32_t*)(cache->size + idx);
     *file_size = 44 + capture_frames * ctx_a->channel_count * sizeof(int16_t);
-    *(war_riff_header*)wav = (war_riff_header){"RIFF", *file_size, "WAVE"};
+    *(war_riff_header*)wav = (war_riff_header){"RIFF", *file_size - 8, "WAVE"};
     *(war_fmt_chunk*)(wav + sizeof(war_riff_header)) = (war_fmt_chunk){"fmt ",
                                                                        16,
                                                                        1,

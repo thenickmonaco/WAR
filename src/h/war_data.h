@@ -577,8 +577,9 @@ typedef struct war_pool {
 typedef struct war_cache_audio {
     uint64_t* id;
     uint64_t* timestamp;
-    void* wav;
-    ssize_t* size;
+    void** wav;
+    uint64_t* size;
+    uint64_t* capacity;
     char* fname;
     uint32_t* fname_size;
     int16_t* note;
@@ -586,6 +587,15 @@ typedef struct war_cache_audio {
     int* fd;
     uint32_t count;
 } war_cache_audio;
+
+typedef struct war_wav {
+    void* wav;
+    int fd;
+    char* fname;
+    uint32_t fname_size;
+    uint64_t size;
+    uint64_t capacity;
+} war_wav;
 
 typedef struct war_sequencer {
     uint64_t* id;

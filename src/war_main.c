@@ -308,6 +308,7 @@ void* war_window_render(void* args) {
     memset(
         note_layers, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     war_window_render_context ctx_wr = {
+        .play = 0,
         .prompt = 0,
         .layers_active = layers_active,
         .layer_flux = 0,
@@ -758,14 +759,16 @@ void* war_window_render(void* args) {
     memset(tmp_control_payload, 0, pc_control->size);
     void** pc_control_cmd = war_pool_alloc(
         pool_wr, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
+    pc_control_cmd[0] = &&end_wr;
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
     while (1) {
     pc_wr: {
         if (war_pc_from_a(pc_control, &header, &size, control_payload)) {
-            // goto* pc_control_cmd[header];
+            goto* pc_control_cmd[header];
         }
         goto pc_wr_done;
     }
+    end_wr: { break; }
     pc_wr_done:
         ctx_wr.now = war_get_monotonic_time_us();
         if (ctx_wr.now - last_frame_time >= ctx_wr.frame_duration_us) {
@@ -781,6 +784,87 @@ void* war_window_render(void* args) {
                                          0,
                                          physical_width,
                                          physical_height);
+            }
+            if (ctx_wr.play) {
+                call_carmack("playing");
+
+                // Calculate frame parameters
+                uint32_t samples_per_frame =
+                    (ctx_wr.frame_duration_us * 44100.0f) / 1000000;
+                uint32_t stereo_samples = samples_per_frame * 2;
+                uint32_t payload_size = stereo_samples * sizeof(float);
+
+                // Create temporary buffer on stack (small, safe)
+                float sine_buffer[stereo_samples];
+
+                // Generate sine wave samples
+                static float phase = 0.0f;
+                const float phase_increment = 2.0f * M_PI * 440.0f / 44100.0f;
+                const float amplitude = 0.1f;
+
+                for (uint32_t i = 0; i < samples_per_frame; i++) {
+                    float sample = sinf(phase) * amplitude;
+                    sine_buffer[i * 2] = sample;     // Left channel
+                    sine_buffer[i * 2 + 1] = sample; // Right channel
+                    phase += phase_increment;
+                    if (phase >= 2.0f * M_PI) phase -= 2.0f * M_PI;
+                }
+
+                // Inline war_pc_to_a logic
+                uint32_t header = 1; // Define appropriate header constant
+                uint32_t total_size = 8 + payload_size;
+                uint32_t write_index = pc_data->i_to_a;
+                uint32_t read_index = pc_data->i_from_wr;
+                uint32_t free_bytes =
+                    (pc_data->size + read_index - write_index - 1) &
+                    (pc_data->size - 1);
+
+                if (free_bytes >= total_size) {
+                    // Write header+size
+                    uint32_t cont_bytes = pc_data->size - write_index;
+
+                    if (cont_bytes >= 8) {
+                        *(uint32_t*)(pc_data->to_a + write_index) = header;
+                        *(uint32_t*)(pc_data->to_a + write_index + 4) =
+                            payload_size;
+                    } else {
+                        if (cont_bytes >= 4) {
+                            *(uint32_t*)(pc_data->to_a + write_index) = header;
+                            *(uint32_t*)pc_data->to_a = payload_size;
+                        } else {
+                            *(uint16_t*)(pc_data->to_a + write_index) =
+                                (uint16_t)header;
+                            *(uint16_t*)(pc_data->to_a + write_index + 2) =
+                                (uint16_t)(header >> 16);
+                            *(uint32_t*)pc_data->to_a = payload_size;
+                        }
+                    }
+
+                    // Write payload (sine wave data)
+                    if (payload_size > 0) {
+                        uint32_t payload_write_pos =
+                            (write_index + 8) & (pc_data->size - 1);
+                        uint32_t first_chunk =
+                            pc_data->size - payload_write_pos;
+
+                        if (first_chunk >= payload_size) {
+                            memcpy(pc_data->to_a + payload_write_pos,
+                                   sine_buffer,
+                                   payload_size);
+                        } else {
+                            memcpy(pc_data->to_a + payload_write_pos,
+                                   sine_buffer,
+                                   first_chunk);
+                            memcpy(pc_data->to_a,
+                                   (uint8_t*)sine_buffer + first_chunk,
+                                   payload_size - first_chunk);
+                        }
+                    }
+
+                    // Update write index
+                    pc_data->i_to_a =
+                        (write_index + total_size) & (pc_data->size - 1);
+                }
             }
         }
         // cursor blink
@@ -2485,6 +2569,7 @@ void* war_window_render(void* args) {
                 // wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
+                war_pc_to_a(pc_control, CONTROL_END_WAR, 0, NULL);
                 usleep(500000);
                 goto wayland_done;
             xdg_toplevel_configure_bounds:
@@ -6141,7 +6226,7 @@ void* war_window_render(void* args) {
             //-----------------------------------------------------------------
             cmd_normal_a: {
                 call_carmack("cmd_normal_a");
-                atomic_fetch_xor(&atomics->play, 1);
+                ctx_wr.play = !ctx_wr.play;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -8647,10 +8732,91 @@ void* war_window_render(void* args) {
 static void war_play(void* userdata) {
     void** data = (void**)userdata;
     war_pipewire_context* ctx_pw = data[0];
+    war_producer_consumer* pc_data = data[1];
+    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_pw->play_stream);
+    if (!b) { return; }
+    float* dst = (float*)b->buffer->datas[0].data;
+    uint32_t total_floats = b->buffer->datas[0].maxsize / sizeof(float);
+    uint32_t bytes_needed = total_floats * sizeof(float);
+    uint32_t write_index = pc_data->i_to_a;
+    uint32_t read_index = pc_data->i_from_wr;
+    uint32_t used_bytes =
+        (pc_data->size + write_index - read_index) & (pc_data->size - 1);
+    uint32_t header;
+    uint32_t size;
+    bool data_available = false;
+    if (used_bytes >= 8) {
+        uint32_t cont_bytes = pc_data->size - read_index;
+        if (cont_bytes >= 8) {
+            header = *(uint32_t*)(pc_data->to_a + read_index);
+            size = *(uint32_t*)(pc_data->to_a + read_index + 4);
+        } else {
+            if (cont_bytes >= 4) {
+                header = *(uint32_t*)(pc_data->to_a + read_index);
+                size = *(uint32_t*)pc_data->to_a;
+            } else {
+                uint16_t low = *(uint16_t*)(pc_data->to_a + read_index);
+                uint16_t high = *(uint16_t*)(pc_data->to_a + read_index + 2);
+                header = (uint32_t)high << 16 | low;
+                size = *(uint32_t*)pc_data->to_a;
+            }
+        }
+        uint32_t total_size = 8 + size;
+        if (used_bytes >= total_size && size > 0) {
+            uint32_t payload_start = (read_index + 8) & (pc_data->size - 1);
+            uint32_t first_chunk = pc_data->size - payload_start;
+            uint32_t bytes_to_copy =
+                (size < bytes_needed) ? size : bytes_needed;
+            if (first_chunk >= bytes_to_copy) {
+                memcpy(dst, pc_data->to_a + payload_start, bytes_to_copy);
+            } else {
+                uint32_t copy_size =
+                    (first_chunk < bytes_to_copy) ? first_chunk : bytes_to_copy;
+                memcpy(dst, pc_data->to_a + payload_start, copy_size);
+                if (bytes_to_copy > copy_size) {
+                    memcpy((uint8_t*)dst + copy_size,
+                           pc_data->to_a,
+                           bytes_to_copy - copy_size);
+                }
+            }
+            pc_data->i_from_wr =
+                (read_index + total_size) & (pc_data->size - 1);
+            data_available = true;
+            b->buffer->datas[0].chunk->size = bytes_to_copy;
+        }
+    }
+    if (!data_available) {
+        memset(dst, 0, bytes_needed);
+        b->buffer->datas[0].chunk->size = bytes_needed;
+    }
+    pw_stream_queue_buffer(ctx_pw->play_stream, b);
 }
 static void war_capture(void* userdata) {
     void** data = (void**)userdata;
     war_pipewire_context* ctx_pw = data[0];
+    war_producer_consumer* pc_data = data[1];
+    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_pw->capture_stream);
+    if (!b) { return; }
+    float* src = (float*)b->buffer->datas[0].data;
+    uint32_t n_samples = b->buffer->datas[0].chunk->size / sizeof(float);
+    uint32_t bytes_to_write = n_samples * sizeof(float);
+    uint32_t write_pos = pc_data->i_to_a;
+    uint32_t read_pos = pc_data->i_from_a;
+    uint32_t available_space =
+        (pc_data->size + read_pos - write_pos - 1) & (pc_data->size - 1);
+    if (available_space >= bytes_to_write) {
+        uint32_t first_chunk = pc_data->size - write_pos;
+        if (first_chunk >= bytes_to_write) {
+            memcpy(pc_data->to_a + write_pos, src, bytes_to_write);
+        } else {
+            memcpy(pc_data->to_a + write_pos, src, first_chunk);
+            memcpy(pc_data->to_a,
+                   (uint8_t*)src + first_chunk,
+                   bytes_to_write - first_chunk);
+        }
+        pc_data->i_to_a = (write_pos + bytes_to_write) & (pc_data->size - 1);
+    }
+    pw_stream_queue_buffer(ctx_pw->capture_stream, b);
 }
 //-----------------------------------------------------------------------------
 // THREAD AUDIO
@@ -8687,7 +8853,9 @@ void* war_audio(void* args) {
         war_pool_alloc(pool_a, sizeof(war_pipewire_context));
     ctx_pw->data =
         war_pool_alloc(pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_DATA));
+    // data
     ctx_pw->data[0] = ctx_pw;
+    ctx_pw->data[1] = pc_data;
     pw_init(NULL, NULL);
     ctx_pw->loop = pw_loop_new(NULL);
     ctx_pw->play_info = (struct spa_audio_info_raw){
@@ -8710,13 +8878,16 @@ void* war_audio(void* args) {
     };
     ctx_pw->play_stream = pw_stream_new_simple(
         ctx_pw->loop, "WAR_play", NULL, &ctx_pw->play_events, ctx_pw->data);
-    pw_stream_connect(ctx_pw->play_stream,
-                      PW_DIRECTION_OUTPUT,
-                      PW_ID_ANY,
-                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
-                          PW_STREAM_FLAG_RT_PROCESS,
-                      &ctx_pw->play_params,
-                      1);
+    if (!ctx_pw->play_stream) { call_carmack("play_stream init issue"); }
+    int pw_stream_result = pw_stream_connect(ctx_pw->play_stream,
+                                             PW_DIRECTION_OUTPUT,
+                                             PW_ID_ANY,
+                                             PW_STREAM_FLAG_AUTOCONNECT |
+                                                 PW_STREAM_FLAG_MAP_BUFFERS |
+                                                 PW_STREAM_FLAG_RT_PROCESS,
+                                             &ctx_pw->play_params,
+                                             1);
+    if (pw_stream_result < 0) { call_carmack("play stream connection error"); }
     ctx_pw->capture_info = (struct spa_audio_info_raw){
         .format = SPA_AUDIO_FORMAT_F32_LE,
         .rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
@@ -8740,13 +8911,18 @@ void* war_audio(void* args) {
                                                   NULL,
                                                   &ctx_pw->capture_events,
                                                   ctx_pw->data);
-    pw_stream_connect(ctx_pw->capture_stream,
-                      PW_DIRECTION_INPUT,
-                      PW_ID_ANY,
-                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
-                          PW_STREAM_FLAG_RT_PROCESS,
-                      &ctx_pw->capture_params,
-                      1);
+    if (!ctx_pw->capture_stream) { call_carmack("capture_stream init issue"); }
+    pw_stream_result = pw_stream_connect(ctx_pw->capture_stream,
+                                         PW_DIRECTION_INPUT,
+                                         PW_ID_ANY,
+                                         PW_STREAM_FLAG_AUTOCONNECT |
+                                             PW_STREAM_FLAG_MAP_BUFFERS |
+                                             PW_STREAM_FLAG_RT_PROCESS,
+                                         &ctx_pw->capture_params,
+                                         1);
+    if (pw_stream_result < 0) {
+        call_carmack("capture stream connection error");
+    }
     while (pw_stream_get_state(ctx_pw->capture_stream, NULL) !=
            PW_STREAM_STATE_PAUSED) {
         pw_loop_iterate(ctx_pw->loop, 1);
@@ -8784,6 +8960,7 @@ pc_a_done: {
     goto pc_a;
 }
 end_a: {
+    war_pc_to_wr(pc_control, CONTROL_END_WAR, 0, NULL);
     pw_stream_destroy(ctx_pw->play_stream);
     pw_stream_destroy(ctx_pw->capture_stream);
     pw_loop_destroy(ctx_pw->loop);

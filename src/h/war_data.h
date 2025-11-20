@@ -782,6 +782,7 @@ typedef struct war_window_render_context {
     uint32_t num_chars_in_prompt;
     uint32_t cursor_pos_x_command_mode;
     uint8_t layer_flux;
+    uint8_t play;
 } war_window_render_context;
 
 typedef struct war_glyph_info {

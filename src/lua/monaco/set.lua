@@ -35,7 +35,7 @@ ctx_lua = {
     A_NOTE_COUNT                        = 128,
     A_LAYERS_IN_RAM                     = 13,
     A_LAYER_COUNT                       = 9,
-    A_DATA                              = 1,
+    A_DATA                              = 2,
     A_WARMUP_FRAMES_FACTOR              = 1000, -- bigger value means less recording warmup frames
     A_NOTES_MAX                         = 20000,
     A_DEFAULT_ATTACK                    = 0.0,
@@ -2393,7 +2393,7 @@ pool_wr = {
     { name = "key_last_event_us",                   type = "uint64_t",                count = ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
     { name = "msg_buffer",                          type = "uint8_t",                 count = ctx_lua.WR_WAYLAND_MSG_BUFFER_SIZE },
     { name = "obj_op",                              type = "void*",                   count = ctx_lua.WR_WAYLAND_MAX_OBJECTS * ctx_lua.WR_WAYLAND_MAX_OP_CODES },
-    { name = "pc_window_render",                    type = "void*",                   count = ctx_lua.CMD_COUNT },
+    { name = "pc_control_cmd",                      type = "void*",                   count = ctx_lua.CMD_COUNT },
     { name = "control_payload",                     type = "uint8_t",                 count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
     { name = "tmp_control_payload",                 type = "uint8_t",                 count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
     { name = "input_sequence",                      type = "char",                    count = ctx_lua.WR_INPUT_SEQUENCE_LENGTH_MAX },

@@ -125,6 +125,7 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     // pc
     LOAD_INT(PC_CONTROL_BUFFER_SIZE)
     LOAD_INT(PC_DATA_BUFFER_SIZE)
+    LOAD_INT(A_BUILDER_DATA_SIZE)
 
 #undef LOAD_INT
 
@@ -460,19 +461,145 @@ static inline void war_layer_flux(war_window_render_context* ctx_wr,
 static inline void war_get_top_text(war_window_render_context* ctx_wr,
                                     war_lua_context* ctx_lua,
                                     char* tmp_str,
-                                    char* prompt) {}
+                                    char* prompt) {
+    memset(ctx_wr->text_top_status_bar,
+           0,
+           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    if (getcwd(tmp_str, atomic_load(&ctx_lua->A_PATH_LIMIT)) != NULL) {
+        memcpy(ctx_wr->text_top_status_bar,
+               tmp_str + 1,
+               atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    }
+    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    snprintf(tmp_str,
+             atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX),
+             "%.0f,%.0f",
+             ctx_wr->cursor_pos_y,
+             ctx_wr->cursor_pos_x);
+    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
+           tmp_str,
+           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_middle_index,
+           ctx_wr->layers_active,
+           ctx_wr->layers_active_count);
+}
 
 static inline void war_get_middle_text(war_window_render_context* ctx_wr,
                                        war_views* views,
                                        war_atomics* atomics,
                                        war_lua_context* ctx_lua,
                                        char* tmp_str,
-                                       char* prompt) {}
+                                       char* prompt) {
+    memset(ctx_wr->text_middle_status_bar,
+           0,
+           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    switch (ctx_wr->mode) {
+    case MODE_NORMAL:
+        uint8_t repeat = atomic_load(&atomics->repeat_section);
+        if (repeat) {
+            double start_frames =
+                (double)atomic_load(&atomics->repeat_start_frames);
+            double end_frames =
+                (double)atomic_load(&atomics->repeat_end_frames);
+            double bpm = atomic_load(&ctx_lua->A_BPM);
+            double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
+            uint32_t grid_start =
+                (uint32_t)((start_frames * bpm * 4.0) / (60.0 * sample_rate));
+            uint32_t grid_end =
+                (uint32_t)((end_frames * bpm * 4.0) / (60.0 * sample_rate));
+            memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+            snprintf(tmp_str,
+                     atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX),
+                     "R:%u,%u",
+                     grid_start,
+                     grid_end);
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_middle_index,
+                   tmp_str,
+                   atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        }
+        if (ctx_wr->layer_flux) {
+            int offset = (repeat) ? 6 : 0;
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_middle_index + offset,
+                   "FLUX",
+                   sizeof("FLUX"));
+        }
+        if (ctx_wr->cursor_blink_state) {
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_end_index,
+                   ctx_wr->input_sequence,
+                   ctx_wr->num_chars_in_sequence);
+            uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ?
+                                sizeof("BLINK") :
+                                sizeof("BPM");
+            memcpy(ctx_wr->text_middle_status_bar +
+                       ctx_wr->text_status_bar_end_index + 2,
+                   (size == sizeof("BLINK")) ? "BLINK" : "BPM",
+                   size);
+        }
+        int offset = ctx_wr->text_status_bar_end_index;
+        memcpy(ctx_wr->text_middle_status_bar + offset,
+               ctx_wr->input_sequence,
+               ctx_wr->num_chars_in_sequence);
+        break;
+    case MODE_VISUAL:
+        memcpy(ctx_wr->text_middle_status_bar,
+               "-- VISUAL --",
+               sizeof("-- VISUAL --"));
+        break;
+    case MODE_VIEWS:
+        if (views->warpoon_mode == MODE_VISUAL_LINE) {
+            memcpy(ctx_wr->text_middle_status_bar,
+                   "-- VIEWS -- -- VISUAL LINE --",
+                   sizeof("-- VIEWS -- -- VISUAL LINE --"));
+            break;
+        }
+        memcpy(ctx_wr->text_middle_status_bar,
+               "-- VIEWS --",
+               sizeof("-- VIEWS --"));
+        break;
+    case MODE_COMMAND: {
+        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        uint32_t max_cols = atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX);
+        if (ctx_wr->num_chars_in_prompt > 0) {
+            snprintf(tmp_str,
+                     ctx_wr->num_chars_in_sequence +
+                         ctx_wr->num_chars_in_prompt + 3,
+                     "%s: %s",
+                     prompt,
+                     ctx_wr->input_sequence);
+            memcpy(ctx_wr->text_middle_status_bar,
+                   tmp_str,
+                   ctx_wr->num_chars_in_prompt + ctx_wr->num_chars_in_sequence +
+                       3);
+            break;
+        }
+        snprintf(tmp_str,
+                 ctx_wr->num_chars_in_sequence + 2,
+                 ":%s",
+                 ctx_wr->input_sequence);
+        memcpy(ctx_wr->text_middle_status_bar,
+               tmp_str,
+               ctx_wr->num_chars_in_sequence + 2);
+        break;
+    }
+    }
+}
 
 static inline void war_get_bottom_text(war_window_render_context* ctx_wr,
                                        war_lua_context* ctx_lua,
                                        char* tmp_str,
-                                       char* prompt) {}
+                                       char* prompt) {
+    memset(ctx_wr->text_bottom_status_bar,
+           0,
+           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    memcpy(ctx_wr->text_bottom_status_bar,
+           "[WAR] 1:roll*",
+           sizeof("[WAR] 1:roll*"));
+}
 
 static inline void war_get_local_time(char* timestamp,
                                       war_lua_context* ctx_lua) {

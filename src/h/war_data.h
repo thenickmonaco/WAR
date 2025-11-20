@@ -23,7 +23,10 @@
 #ifndef WAR_DATA_H
 #define WAR_DATA_H
 
+#include "pipewire/stream.h"
 #include <ft2build.h>
+#include <spa-0.2/spa/param/audio/raw.h>
+#include <spa-0.2/spa/pod/builder.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -155,7 +158,7 @@ enum war_cursor {
     DEFAULT_CURSOR_BLINK_DURATION = 700000,
 };
 
-enum war_undo_commands_enum {
+enum war_undo_commands {
     CMD_ADD_NOTE = 0,
     CMD_DELETE_NOTE = 1,
     CMD_ADD_NOTES = 2,
@@ -164,6 +167,10 @@ enum war_undo_commands_enum {
     CMD_SWAP_DELETE_NOTES = 5,
     CMD_ADD_NOTES_SAME = 6,
     CMD_DELETE_NOTES_SAME = 7,
+};
+
+enum war_control_commands {
+    CONTROL_END_WAR = 0,
 };
 
 typedef struct __attribute__((packed)) war_riff_header {
@@ -353,6 +360,7 @@ typedef struct war_lua_context {
     _Atomic int A_LAYERS_IN_RAM;
     _Atomic double A_BPM;
     _Atomic int A_BASE_FREQUENCY;
+    _Atomic int A_SCHED_FIFO_PRIORITY;
     _Atomic int A_BASE_NOTE;
     _Atomic int A_EDO;
     _Atomic int A_NOTES_MAX;
@@ -361,7 +369,8 @@ typedef struct war_lua_context {
     _Atomic float A_DEFAULT_RELEASE;
     _Atomic float A_DEFAULT_GAIN;
     _Atomic double A_DEFAULT_COLUMNS_PER_BEAT;
-    _Atomic int A_USERDATA;
+    _Atomic int A_BUILDER_DATA_SIZE;
+    _Atomic int A_DATA;
     _Atomic int A_CACHE_SIZE;
     _Atomic int A_PATH_LIMIT;
     _Atomic int A_WARMUP_FRAMES_FACTOR;
@@ -397,7 +406,8 @@ typedef struct war_lua_context {
     // cmd
     _Atomic int CMD_COUNT;
     // pc
-    _Atomic int PC_BUFFER_SIZE;
+    _Atomic int PC_CONTROL_BUFFER_SIZE;
+    _Atomic int PC_DATA_BUFFER_SIZE;
     // vk
     _Atomic int VK_ATLAS_WIDTH;
     _Atomic int VK_ATLAS_HEIGHT;
@@ -488,41 +498,6 @@ enum war_audio {
     AUDIO_DEFAULT_PERIOD_COUNT = 4,
     AUDIO_DEFAULT_SAMPLE_DURATION = 30,
     // cmds
-    AUDIO_CMD_STOP = 1,
-    AUDIO_CMD_PLAY = 2,
-    AUDIO_CMD_PAUSE = 3,
-    AUDIO_CMD_GET_FRAMES = 4,
-    AUDIO_CMD_ADD_NOTE = 5,
-    AUDIO_CMD_END_WAR = 6,
-    AUDIO_CMD_SEEK = 7,
-    AUDIO_CMD_RECORD_WAIT = 8,
-    AUDIO_CMD_RECORD = 9,
-    AUDIO_CMD_RECORD_MAP = 10,
-    AUDIO_CMD_SET_THRESHOLD = 11,
-    AUDIO_CMD_NOTE_ON = 12,
-    AUDIO_CMD_NOTE_OFF = 13,
-    AUDIO_CMD_NOTE_OFF_ALL = 14,
-    AUDIO_CMD_RESET_MAPPINGS = 15,
-    AUDIO_CMD_MIDI_RECORD_WAIT = 16,
-    AUDIO_CMD_MIDI_RECORD = 17,
-    AUDIO_CMD_MIDI_RECORD_MAP = 18,
-    AUDIO_CMD_SAVE = 19,
-    AUDIO_CMD_DELETE_NOTE = 20,
-    AUDIO_CMD_DELETE_ALL_NOTES = 21,
-    AUDIO_CMD_REPLACE_NOTE = 22,
-    AUDIO_CMD_REPLACE_NOTE_DURATION = 23,
-    AUDIO_CMD_REPLACE_NOTE_START = 24,
-    AUDIO_CMD_REPEAT_SECTION = 25,
-    AUDIO_CMD_INSERT_NOTE = 26,
-    AUDIO_CMD_COMPACT = 27,
-    AUDIO_CMD_REVIVE_NOTE = 28,
-    AUDIO_CMD_ADD_NOTES = 29,
-    AUDIO_CMD_DELETE_NOTES = 30,
-    AUDIO_CMD_ADD_NOTES_SAME = 31,
-    AUDIO_CMD_DELETE_NOTES_SAME = 32,
-    AUDIO_CMD_REVIVE_NOTES = 33,
-    AUDIO_CMD_WRITE = 34,
-    AUDIO_CMD_GET_NOTE_DURATION = 35,
     //
     AUDIO_VOICE_GRAND_PIANO = 0,
     AUDIO_VOICE_COUNT = 128,
@@ -533,7 +508,6 @@ typedef struct war_atomics {
     _Atomic uint64_t play_clock;
     _Atomic uint64_t play_frames;
     _Atomic uint64_t capture_frames;
-    _Atomic uint8_t state;
     _Atomic float capture_threshold;
     _Atomic uint8_t capture;
     _Atomic uint8_t play;
@@ -565,6 +539,7 @@ typedef struct war_producer_consumer {
     uint32_t i_to_wr;
     uint32_t i_from_a;
     uint32_t i_from_wr;
+    uint64_t size;
 } war_producer_consumer;
 
 typedef struct war_pool {
@@ -595,6 +570,9 @@ typedef struct war_wav {
     uint32_t fname_size;
     uint64_t size;
     uint64_t capacity;
+    void* tmp_wav;
+    uint64_t tmp_size;
+    uint64_t tmp_capacity;
 } war_wav;
 
 typedef struct war_sequencer {
@@ -648,6 +626,23 @@ typedef struct war_audio_context {
     uint8_t* previous_note_states;
     uint64_t* note_play_start;
 } war_audio_context;
+
+typedef struct war_pipewire_context {
+    struct pw_loop* loop;
+    struct pw_stream* play_stream;
+    struct pw_stream* capture_stream;
+    const struct spa_pod* play_params;
+    const struct spa_pod* capture_params;
+    struct spa_audio_info_raw play_info;
+    struct spa_audio_info_raw capture_info;
+    struct spa_pod_builder play_builder;
+    struct spa_pod_builder capture_builder;
+    struct pw_stream_events play_events;
+    struct pw_stream_events capture_events;
+    uint8_t* play_builder_data;
+    uint8_t* capture_builder_data;
+    void** data;
+} war_pipewire_context;
 
 typedef struct war_color_context {
     uint32_t white_hex;
@@ -788,10 +783,6 @@ typedef struct war_window_render_context {
     uint32_t cursor_pos_x_command_mode;
     uint8_t layer_flux;
 } war_window_render_context;
-
-enum war_producer_consumer_enum {
-    PC_BUFFER_SIZE = 4096,
-};
 
 typedef struct war_glyph_info {
     float advance_x;

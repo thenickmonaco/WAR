@@ -12,7 +12,8 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 //
-// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
+// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and
+// LICENSE.
 //
 //-----------------------------------------------------------------------------
 
@@ -58,22 +59,32 @@
 int main() {
     CALL_CARMACK("war");
     war_lua_context ctx_lua;
-    war_load_lua(&ctx_lua, "src/lua/monaco/set.lua");
-    war_producer_consumer pc;
-    {
-        pc.to_a = malloc(sizeof(uint8_t) * atomic_load(&ctx_lua.PC_BUFFER_SIZE));
-        assert(pc.to_a);
-        memset(pc.to_a, 0, atomic_load(&ctx_lua.PC_BUFFER_SIZE));
-        pc.to_wr = malloc(sizeof(uint8_t) * atomic_load(&ctx_lua.PC_BUFFER_SIZE));
-        assert(pc.to_wr);
-        memset(pc.to_wr, 0, atomic_load(&ctx_lua.PC_BUFFER_SIZE));
-        pc.i_to_a = 0;
-        pc.i_to_wr = 0;
-        pc.i_from_a = 0;
-        pc.i_from_wr = 0;
-    }
+    war_load_lua_config(&ctx_lua, "src/lua/monaco/set.lua");
+    war_producer_consumer pc_control;
+    pc_control.size = atomic_load(&ctx_lua.PC_CONTROL_BUFFER_SIZE);
+    pc_control.to_a = malloc(sizeof(uint8_t) * pc_control.size);
+    assert(pc_control.to_a);
+    memset(pc_control.to_a, 0, pc_control.size);
+    pc_control.to_wr = malloc(sizeof(uint8_t) * pc_control.size);
+    assert(pc_control.to_wr);
+    memset(pc_control.to_wr, 0, pc_control.size);
+    pc_control.i_to_a = 0;
+    pc_control.i_to_wr = 0;
+    pc_control.i_from_a = 0;
+    pc_control.i_from_wr = 0;
+    war_producer_consumer pc_data;
+    pc_data.size = atomic_load(&ctx_lua.PC_DATA_BUFFER_SIZE);
+    pc_data.to_a = malloc(sizeof(uint8_t) * pc_data.size);
+    assert(pc_data.to_a);
+    memset(pc_data.to_a, 0, pc_data.size);
+    pc_data.to_wr = malloc(sizeof(uint8_t) * pc_data.size);
+    assert(pc_data.to_wr);
+    memset(pc_data.to_wr, 0, pc_data.size);
+    pc_data.i_to_a = 0;
+    pc_data.i_to_wr = 0;
+    pc_data.i_from_a = 0;
+    pc_data.i_from_wr = 0;
     war_atomics atomics = {
-        .state = AUDIO_CMD_STOP,
         .play_clock = 0,
         .play_frames = 0,
         .capture_frames = 0,
@@ -99,9 +110,17 @@ int main() {
     war_pool pool_wr;
     war_pool pool_a;
     pthread_t war_window_render_thread;
-    pthread_create(&war_window_render_thread, NULL, war_window_render, (void* [4]){&pc, &atomics, &pool_wr, &ctx_lua});
+    pthread_create(
+        &war_window_render_thread,
+        NULL,
+        war_window_render,
+        (void* [5]){&pc_control, &atomics, &pool_wr, &ctx_lua, &pc_data});
     pthread_t war_audio_thread;
-    pthread_create(&war_audio_thread, NULL, war_audio, (void* [4]){&pc, &atomics, &pool_a, &ctx_lua});
+    pthread_create(
+        &war_audio_thread,
+        NULL,
+        war_audio,
+        (void* [5]){&pc_control, &atomics, &pool_a, &ctx_lua, &pc_data});
     pthread_join(war_window_render_thread, NULL);
     pthread_join(war_audio_thread, NULL);
     END("war");
@@ -113,17 +132,20 @@ int main() {
 void* war_window_render(void* args) {
     header("war_window_render");
     void** args_ptrs = (void**)args;
-    war_producer_consumer* pc = args_ptrs[0];
+    war_producer_consumer* pc_control = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
     war_pool* pool_wr = args_ptrs[2];
     war_lua_context* ctx_lua = args_ptrs[3];
+    war_producer_consumer* pc_data = args_ptrs[4];
     call_carmack("ctx_lua WR_STATES: %i", atomic_load(&ctx_lua->WR_STATES));
     pool_wr->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
-    pool_wr->pool_size = war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/monaco/set.lua");
+    pool_wr->pool_size =
+        war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/monaco/set.lua");
     pool_wr->pool_size += pool_wr->pool_alignment * 2000;
     call_carmack("pool_wr hack size: %zu", pool_wr->pool_size);
     pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
-    int pool_result = posix_memalign(&pool_wr->pool, pool_wr->pool_alignment, pool_wr->pool_size);
+    int pool_result = posix_memalign(
+        &pool_wr->pool, pool_wr->pool_alignment, pool_wr->pool_size);
     memset(pool_wr->pool, 0, pool_wr->pool_size);
     assert(pool_result == 0 && pool_wr->pool);
     pool_wr->pool_ptr = (uint8_t*)pool_wr->pool;
@@ -135,13 +157,12 @@ void* war_window_render(void* args) {
     double physical_height = 1600;
     const uint32_t stride = physical_width * 4;
 
-#if DMABUF
-    war_vulkan_context ctx_vk = war_vulkan_init(ctx_lua, physical_width, physical_height);
+    war_vulkan_context ctx_vk =
+        war_vulkan_init(ctx_lua, physical_width, physical_height);
     assert(ctx_vk.dmabuf_fd >= 0);
     uint32_t zwp_linux_dmabuf_v1_id = 0;
     uint32_t zwp_linux_buffer_params_v1_id = 0;
     uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
-#endif
 
     // constants
     const uint32_t light_gray_hex = 0xFF454950;
@@ -149,7 +170,8 @@ void* war_window_render(void* args) {
     const uint32_t dark_gray_hex = 0xFF282828;
     // rainbow
     uint32_t layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
-    uint32_t* colors = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->A_LAYER_COUNT));
+    uint32_t* colors = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->A_LAYER_COUNT));
     const uint32_t red_hex = 0xFF0000DE;
     const uint32_t orange_hex = 0xFF0080FF;
     const uint32_t yellow_hex = 0xFF00FFFF;
@@ -218,32 +240,45 @@ void* war_window_render(void* args) {
     const float default_horizontal_line_thickness = 0.018;
     const float piano_horizontal_line_thickness = 0.018;
     const float default_vertical_line_thickness = 0.018; // default: 0.018
-    const float default_outline_thickness = 0.04;        // 0.027 is minimum for preventing 1/4, 1/7, 1/9, max = 0.075f
-                                                         // sub_cursor right outline from disappearing
-                                                         // defualt outline = 0.04f
-    war_color_context* ctx_color = war_pool_alloc(pool_wr, sizeof(war_color_context));
+    const float default_outline_thickness =
+        0.04; // 0.027 is minimum for preventing 1/4, 1/7, 1/9, max = 0.075f
+              // sub_cursor right outline from disappearing
+              // defualt outline = 0.04f
+    war_color_context* ctx_color =
+        war_pool_alloc(pool_wr, sizeof(war_color_context));
     ctx_color->full_white_hex = full_white_hex;
     ctx_color->white_hex = white_hex;
     ctx_color->colors = colors;
     float default_alpha_scale = atomic_load(&ctx_lua->DEFAULT_ALPHA_SCALE);
-    float default_cursor_alpha_scale = atomic_load(&ctx_lua->DEFAULT_CURSOR_ALPHA_SCALE);
-    float default_playback_bar_thickness = atomic_load(&ctx_lua->DEFAULT_PLAYBACK_BAR_THICKNESS);
+    float default_cursor_alpha_scale =
+        atomic_load(&ctx_lua->DEFAULT_CURSOR_ALPHA_SCALE);
+    float default_playback_bar_thickness =
+        atomic_load(&ctx_lua->DEFAULT_PLAYBACK_BAR_THICKNESS);
     float default_text_feather = atomic_load(&ctx_lua->DEFAULT_TEXT_FEATHER);
-    float default_text_thickness = atomic_load(&ctx_lua->DEFAULT_TEXT_THICKNESS);
+    float default_text_thickness =
+        atomic_load(&ctx_lua->DEFAULT_TEXT_THICKNESS);
     float windowed_text_feather = atomic_load(&ctx_lua->WINDOWED_TEXT_FEATHER);
-    float windowed_text_thickness = atomic_load(&ctx_lua->WINDOWED_TEXT_THICKNESS);
-    float default_windowed_alpha_scale = atomic_load(&ctx_lua->DEFAULT_WINDOWED_ALPHA_SCALE);
-    float default_windowed_cursor_alpha_scale = atomic_load(&ctx_lua->DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE);
+    float windowed_text_thickness =
+        atomic_load(&ctx_lua->WINDOWED_TEXT_THICKNESS);
+    float default_windowed_alpha_scale =
+        atomic_load(&ctx_lua->DEFAULT_WINDOWED_ALPHA_SCALE);
+    float default_windowed_cursor_alpha_scale =
+        atomic_load(&ctx_lua->DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE);
     double scale_factor = 1.483333; // 1.483333
-    const uint32_t logical_width = (uint32_t)floor(physical_width / scale_factor);
-    const uint32_t logical_height = (uint32_t)floor(physical_height / scale_factor);
+    const uint32_t logical_width =
+        (uint32_t)floor(physical_width / scale_factor);
+    const uint32_t logical_height =
+        (uint32_t)floor(physical_height / scale_factor);
     uint32_t num_rows_for_status_bars = 3;
     uint32_t num_cols_for_line_numbers = 3;
     uint32_t viewport_cols = (uint32_t)(physical_width / ctx_vk.cell_width);
     uint32_t viewport_rows = (uint32_t)(physical_height / ctx_vk.cell_height);
     double viewport_bound_x = physical_width / ctx_vk.cell_width;
     double viewport_bound_y = physical_height / ctx_vk.cell_height;
-    uint32_t visible_rows = (uint32_t)((physical_height - ((float)num_rows_for_status_bars * ctx_vk.cell_height)) / ctx_vk.cell_height);
+    uint32_t visible_rows =
+        (uint32_t)((physical_height -
+                    ((float)num_rows_for_status_bars * ctx_vk.cell_height)) /
+                   ctx_vk.cell_height);
     war_audio_context ctx_a = {
         .sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
         .BPM = atomic_load(&ctx_lua->A_BPM),
@@ -257,14 +292,21 @@ void* war_window_render(void* args) {
     undo_tree->next_id = 1;
     undo_tree->next_seq_num = 1;
     undo_tree->next_branch_id = 1;
-    char* input_sequence = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-    char* prompt = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    char* input_sequence = war_pool_alloc(
+        pool_wr,
+        sizeof(char) * atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
+    char* prompt = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    char* tmp_str = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    char* layers_active = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_LAYER_COUNT));
+    char* tmp_str = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    char* layers_active = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_LAYER_COUNT));
     chdir(atomic_load(&ctx_lua->CWD));
-    uint64_t* note_layers = war_pool_alloc(pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    memset(note_layers, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    uint64_t* note_layers = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    memset(
+        note_layers, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     war_window_render_context ctx_wr = {
         .prompt = 0,
         .layers_active = layers_active,
@@ -284,7 +326,8 @@ void* war_window_render(void* args) {
         .mode = MODE_NORMAL,
         .hud_state = HUD_PIANO,
         .cursor_blink_state = 0,
-        .cursor_blink_duration_us = atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US),
+        .cursor_blink_duration_us =
+            atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US),
         .cursor_pos_x = 0,
         .cursor_pos_y = 60,
         .cursor_size_x = 1.0,
@@ -315,7 +358,11 @@ void* war_window_render(void* args) {
         .bottom_row = 60 - visible_rows / 2 + 1,
         .top_row = 60 + visible_rows / 2,
         .left_col = 0,
-        .right_col = (uint32_t)((physical_width - ((float)num_cols_for_line_numbers * ctx_vk.cell_width)) / ctx_vk.cell_width) - 1,
+        .right_col =
+            (uint32_t)((physical_width - ((float)num_cols_for_line_numbers *
+                                          ctx_vk.cell_width)) /
+                       ctx_vk.cell_width) -
+            1,
         .col_increment = 1,
         .row_increment = 1,
         .col_leap_increment = 13,
@@ -380,26 +427,41 @@ void* war_window_render(void* args) {
         .color_cursor = white_hex,
         .color_cursor_transparent = white_hex,
     };
-    for (int i = 0; i < LAYER_COUNT; i++) { ctx_wr.layers[i] = i / ctx_wr.layer_count; }
+    for (int i = 0; i < LAYER_COUNT; i++) {
+        ctx_wr.layers[i] = i / ctx_wr.layer_count;
+    }
     war_views views;
     {
-        uint32_t* views_col = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_row = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_left_col = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_right_col = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_bottom_row = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        uint32_t* views_top_row = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        char** warpoon_text = war_pool_alloc(pool_wr, sizeof(char*) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_col = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_row = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_left_col = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_right_col = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_bottom_row = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        uint32_t* views_top_row = war_pool_alloc(
+            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+        char** warpoon_text = war_pool_alloc(
+            pool_wr, sizeof(char*) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
         for (uint32_t i = 0; i < atomic_load(&ctx_lua->WR_VIEWS_SAVED); i++) {
-            warpoon_text[i] = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
-            memset(warpoon_text[i], 0, atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
+            warpoon_text[i] = war_pool_alloc(
+                pool_wr,
+                sizeof(char) * atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
+            memset(warpoon_text[i],
+                   0,
+                   atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
         }
         uint32_t warpoon_viewport_cols = 25;
         uint32_t warpoon_viewport_rows = 8;
         uint32_t warpoon_hud_cols = 2;
         uint32_t warpoon_hud_rows = 0;
-        uint32_t warpoon_max_col = atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS) - 1 - warpoon_hud_cols;
-        uint32_t warpoon_max_row = atomic_load(&ctx_lua->WR_VIEWS_SAVED) - 1 - warpoon_hud_rows;
+        uint32_t warpoon_max_col =
+            atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS) - 1 - warpoon_hud_cols;
+        uint32_t warpoon_max_row =
+            atomic_load(&ctx_lua->WR_VIEWS_SAVED) - 1 - warpoon_hud_rows;
         views = (war_views){
             .col = views_col,
             .row = views_row,
@@ -444,30 +506,65 @@ void* war_window_render(void* args) {
     uint64_t timeout_start_us = 0;
     bool timeout = false;
     bool goto_cmd_timeout_done = false;
-    war_fsm_state* fsm = war_pool_alloc(pool_wr, sizeof(war_fsm_state) * atomic_load(&ctx_lua->WR_STATES));
+    war_fsm_state* fsm = war_pool_alloc(
+        pool_wr, sizeof(war_fsm_state) * atomic_load(&ctx_lua->WR_STATES));
     for (int i = 0; i < atomic_load(&ctx_lua->WR_STATES); i++) {
-        fsm[i].is_terminal = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].is_terminal, 0, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].is_prefix = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].is_prefix, 0, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_release = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].handle_release, 0, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_repeat = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].handle_repeat, 0, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_timeout = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].handle_timeout, 0, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].command = war_pool_alloc(pool_wr, sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].command, 0, sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].next_state =
-            war_pool_alloc(pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) * atomic_load(&ctx_lua->WR_MOD_COUNT));
-        memset(fsm[i].next_state, 0, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) * atomic_load(&ctx_lua->WR_MOD_COUNT));
+        fsm[i].is_terminal = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].is_terminal,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].is_prefix = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].is_prefix,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_release = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].handle_release,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_repeat = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].handle_repeat,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].handle_timeout = war_pool_alloc(
+            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].handle_timeout,
+               0,
+               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].command = war_pool_alloc(
+            pool_wr, sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        memset(fsm[i].command,
+               0,
+               sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
+        fsm[i].next_state = war_pool_alloc(
+            pool_wr,
+            sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+                atomic_load(&ctx_lua->WR_MOD_COUNT));
+        memset(fsm[i].next_state,
+               0,
+               sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+                   atomic_load(&ctx_lua->WR_MOD_COUNT));
     }
     uint16_t current_state_index = 0;
-    bool* key_down = war_pool_alloc(pool_wr, sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) * atomic_load(&ctx_lua->WR_MOD_COUNT));
-    memset(key_down, 0, sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) * atomic_load(&ctx_lua->WR_MOD_COUNT));
-    uint64_t* key_last_event_us =
-        war_pool_alloc(pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) * atomic_load(&ctx_lua->WR_MOD_COUNT));
-    memset(key_last_event_us, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) * atomic_load(&ctx_lua->WR_MOD_COUNT));
+    bool* key_down =
+        war_pool_alloc(pool_wr,
+                       sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+                           atomic_load(&ctx_lua->WR_MOD_COUNT));
+    memset(key_down,
+           0,
+           sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+               atomic_load(&ctx_lua->WR_MOD_COUNT));
+    uint64_t* key_last_event_us = war_pool_alloc(
+        pool_wr,
+        sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+            atomic_load(&ctx_lua->WR_MOD_COUNT));
+    memset(key_last_event_us,
+           0,
+           sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
+               atomic_load(&ctx_lua->WR_MOD_COUNT));
     uint64_t fsm_state_last_event_us = 0;
 
     uint32_t mod_shift;
@@ -484,7 +581,6 @@ void* war_window_render(void* args) {
         ARGB8888 = 0,
     };
 
-#if WL_SHM
     int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
     if (shm_fd < 0) {
         call_carmack("error: memfd_create");
@@ -495,11 +591,6 @@ void* war_window_render(void* args) {
         close(shm_fd);
         return NULL;
     }
-    uint32_t wl_shm_id = 0;
-    uint32_t wl_shm_pool_id = 0;
-    void* pixel_buffer;
-#endif
-
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
     uint32_t wl_buffer_id = 0;
@@ -554,7 +645,9 @@ void* war_window_render(void* args) {
         new_id = wl_registry_id + 1;
     }
 
-    uint8_t* msg_buffer = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE));
+    uint8_t* msg_buffer = war_pool_alloc(
+        pool_wr,
+        sizeof(uint8_t) * atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE));
     size_t msg_buffer_size = 0;
 
     struct pollfd pfd = {
@@ -563,175 +656,145 @@ void* war_window_render(void* args) {
     };
 
     void** obj_op = war_pool_alloc(
-        pool_wr, sizeof(void*) * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OBJECTS) * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES));
-    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_display_error;
-    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_display_delete_id;
-    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_registry_global;
-    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_registry_global_remove;
+        pool_wr,
+        sizeof(void*) * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OBJECTS) *
+            atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES));
+    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
+        &&wl_display_error;
+    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] =
+        &&wl_display_delete_id;
+    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+           0] = &&wl_registry_global;
+    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+           1] = &&wl_registry_global_remove;
 
-    uint32_t max_viewport_cols = (uint32_t)(physical_width / (ctx_vk.cell_width * ctx_wr.min_zoom_scale));
-    uint32_t max_viewport_rows = (uint32_t)(physical_height / (ctx_vk.cell_height * ctx_wr.min_zoom_scale));
+    uint32_t max_viewport_cols =
+        (uint32_t)(physical_width /
+                   (ctx_vk.cell_width * ctx_wr.min_zoom_scale));
+    uint32_t max_viewport_rows =
+        (uint32_t)(physical_height /
+                   (ctx_vk.cell_height * ctx_wr.min_zoom_scale));
     uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
 
     // --- WAR_NOTE_QUADS ALLOCATION ---
     war_note_quads note_quads;
-    note_quads.alive = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.id = war_pool_alloc(pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.pos_x = war_pool_alloc(pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.pos_y = war_pool_alloc(pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.layer = war_pool_alloc(pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.size_x = war_pool_alloc(pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.navigation_x = war_pool_alloc(pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.navigation_x_numerator = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.navigation_x_denominator = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.size_x_numerator = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.size_x_denominator = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.color = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.outline_color = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.gain = war_pool_alloc(pool_wr, sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.voice = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.hidden = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads.mute = war_pool_alloc(pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.alive = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.id = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.pos_x = war_pool_alloc(
+        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.pos_y = war_pool_alloc(
+        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.layer = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.size_x = war_pool_alloc(
+        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.navigation_x = war_pool_alloc(
+        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.navigation_x_numerator = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.navigation_x_denominator = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.size_x_numerator = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.size_x_denominator = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.color = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.outline_color = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.gain = war_pool_alloc(
+        pool_wr, sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.voice = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.hidden = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads.mute = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
     note_quads.count = 0;
-    war_quad_vertex* quad_vertices = war_pool_alloc(pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    war_quad_vertex* quad_vertices = war_pool_alloc(
+        pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t quad_vertices_count = 0;
-    uint16_t* quad_indices = war_pool_alloc(pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    uint16_t* quad_indices = war_pool_alloc(
+        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t quad_indices_count = 0;
-    war_quad_vertex* transparent_quad_vertices = war_pool_alloc(pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    war_quad_vertex* transparent_quad_vertices = war_pool_alloc(
+        pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t transparent_quad_vertices_count = 0;
-    uint16_t* transparent_quad_indices = war_pool_alloc(pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    uint16_t* transparent_quad_indices = war_pool_alloc(
+        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
     uint32_t transparent_quad_indices_count = 0;
-    war_text_vertex* text_vertices = war_pool_alloc(pool_wr, sizeof(war_text_vertex) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
+    war_text_vertex* text_vertices = war_pool_alloc(
+        pool_wr,
+        sizeof(war_text_vertex) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_vertices_count = 0;
-    uint16_t* text_indices = war_pool_alloc(pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
+    uint16_t* text_indices = war_pool_alloc(
+        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_indices_count = 0;
 
-    ctx_wr.text_bottom_status_bar = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    ctx_wr.text_middle_status_bar = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    ctx_wr.text_top_status_bar = war_pool_alloc(pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_bottom_status_bar = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_middle_status_bar = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    ctx_wr.text_top_status_bar = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
 
     const double microsecond_conversion = 1000000.0;
     ctx_wr.sleep_duration_us = 50000;
-    ctx_wr.frame_duration_us = (uint64_t)round((1.0 / (double)ctx_wr.FPS) * microsecond_conversion);
+    ctx_wr.frame_duration_us =
+        (uint64_t)round((1.0 / (double)ctx_wr.FPS) * microsecond_conversion);
     uint64_t last_frame_time = war_get_monotonic_time_us();
     ctx_wr.cursor_blink_previous_us = last_frame_time;
     ctx_wr.cursor_blinking = false;
 
     uint32_t header;
     uint32_t size;
-    uint8_t* payload = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->PC_BUFFER_SIZE));
-    uint8_t* tmp_payload = war_pool_alloc(pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->PC_BUFFER_SIZE));
-    void** pc_window_render = war_pool_alloc(pool_wr, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
-    pc_window_render[AUDIO_CMD_STOP] = &&pc_stop;
-    pc_window_render[AUDIO_CMD_PLAY] = &&pc_play;
-    pc_window_render[AUDIO_CMD_PAUSE] = &&pc_pause;
-    pc_window_render[AUDIO_CMD_GET_FRAMES] = &&pc_get_frames;
-    pc_window_render[AUDIO_CMD_ADD_NOTE] = &&pc_add_note;
-    pc_window_render[AUDIO_CMD_END_WAR] = &&pc_end_war;
-    pc_window_render[AUDIO_CMD_SEEK] = &&pc_seek;
-    pc_window_render[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
-    pc_window_render[AUDIO_CMD_RECORD] = &&pc_record;
-    pc_window_render[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
-    pc_window_render[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
-    pc_window_render[AUDIO_CMD_NOTE_ON] = &&pc_note_on;
-    pc_window_render[AUDIO_CMD_NOTE_OFF] = &&pc_note_off;
-    pc_window_render[AUDIO_CMD_RESET_MAPPINGS] = &&pc_reset_mappings;
-    pc_window_render[AUDIO_CMD_MIDI_RECORD_WAIT] = &&pc_midi_record_wait;
-    pc_window_render[AUDIO_CMD_MIDI_RECORD] = &&pc_midi_record;
-    pc_window_render[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
-    pc_window_render[AUDIO_CMD_INSERT_NOTE] = &&pc_insert_note;
-    pc_window_render[AUDIO_CMD_COMPACT] = &&pc_compact;
-    pc_window_render[AUDIO_CMD_REVIVE_NOTE] = &&pc_revive_note;
-    pc_window_render[AUDIO_CMD_WRITE] = &&pc_write;
+    uint8_t* control_payload =
+        war_pool_alloc(pool_wr, sizeof(uint8_t) * pc_control->size);
+    memset(control_payload, 0, pc_control->size);
+    uint8_t* tmp_control_payload =
+        war_pool_alloc(pool_wr, sizeof(uint8_t) * pc_control->size);
+    memset(tmp_control_payload, 0, pc_control->size);
+    void** pc_control_cmd = war_pool_alloc(
+        pool_wr, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
-    while (atomics->state != AUDIO_CMD_END_WAR) {
-    pc_window_render:
-        if (war_pc_from_a(pc, &header, &size, payload)) { goto* pc_window_render[header]; }
-        goto pc_window_render_done;
-    pc_stop: {
-        call_carmack("from a: STOP");
-        atomic_store(&atomics->state, AUDIO_CMD_STOP);
-        goto pc_window_render;
+    while (1) {
+    pc_wr: {
+        if (war_pc_from_a(pc_control, &header, &size, control_payload)) {
+            // goto* pc_control_cmd[header];
+        }
+        goto pc_wr_done;
     }
-    pc_compact: { goto pc_window_render; }
-    pc_insert_note: { goto pc_window_render; }
-    pc_revive_note: { goto pc_window_render; }
-    pc_play: {
-        call_carmack("from a: PLAY");
-        ctx_wr.cursor_blink_previous_us = ctx_wr.now;
-        ctx_wr.cursor_blinking = false;
-        ctx_wr.cursor_blink_duration_us = (uint64_t)round((60.0 / ((double)ctx_a.BPM)) * microsecond_conversion);
-        goto pc_window_render;
-    }
-    pc_pause:
-        call_carmack("from a: PAUSE");
-        goto pc_window_render;
-    pc_get_frames:
-        goto pc_window_render;
-    pc_add_note:
-        goto pc_window_render;
-    pc_end_war:
-        call_carmack("from a: END_WAR");
-        goto pc_window_render;
-    pc_seek:
-        goto pc_window_render;
-    pc_record_wait:
-        call_carmack("from a: RECORD_WAIT");
-        goto pc_window_render;
-    pc_record:
-        call_carmack("from a: RECORD");
-        atomic_store(&atomics->state, AUDIO_CMD_RECORD);
-        goto pc_window_render;
-    pc_record_map:
-        call_carmack("from a: RECORD_MAP");
-        atomic_store(&atomics->state, AUDIO_CMD_STOP);
-        goto pc_window_render;
-    pc_set_threshold:
-        goto pc_window_render;
-    pc_note_on:
-        goto pc_window_render;
-    pc_note_off: {
-        call_carmack("from a: NOTE_OFF");
-        uint32_t note;
-        note = *(uint32_t*)(payload);
-        ctx_wr.skip_release = 1;
-        goto pc_window_render;
-    }
-    pc_reset_mappings:
-        call_carmack("from a: RESET_MAPPINGS");
-        goto pc_window_render;
-    pc_midi_record:
-        call_carmack("from a: MIDI_RECORD");
-        atomic_store(&atomics->state, AUDIO_CMD_MIDI_RECORD);
-        goto pc_window_render;
-    pc_write: {
-        call_carmack("from a: WRITE");
-        uint32_t fname_size = *(uint32_t*)payload;
-        char* fname = (char*)(payload + sizeof(uint32_t));
-        uint32_t written = *(uint32_t*)(payload + sizeof(uint32_t) + fname_size);
-        int len = snprintf(NULL, 0, "NAME: %.*s, %u B", fname_size, fname, written);
-        call_carmack("NAME: %.*s, %u B", fname_size, fname, written);
-        goto pc_window_render;
-    }
-    pc_midi_record_wait:
-        call_carmack("from a: MIDI_RECORD_WAIT");
-        goto pc_window_render;
-    pc_midi_record_map:
-        call_carmack("from a: MIDI_RECORD_MAP");
-        goto pc_window_render;
-    pc_window_render_done:
+    pc_wr_done:
         ctx_wr.now = war_get_monotonic_time_us();
         if (ctx_wr.now - last_frame_time >= ctx_wr.frame_duration_us) {
             war_get_frame_duration_us(&ctx_wr);
             last_frame_time += ctx_wr.frame_duration_us;
-            if (ctx_wr.trinity) { war_wayland_holy_trinity(fd, wl_surface_id, wl_buffer_id, 0, 0, 0, 0, physical_width, physical_height); }
+            if (ctx_wr.trinity) {
+                war_wayland_holy_trinity(fd,
+                                         wl_surface_id,
+                                         wl_buffer_id,
+                                         0,
+                                         0,
+                                         0,
+                                         0,
+                                         physical_width,
+                                         physical_height);
+            }
         }
         // cursor blink
-        if (ctx_wr.cursor_blink_state && ctx_wr.now - ctx_wr.cursor_blink_previous_us >= ctx_wr.cursor_blink_duration_us &&
-            (ctx_wr.mode == MODE_NORMAL || (ctx_wr.mode == MODE_VIEWS && views.warpoon_mode != MODE_VISUAL_LINE))) {
-            ctx_wr.cursor_blink_duration_us = (ctx_wr.cursor_blink_state == CURSOR_BLINK) ?
-                                                  atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US) :
-                                                  (uint64_t)round((60.0 / ((double)ctx_a.BPM)) * microsecond_conversion);
+        if (ctx_wr.cursor_blink_state &&
+            ctx_wr.now - ctx_wr.cursor_blink_previous_us >=
+                ctx_wr.cursor_blink_duration_us &&
+            (ctx_wr.mode == MODE_NORMAL ||
+             (ctx_wr.mode == MODE_VIEWS &&
+              views.warpoon_mode != MODE_VISUAL_LINE))) {
+            ctx_wr.cursor_blink_duration_us =
+                (ctx_wr.cursor_blink_state == CURSOR_BLINK) ?
+                    atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US) :
+                    (uint64_t)round((60.0 / ((double)ctx_a.BPM)) *
+                                    microsecond_conversion);
             ;
             ctx_wr.cursor_blink_previous_us += ctx_wr.cursor_blink_duration_us;
             ctx_wr.cursor_blinking = !ctx_wr.cursor_blinking;
@@ -743,23 +806,35 @@ void* war_window_render(void* args) {
             uint32_t k = repeat_keysym;
             uint8_t m = repeat_mod;
             if (key_down[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m]) {
-                uint64_t elapsed = ctx_wr.now - key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
+                uint64_t elapsed =
+                    ctx_wr.now -
+                    key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                      m];
                 if (!repeating) {
                     // still waiting for initial delay
                     if (elapsed >= repeat_delay_us) {
                         repeating = true;
-                        key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m] = ctx_wr.now; // reset timer
+                        key_last_event_us[k * atomic_load(
+                                                  &ctx_lua->WR_MOD_COUNT) +
+                                          m] = ctx_wr.now; // reset timer
                     }
                 } else {
                     // normal repeating
                     if (elapsed >= repeat_rate_us) {
-                        key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m] = ctx_wr.now;
+                        key_last_event_us[k * atomic_load(
+                                                  &ctx_lua->WR_MOD_COUNT) +
+                                          m] = ctx_wr.now;
                         if (ctx_wr.mode == MODE_COMMAND) {
                             switch (k) {
                             case KEYSYM_BACKSPACE: {
                                 if (ctx_wr.num_chars_in_sequence == 0) {
                                     ctx_wr.mode = MODE_NORMAL;
-                                    memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
+                                    memset(
+                                        ctx_wr.input_sequence,
+                                        0,
+                                        atomic_load(
+                                            &ctx_lua
+                                                 ->WR_INPUT_SEQUENCE_LENGTH_MAX));
                                     break;
                                 }
                                 ctx_wr.num_chars_in_sequence--;
@@ -768,9 +843,14 @@ void* war_window_render(void* args) {
                             }
                             case KEYSYM_TAB: {
                                 char keysym_char = war_keysym_to_char(k, m);
-                                if (ctx_wr.num_chars_in_sequence < atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
+                                if (ctx_wr.num_chars_in_sequence <
+                                    atomic_load(
+                                        &ctx_lua
+                                             ->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
                                     for (uint32_t i = 0; i < 4; i++) {
-                                        ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] = keysym_char;
+                                        ctx_wr.input_sequence
+                                            [ctx_wr.num_chars_in_sequence] =
+                                            keysym_char;
                                         ctx_wr.num_chars_in_sequence++;
                                         ctx_wr.cursor_pos_x_command_mode++;
                                     }
@@ -779,8 +859,13 @@ void* war_window_render(void* args) {
                             }
                             default: {
                                 char keysym_char = war_keysym_to_char(k, m);
-                                if (ctx_wr.num_chars_in_sequence < atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
-                                    ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] = keysym_char;
+                                if (ctx_wr.num_chars_in_sequence <
+                                    atomic_load(
+                                        &ctx_lua
+                                             ->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
+                                    ctx_wr.input_sequence
+                                        [ctx_wr.num_chars_in_sequence] =
+                                        keysym_char;
                                     ctx_wr.num_chars_in_sequence++;
                                     ctx_wr.cursor_pos_x_command_mode++;
                                 }
@@ -788,16 +873,25 @@ void* war_window_render(void* args) {
                             }
                             }
                         } else {
-                            uint16_t next_state_index = fsm[current_state_index].next_state[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
+                            uint16_t next_state_index =
+                                fsm[current_state_index].next_state
+                                    [k * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                     m];
                             if (next_state_index != 0) {
                                 current_state_index = next_state_index;
                                 fsm_state_last_event_us = ctx_wr.now;
-                                if (fsm[current_state_index].is_terminal[ctx_wr.mode] && !fsm[current_state_index].is_prefix[ctx_wr.mode] &&
-                                    fsm[current_state_index].handle_repeat[ctx_wr.mode]) {
+                                if (fsm[current_state_index]
+                                        .is_terminal[ctx_wr.mode] &&
+                                    !fsm[current_state_index]
+                                         .is_prefix[ctx_wr.mode] &&
+                                    fsm[current_state_index]
+                                        .handle_repeat[ctx_wr.mode]) {
                                     uint16_t temp = current_state_index;
                                     current_state_index = 0;
                                     goto_cmd_repeat_done = true;
-                                    if (fsm[temp].command[ctx_wr.mode]) { goto* fsm[temp].command[ctx_wr.mode]; }
+                                    if (fsm[temp].command[ctx_wr.mode]) {
+                                        goto* fsm[temp].command[ctx_wr.mode];
+                                    }
                                 }
                             }
                         }
@@ -822,7 +916,9 @@ void* war_window_render(void* args) {
             // clear current
             current_state_index = 0;
             fsm_state_last_event_us = ctx_wr.now;
-            if (fsm[temp].command[ctx_wr.mode]) { goto* fsm[temp].command[ctx_wr.mode]; }
+            if (fsm[temp].command[ctx_wr.mode]) {
+                goto* fsm[temp].command[ctx_wr.mode];
+            }
         }
     cmd_timeout_done:
         //---------------------------------------------------------------------
@@ -839,7 +935,9 @@ void* war_window_render(void* args) {
             struct msghdr poll_msg_hdr = {0};
             struct iovec poll_iov;
             poll_iov.iov_base = msg_buffer + msg_buffer_size;
-            poll_iov.iov_len = atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE) - msg_buffer_size;
+            poll_iov.iov_len =
+                atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE) -
+                msg_buffer_size;
             poll_msg_hdr.msg_iov = &poll_iov;
             poll_msg_hdr.msg_iovlen = 1;
             char poll_ctrl_buf[CMSG_SPACE(sizeof(int) * 4)];
@@ -850,157 +948,235 @@ void* war_window_render(void* args) {
             msg_buffer_size += size_read;
             size_t msg_buffer_offset = 0;
             while (msg_buffer_size - msg_buffer_offset >= 8) {
-                uint16_t size = war_read_le16(msg_buffer + msg_buffer_offset + 6);
-                if ((size < 8) || (size > (msg_buffer_size - msg_buffer_offset))) { break; };
-                uint32_t object_id = war_read_le32(msg_buffer + msg_buffer_offset);
-                uint16_t opcode = war_read_le16(msg_buffer + msg_buffer_offset + 4);
-                if (object_id >= (uint32_t)atomic_load(&ctx_lua->WR_WAYLAND_MAX_OBJECTS) ||
-                    opcode >= (uint16_t)atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES)) {
+                uint16_t size =
+                    war_read_le16(msg_buffer + msg_buffer_offset + 6);
+                if ((size < 8) ||
+                    (size > (msg_buffer_size - msg_buffer_offset))) {
+                    break;
+                };
+                uint32_t object_id =
+                    war_read_le32(msg_buffer + msg_buffer_offset);
+                uint16_t opcode =
+                    war_read_le16(msg_buffer + msg_buffer_offset + 4);
+                if (object_id >= (uint32_t)atomic_load(
+                                     &ctx_lua->WR_WAYLAND_MAX_OBJECTS) ||
+                    opcode >= (uint16_t)atomic_load(
+                                  &ctx_lua->WR_WAYLAND_MAX_OP_CODES)) {
                     // COMMENT CONCERN: INVALID OBJECT/OP 27 TIMES!
                     // call_carmack(
                     //    "invalid object/op: id=%u, op=%u", object_id,
                     //    opcode);
                     goto wayland_done;
                 }
-                size_t idx = object_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + opcode;
+                size_t idx =
+                    object_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                    opcode;
                 if (obj_op[idx]) { goto* obj_op[idx]; }
                 goto wayland_default;
             wl_registry_global:
-                dump_bytes("global event", msg_buffer + msg_buffer_offset, size);
-                call_carmack("iname: %s", (const char*)msg_buffer + msg_buffer_offset + 16);
+                dump_bytes(
+                    "global event", msg_buffer + msg_buffer_offset, size);
+                call_carmack("iname: %s",
+                             (const char*)msg_buffer + msg_buffer_offset + 16);
 
-                const char* iname = (const char*)msg_buffer + msg_buffer_offset + 16; // COMMENT OPTIMIZE: perfect hash
-                if (strcmp(iname, "wl_shm") == 0) {
-#if WL_SHM
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
-                    wl_shm_id = new_id;
-                    obj_op[wl_shm_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_shm_format;
-                    new_id++;
-#endif
-                } else if (strcmp(iname, "wl_compositor") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                const char* iname = (const char*)msg_buffer +
+                                    msg_buffer_offset +
+                                    16; // COMMENT OPTIMIZE: perfect hash
+                if (strcmp(iname, "wl_compositor") == 0) {
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_compositor_id = new_id;
-                    obj_op[wl_compositor_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_compositor_jump;
+                    obj_op[wl_compositor_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_compositor_jump;
                     new_id++;
                 } else if (strcmp(iname, "wl_output") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_output_id = new_id;
-                    obj_op[wl_output_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_output_geometry;
-                    obj_op[wl_output_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_output_mode;
-                    obj_op[wl_output_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 2] = &&wl_output_done;
-                    obj_op[wl_output_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 3] = &&wl_output_scale;
-                    obj_op[wl_output_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 4] = &&wl_output_name;
-                    obj_op[wl_output_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 5] = &&wl_output_description;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_output_geometry;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_output_mode;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_output_done;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_output_scale;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_output_name;
+                    obj_op[wl_output_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_output_description;
                     new_id++;
                 } else if (strcmp(iname, "wl_seat") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wl_seat_id = new_id;
-                    obj_op[wl_seat_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_seat_capabilities;
-                    obj_op[wl_seat_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_seat_name;
+                    obj_op[wl_seat_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_seat_capabilities;
+                    obj_op[wl_seat_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_seat_name;
                     new_id++;
                 } else if (strcmp(iname, "zwp_linux_dmabuf_v1") == 0) {
-#if DMABUF
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_linux_dmabuf_v1_id = new_id;
-                    obj_op[zwp_linux_dmabuf_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&zwp_linux_dmabuf_v1_format;
-                    obj_op[zwp_linux_dmabuf_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&zwp_linux_dmabuf_v1_modifier;
+                    obj_op[zwp_linux_dmabuf_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_linux_dmabuf_v1_format;
+                    obj_op[zwp_linux_dmabuf_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&zwp_linux_dmabuf_v1_modifier;
                     new_id++;
-#endif
                 } else if (strcmp(iname, "xdg_wm_base") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     xdg_wm_base_id = new_id;
-                    obj_op[xdg_wm_base_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&xdg_wm_base_ping;
+                    obj_op[xdg_wm_base_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_wm_base_ping;
                     new_id++;
-                } else if (strcmp(iname, "wp_linux_drm_syncobj_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                } else if (strcmp(iname, "wp_linux_drm_syncobj_manager_v1") ==
+                           0) {
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_linux_drm_syncobj_manager_v1_id = new_id;
-                    obj_op[wp_linux_drm_syncobj_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&wp_linux_drm_syncobj_manager_v1_jump;
+                    obj_op[wp_linux_drm_syncobj_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_linux_drm_syncobj_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_idle_inhibit_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_idle_inhibit_manager_v1_id = new_id;
-                    obj_op[zwp_idle_inhibit_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zwp_idle_inhibit_manager_v1_jump;
+                    obj_op[zwp_idle_inhibit_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_idle_inhibit_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zxdg_decoration_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zxdg_decoration_manager_v1_id = new_id;
-                    obj_op[zxdg_decoration_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zxdg_decoration_manager_v1_jump;
+                    obj_op[zxdg_decoration_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zxdg_decoration_manager_v1_jump;
                     new_id++;
-                } else if (strcmp(iname, "zwp_relative_pointer_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                } else if (strcmp(iname, "zwp_relative_pointer_manager_v1") ==
+                           0) {
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_relative_pointer_manager_v1_id = new_id;
-                    obj_op[zwp_relative_pointer_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zwp_relative_pointer_manager_v1_jump;
+                    obj_op[zwp_relative_pointer_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_relative_pointer_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_constraints_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_pointer_constraints_v1_id = new_id;
-                    obj_op[zwp_pointer_constraints_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zwp_pointer_constraints_v1_jump;
+                    obj_op[zwp_pointer_constraints_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_pointer_constraints_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_output_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_output_manager_v1_id = new_id;
-                    obj_op[zwlr_output_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&zwlr_output_manager_v1_head;
-                    obj_op[zwlr_output_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&zwlr_output_manager_v1_done;
+                    obj_op[zwlr_output_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwlr_output_manager_v1_head;
+                    obj_op[zwlr_output_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&zwlr_output_manager_v1_done;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_data_control_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_data_control_manager_v1_id = new_id;
-                    obj_op[zwlr_data_control_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zwlr_data_control_manager_v1_jump;
+                    obj_op[zwlr_data_control_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwlr_data_control_manager_v1_jump;
                     new_id++;
-                } else if (strcmp(iname, "zwp_virtual_keyboard_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                } else if (strcmp(iname, "zwp_virtual_keyboard_manager_v1") ==
+                           0) {
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_virtual_keyboard_manager_v1_id = new_id;
-                    obj_op[zwp_virtual_keyboard_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zwp_virtual_keyboard_manager_v1_jump;
+                    obj_op[zwp_virtual_keyboard_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_virtual_keyboard_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_viewporter") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_viewporter_id = new_id;
-                    obj_op[wp_viewporter_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wp_viewporter_jump;
+                    obj_op[wp_viewporter_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_viewporter_jump;
                     new_id++;
-                } else if (strcmp(iname, "wp_fractional_scale_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                } else if (strcmp(iname, "wp_fractional_scale_manager_v1") ==
+                           0) {
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_fractional_scale_manager_v1_id = new_id;
-                    obj_op[wp_fractional_scale_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&wp_fractional_scale_manager_v1_jump;
+                    obj_op[wp_fractional_scale_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_fractional_scale_manager_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "zwp_pointer_gestures_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwp_pointer_gestures_v1_id = new_id;
-                    obj_op[zwp_pointer_gestures_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&zwp_pointer_gestures_v1_jump;
+                    obj_op[zwp_pointer_gestures_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_pointer_gestures_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "xdg_activation_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     xdg_activation_v1_id = new_id;
-                    obj_op[xdg_activation_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&xdg_activation_v1_jump;
+                    obj_op[xdg_activation_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_activation_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "wp_presentation") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_presentation_id = new_id;
-                    obj_op[wp_presentation_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wp_presentation_clock_id;
+                    obj_op[wp_presentation_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_presentation_clock_id;
                     new_id++;
                 } else if (strcmp(iname, "zwlr_layer_shell_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     zwlr_layer_shell_v1_id = new_id;
-                    obj_op[zwlr_layer_shell_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&zwlr_layer_shell_v1_jump;
+                    obj_op[zwlr_layer_shell_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwlr_layer_shell_v1_jump;
                     new_id++;
                 } else if (strcmp(iname, "ext_foreign_toplevel_list_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     ext_foreign_toplevel_list_v1_id = new_id;
-                    obj_op[ext_foreign_toplevel_list_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&ext_foreign_toplevel_list_v1_toplevel;
+                    obj_op[ext_foreign_toplevel_list_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&ext_foreign_toplevel_list_v1_toplevel;
                     new_id++;
                 } else if (strcmp(iname, "wp_content_type_manager_v1") == 0) {
-                    war_wayland_registry_bind(fd, msg_buffer, msg_buffer_offset, size, new_id);
+                    war_wayland_registry_bind(
+                        fd, msg_buffer, msg_buffer_offset, size, new_id);
                     wp_content_type_manager_v1_id = new_id;
-                    obj_op[wp_content_type_manager_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&wp_content_type_manager_v1_jump;
+                    obj_op[wp_content_type_manager_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wp_content_type_manager_v1_jump;
                     new_id++;
                 }
                 if (!wl_surface_id && wl_compositor_id) {
@@ -1011,13 +1187,22 @@ void* war_window_render(void* args) {
                     war_write_le32(create_surface + 8, new_id);
                     dump_bytes("create_surface request", create_surface, 12);
                     call_carmack("bound: wl_surface");
-                    ssize_t create_surface_written = write(fd, create_surface, 12);
+                    ssize_t create_surface_written =
+                        write(fd, create_surface, 12);
                     assert(create_surface_written == 12);
                     wl_surface_id = new_id;
-                    obj_op[wl_surface_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_surface_enter;
-                    obj_op[wl_surface_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_surface_leave;
-                    obj_op[wl_surface_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 2] = &&wl_surface_preferred_buffer_scale;
-                    obj_op[wl_surface_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 3] = &&wl_surface_preferred_buffer_transform;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_surface_enter;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_surface_leave;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_surface_preferred_buffer_scale;
+                    obj_op[wl_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_surface_preferred_buffer_transform;
                     new_id++;
                 }
                 if (!wl_region_id && wl_surface_id && wl_compositor_id) {
@@ -1028,7 +1213,8 @@ void* war_window_render(void* args) {
                     war_write_le32(create_region + 8, new_id);
                     dump_bytes("create_region request", create_region, 12);
                     call_carmack("bound: wl_region");
-                    ssize_t create_region_written = write(fd, create_region, 12);
+                    ssize_t create_region_written =
+                        write(fd, create_region, 12);
                     assert(create_region_written == 12);
                     wl_region_id = new_id;
                     new_id++;
@@ -1045,38 +1231,51 @@ void* war_window_render(void* args) {
                     ssize_t region_add_written = write(fd, region_add, 24);
                     assert(region_add_written == 24);
 
-                    war_wl_surface_set_opaque_region(fd, wl_surface_id, wl_region_id);
+                    war_wl_surface_set_opaque_region(
+                        fd, wl_surface_id, wl_region_id);
                 }
-#if DMABUF
-                if (!zwp_linux_dmabuf_feedback_v1_id && zwp_linux_dmabuf_v1_id && wl_surface_id) {
+                if (!zwp_linux_dmabuf_feedback_v1_id &&
+                    zwp_linux_dmabuf_v1_id && wl_surface_id) {
                     uint8_t get_surface_feedback[16];
-                    war_write_le32(get_surface_feedback, zwp_linux_dmabuf_v1_id);
+                    war_write_le32(get_surface_feedback,
+                                   zwp_linux_dmabuf_v1_id);
                     war_write_le16(get_surface_feedback + 4, 3);
                     war_write_le16(get_surface_feedback + 6, 16);
                     war_write_le32(get_surface_feedback + 8, new_id);
                     war_write_le32(get_surface_feedback + 12, wl_surface_id);
-                    dump_bytes("zwp_linux_dmabuf_v1::get_surface_feedback request", get_surface_feedback, 16);
+                    dump_bytes(
+                        "zwp_linux_dmabuf_v1::get_surface_feedback request",
+                        get_surface_feedback,
+                        16);
                     call_carmack("bound: xdg_surface");
-                    ssize_t get_surface_feedback_written = write(fd, get_surface_feedback, 16);
+                    ssize_t get_surface_feedback_written =
+                        write(fd, get_surface_feedback, 16);
                     assert(get_surface_feedback_written == 16);
                     zwp_linux_dmabuf_feedback_v1_id = new_id;
-                    obj_op[zwp_linux_dmabuf_feedback_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zwp_linux_dmabuf_feedback_v1_done;
-                    obj_op[zwp_linux_dmabuf_feedback_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] =
-                        &&zwp_linux_dmabuf_feedback_v1_format_table;
-                    obj_op[zwp_linux_dmabuf_feedback_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 2] =
-                        &&zwp_linux_dmabuf_feedback_v1_main_device;
-                    obj_op[zwp_linux_dmabuf_feedback_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 3] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_done;
-                    obj_op[zwp_linux_dmabuf_feedback_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 4] =
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zwp_linux_dmabuf_feedback_v1_done;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&zwp_linux_dmabuf_feedback_v1_format_table;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&zwp_linux_dmabuf_feedback_v1_main_device;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&zwp_linux_dmabuf_feedback_v1_tranche_done;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] =
                         &&zwp_linux_dmabuf_feedback_v1_tranche_target_device;
-                    obj_op[zwp_linux_dmabuf_feedback_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 5] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
-                    obj_op[zwp_linux_dmabuf_feedback_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 6] =
-                        &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&zwp_linux_dmabuf_feedback_v1_tranche_formats;
+                    obj_op[zwp_linux_dmabuf_feedback_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           6] = &&zwp_linux_dmabuf_feedback_v1_tranche_flags;
                     new_id++;
                 }
-#endif
                 if (!xdg_surface_id && xdg_wm_base_id && wl_surface_id) {
                     uint8_t get_xdg_surface[16];
                     war_write_le32(get_xdg_surface, xdg_wm_base_id);
@@ -1086,10 +1285,13 @@ void* war_window_render(void* args) {
                     war_write_le32(get_xdg_surface + 12, wl_surface_id);
                     dump_bytes("get_xdg_surface request", get_xdg_surface, 16);
                     call_carmack("bound: xdg_surface");
-                    ssize_t get_xdg_surface_written = write(fd, get_xdg_surface, 16);
+                    ssize_t get_xdg_surface_written =
+                        write(fd, get_xdg_surface, 16);
                     assert(get_xdg_surface_written == 16);
                     xdg_surface_id = new_id;
-                    obj_op[xdg_surface_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&xdg_surface_configure;
+                    obj_op[xdg_surface_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_surface_configure;
                     new_id++;
                     uint8_t get_toplevel[12];
                     war_write_le32(get_toplevel, xdg_surface_id);
@@ -1101,26 +1303,41 @@ void* war_window_render(void* args) {
                     ssize_t get_toplevel_written = write(fd, get_toplevel, 12);
                     assert(get_toplevel_written == 12);
                     xdg_toplevel_id = new_id;
-                    obj_op[xdg_toplevel_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&xdg_toplevel_configure;
-                    obj_op[xdg_toplevel_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&xdg_toplevel_close;
-                    obj_op[xdg_toplevel_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 2] = &&xdg_toplevel_configure_bounds;
-                    obj_op[xdg_toplevel_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 3] = &&xdg_toplevel_wm_capabilities;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&xdg_toplevel_configure;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&xdg_toplevel_close;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&xdg_toplevel_configure_bounds;
+                    obj_op[xdg_toplevel_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&xdg_toplevel_wm_capabilities;
                     new_id++;
                 }
-                if (!zxdg_toplevel_decoration_v1_id && xdg_toplevel_id && zxdg_decoration_manager_v1_id) {
+                if (!zxdg_toplevel_decoration_v1_id && xdg_toplevel_id &&
+                    zxdg_decoration_manager_v1_id) {
                     uint8_t get_toplevel_decoration[16];
-                    war_write_le32(get_toplevel_decoration, zxdg_decoration_manager_v1_id);
+                    war_write_le32(get_toplevel_decoration,
+                                   zxdg_decoration_manager_v1_id);
                     war_write_le16(get_toplevel_decoration + 4, 1);
                     war_write_le16(get_toplevel_decoration + 6, 16);
                     war_write_le32(get_toplevel_decoration + 8, new_id);
-                    war_write_le32(get_toplevel_decoration + 12, xdg_toplevel_id);
-                    dump_bytes("get_toplevel_decoration request", get_toplevel_decoration, 16);
+                    war_write_le32(get_toplevel_decoration + 12,
+                                   xdg_toplevel_id);
+                    dump_bytes("get_toplevel_decoration request",
+                               get_toplevel_decoration,
+                               16);
                     call_carmack("bound: zxdg_toplevel_decoration_v1");
-                    ssize_t get_toplevel_decoration_written = write(fd, get_toplevel_decoration, 16);
+                    ssize_t get_toplevel_decoration_written =
+                        write(fd, get_toplevel_decoration, 16);
                     assert(get_toplevel_decoration_written == 16);
                     zxdg_toplevel_decoration_v1_id = new_id;
-                    obj_op[zxdg_toplevel_decoration_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                        &&zxdg_toplevel_decoration_v1_configure;
+                    obj_op[zxdg_toplevel_decoration_v1_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&zxdg_toplevel_decoration_v1_configure;
                     new_id++;
 
                     //---------------------------------------------------------
@@ -1130,7 +1347,8 @@ void* war_window_render(void* args) {
                 }
                 goto wayland_done;
             wl_registry_global_remove:
-                dump_bytes("global_rm event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes(
+                    "global_rm event", msg_buffer + msg_buffer_offset, size);
                 goto wayland_done;
             wl_callback_done: {
                 //-------------------------------------------------------------
@@ -1139,19 +1357,27 @@ void* war_window_render(void* args) {
                 // dump_bytes("wl_callback::wayland_done event",
                 //           msg_buffer + msg_buffer_offset,
                 //           size);
-#if DMABUF
                 assert(ctx_vk.current_frame == 0);
-                vkWaitForFences(ctx_vk.device, 1, &ctx_vk.in_flight_fences[ctx_vk.current_frame], VK_TRUE, UINT64_MAX);
-                vkResetFences(ctx_vk.device, 1, &ctx_vk.in_flight_fences[ctx_vk.current_frame]);
+                vkWaitForFences(ctx_vk.device,
+                                1,
+                                &ctx_vk.in_flight_fences[ctx_vk.current_frame],
+                                VK_TRUE,
+                                UINT64_MAX);
+                vkResetFences(ctx_vk.device,
+                              1,
+                              &ctx_vk.in_flight_fences[ctx_vk.current_frame]);
                 VkCommandBufferBeginInfo begin_info = {
                     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
                 };
-                VkResult result = vkBeginCommandBuffer(ctx_vk.cmd_buffer, &begin_info);
+                VkResult result =
+                    vkBeginCommandBuffer(ctx_vk.cmd_buffer, &begin_info);
                 assert(result == VK_SUCCESS);
                 VkClearValue clear_values[2];
-                clear_values[0].color = (VkClearColorValue){{0.1569f, 0.1569f, 0.1569f, 1.0f}};
-                clear_values[1].depthStencil = (VkClearDepthStencilValue){ctx_wr.layers[LAYER_OPAQUE_REGION], 0.0f};
+                clear_values[0].color =
+                    (VkClearColorValue){{0.1569f, 0.1569f, 0.1569f, 1.0f}};
+                clear_values[1].depthStencil = (VkClearDepthStencilValue){
+                    ctx_wr.layers[LAYER_OPAQUE_REGION], 0.0f};
                 VkRenderPassBeginInfo render_pass_info = {
                     .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                     .renderPass = ctx_vk.render_pass,
@@ -1164,7 +1390,9 @@ void* war_window_render(void* args) {
                     .clearValueCount = 2,
                     .pClearValues = clear_values,
                 };
-                vkCmdBeginRenderPass(ctx_vk.cmd_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+                vkCmdBeginRenderPass(ctx_vk.cmd_buffer,
+                                     &render_pass_info,
+                                     VK_SUBPASS_CONTENTS_INLINE);
                 quad_vertices_count = 0;
                 quad_indices_count = 0;
                 transparent_quad_vertices_count = 0;
@@ -1174,16 +1402,23 @@ void* war_window_render(void* args) {
                 //---------------------------------------------------------
                 // QUAD PIPELINE
                 //---------------------------------------------------------
-                vkCmdBindPipeline(ctx_vk.cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx_vk.quad_pipeline);
+                vkCmdBindPipeline(ctx_vk.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  ctx_vk.quad_pipeline);
                 uint32_t cursor_color = ctx_wr.color_cursor;
                 float alpha_factor = ctx_wr.alpha_scale_cursor;
-                uint8_t color_alpha = (ctx_wr.color_cursor_transparent >> 24) & 0xFF;
+                uint8_t color_alpha =
+                    (ctx_wr.color_cursor_transparent >> 24) & 0xFF;
                 uint32_t cursor_color_transparent =
-                    ((uint8_t)(color_alpha * alpha_factor) << 24) | (ctx_wr.color_cursor_transparent & 0x00FFFFFF);
-                // draw note quads and figure out if cursor should be transparent
+                    ((uint8_t)(color_alpha * alpha_factor) << 24) |
+                    (ctx_wr.color_cursor_transparent & 0x00FFFFFF);
+                // draw note quads and figure out if cursor should be
+                // transparent
                 // TODO: spillover
                 for (uint32_t i = 0; i < note_quads.count; i++) {
-                    if (note_quads.alive[i] == 0 || note_quads.hidden[i]) { continue; }
+                    if (note_quads.alive[i] == 0 || note_quads.hidden[i]) {
+                        continue;
+                    }
                     double cursor_pos_x = ctx_wr.cursor_pos_x;
                     double cursor_pos_y = ctx_wr.cursor_pos_y;
                     double cursor_end_x = cursor_pos_x + ctx_wr.cursor_size_x;
@@ -1195,28 +1430,41 @@ void* war_window_render(void* args) {
                     double right_bound = ctx_wr.right_col + 1;
                     double top_bound = ctx_wr.top_row + 1;
                     double bottom_bound = ctx_wr.bottom_row;
-                    if (pos_y > top_bound || pos_y < bottom_bound || pos_x > right_bound || end_x < left_bound) { continue; }
+                    if (pos_y > top_bound || pos_y < bottom_bound ||
+                        pos_x > right_bound || end_x < left_bound) {
+                        continue;
+                    }
                     uint32_t color = note_quads.color[i];
                     uint32_t outline_color = note_quads.outline_color[i];
                     if (note_quads.mute[i]) {
                         float alpha_factor = ctx_wr.alpha_scale;
                         uint8_t color_alpha = (color >> 24) & 0xFF;
-                        uint8_t outline_color_alpha = (outline_color >> 24) & 0xFF;
-                        color = ((uint8_t)(color_alpha * alpha_factor) << 24) | (color & 0x00FFFFFF);
-                        outline_color = ((uint8_t)(outline_color_alpha * alpha_factor) << 24) | (outline_color & 0x00FFFFFF);
+                        uint8_t outline_color_alpha =
+                            (outline_color >> 24) & 0xFF;
+                        color = ((uint8_t)(color_alpha * alpha_factor) << 24) |
+                                (color & 0x00FFFFFF);
+                        outline_color =
+                            ((uint8_t)(outline_color_alpha * alpha_factor)
+                             << 24) |
+                            (outline_color & 0x00FFFFFF);
                     }
                     war_make_quad(quad_vertices,
                                   quad_indices,
                                   &quad_vertices_count,
                                   &quad_indices_count,
-                                  (float[3]){(float)pos_x, (float)note_quads.pos_y[i], ctx_wr.layers[LAYER_NOTES]},
+                                  (float[3]){(float)pos_x,
+                                             (float)note_quads.pos_y[i],
+                                             ctx_wr.layers[LAYER_NOTES]},
                                   (float[2]){(float)size_x, 1},
                                   color,
                                   default_outline_thickness,
                                   outline_color,
                                   (float[2]){0.0f, 0.0f},
                                   QUAD_GRID);
-                    if (cursor_pos_y != pos_y || cursor_pos_x >= end_x || cursor_end_x <= pos_x) { continue; }
+                    if (cursor_pos_y != pos_y || cursor_pos_x >= end_x ||
+                        cursor_end_x <= pos_x) {
+                        continue;
+                    }
                     cursor_color = cursor_color_transparent;
                 }
                 switch (ctx_wr.mode) {
@@ -1229,7 +1477,9 @@ void* war_window_render(void* args) {
                         transparent_quad_indices,
                         &transparent_quad_vertices_count,
                         &transparent_quad_indices_count,
-                        (float[3]){ctx_wr.cursor_pos_x_command_mode + ctx_wr.left_col + ctx_wr.num_chars_in_prompt + 1 + offset,
+                        (float[3]){ctx_wr.cursor_pos_x_command_mode +
+                                       ctx_wr.left_col +
+                                       ctx_wr.num_chars_in_prompt + 1 + offset,
                                    ctx_wr.bottom_row + 1,
                                    ctx_wr.layers[LAYER_CURSOR]},
                         (float[2]){1, 1},
@@ -1242,46 +1492,64 @@ void* war_window_render(void* args) {
                 }
                 case MODE_NORMAL: {
                     if (ctx_wr.cursor_blinking) { break; }
-                    war_make_transparent_quad(transparent_quad_vertices,
-                                              transparent_quad_indices,
-                                              &transparent_quad_vertices_count,
-                                              &transparent_quad_indices_count,
-                                              (float[3]){ctx_wr.cursor_pos_x + (float)ctx_wr.sub_col / ctx_wr.navigation_sub_cells_col,
-                                                         ctx_wr.cursor_pos_y,
-                                                         ctx_wr.layers[LAYER_CURSOR]},
-                                              (float[2]){(float)ctx_wr.cursor_size_x, 1},
-                                              cursor_color,
-                                              0,
-                                              0,
-                                              (float[2]){0.0f, 0.0f},
-                                              QUAD_GRID);
+                    war_make_transparent_quad(
+                        transparent_quad_vertices,
+                        transparent_quad_indices,
+                        &transparent_quad_vertices_count,
+                        &transparent_quad_indices_count,
+                        (float[3]){ctx_wr.cursor_pos_x +
+                                       (float)ctx_wr.sub_col /
+                                           ctx_wr.navigation_sub_cells_col,
+                                   ctx_wr.cursor_pos_y,
+                                   ctx_wr.layers[LAYER_CURSOR]},
+                        (float[2]){(float)ctx_wr.cursor_size_x, 1},
+                        cursor_color,
+                        0,
+                        0,
+                        (float[2]){0.0f, 0.0f},
+                        QUAD_GRID);
                     break;
                 }
                 case MODE_VIEWS: {
                     // draw views
-                    uint32_t offset_col = ctx_wr.left_col + ((ctx_wr.viewport_cols + ctx_wr.num_cols_for_line_numbers - 1) / 2 -
-                                                             views.warpoon_viewport_cols / 2);
-                    uint32_t offset_row = ctx_wr.bottom_row +
-                                          ((ctx_wr.viewport_rows + ctx_wr.num_rows_for_status_bars - 1) / 2 - views.warpoon_viewport_rows / 2);
+                    uint32_t offset_col =
+                        ctx_wr.left_col +
+                        ((ctx_wr.viewport_cols +
+                          ctx_wr.num_cols_for_line_numbers - 1) /
+                             2 -
+                         views.warpoon_viewport_cols / 2);
+                    uint32_t offset_row =
+                        ctx_wr.bottom_row +
+                        ((ctx_wr.viewport_rows +
+                          ctx_wr.num_rows_for_status_bars - 1) /
+                             2 -
+                         views.warpoon_viewport_rows / 2);
                     // draw views background
-                    war_make_quad(quad_vertices,
-                                  quad_indices,
-                                  &quad_vertices_count,
-                                  &quad_indices_count,
-                                  (float[3]){offset_col, offset_row, ctx_wr.layers[LAYER_POPUP_BACKGROUND]},
-                                  (float[2]){views.warpoon_viewport_cols, views.warpoon_viewport_rows},
-                                  views.warpoon_color_bg,
-                                  ctx_wr.outline_thickness,
-                                  views.warpoon_color_outline,
-                                  (float[2]){0.0f, 0.0f},
-                                  QUAD_OUTLINE);
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){offset_col,
+                                   offset_row,
+                                   ctx_wr.layers[LAYER_POPUP_BACKGROUND]},
+                        (float[2]){views.warpoon_viewport_cols,
+                                   views.warpoon_viewport_rows},
+                        views.warpoon_color_bg,
+                        ctx_wr.outline_thickness,
+                        views.warpoon_color_outline,
+                        (float[2]){0.0f, 0.0f},
+                        QUAD_OUTLINE);
                     // draw views gutter
                     war_make_quad(quad_vertices,
                                   quad_indices,
                                   &quad_vertices_count,
                                   &quad_indices_count,
-                                  (float[3]){offset_col, offset_row, ctx_wr.layers[LAYER_POPUP_HUD]},
-                                  (float[2]){views.warpoon_hud_cols, views.warpoon_viewport_rows},
+                                  (float[3]){offset_col,
+                                             offset_row,
+                                             ctx_wr.layers[LAYER_POPUP_HUD]},
+                                  (float[2]){views.warpoon_hud_cols,
+                                             views.warpoon_viewport_rows},
                                   views.warpoon_color_hud,
                                   ctx_wr.outline_thickness,
                                   views.warpoon_color_outline,
@@ -1292,69 +1560,94 @@ void* war_window_render(void* args) {
                         uint32_t cursor_span_x = 1;
                         uint32_t cursor_pos_x = views.warpoon_col;
                         if (views.warpoon_mode == MODE_VISUAL_LINE) {
-                            cursor_span_x = views.warpoon_viewport_cols - views.warpoon_hud_cols;
+                            cursor_span_x = views.warpoon_viewport_cols -
+                                            views.warpoon_hud_cols;
                             cursor_pos_x = 0;
                         }
                         float alpha_factor = ctx_wr.alpha_scale;
                         uint8_t color_alpha = (cursor_color >> 24) & 0xFF;
-                        cursor_color = ((uint8_t)(color_alpha * alpha_factor) << 24) | (cursor_color & 0x00FFFFFF);
-                        war_make_quad(quad_vertices,
-                                      quad_indices,
-                                      &quad_vertices_count,
-                                      &quad_indices_count,
-                                      (float[3]){offset_col + views.warpoon_hud_cols + cursor_pos_x - views.warpoon_left_col,
-                                                 offset_row + views.warpoon_hud_rows + views.warpoon_row - views.warpoon_bottom_row,
-                                                 ctx_wr.layers[LAYER_POPUP_CURSOR]},
-                                      (float[2]){cursor_span_x, 1},
-                                      cursor_color_transparent,
-                                      0,
-                                      0,
-                                      (float[2]){0.0f, 0.0f},
-                                      0);
+                        cursor_color =
+                            ((uint8_t)(color_alpha * alpha_factor) << 24) |
+                            (cursor_color & 0x00FFFFFF);
+                        war_make_quad(
+                            quad_vertices,
+                            quad_indices,
+                            &quad_vertices_count,
+                            &quad_indices_count,
+                            (float[3]){offset_col + views.warpoon_hud_cols +
+                                           cursor_pos_x -
+                                           views.warpoon_left_col,
+                                       offset_row + views.warpoon_hud_rows +
+                                           views.warpoon_row -
+                                           views.warpoon_bottom_row,
+                                       ctx_wr.layers[LAYER_POPUP_CURSOR]},
+                            (float[2]){cursor_span_x, 1},
+                            cursor_color_transparent,
+                            0,
+                            0,
+                            (float[2]){0.0f, 0.0f},
+                            0);
                     }
                     // draw views line numbers text
-                    int number = views.warpoon_max_row - views.warpoon_top_row + views.warpoon_viewport_rows;
-                    for (uint32_t row = views.warpoon_bottom_row; row <= views.warpoon_top_row; row++, number--) {
+                    int number = views.warpoon_max_row - views.warpoon_top_row +
+                                 views.warpoon_viewport_rows;
+                    for (uint32_t row = views.warpoon_bottom_row;
+                         row <= views.warpoon_top_row;
+                         row++, number--) {
                         uint32_t digits[2];
                         digits[0] = (number / 10) % 10;
                         digits[1] = number % 10;
                         int digit_count = 2;
                         if (digits[0] == 0) { digit_count--; }
                         for (int col = 2; col > 2 - digit_count; col--) {
-                            war_make_text_quad(text_vertices,
-                                               text_indices,
-                                               &text_vertices_count,
-                                               &text_indices_count,
-                                               (float[3]){offset_col + col - 1,
-                                                          offset_row + row - views.warpoon_bottom_row + views.warpoon_hud_rows,
-                                                          ctx_wr.layers[LAYER_POPUP_HUD_TEXT]},
-                                               (float[2]){1, 1},
-                                               views.warpoon_color_hud_text,
-                                               &ctx_vk.glyphs['0' + digits[col - 1]],
-                                               ctx_wr.text_thickness,
-                                               ctx_wr.text_feather,
-                                               0);
+                            war_make_text_quad(
+                                text_vertices,
+                                text_indices,
+                                &text_vertices_count,
+                                &text_indices_count,
+                                (float[3]){offset_col + col - 1,
+                                           offset_row + row -
+                                               views.warpoon_bottom_row +
+                                               views.warpoon_hud_rows,
+                                           ctx_wr.layers[LAYER_POPUP_HUD_TEXT]},
+                                (float[2]){1, 1},
+                                views.warpoon_color_hud_text,
+                                &ctx_vk.glyphs['0' + digits[col - 1]],
+                                ctx_wr.text_thickness,
+                                ctx_wr.text_feather,
+                                0);
                         }
                     }
                     // draw views text
                     war_get_warpoon_text(&views);
                     uint32_t row = views.warpoon_max_row;
-                    for (uint32_t i_views = 0; i_views < views.views_count; i_views++, row--) {
-                        if (row > views.warpoon_top_row || row < views.warpoon_bottom_row) { continue; }
-                        for (uint32_t col = 0; col <= views.warpoon_right_col && views.warpoon_text[i_views][col] != '\0'; col++) {
-                            war_make_text_quad(text_vertices,
-                                               text_indices,
-                                               &text_vertices_count,
-                                               &text_indices_count,
-                                               (float[3]){offset_col + views.warpoon_hud_cols + col,
-                                                          offset_row + views.warpoon_hud_rows + row - views.warpoon_bottom_row,
-                                                          ctx_wr.layers[LAYER_POPUP_CURSOR]},
-                                               (float[2]){1, 1},
-                                               views.warpoon_color_text,
-                                               &ctx_vk.glyphs[(int)views.warpoon_text[i_views][col]],
-                                               ctx_wr.text_thickness,
-                                               ctx_wr.text_feather,
-                                               0);
+                    for (uint32_t i_views = 0; i_views < views.views_count;
+                         i_views++, row--) {
+                        if (row > views.warpoon_top_row ||
+                            row < views.warpoon_bottom_row) {
+                            continue;
+                        }
+                        for (uint32_t col = 0;
+                             col <= views.warpoon_right_col &&
+                             views.warpoon_text[i_views][col] != '\0';
+                             col++) {
+                            war_make_text_quad(
+                                text_vertices,
+                                text_indices,
+                                &text_vertices_count,
+                                &text_indices_count,
+                                (float[3]){offset_col + views.warpoon_hud_cols +
+                                               col,
+                                           offset_row + views.warpoon_hud_rows +
+                                               row - views.warpoon_bottom_row,
+                                           ctx_wr.layers[LAYER_POPUP_CURSOR]},
+                                (float[2]){1, 1},
+                                views.warpoon_color_text,
+                                &ctx_vk.glyphs[(int)views
+                                                   .warpoon_text[i_views][col]],
+                                ctx_wr.text_thickness,
+                                ctx_wr.text_feather,
+                                0);
                         }
                     }
                     break;
@@ -1363,27 +1656,35 @@ void* war_window_render(void* args) {
                 // draw playback bar
                 uint32_t playback_bar_color = ctx_wr.red_hex;
                 float span_y = ctx_wr.viewport_rows;
-                if (ctx_wr.top_row == atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) { span_y -= ctx_wr.num_rows_for_status_bars; }
-                war_make_quad(quad_vertices,
-                              quad_indices,
-                              &quad_vertices_count,
-                              &quad_indices_count,
-                              (float[3]){((float)atomic_load(&atomics->play_frames) / ctx_a.sample_rate) /
-                                             ((60.0f / ctx_a.BPM) / atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT)),
-                                         ctx_wr.bottom_row,
-                                         ctx_wr.layers[LAYER_PLAYBACK_BAR]},
-                              (float[2]){0, span_y},
-                              playback_bar_color,
-                              0,
-                              0,
-                              (float[2]){default_playback_bar_thickness, 0.0f},
-                              QUAD_LINE | QUAD_GRID);
+                if (ctx_wr.top_row == atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) {
+                    span_y -= ctx_wr.num_rows_for_status_bars;
+                }
+                war_make_quad(
+                    quad_vertices,
+                    quad_indices,
+                    &quad_vertices_count,
+                    &quad_indices_count,
+                    (float[3]){
+                        ((float)atomic_load(&atomics->play_frames) /
+                         ctx_a.sample_rate) /
+                            ((60.0f / ctx_a.BPM) /
+                             atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT)),
+                        ctx_wr.bottom_row,
+                        ctx_wr.layers[LAYER_PLAYBACK_BAR]},
+                    (float[2]){0, span_y},
+                    playback_bar_color,
+                    0,
+                    0,
+                    (float[2]){default_playback_bar_thickness, 0.0f},
+                    QUAD_LINE | QUAD_GRID);
                 // draw status bar quads
                 war_make_quad(quad_vertices,
                               quad_indices,
                               &quad_vertices_count,
                               &quad_indices_count,
-                              (float[3]){ctx_wr.left_col, ctx_wr.bottom_row, ctx_wr.layers[LAYER_HUD]},
+                              (float[3]){ctx_wr.left_col,
+                                         ctx_wr.bottom_row,
+                                         ctx_wr.layers[LAYER_HUD]},
                               (float[2]){ctx_wr.viewport_cols + 1, 1},
                               ctx_wr.red_hex,
                               0,
@@ -1394,7 +1695,9 @@ void* war_window_render(void* args) {
                               quad_indices,
                               &quad_vertices_count,
                               &quad_indices_count,
-                              (float[3]){ctx_wr.left_col, ctx_wr.bottom_row + 1, ctx_wr.layers[LAYER_HUD]},
+                              (float[3]){ctx_wr.left_col,
+                                         ctx_wr.bottom_row + 1,
+                                         ctx_wr.layers[LAYER_HUD]},
                               (float[2]){ctx_wr.viewport_cols + 1, 1},
                               ctx_wr.dark_gray_hex,
                               0,
@@ -1405,7 +1708,9 @@ void* war_window_render(void* args) {
                               quad_indices,
                               &quad_vertices_count,
                               &quad_indices_count,
-                              (float[3]){ctx_wr.left_col, ctx_wr.bottom_row + 2, ctx_wr.layers[LAYER_HUD]},
+                              (float[3]){ctx_wr.left_col,
+                                         ctx_wr.bottom_row + 2,
+                                         ctx_wr.layers[LAYER_HUD]},
                               (float[2]){ctx_wr.viewport_cols + 1, 1},
                               ctx_wr.darker_light_gray_hex,
                               0,
@@ -1413,50 +1718,69 @@ void* war_window_render(void* args) {
                               (float[2]){0.0f, 0.0f},
                               0);
                 // draw piano quads
-                float gutter_end_span_inset = 5 * default_vertical_line_thickness;
+                float gutter_end_span_inset =
+                    5 * default_vertical_line_thickness;
                 switch (ctx_wr.hud_state) {
                 case HUD_PIANO_AND_LINE_NUMBERS:
                 case HUD_PIANO:
                     float span_y = ctx_wr.viewport_rows;
-                    if (ctx_wr.top_row == ctx_wr.max_row) { span_y -= ctx_wr.num_rows_for_status_bars; }
-                    war_make_quad(quad_vertices,
-                                  quad_indices,
-                                  &quad_vertices_count,
-                                  &quad_indices_count,
-                                  (float[3]){ctx_wr.left_col, ctx_wr.bottom_row + ctx_wr.num_rows_for_status_bars, ctx_wr.layers[LAYER_HUD]},
-                                  (float[2]){3 - gutter_end_span_inset, span_y},
-                                  ctx_wr.full_white_hex,
-                                  0,
-                                  0,
-                                  (float[2]){0.0f, 0.0f},
-                                  0);
-                    for (uint32_t row = ctx_wr.bottom_row; row <= ctx_wr.top_row; row++) {
+                    if (ctx_wr.top_row == ctx_wr.max_row) {
+                        span_y -= ctx_wr.num_rows_for_status_bars;
+                    }
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){ctx_wr.left_col,
+                                   ctx_wr.bottom_row +
+                                       ctx_wr.num_rows_for_status_bars,
+                                   ctx_wr.layers[LAYER_HUD]},
+                        (float[2]){3 - gutter_end_span_inset, span_y},
+                        ctx_wr.full_white_hex,
+                        0,
+                        0,
+                        (float[2]){0.0f, 0.0f},
+                        0);
+                    for (uint32_t row = ctx_wr.bottom_row;
+                         row <= ctx_wr.top_row;
+                         row++) {
                         if (row < ctx_wr.max_row) {
-                            war_make_quad(quad_vertices,
-                                          quad_indices,
-                                          &quad_vertices_count,
-                                          &quad_indices_count,
-                                          (float[3]){ctx_wr.left_col, row + ctx_wr.num_rows_for_status_bars + 1, ctx_wr.layers[LAYER_HUD]},
-                                          (float[2]){3 - gutter_end_span_inset, 0},
-                                          super_light_gray_hex,
-                                          0,
-                                          0,
-                                          (float[2]){0.0f, piano_horizontal_line_thickness},
-                                          QUAD_LINE);
+                            war_make_quad(
+                                quad_vertices,
+                                quad_indices,
+                                &quad_vertices_count,
+                                &quad_indices_count,
+                                (float[3]){
+                                    ctx_wr.left_col,
+                                    row + ctx_wr.num_rows_for_status_bars + 1,
+                                    ctx_wr.layers[LAYER_HUD]},
+                                (float[2]){3 - gutter_end_span_inset, 0},
+                                super_light_gray_hex,
+                                0,
+                                0,
+                                (float[2]){0.0f,
+                                           piano_horizontal_line_thickness},
+                                QUAD_LINE);
                         }
                         uint32_t note = row % 12;
-                        if (note == 1 || note == 3 || note == 6 || note == 8 || note == 10) {
-                            war_make_quad(quad_vertices,
-                                          quad_indices,
-                                          &quad_vertices_count,
-                                          &quad_indices_count,
-                                          (float[3]){ctx_wr.left_col, row + ctx_wr.num_rows_for_status_bars, ctx_wr.layers[LAYER_HUD]},
-                                          (float[2]){2 - gutter_end_span_inset, 1},
-                                          ctx_wr.black_hex,
-                                          0,
-                                          0,
-                                          (float[2]){0.0f, 0.0f},
-                                          0);
+                        if (note == 1 || note == 3 || note == 6 || note == 8 ||
+                            note == 10) {
+                            war_make_quad(
+                                quad_vertices,
+                                quad_indices,
+                                &quad_vertices_count,
+                                &quad_indices_count,
+                                (float[3]){ctx_wr.left_col,
+                                           row +
+                                               ctx_wr.num_rows_for_status_bars,
+                                           ctx_wr.layers[LAYER_HUD]},
+                                (float[2]){2 - gutter_end_span_inset, 1},
+                                ctx_wr.black_hex,
+                                0,
+                                0,
+                                (float[2]){0.0f, 0.0f},
+                                0);
                         }
                     }
                     break;
@@ -1465,28 +1789,39 @@ void* war_window_render(void* args) {
                 int ln_offset = (ctx_wr.hud_state == HUD_LINE_NUMBERS) ? 0 : 3;
                 if (ctx_wr.hud_state != HUD_PIANO) {
                     uint32_t span_y = ctx_wr.viewport_rows;
-                    if (ctx_wr.top_row == atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) { span_y -= ctx_wr.num_rows_for_status_bars; }
-                    war_make_quad(quad_vertices,
-                                  quad_indices,
-                                  &quad_vertices_count,
-                                  &quad_indices_count,
-                                  (float[3]){ctx_wr.left_col + ln_offset - default_vertical_line_thickness,
-                                             ctx_wr.bottom_row + ctx_wr.num_rows_for_status_bars,
-                                             ctx_wr.layers[LAYER_HUD]},
-                                  (float[2]){3 - gutter_end_span_inset, span_y},
-                                  ctx_wr.red_hex,
-                                  0,
-                                  0,
-                                  (float[2]){0.0f, 0.0f},
-                                  0);
-                    for (uint32_t row = ctx_wr.bottom_row; row <= ctx_wr.top_row; row++) {
+                    if (ctx_wr.top_row ==
+                        atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) {
+                        span_y -= ctx_wr.num_rows_for_status_bars;
+                    }
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){ctx_wr.left_col + ln_offset -
+                                       default_vertical_line_thickness,
+                                   ctx_wr.bottom_row +
+                                       ctx_wr.num_rows_for_status_bars,
+                                   ctx_wr.layers[LAYER_HUD]},
+                        (float[2]){3 - gutter_end_span_inset, span_y},
+                        ctx_wr.red_hex,
+                        0,
+                        0,
+                        (float[2]){0.0f, 0.0f},
+                        0);
+                    for (uint32_t row = ctx_wr.bottom_row;
+                         row <= ctx_wr.top_row;
+                         row++) {
                         if (row >= ctx_wr.max_row) { continue; }
                         war_make_quad(
                             quad_vertices,
                             quad_indices,
                             &quad_vertices_count,
                             &quad_indices_count,
-                            (float[3]){ctx_wr.left_col + ln_offset, row + ctx_wr.num_rows_for_status_bars + 1, ctx_wr.layers[LAYER_HUD]},
+                            (float[3]){ctx_wr.left_col + ln_offset,
+                                       row + ctx_wr.num_rows_for_status_bars +
+                                           1,
+                                       ctx_wr.layers[LAYER_HUD]},
                             (float[2]){3 - gutter_end_span_inset, 0},
                             ctx_wr.full_white_hex,
                             0,
@@ -1496,25 +1831,36 @@ void* war_window_render(void* args) {
                     }
                 }
                 // draw gridline quads
-                for (uint32_t row = ctx_wr.bottom_row + 1; row <= ctx_wr.top_row + 1; row++) {
-                    war_make_quad(quad_vertices,
-                                  quad_indices,
-                                  &quad_vertices_count,
-                                  &quad_indices_count,
-                                  (float[3]){ctx_wr.left_col, row, ctx_wr.layers[LAYER_GRIDLINES]},
-                                  (float[2]){ctx_wr.viewport_cols, 0},
-                                  ctx_wr.darker_light_gray_hex,
-                                  0,
-                                  0,
-                                  (float[2]){0.0f, default_horizontal_line_thickness},
-                                  QUAD_LINE | QUAD_GRID);
+                for (uint32_t row = ctx_wr.bottom_row + 1;
+                     row <= ctx_wr.top_row + 1;
+                     row++) {
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){ctx_wr.left_col,
+                                   row,
+                                   ctx_wr.layers[LAYER_GRIDLINES]},
+                        (float[2]){ctx_wr.viewport_cols, 0},
+                        ctx_wr.darker_light_gray_hex,
+                        0,
+                        0,
+                        (float[2]){0.0f, default_horizontal_line_thickness},
+                        QUAD_LINE | QUAD_GRID);
                 }
-                qsort(ctx_wr.gridline_splits, MAX_GRIDLINE_SPLITS, sizeof(uint32_t), war_compare_desc_uint32);
-                for (uint32_t col = ctx_wr.left_col + 1; col <= ctx_wr.right_col + 1; col++) {
+                qsort(ctx_wr.gridline_splits,
+                      MAX_GRIDLINE_SPLITS,
+                      sizeof(uint32_t),
+                      war_compare_desc_uint32);
+                for (uint32_t col = ctx_wr.left_col + 1;
+                     col <= ctx_wr.right_col + 1;
+                     col++) {
                     bool draw_vertical_line = false;
                     uint32_t color;
                     for (uint32_t i = 0; i < MAX_GRIDLINE_SPLITS; i++) {
-                        draw_vertical_line = (col % ctx_wr.gridline_splits[i]) == 0;
+                        draw_vertical_line =
+                            (col % ctx_wr.gridline_splits[i]) == 0;
                         if (draw_vertical_line) {
                             switch (i) {
                             case 0:
@@ -1535,43 +1881,69 @@ void* war_window_render(void* args) {
                     }
                     if (!draw_vertical_line) { continue; }
                     uint32_t span_y = ctx_wr.viewport_rows;
-                    if (ctx_wr.top_row == atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) { span_y -= ctx_wr.num_rows_for_status_bars; }
-                    war_make_quad(quad_vertices,
-                                  quad_indices,
-                                  &quad_vertices_count,
-                                  &quad_indices_count,
-                                  (float[3]){col, ctx_wr.bottom_row, ctx_wr.layers[LAYER_GRIDLINES]},
-                                  (float[2]){0, span_y},
-                                  color,
-                                  0,
-                                  0,
-                                  (float[2]){default_vertical_line_thickness, 0},
-                                  QUAD_LINE | QUAD_GRID);
+                    if (ctx_wr.top_row ==
+                        atomic_load(&ctx_lua->A_NOTE_COUNT) - 1) {
+                        span_y -= ctx_wr.num_rows_for_status_bars;
+                    }
+                    war_make_quad(
+                        quad_vertices,
+                        quad_indices,
+                        &quad_vertices_count,
+                        &quad_indices_count,
+                        (float[3]){col,
+                                   ctx_wr.bottom_row,
+                                   ctx_wr.layers[LAYER_GRIDLINES]},
+                        (float[2]){0, span_y},
+                        color,
+                        0,
+                        0,
+                        (float[2]){default_vertical_line_thickness, 0},
+                        QUAD_LINE | QUAD_GRID);
                 }
-                memcpy(ctx_vk.quads_vertex_buffer_mapped, quad_vertices, sizeof(war_quad_vertex) * quad_vertices_count);
-                memcpy(ctx_vk.quads_index_buffer_mapped, quad_indices, sizeof(uint16_t) * quad_indices_count);
-                VkMappedMemoryRange quad_flush_ranges[2] = {{.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                                                             .memory = ctx_vk.quads_vertex_buffer_memory,
-                                                             .offset = 0,
-                                                             .size = war_align64(sizeof(war_quad_vertex) * quad_vertices_count)},
-                                                            {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                                                             .memory = ctx_vk.quads_index_buffer_memory,
-                                                             .offset = 0,
-                                                             .size = war_align64(sizeof(uint16_t) * quad_indices_count)}};
+                memcpy(ctx_vk.quads_vertex_buffer_mapped,
+                       quad_vertices,
+                       sizeof(war_quad_vertex) * quad_vertices_count);
+                memcpy(ctx_vk.quads_index_buffer_mapped,
+                       quad_indices,
+                       sizeof(uint16_t) * quad_indices_count);
+                VkMappedMemoryRange quad_flush_ranges[2] = {
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = ctx_vk.quads_vertex_buffer_memory,
+                     .offset = 0,
+                     .size = war_align64(sizeof(war_quad_vertex) *
+                                         quad_vertices_count)},
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = ctx_vk.quads_index_buffer_memory,
+                     .offset = 0,
+                     .size =
+                         war_align64(sizeof(uint16_t) * quad_indices_count)}};
                 vkFlushMappedMemoryRanges(ctx_vk.device, 2, quad_flush_ranges);
                 VkDeviceSize quad_vertices_offsets[2] = {0};
-                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer, 0, 1, &ctx_vk.quads_vertex_buffer, quad_vertices_offsets);
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       0,
+                                       1,
+                                       &ctx_vk.quads_vertex_buffer,
+                                       quad_vertices_offsets);
                 VkDeviceSize quad_instances_offsets[2] = {0};
-                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer, 1, 1, &ctx_vk.quads_instance_buffer, quad_instances_offsets);
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       1,
+                                       1,
+                                       &ctx_vk.quads_instance_buffer,
+                                       quad_instances_offsets);
                 VkDeviceSize quad_indices_offset = 0;
-                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer, ctx_vk.quads_index_buffer, quad_indices_offset, VK_INDEX_TYPE_UINT16);
+                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer,
+                                     ctx_vk.quads_index_buffer,
+                                     quad_indices_offset,
+                                     VK_INDEX_TYPE_UINT16);
                 war_quad_push_constants quad_push_constants = {
                     .bottom_left = {ctx_wr.left_col, ctx_wr.bottom_row},
                     .physical_size = {physical_width, physical_height},
                     .cell_size = {ctx_wr.cell_width, ctx_wr.cell_height},
                     .zoom = ctx_wr.zoom_scale,
-                    .cell_offsets = {ctx_wr.num_cols_for_line_numbers, ctx_wr.num_rows_for_status_bars},
-                    .scroll_margin = {ctx_wr.scroll_margin_cols, ctx_wr.scroll_margin_rows},
+                    .cell_offsets = {ctx_wr.num_cols_for_line_numbers,
+                                     ctx_wr.num_rows_for_status_bars},
+                    .scroll_margin = {ctx_wr.scroll_margin_cols,
+                                      ctx_wr.scroll_margin_rows},
                     .anchor_cell = {ctx_wr.cursor_pos_x, ctx_wr.cursor_pos_y},
                     .top_right = {ctx_wr.right_col, ctx_wr.top_row},
                 };
@@ -1581,38 +1953,64 @@ void* war_window_render(void* args) {
                                    0,
                                    sizeof(war_quad_push_constants),
                                    &quad_push_constants);
-                vkCmdDrawIndexed(ctx_vk.cmd_buffer, quad_indices_count, 1, 0, 0, 0);
+                vkCmdDrawIndexed(
+                    ctx_vk.cmd_buffer, quad_indices_count, 1, 0, 0, 0);
                 // draw transparent quads
-                vkCmdBindPipeline(ctx_vk.cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx_vk.transparent_quad_pipeline);
-                memcpy(ctx_vk.quads_vertex_buffer_mapped + quad_vertices_count * sizeof(war_quad_vertex),
+                vkCmdBindPipeline(ctx_vk.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  ctx_vk.transparent_quad_pipeline);
+                memcpy(ctx_vk.quads_vertex_buffer_mapped +
+                           quad_vertices_count * sizeof(war_quad_vertex),
                        transparent_quad_vertices,
-                       sizeof(war_quad_vertex) * transparent_quad_vertices_count);
-                memcpy(ctx_vk.quads_index_buffer_mapped + quad_indices_count * sizeof(uint16_t),
+                       sizeof(war_quad_vertex) *
+                           transparent_quad_vertices_count);
+                memcpy(ctx_vk.quads_index_buffer_mapped +
+                           quad_indices_count * sizeof(uint16_t),
                        transparent_quad_indices,
                        sizeof(uint16_t) * transparent_quad_indices_count);
                 VkMappedMemoryRange transparent_quad_flush_ranges[2] = {
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                      .memory = ctx_vk.quads_vertex_buffer_memory,
-                     .offset = war_align64(sizeof(war_quad_vertex) * quad_vertices_count),
-                     .size = war_align64(sizeof(war_quad_vertex) * transparent_quad_vertices_count)},
+                     .offset = war_align64(sizeof(war_quad_vertex) *
+                                           quad_vertices_count),
+                     .size = war_align64(sizeof(war_quad_vertex) *
+                                         transparent_quad_vertices_count)},
                     {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
                      .memory = ctx_vk.quads_index_buffer_memory,
-                     .offset = war_align64(sizeof(uint16_t) * quad_indices_count),
-                     .size = war_align64(sizeof(uint16_t) * transparent_quad_indices_count)}};
-                vkFlushMappedMemoryRanges(ctx_vk.device, 2, transparent_quad_flush_ranges);
-                VkDeviceSize transparent_quad_vertices_offsets[2] = {quad_vertices_count * sizeof(war_quad_vertex)};
-                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer, 0, 1, &ctx_vk.quads_vertex_buffer, transparent_quad_vertices_offsets);
+                     .offset =
+                         war_align64(sizeof(uint16_t) * quad_indices_count),
+                     .size = war_align64(sizeof(uint16_t) *
+                                         transparent_quad_indices_count)}};
+                vkFlushMappedMemoryRanges(
+                    ctx_vk.device, 2, transparent_quad_flush_ranges);
+                VkDeviceSize transparent_quad_vertices_offsets[2] = {
+                    quad_vertices_count * sizeof(war_quad_vertex)};
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       0,
+                                       1,
+                                       &ctx_vk.quads_vertex_buffer,
+                                       transparent_quad_vertices_offsets);
                 VkDeviceSize transparent_quad_instances_offsets[2] = {0};
-                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer, 1, 1, &ctx_vk.quads_instance_buffer, transparent_quad_instances_offsets);
-                VkDeviceSize transparent_quad_indices_offset = quad_indices_count * sizeof(uint16_t);
-                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer, ctx_vk.quads_index_buffer, transparent_quad_indices_offset, VK_INDEX_TYPE_UINT16);
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       1,
+                                       1,
+                                       &ctx_vk.quads_instance_buffer,
+                                       transparent_quad_instances_offsets);
+                VkDeviceSize transparent_quad_indices_offset =
+                    quad_indices_count * sizeof(uint16_t);
+                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer,
+                                     ctx_vk.quads_index_buffer,
+                                     transparent_quad_indices_offset,
+                                     VK_INDEX_TYPE_UINT16);
                 war_quad_push_constants transparent_quad_push_constants = {
                     .bottom_left = {ctx_wr.left_col, ctx_wr.bottom_row},
                     .physical_size = {physical_width, physical_height},
                     .cell_size = {ctx_wr.cell_width, ctx_wr.cell_height},
                     .zoom = ctx_wr.zoom_scale,
-                    .cell_offsets = {ctx_wr.num_cols_for_line_numbers, ctx_wr.num_rows_for_status_bars},
-                    .scroll_margin = {ctx_wr.scroll_margin_cols, ctx_wr.scroll_margin_rows},
+                    .cell_offsets = {ctx_wr.num_cols_for_line_numbers,
+                                     ctx_wr.num_rows_for_status_bars},
+                    .scroll_margin = {ctx_wr.scroll_margin_cols,
+                                      ctx_wr.scroll_margin_rows},
                     .anchor_cell = {ctx_wr.cursor_pos_x, ctx_wr.cursor_pos_y},
                     .top_right = {ctx_wr.right_col, ctx_wr.top_row},
                 };
@@ -1622,11 +2020,18 @@ void* war_window_render(void* args) {
                                    0,
                                    sizeof(war_quad_push_constants),
                                    &transparent_quad_push_constants);
-                vkCmdDrawIndexed(ctx_vk.cmd_buffer, transparent_quad_indices_count, 1, 0, 0, 0);
+                vkCmdDrawIndexed(ctx_vk.cmd_buffer,
+                                 transparent_quad_indices_count,
+                                 1,
+                                 0,
+                                 0,
+                                 0);
                 //---------------------------------------------------------
                 // TEXT PIPELINE
                 //---------------------------------------------------------
-                vkCmdBindPipeline(ctx_vk.cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx_vk.text_pipeline);
+                vkCmdBindPipeline(ctx_vk.cmd_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  ctx_vk.text_pipeline);
                 vkCmdBindDescriptorSets(ctx_vk.cmd_buffer,
                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
                                         ctx_vk.text_pipeline_layout,
@@ -1638,98 +2043,143 @@ void* war_window_render(void* args) {
                 // draw status bar text
                 ctx_wr.text_status_bar_start_index = 0;
                 ctx_wr.text_status_bar_middle_index = ctx_wr.viewport_cols / 2;
-                ctx_wr.text_status_bar_end_index = (ctx_wr.viewport_cols * 3) / 4;
+                ctx_wr.text_status_bar_end_index =
+                    (ctx_wr.viewport_cols * 3) / 4;
                 war_get_top_text(&ctx_wr, ctx_lua, tmp_str, prompt);
-                war_get_middle_text(&ctx_wr, &views, atomics, ctx_lua, tmp_str, prompt);
+                war_get_middle_text(
+                    &ctx_wr, &views, atomics, ctx_lua, tmp_str, prompt);
                 war_get_bottom_text(&ctx_wr, ctx_lua, tmp_str, prompt);
                 for (float col = 0; col < ctx_wr.viewport_cols; col++) {
                     if (ctx_wr.text_top_status_bar[(int)col] != 0) {
-                        war_make_text_quad(text_vertices,
-                                           text_indices,
-                                           &text_vertices_count,
-                                           &text_indices_count,
-                                           (float[3]){col + ctx_wr.left_col, 2 + ctx_wr.bottom_row, ctx_wr.layers[LAYER_HUD_TEXT]},
-                                           (float[2]){1, 1},
-                                           ctx_wr.white_hex,
-                                           &ctx_vk.glyphs[(int)ctx_wr.text_top_status_bar[(int)col]],
-                                           ctx_wr.text_thickness,
-                                           ctx_wr.text_feather,
-                                           0);
-                    }
-                    if (ctx_wr.text_middle_status_bar[(int)col] != 0) {
-                        war_make_text_quad(text_vertices,
-                                           text_indices,
-                                           &text_vertices_count,
-                                           &text_indices_count,
-                                           (float[3]){col + ctx_wr.left_col, 1 + ctx_wr.bottom_row, ctx_wr.layers[LAYER_HUD_TEXT]},
-                                           (float[2]){1, 1},
-                                           ctx_wr.red_hex,
-                                           &ctx_vk.glyphs[(int)ctx_wr.text_middle_status_bar[(int)col]],
-                                           ctx_wr.text_thickness_bold,
-                                           ctx_wr.text_feather_bold,
-                                           0);
-                    }
-                    if (ctx_wr.text_bottom_status_bar[(int)col] != 0) {
-                        war_make_text_quad(text_vertices,
-                                           text_indices,
-                                           &text_vertices_count,
-                                           &text_indices_count,
-                                           (float[3]){col + ctx_wr.left_col, ctx_wr.bottom_row, ctx_wr.layers[LAYER_HUD_TEXT]},
-                                           (float[2]){1, 1},
-                                           ctx_wr.full_white_hex,
-                                           &ctx_vk.glyphs[(int)ctx_wr.text_bottom_status_bar[(int)col]],
-                                           ctx_wr.text_thickness,
-                                           ctx_wr.text_feather,
-                                           0);
-                    }
-                }
-                // draw piano text
-                char* piano_notes[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-                for (uint32_t row = ctx_wr.bottom_row; row <= ctx_wr.top_row && ctx_wr.hud_state != HUD_LINE_NUMBERS; row++) {
-                    uint32_t i_piano_notes = row % 12;
-                    if (i_piano_notes == 1 || i_piano_notes == 3 || i_piano_notes == 6 || i_piano_notes == 8 || i_piano_notes == 10) {
-                        continue;
-                    }
-                    int octave = row / 12 - 1;
-                    if (octave < 0) { octave = '-' - '0'; }
-                    war_make_text_quad(text_vertices,
-                                       text_indices,
-                                       &text_vertices_count,
-                                       &text_indices_count,
-                                       (float[3]){1 + ctx_wr.left_col, row + ctx_wr.num_rows_for_status_bars, ctx_wr.layers[LAYER_HUD_TEXT]},
-                                       (float[2]){1, 1},
-                                       ctx_wr.black_hex,
-                                       &ctx_vk.glyphs[piano_notes[i_piano_notes][0]],
-                                       ctx_wr.text_thickness,
-                                       ctx_wr.text_feather,
-                                       0);
-                    war_make_text_quad(text_vertices,
-                                       text_indices,
-                                       &text_vertices_count,
-                                       &text_indices_count,
-                                       (float[3]){2 + ctx_wr.left_col, row + ctx_wr.num_rows_for_status_bars, ctx_wr.layers[LAYER_HUD_TEXT]},
-                                       (float[2]){1, 1},
-                                       ctx_wr.black_hex,
-                                       &ctx_vk.glyphs['0' + octave],
-                                       ctx_wr.text_thickness,
-                                       ctx_wr.text_feather,
-                                       0);
-                }
-                // draw line number text
-                for (uint32_t row = ctx_wr.bottom_row; row <= ctx_wr.top_row && ctx_wr.hud_state != HUD_PIANO; row++) {
-                    uint32_t digits[3];
-                    digits[0] = (row / 100) % 10;
-                    digits[1] = (row / 10) % 10;
-                    digits[2] = row % 10;
-                    int digit_count = 3;
-                    if (digits[0] == 0) { digit_count = (digits[1] == 0) ? (digit_count - 2) : (digit_count - 1); }
-                    for (int col = ln_offset + 2; col > (ln_offset + 2) - digit_count; col--) {
                         war_make_text_quad(
                             text_vertices,
                             text_indices,
                             &text_vertices_count,
                             &text_indices_count,
-                            (float[3]){ctx_wr.left_col + col, row + ctx_wr.num_rows_for_status_bars, ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[3]){col + ctx_wr.left_col,
+                                       2 + ctx_wr.bottom_row,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[2]){1, 1},
+                            ctx_wr.white_hex,
+                            &ctx_vk.glyphs[(int)ctx_wr
+                                               .text_top_status_bar[(int)col]],
+                            ctx_wr.text_thickness,
+                            ctx_wr.text_feather,
+                            0);
+                    }
+                    if (ctx_wr.text_middle_status_bar[(int)col] != 0) {
+                        war_make_text_quad(
+                            text_vertices,
+                            text_indices,
+                            &text_vertices_count,
+                            &text_indices_count,
+                            (float[3]){col + ctx_wr.left_col,
+                                       1 + ctx_wr.bottom_row,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[2]){1, 1},
+                            ctx_wr.red_hex,
+                            &ctx_vk.glyphs[(int)ctx_wr.text_middle_status_bar[(
+                                int)col]],
+                            ctx_wr.text_thickness_bold,
+                            ctx_wr.text_feather_bold,
+                            0);
+                    }
+                    if (ctx_wr.text_bottom_status_bar[(int)col] != 0) {
+                        war_make_text_quad(
+                            text_vertices,
+                            text_indices,
+                            &text_vertices_count,
+                            &text_indices_count,
+                            (float[3]){col + ctx_wr.left_col,
+                                       ctx_wr.bottom_row,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
+                            (float[2]){1, 1},
+                            ctx_wr.full_white_hex,
+                            &ctx_vk.glyphs[(int)ctx_wr.text_bottom_status_bar[(
+                                int)col]],
+                            ctx_wr.text_thickness,
+                            ctx_wr.text_feather,
+                            0);
+                    }
+                }
+                // draw piano text
+                char* piano_notes[12] = {"C",
+                                         "C#",
+                                         "D",
+                                         "D#",
+                                         "E",
+                                         "F",
+                                         "F#",
+                                         "G",
+                                         "G#",
+                                         "A",
+                                         "A#",
+                                         "B"};
+                for (uint32_t row = ctx_wr.bottom_row;
+                     row <= ctx_wr.top_row &&
+                     ctx_wr.hud_state != HUD_LINE_NUMBERS;
+                     row++) {
+                    uint32_t i_piano_notes = row % 12;
+                    if (i_piano_notes == 1 || i_piano_notes == 3 ||
+                        i_piano_notes == 6 || i_piano_notes == 8 ||
+                        i_piano_notes == 10) {
+                        continue;
+                    }
+                    int octave = row / 12 - 1;
+                    if (octave < 0) { octave = '-' - '0'; }
+                    war_make_text_quad(
+                        text_vertices,
+                        text_indices,
+                        &text_vertices_count,
+                        &text_indices_count,
+                        (float[3]){1 + ctx_wr.left_col,
+                                   row + ctx_wr.num_rows_for_status_bars,
+                                   ctx_wr.layers[LAYER_HUD_TEXT]},
+                        (float[2]){1, 1},
+                        ctx_wr.black_hex,
+                        &ctx_vk.glyphs[piano_notes[i_piano_notes][0]],
+                        ctx_wr.text_thickness,
+                        ctx_wr.text_feather,
+                        0);
+                    war_make_text_quad(
+                        text_vertices,
+                        text_indices,
+                        &text_vertices_count,
+                        &text_indices_count,
+                        (float[3]){2 + ctx_wr.left_col,
+                                   row + ctx_wr.num_rows_for_status_bars,
+                                   ctx_wr.layers[LAYER_HUD_TEXT]},
+                        (float[2]){1, 1},
+                        ctx_wr.black_hex,
+                        &ctx_vk.glyphs['0' + octave],
+                        ctx_wr.text_thickness,
+                        ctx_wr.text_feather,
+                        0);
+                }
+                // draw line number text
+                for (uint32_t row = ctx_wr.bottom_row;
+                     row <= ctx_wr.top_row && ctx_wr.hud_state != HUD_PIANO;
+                     row++) {
+                    uint32_t digits[3];
+                    digits[0] = (row / 100) % 10;
+                    digits[1] = (row / 10) % 10;
+                    digits[2] = row % 10;
+                    int digit_count = 3;
+                    if (digits[0] == 0) {
+                        digit_count = (digits[1] == 0) ? (digit_count - 2) :
+                                                         (digit_count - 1);
+                    }
+                    for (int col = ln_offset + 2;
+                         col > (ln_offset + 2) - digit_count;
+                         col--) {
+                        war_make_text_quad(
+                            text_vertices,
+                            text_indices,
+                            &text_vertices_count,
+                            &text_indices_count,
+                            (float[3]){ctx_wr.left_col + col,
+                                       row + ctx_wr.num_rows_for_status_bars,
+                                       ctx_wr.layers[LAYER_HUD_TEXT]},
                             (float[2]){1, 1},
                             ctx_wr.full_white_hex,
                             &ctx_vk.glyphs['0' + digits[col - ln_offset]],
@@ -1738,30 +2188,50 @@ void* war_window_render(void* args) {
                             0);
                     }
                 }
-                memcpy(ctx_vk.text_vertex_buffer_mapped, text_vertices, sizeof(war_text_vertex) * text_vertices_count);
-                memcpy(ctx_vk.text_index_buffer_mapped, text_indices, sizeof(uint16_t) * text_indices_count);
-                VkMappedMemoryRange text_flush_ranges[2] = {{.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                                                             .memory = ctx_vk.text_vertex_buffer_memory,
-                                                             .offset = 0,
-                                                             .size = war_align64(sizeof(war_text_vertex) * text_vertices_count)},
-                                                            {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                                                             .memory = ctx_vk.text_index_buffer_memory,
-                                                             .offset = 0,
-                                                             .size = war_align64(sizeof(uint16_t) * text_indices_count)}};
+                memcpy(ctx_vk.text_vertex_buffer_mapped,
+                       text_vertices,
+                       sizeof(war_text_vertex) * text_vertices_count);
+                memcpy(ctx_vk.text_index_buffer_mapped,
+                       text_indices,
+                       sizeof(uint16_t) * text_indices_count);
+                VkMappedMemoryRange text_flush_ranges[2] = {
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = ctx_vk.text_vertex_buffer_memory,
+                     .offset = 0,
+                     .size = war_align64(sizeof(war_text_vertex) *
+                                         text_vertices_count)},
+                    {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                     .memory = ctx_vk.text_index_buffer_memory,
+                     .offset = 0,
+                     .size =
+                         war_align64(sizeof(uint16_t) * text_indices_count)}};
                 vkFlushMappedMemoryRanges(ctx_vk.device, 2, text_flush_ranges);
                 VkDeviceSize text_vertices_offsets[2] = {0};
-                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer, 0, 1, &ctx_vk.text_vertex_buffer, text_vertices_offsets);
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       0,
+                                       1,
+                                       &ctx_vk.text_vertex_buffer,
+                                       text_vertices_offsets);
                 VkDeviceSize text_instances_offsets[2] = {0};
-                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer, 1, 1, &ctx_vk.text_instance_buffer, text_instances_offsets);
+                vkCmdBindVertexBuffers(ctx_vk.cmd_buffer,
+                                       1,
+                                       1,
+                                       &ctx_vk.text_instance_buffer,
+                                       text_instances_offsets);
                 VkDeviceSize text_indices_offset = 0;
-                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer, ctx_vk.text_index_buffer, text_indices_offset, VK_INDEX_TYPE_UINT16);
+                vkCmdBindIndexBuffer(ctx_vk.cmd_buffer,
+                                     ctx_vk.text_index_buffer,
+                                     text_indices_offset,
+                                     VK_INDEX_TYPE_UINT16);
                 war_text_push_constants text_push_constants = {
                     .bottom_left = {ctx_wr.left_col, ctx_wr.bottom_row},
                     .physical_size = {physical_width, physical_height},
                     .cell_size = {ctx_wr.cell_width, ctx_wr.cell_height},
                     .zoom = ctx_wr.zoom_scale,
-                    .cell_offsets = {ctx_wr.num_cols_for_line_numbers, ctx_wr.num_rows_for_status_bars},
-                    .scroll_margin = {ctx_wr.scroll_margin_cols, ctx_wr.scroll_margin_rows},
+                    .cell_offsets = {ctx_wr.num_cols_for_line_numbers,
+                                     ctx_wr.num_rows_for_status_bars},
+                    .scroll_margin = {ctx_wr.scroll_margin_cols,
+                                      ctx_wr.scroll_margin_rows},
                     .anchor_cell = {ctx_wr.cursor_pos_x, ctx_wr.cursor_pos_y},
                     .top_right = {ctx_wr.right_col, ctx_wr.top_row},
                     .ascent = ctx_vk.ascent,
@@ -1776,7 +2246,8 @@ void* war_window_render(void* args) {
                                    0,
                                    sizeof(war_text_push_constants),
                                    &text_push_constants);
-                vkCmdDrawIndexed(ctx_vk.cmd_buffer, text_indices_count, 1, 0, 0, 0);
+                vkCmdDrawIndexed(
+                    ctx_vk.cmd_buffer, text_indices_count, 1, 0, 0, 0);
                 //---------------------------------------------------------
                 //   END RENDER PASS
                 //---------------------------------------------------------
@@ -1792,39 +2263,12 @@ void* war_window_render(void* args) {
                     .signalSemaphoreCount = 0,
                     .pSignalSemaphores = NULL,
                 };
-                result = vkQueueSubmit(ctx_vk.queue, 1, &submit_info, ctx_vk.in_flight_fences[ctx_vk.current_frame]);
+                result = vkQueueSubmit(
+                    ctx_vk.queue,
+                    1,
+                    &submit_info,
+                    ctx_vk.in_flight_fences[ctx_vk.current_frame]);
                 assert(result == VK_SUCCESS);
-#endif
-#if WL_SHM
-                uint32_t* pixels = (uint32_t*)pixel_buffer;
-                for (uint32_t y = 0; y < physical_height; y++) {
-                    for (uint32_t x = 0; x < physical_width; x++) { pixels[(int)(y * physical_width + x)] = 0xFF808080; }
-                }
-
-                uint32_t quad_w = physical_width / 2;
-                uint32_t quad_h = physical_height / 2;
-                uint32_t quad_x = (physical_width - quad_w) / 2;
-                uint32_t quad_y = (physical_height - quad_h) / 2;
-
-                for (uint32_t y = quad_y; y < quad_y + quad_h; ++y) {
-                    for (uint32_t x = quad_x; x < quad_x + quad_w; ++x) {
-                        pixels[(int)(y * physical_width + x)] = 0xFFFF0000; // red in ARGB
-                    }
-                }
-
-                uint32_t cursor_w = ctx_vk.cell_width;
-                uint32_t cursor_h = ctx_vk.cell_height;
-                ctx_wr.cursor_x = ctx_wr.cursor_pos_x * ctx_vk.cell_width;
-                ctx_wr.cursor_y = (physical_height - 1) - (ctx_wr.cursor_pos_y * ctx_vk.cell_height);
-
-                for (uint32_t y = ctx_wr.cursor_y; y < ctx_wr.cursor_y + cursor_h; ++y) {
-                    if (y >= physical_height) break;
-                    for (uint32_t x = ctx_wr.cursor_x; x < ctx_wr.cursor_x + cursor_w; ++x) {
-                        if (x >= physical_width) break;
-                        pixels[(int)(y * physical_width + x)] = 0xFFFFFFFF; // white
-                    }
-                }
-#endif
                 // war_wayland_holy_trinity(fd,
                 //                          wl_surface_id,
                 //                          wl_buffer_id,
@@ -1837,85 +2281,38 @@ void* war_window_render(void* args) {
                 goto wayland_done;
             }
             wl_display_error:
-                dump_bytes("wl_display::error event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_display::error event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_display_delete_id:
                 // dump_bytes("wl_display::delete_id event",
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
 
-                if (war_read_le32(msg_buffer + msg_buffer_offset + 8) == wl_callback_id) {
-                    war_wayland_wl_surface_frame(fd, wl_surface_id, wl_callback_id);
+                if (war_read_le32(msg_buffer + msg_buffer_offset + 8) ==
+                    wl_callback_id) {
+                    war_wayland_wl_surface_frame(
+                        fd, wl_surface_id, wl_callback_id);
                 }
                 goto wayland_done;
-#if WL_SHM
-            wl_shm_format:
-                dump_bytes("wl_shm_format event", msg_buffer + msg_buffer_offset, size);
-                if (war_read_le32(msg_buffer + msg_buffer_offset + 8) == ARGB8888) {
-                    uint8_t create_pool[12];
-                    war_write_le32(create_pool, wl_shm_id); // object id
-                    war_write_le16(create_pool + 4, 0);     // opcode 0
-                    war_write_le16(create_pool + 6,
-                                   16);                      // message size = 12 + 4 bytes for pool size
-                    war_write_le32(create_pool + 8, new_id); // new pool id
-                    uint32_t pool_size = stride * physical_height;
-                    struct iovec iov[2] = {{.iov_base = create_pool, .iov_len = 12}, {.iov_base = &pool_size, .iov_len = 4}};
-                    char cmsgbuf[CMSG_SPACE(sizeof(int))];
-                    memset(cmsgbuf, 0, sizeof(cmsgbuf));
-                    struct msghdr msg = {0};
-                    msg.msg_iov = iov;
-                    msg.msg_iovlen = 2;
-                    msg.msg_control = cmsgbuf;
-                    msg.msg_controllen = sizeof(cmsgbuf);
-                    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
-                    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-                    cmsg->cmsg_level = SOL_SOCKET;
-                    cmsg->cmsg_type = SCM_RIGHTS;
-                    *((int*)CMSG_DATA(cmsg)) = shm_fd;
-                    ssize_t sent = sendmsg(fd, &msg, 0);
-                    if (sent < 0) perror("sendmsg");
-                    assert(sent == 16);
-                    dump_bytes("wl_shm_create_pool request", create_pool, sizeof(create_pool));
-                    call_carmack("bound wl_shm_pool");
-                    wl_shm_pool_id = new_id;
-                    new_id++;
-
-                    uint8_t create_buffer[32];
-                    war_write_le32(create_buffer, wl_shm_pool_id);
-                    war_write_le16(create_buffer + 4, 0);
-                    war_write_le16(create_buffer + 6, 32);
-                    war_write_le32(create_buffer + 8, new_id);
-                    war_write_le32(create_buffer + 12, 0); // msg_buffer_offset
-                    war_write_le32(create_buffer + 16, physical_width);
-                    war_write_le32(create_buffer + 20, physical_height);
-                    war_write_le32(create_buffer + 24, stride);
-                    war_write_le32(create_buffer + 28, ARGB8888);
-                    dump_bytes("wl_shm_pool_create_buffer request", create_buffer, 32);
-                    call_carmack("bound wl_buffer");
-                    ssize_t create_buffer_written = write(fd, create_buffer, 32);
-                    assert(create_buffer_written == 32);
-                    wl_buffer_id = new_id;
-                    obj_op[wl_buffer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_buffer_release;
-                    new_id++;
-
-                    pixel_buffer = mmap(NULL, pool_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-                    assert(pixel_buffer != MAP_FAILED);
-                }
-                goto wayland_done;
-#endif
             wl_buffer_release:
                 // dump_bytes("wl_buffer_release event",
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
                 goto wayland_done;
             xdg_wm_base_ping:
-                dump_bytes("xdg_wm_base_ping event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("xdg_wm_base_ping event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 assert(size == 12);
                 uint8_t pong[12];
                 war_write_le32(pong, xdg_wm_base_id);
                 war_write_le16(pong + 4, 3);
                 war_write_le16(pong + 6, 12);
-                war_write_le32(pong + 8, war_read_le32(msg_buffer + msg_buffer_offset + 8));
+                war_write_le32(
+                    pong + 8,
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8));
                 dump_bytes("xdg_wm_base_pong request", pong, 12);
                 ssize_t pong_written = write(fd, pong, 12);
                 assert(pong_written == 12);
@@ -1930,7 +2327,9 @@ void* war_window_render(void* args) {
                 war_write_le32(ack_configure, xdg_surface_id);
                 war_write_le16(ack_configure + 4, 4);
                 war_write_le16(ack_configure + 6, 12);
-                war_write_le32(ack_configure + 8, war_read_le32(msg_buffer + msg_buffer_offset + 8));
+                war_write_le32(
+                    ack_configure + 8,
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8));
                 // dump_bytes(
                 //     "xdg_surface_ack_configure request", ack_configure, 12);
                 ssize_t ack_configure_written = write(fd, ack_configure, 12);
@@ -1975,17 +2374,21 @@ void* war_window_render(void* args) {
                     // dump_bytes("wp_viewport::set_destination request",
                     //            set_destination,
                     //            16);
-                    ssize_t set_destination_written = write(fd, set_destination, 16);
+                    ssize_t set_destination_written =
+                        write(fd, set_destination, 16);
                     assert(set_destination_written == 16);
                 }
                 //-------------------------------------------------------------
                 // initial attach, initial frame, commit
                 //-------------------------------------------------------------
-                war_wayland_wl_surface_attach(fd, wl_surface_id, wl_buffer_id, 0, 0);
+                war_wayland_wl_surface_attach(
+                    fd, wl_surface_id, wl_buffer_id, 0, 0);
                 if (!wl_callback_id) {
                     war_wayland_wl_surface_frame(fd, wl_surface_id, new_id);
                     wl_callback_id = new_id;
-                    obj_op[wl_callback_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_callback_done;
+                    obj_op[wl_callback_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_callback_done;
                     new_id++;
                 }
                 war_wayland_wl_surface_commit(fd, wl_surface_id);
@@ -1994,11 +2397,15 @@ void* war_window_render(void* args) {
                 // dump_bytes("xdg_toplevel_configure event",
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
-                uint32_t width = *(uint32_t*)(msg_buffer + msg_buffer_offset + 0);
-                uint32_t height = *(uint32_t*)(msg_buffer + msg_buffer_offset + 4);
+                uint32_t width =
+                    *(uint32_t*)(msg_buffer + msg_buffer_offset + 0);
+                uint32_t height =
+                    *(uint32_t*)(msg_buffer + msg_buffer_offset + 4);
                 // States array starts at offset 8
                 uint8_t* states_ptr = msg_buffer + msg_buffer_offset + 8;
-                size_t states_bytes = size - 12; // subtract object_id/opcode/length + width/height
+                size_t states_bytes =
+                    size -
+                    12; // subtract object_id/opcode/length + width/height
                 size_t num_states = states_bytes / 4;
                 ctx_wr.fullscreen = false;
                 for (size_t i = 0; i < num_states; i++) {
@@ -2017,96 +2424,123 @@ void* war_window_render(void* args) {
                     ctx_wr.alpha_scale_cursor = default_cursor_alpha_scale;
                     goto wayland_done;
                 }
-                war_wl_surface_set_opaque_region(fd, wl_surface_id, wl_region_id);
+                war_wl_surface_set_opaque_region(
+                    fd, wl_surface_id, wl_region_id);
                 ctx_wr.text_feather = windowed_text_feather;
                 ctx_wr.text_thickness = windowed_text_thickness;
                 ctx_wr.alpha_scale = default_windowed_alpha_scale;
                 ctx_wr.alpha_scale_cursor = default_windowed_cursor_alpha_scale;
                 goto wayland_done;
             xdg_toplevel_close:
-                // dump_bytes("xdg_toplevel_close event", msg_buffer + msg_buffer_offset, size);
+                // dump_bytes("xdg_toplevel_close event", msg_buffer +
+                // msg_buffer_offset, size);
 
                 uint8_t xdg_toplevel_destroy[8];
                 war_write_le32(xdg_toplevel_destroy, xdg_toplevel_id);
                 war_write_le16(xdg_toplevel_destroy + 4, 0);
                 war_write_le16(xdg_toplevel_destroy + 6, 8);
-                ssize_t xdg_toplevel_destroy_written = write(fd, xdg_toplevel_destroy, 8);
-                // dump_bytes("xdg_toplevel::destroy request", xdg_toplevel_destroy, 8);
+                ssize_t xdg_toplevel_destroy_written =
+                    write(fd, xdg_toplevel_destroy, 8);
+                // dump_bytes("xdg_toplevel::destroy request",
+                // xdg_toplevel_destroy, 8);
                 assert(xdg_toplevel_destroy_written == 8);
 
                 uint8_t xdg_surface_destroy[8];
                 war_write_le32(xdg_surface_destroy, xdg_surface_id);
                 war_write_le16(xdg_surface_destroy + 4, 0);
                 war_write_le16(xdg_surface_destroy + 6, 8);
-                ssize_t xdg_surface_destroy_written = write(fd, xdg_surface_destroy, 8);
-                // dump_bytes("xdg_surface::destroy request", xdg_surface_destroy, 8);
+                ssize_t xdg_surface_destroy_written =
+                    write(fd, xdg_surface_destroy, 8);
+                // dump_bytes("xdg_surface::destroy request",
+                // xdg_surface_destroy, 8);
                 assert(xdg_surface_destroy_written == 8);
 
                 uint8_t wl_buffer_destroy[8];
                 war_write_le32(wl_buffer_destroy, wl_buffer_id);
                 war_write_le16(wl_buffer_destroy + 4, 0);
                 war_write_le16(wl_buffer_destroy + 6, 8);
-                ssize_t wl_buffer_destroy_written = write(fd, wl_buffer_destroy, 8);
-                // dump_bytes("wl_buffer::destroy request", wl_buffer_destroy, 8);
+                ssize_t wl_buffer_destroy_written =
+                    write(fd, wl_buffer_destroy, 8);
+                // dump_bytes("wl_buffer::destroy request", wl_buffer_destroy,
+                // 8);
                 assert(wl_buffer_destroy_written == 8);
 
                 uint8_t wl_region_destroy[8];
                 war_write_le32(wl_region_destroy, wl_region_id);
                 war_write_le16(wl_region_destroy + 4, 0);
                 war_write_le16(wl_region_destroy + 6, 8);
-                ssize_t wl_region_destroy_written = write(fd, wl_region_destroy, 8);
-                // dump_bytes("wl_region::destroy request", wl_region_destroy, 8);
+                ssize_t wl_region_destroy_written =
+                    write(fd, wl_region_destroy, 8);
+                // dump_bytes("wl_region::destroy request", wl_region_destroy,
+                // 8);
                 assert(wl_region_destroy_written == 8);
 
                 uint8_t wl_surface_destroy[8];
                 war_write_le32(wl_surface_destroy, wl_surface_id);
                 war_write_le16(wl_surface_destroy + 4, 0);
                 war_write_le16(wl_surface_destroy + 6, 8);
-                ssize_t wl_surface_destroy_written = write(fd, wl_surface_destroy, 8);
-                // dump_bytes("wl_surface::destroy request", wl_surface_destroy, 8);
+                ssize_t wl_surface_destroy_written =
+                    write(fd, wl_surface_destroy, 8);
+                // dump_bytes("wl_surface::destroy request",
+                // wl_surface_destroy, 8);
                 assert(wl_surface_destroy_written == 8);
 
-                atomic_store(&atomics->state, AUDIO_CMD_END_WAR);
                 usleep(500000);
                 goto wayland_done;
             xdg_toplevel_configure_bounds:
-                dump_bytes("xdg_toplevel_configure_bounds event", msg_buffer + msg_buffer_offset, size);
-                goto wayland_done;
-            xdg_toplevel_wm_capabilities:
-                dump_bytes("xdg_toplevel_wm_capabilities event", msg_buffer + msg_buffer_offset, size);
-                goto wayland_done;
-#if DMABUF
-            zwp_linux_dmabuf_v1_format:
-                dump_bytes("zwp_linux_dmabuf_v1_format event", msg_buffer + msg_buffer_offset, size);
-                goto wayland_done;
-            zwp_linux_dmabuf_v1_modifier:
-                dump_bytes("zwp_linux_dmabuf_v1_modifier event", msg_buffer + msg_buffer_offset, size);
-                goto wayland_done;
-            zwp_linux_buffer_params_v1_created:
-                dump_bytes("zwp_linux_buffer_params_v1_created", // COMMENT
-                                                                 // REFACTOR: to ::
+                dump_bytes("xdg_toplevel_configure_bounds event",
                            msg_buffer + msg_buffer_offset,
                            size);
                 goto wayland_done;
+            xdg_toplevel_wm_capabilities:
+                dump_bytes("xdg_toplevel_wm_capabilities event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
+                goto wayland_done;
+            zwp_linux_dmabuf_v1_format:
+                dump_bytes("zwp_linux_dmabuf_v1_format event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
+                goto wayland_done;
+            zwp_linux_dmabuf_v1_modifier:
+                dump_bytes("zwp_linux_dmabuf_v1_modifier event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
+                goto wayland_done;
+            zwp_linux_buffer_params_v1_created:
+                dump_bytes(
+                    "zwp_linux_buffer_params_v1_created", // COMMENT
+                                                          // REFACTOR: to ::
+                    msg_buffer + msg_buffer_offset,
+                    size);
+                goto wayland_done;
             zwp_linux_buffer_params_v1_failed:
-                dump_bytes("zwp_linux_buffer_params_v1_failed event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_linux_buffer_params_v1_failed event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_done:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_done event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_done event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 uint8_t create_params[12]; // REFACTOR: zero initialize
                 war_write_le32(create_params, zwp_linux_dmabuf_v1_id);
                 war_write_le16(create_params + 4, 1);
                 war_write_le16(create_params + 6, 12);
                 war_write_le32(create_params + 8, new_id);
-                dump_bytes("zwp_linux_dmabuf_v1_create_params request", create_params, 12);
+                dump_bytes("zwp_linux_dmabuf_v1_create_params request",
+                           create_params,
+                           12);
                 call_carmack("bound: zwp_linux_buffer_params_v1");
                 ssize_t create_params_written = write(fd, create_params, 12);
                 assert(create_params_written == 12);
                 zwp_linux_buffer_params_v1_id = new_id;
-                obj_op[zwp_linux_buffer_params_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-                    &&zwp_linux_buffer_params_v1_created;
-                obj_op[zwp_linux_buffer_params_v1_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] =
-                    &&zwp_linux_buffer_params_v1_failed;
+                obj_op[zwp_linux_buffer_params_v1_id *
+                           atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                       0] = &&zwp_linux_buffer_params_v1_created;
+                obj_op[zwp_linux_buffer_params_v1_id *
+                           atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                       1] = &&zwp_linux_buffer_params_v1_failed;
                 new_id++; // COMMENT REFACTOR: move increment to declaration
                           // (one line it)
 
@@ -2143,15 +2577,17 @@ void* war_window_render(void* args) {
                 memcpy(full_msg, header, 8);
                 memcpy(full_msg + 8, tail, 20);
 #endif
-                dump_bytes("zwp_linux_buffer_params_v1::add request", full_msg, 28);
+                dump_bytes(
+                    "zwp_linux_buffer_params_v1::add request", full_msg, 28);
 
                 uint8_t create_immed[28]; // REFACTOR: maybe 0 initialize
-                war_write_le32(create_immed,
-                               zwp_linux_buffer_params_v1_id); // COMMENT REFACTOR: is
-                                                               // it faster to copy the
-                                                               // incoming message
-                                                               // header and increment
-                                                               // accordingly?
+                war_write_le32(
+                    create_immed,
+                    zwp_linux_buffer_params_v1_id); // COMMENT REFACTOR: is
+                                                    // it faster to copy the
+                                                    // incoming message
+                                                    // header and increment
+                                                    // accordingly?
                 war_write_le16(create_immed + 4,
                                3); // COMMENT REFACTOR CONCERN: check for
                                    // duplicate variables names
@@ -2161,12 +2597,16 @@ void* war_window_render(void* args) {
                 war_write_le32(create_immed + 16, physical_height);
                 war_write_le32(create_immed + 20, DRM_FORMAT_ARGB8888);
                 war_write_le32(create_immed + 24, 0);
-                dump_bytes("zwp_linux_buffer_params_v1::create_immed request", create_immed, 28);
+                dump_bytes("zwp_linux_buffer_params_v1::create_immed request",
+                           create_immed,
+                           28);
                 call_carmack("bound: wl_buffer");
                 ssize_t create_immed_written = write(fd, create_immed, 28);
                 assert(create_immed_written == 28);
                 wl_buffer_id = new_id;
-                obj_op[wl_buffer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_buffer_release;
+                obj_op[wl_buffer_id *
+                           atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                       0] = &&wl_buffer_release;
                 new_id++;
 
                 uint8_t destroy[8];
@@ -2175,17 +2615,24 @@ void* war_window_render(void* args) {
                 war_write_le16(destroy + 6, 8);
                 ssize_t destroy_written = write(fd, destroy, 8);
                 assert(destroy_written == 8);
-                dump_bytes("zwp_linux_buffer_params_v1_id::destroy request", destroy, 8);
+                dump_bytes("zwp_linux_buffer_params_v1_id::destroy request",
+                           destroy,
+                           8);
                 goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_format_table:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event", msg_buffer + msg_buffer_offset,
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_format_table event",
+                           msg_buffer + msg_buffer_offset,
                            size); // REFACTOR: event
                 goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_main_device:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_main_device event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_main_device event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_done:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_done event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_done event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_target_device:
                 dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_target_"
@@ -2194,35 +2641,53 @@ void* war_window_render(void* args) {
                            size);
                 goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_formats:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_formats event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_formats event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwp_linux_dmabuf_feedback_v1_tranche_flags:
-                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_flags event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_linux_dmabuf_feedback_v1_tranche_flags event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
-#endif
             wp_linux_drm_syncobj_manager_v1_jump:
-                dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wp_linux_drm_syncobj_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_compositor_jump:
-                dump_bytes("wl_compositor_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_compositor_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_surface_enter:
-                dump_bytes("wl_surface_enter event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_surface_enter event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_surface_leave:
-                dump_bytes("wl_surface_leave event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_surface_leave event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_surface_preferred_buffer_scale:
-                dump_bytes("wl_surface_preferred_buffer_scale event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_surface_preferred_buffer_scale event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 assert(size == 12);
 
                 uint8_t set_buffer_scale[12];
                 war_write_le32(set_buffer_scale, wl_surface_id);
                 war_write_le16(set_buffer_scale + 4, 8);
                 war_write_le16(set_buffer_scale + 6, 12);
-                war_write_le32(set_buffer_scale + 8, war_read_le32(msg_buffer + msg_buffer_offset + 8));
-                dump_bytes("wl_surface::set_buffer_scale request", set_buffer_scale, 12);
-                ssize_t set_buffer_scale_written = write(fd, set_buffer_scale, 12);
+                war_write_le32(
+                    set_buffer_scale + 8,
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8));
+                dump_bytes("wl_surface::set_buffer_scale request",
+                           set_buffer_scale,
+                           12);
+                ssize_t set_buffer_scale_written =
+                    write(fd, set_buffer_scale, 12);
                 assert(set_buffer_scale_written == 12);
 
                 // war_wayland_holy_trinity(fd,
@@ -2236,16 +2701,23 @@ void* war_window_render(void* args) {
                 //                          physical_height);
                 goto wayland_done;
             wl_surface_preferred_buffer_transform:
-                dump_bytes("wl_surface_preferred_buffer_transform event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_surface_preferred_buffer_transform event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 assert(size == 12);
 
                 uint8_t set_buffer_transform[12];
                 war_write_le32(set_buffer_transform, wl_surface_id);
                 war_write_le16(set_buffer_transform + 4, 7);
                 war_write_le16(set_buffer_transform + 6, 12);
-                war_write_le32(set_buffer_transform + 8, war_read_le32(msg_buffer + msg_buffer_offset + 8));
-                dump_bytes("wl_surface::set_buffer_transform request", set_buffer_transform, 12);
-                ssize_t set_buffer_transform_written = write(fd, set_buffer_transform, 12);
+                war_write_le32(
+                    set_buffer_transform + 8,
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8));
+                dump_bytes("wl_surface::set_buffer_transform request",
+                           set_buffer_transform,
+                           12);
+                ssize_t set_buffer_transform_written =
+                    write(fd, set_buffer_transform, 12);
                 assert(set_buffer_transform_written == 12);
 
                 // war_wayland_holy_trinity(fd,
@@ -2259,16 +2731,24 @@ void* war_window_render(void* args) {
                 //                          physical_height);
                 goto wayland_done;
             zwp_idle_inhibit_manager_v1_jump:
-                dump_bytes("zwp_idle_inhibit_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_idle_inhibit_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwlr_layer_shell_v1_jump:
-                dump_bytes("zwlr_layer_shell_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwlr_layer_shell_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zxdg_decoration_manager_v1_jump:
-                dump_bytes("zxdg_decoration_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zxdg_decoration_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zxdg_toplevel_decoration_v1_configure: {
-                dump_bytes("zxdg_toplevel_decoration_v1_configure event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zxdg_toplevel_decoration_v1_configure event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 uint8_t set_mode[12];
                 war_write_le32(set_mode, zxdg_toplevel_decoration_v1_id);
                 war_write_le16(set_mode + 4, 1);
@@ -2277,58 +2757,89 @@ void* war_window_render(void* args) {
                 // war_write_le32(
                 //     set_mode + 8,
                 //     war_read_le32(msg_buffer + msg_buffer_offset + 8));
-                dump_bytes("zxdg_toplevel_decoration_v1::set_mode request", set_mode, 12);
+                dump_bytes("zxdg_toplevel_decoration_v1::set_mode request",
+                           set_mode,
+                           12);
                 ssize_t set_mode_written = write(fd, set_mode, 12);
                 assert(set_mode_written == 12);
                 goto wayland_done;
             }
             zwp_relative_pointer_manager_v1_jump:
-                dump_bytes("zwp_relative_pointer_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_relative_pointer_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwp_pointer_constraints_v1_jump:
-                dump_bytes("zwp_pointer_constraints_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_pointer_constraints_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wp_presentation_clock_id:
-                dump_bytes("wp_presentation_clock_id event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wp_presentation_clock_id event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwlr_output_manager_v1_head:
-                dump_bytes("zwlr_output_manager_v1_head event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwlr_output_manager_v1_head event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwlr_output_manager_v1_done:
-                dump_bytes("zwlr_output_manager_v1_done event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwlr_output_manager_v1_done event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             ext_foreign_toplevel_list_v1_toplevel:
-                dump_bytes("ext_foreign_toplevel_list_v1_toplevel event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("ext_foreign_toplevel_list_v1_toplevel event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwlr_data_control_manager_v1_jump:
-                dump_bytes("zwlr_data_control_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwlr_data_control_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wp_viewporter_jump:
-                dump_bytes("wp_viewporter_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wp_viewporter_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wp_content_type_manager_v1_jump:
-                dump_bytes("wp_content_type_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wp_content_type_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wp_fractional_scale_manager_v1_jump:
-                dump_bytes("wp_fractional_scale_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wp_fractional_scale_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             xdg_activation_v1_jump:
-                dump_bytes("xdg_activation_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("xdg_activation_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwp_virtual_keyboard_manager_v1_jump:
-                dump_bytes("zwp_virtual_keyboard_manager_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_virtual_keyboard_manager_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             zwp_pointer_gestures_v1_jump:
-                dump_bytes("zwp_pointer_gestures_v1_jump event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("zwp_pointer_gestures_v1_jump event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_seat_capabilities:
-                dump_bytes("wl_seat_capabilities event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_seat_capabilities event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 enum {
                     wl_seat_pointer = 0x01,
                     wl_seat_keyboard = 0x02,
                     wl_seat_touch = 0x04,
                 };
-                uint32_t capabilities = war_read_le32(msg_buffer + msg_buffer_offset + 8);
+                uint32_t capabilities =
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8);
                 if (capabilities & wl_seat_keyboard) {
                     call_carmack("keyboard detected");
                     assert(size == 12);
@@ -2338,16 +2849,30 @@ void* war_window_render(void* args) {
                     war_write_le16(get_keyboard + 6, 12);
                     war_write_le32(get_keyboard + 8, new_id);
                     dump_bytes("get_keyboard request", get_keyboard, 12);
-                    call_carmack("bound: wl_keyboard", (const char*)msg_buffer + msg_buffer_offset + 12);
+                    call_carmack("bound: wl_keyboard",
+                                 (const char*)msg_buffer + msg_buffer_offset +
+                                     12);
                     ssize_t get_keyboard_written = write(fd, get_keyboard, 12);
                     assert(get_keyboard_written == 12);
                     wl_keyboard_id = new_id;
-                    obj_op[wl_keyboard_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_keyboard_keymap;
-                    obj_op[wl_keyboard_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_keyboard_enter;
-                    obj_op[wl_keyboard_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 2] = &&wl_keyboard_leave;
-                    obj_op[wl_keyboard_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 3] = &&wl_keyboard_key;
-                    obj_op[wl_keyboard_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 4] = &&wl_keyboard_modifiers;
-                    obj_op[wl_keyboard_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 5] = &&wl_keyboard_repeat_info;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_keyboard_keymap;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_keyboard_enter;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_keyboard_leave;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_keyboard_key;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_keyboard_modifiers;
+                    obj_op[wl_keyboard_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_keyboard_repeat_info;
                     new_id++;
                 }
                 if (capabilities & wl_seat_pointer) {
@@ -2363,17 +2888,39 @@ void* war_window_render(void* args) {
                     ssize_t get_pointer_written = write(fd, get_pointer, 12);
                     assert(get_pointer_written == 12);
                     wl_pointer_id = new_id;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_pointer_enter;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_pointer_leave;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 2] = &&wl_pointer_motion;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 3] = &&wl_pointer_button;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 4] = &&wl_pointer_axis;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 5] = &&wl_pointer_frame;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 6] = &&wl_pointer_axis_source;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 7] = &&wl_pointer_axis_stop;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 8] = &&wl_pointer_axis_discrete;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 9] = &&wl_pointer_axis_value120;
-                    obj_op[wl_pointer_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 10] = &&wl_pointer_axis_relative_direction;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_pointer_enter;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_pointer_leave;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_pointer_motion;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_pointer_button;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_pointer_axis;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_pointer_frame;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           6] = &&wl_pointer_axis_source;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           7] = &&wl_pointer_axis_stop;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           8] = &&wl_pointer_axis_discrete;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           9] = &&wl_pointer_axis_value120;
+                    obj_op[wl_pointer_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           10] = &&wl_pointer_axis_relative_direction;
                     new_id++;
                 }
                 if (capabilities & wl_seat_touch) {
@@ -2389,50 +2936,78 @@ void* war_window_render(void* args) {
                     ssize_t get_touch_written = write(fd, get_touch, 12);
                     assert(get_touch_written == 12);
                     wl_touch_id = new_id;
-                    obj_op[wl_touch_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] = &&wl_touch_down;
-                    obj_op[wl_touch_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] = &&wl_touch_up;
-                    obj_op[wl_touch_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 2] = &&wl_touch_motion;
-                    obj_op[wl_touch_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 3] = &&wl_touch_frame;
-                    obj_op[wl_touch_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 4] = &&wl_touch_cancel;
-                    obj_op[wl_touch_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 5] = &&wl_touch_shape;
-                    obj_op[wl_touch_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 6] = &&wl_touch_orientation;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           0] = &&wl_touch_down;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           1] = &&wl_touch_up;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           2] = &&wl_touch_motion;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           3] = &&wl_touch_frame;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           4] = &&wl_touch_cancel;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           5] = &&wl_touch_shape;
+                    obj_op[wl_touch_id *
+                               atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
+                           6] = &&wl_touch_orientation;
                     new_id++;
                 }
                 goto wayland_done;
             wl_seat_name:
-                dump_bytes("wl_seat_name event", msg_buffer + msg_buffer_offset, size);
-                call_carmack("seat: %s", (const char*)msg_buffer + msg_buffer_offset + 12);
+                dump_bytes(
+                    "wl_seat_name event", msg_buffer + msg_buffer_offset, size);
+                call_carmack("seat: %s",
+                             (const char*)msg_buffer + msg_buffer_offset + 12);
                 goto wayland_done;
             wl_keyboard_keymap: {
                 dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
                 assert(size == 16);
                 int keymap_fd = -1;
-                for (struct cmsghdr* poll_cmsg = CMSG_FIRSTHDR(&poll_msg_hdr); poll_cmsg != NULL;
+                for (struct cmsghdr* poll_cmsg = CMSG_FIRSTHDR(&poll_msg_hdr);
+                     poll_cmsg != NULL;
                      poll_cmsg = CMSG_NXTHDR(&poll_msg_hdr, poll_cmsg)) {
-                    if (poll_cmsg->cmsg_level == SOL_SOCKET && poll_cmsg->cmsg_type == SCM_RIGHTS) {
+                    if (poll_cmsg->cmsg_level == SOL_SOCKET &&
+                        poll_cmsg->cmsg_type == SCM_RIGHTS) {
                         keymap_fd = *(int*)CMSG_DATA(poll_cmsg);
                         break;
                     }
                 }
                 assert(keymap_fd >= 0);
-                uint32_t keymap_format = war_read_le32(msg_buffer + msg_buffer_offset + 8);
+                uint32_t keymap_format =
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8);
                 assert(keymap_format == XKB_KEYMAP_FORMAT_TEXT_V1);
-                uint32_t keymap_size = war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4);
+                uint32_t keymap_size =
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4);
                 assert(keymap_size > 0);
                 xkb_context = xkb_context_new(0);
                 assert(xkb_context);
-                char* keymap_map = mmap(NULL, keymap_size, PROT_READ, MAP_PRIVATE, keymap_fd, 0);
+                char* keymap_map = mmap(
+                    NULL, keymap_size, PROT_READ, MAP_PRIVATE, keymap_fd, 0);
                 assert(keymap_map != MAP_FAILED);
-                struct xkb_keymap* xkb_keymap = xkb_keymap_new_from_string(xkb_context, keymap_map, XKB_KEYMAP_FORMAT_TEXT_V1, 0);
+                struct xkb_keymap* xkb_keymap = xkb_keymap_new_from_string(
+                    xkb_context, keymap_map, XKB_KEYMAP_FORMAT_TEXT_V1, 0);
                 assert(xkb_keymap);
                 xkb_state = xkb_state_new(xkb_keymap);
                 assert(xkb_state);
-                mod_shift = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_SHIFT);
-                mod_ctrl = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_CTRL);
-                mod_alt = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_ALT);
-                mod_logo = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_LOGO); // Super/Meta
-                mod_caps = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_CAPS); // Super/Meta
-                mod_num = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_NUM);   // Super/Meta
+                mod_shift =
+                    xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_SHIFT);
+                mod_ctrl =
+                    xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_CTRL);
+                mod_alt =
+                    xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_ALT);
+                mod_logo = xkb_keymap_mod_get_index(
+                    xkb_keymap, XKB_MOD_NAME_LOGO); // Super/Meta
+                mod_caps = xkb_keymap_mod_get_index(
+                    xkb_keymap, XKB_MOD_NAME_CAPS); // Super/Meta
+                mod_num = xkb_keymap_mod_get_index(
+                    xkb_keymap, XKB_MOD_NAME_NUM); // Super/Meta
                 //// default to void command if unset
                 // for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
                 //     for (size_t m = 0; m <
@@ -2448,7 +3023,9 @@ void* war_window_render(void* args) {
                     lua_State* L = luaL_newstate();
                     luaL_openlibs(L);
 
-                    if (luaL_dofile(L, "/home/monaco/Projects/WAR/src/lua/monaco/set.lua") != LUA_OK) {
+                    if (luaL_dofile(L,
+                                    "/home/monaco/Projects/WAR/src/lua/monaco/"
+                                    "set.lua") != LUA_OK) {
                         call_carmack("Lua error: %s", lua_tostring(L, -1));
                         lua_close(L);
                         return 0;
@@ -2461,7 +3038,8 @@ void* war_window_render(void* args) {
                     } else {
                         size_t n_sequences = lua_objlen(L, -1);
 
-                        for (size_t seq_idx = 1; seq_idx <= n_sequences; seq_idx++) {
+                        for (size_t seq_idx = 1; seq_idx <= n_sequences;
+                             seq_idx++) {
                             lua_rawgeti(L, -1, seq_idx); // flattened[seq_idx]
 
                             // --- get keys table ---
@@ -2470,7 +3048,8 @@ void* war_window_render(void* args) {
 
                             size_t parent = 0; // start at root
 
-                            for (size_t key_idx = 1; key_idx <= n_keys; key_idx++) {
+                            for (size_t key_idx = 1; key_idx <= n_keys;
+                                 key_idx++) {
                                 lua_rawgeti(L, -1, key_idx);
                                 const char* key = lua_tostring(L, -1);
 
@@ -2484,32 +3063,44 @@ void* war_window_render(void* args) {
                                     if (inner[len - 1] == '>') len--;
 
                                     char buf[32];
-                                    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+                                    if (len >= sizeof(buf))
+                                        len = sizeof(buf) - 1;
                                     memcpy(buf, inner, len);
                                     buf[len] = '\0';
 
-                                    call_carmack("Parsing special key: <%s>", buf);
+                                    call_carmack("Parsing special key: <%s>",
+                                                 buf);
 
                                     // --- parse modifiers first ---
                                     while (true) {
                                         if (strncmp(buf, "C-", 2) == 0) {
                                             mod |= MOD_CTRL;
-                                            memmove(buf, buf + 2, strlen(buf + 2) + 1);
-                                            call_carmack("Detected Ctrl modifier, "
-                                                         "remaining: %s",
-                                                         buf);
-                                        } else if (strncmp(buf, "A-", 2) == 0 || strncmp(buf, "M-", 2) == 0) {
+                                            memmove(buf,
+                                                    buf + 2,
+                                                    strlen(buf + 2) + 1);
+                                            call_carmack(
+                                                "Detected Ctrl modifier, "
+                                                "remaining: %s",
+                                                buf);
+                                        } else if (strncmp(buf, "A-", 2) == 0 ||
+                                                   strncmp(buf, "M-", 2) == 0) {
                                             mod |= MOD_ALT;
-                                            memmove(buf, buf + 2, strlen(buf + 2) + 1);
-                                            call_carmack("Detected Alt modifier, "
-                                                         "remaining: %s",
-                                                         buf);
+                                            memmove(buf,
+                                                    buf + 2,
+                                                    strlen(buf + 2) + 1);
+                                            call_carmack(
+                                                "Detected Alt modifier, "
+                                                "remaining: %s",
+                                                buf);
                                         } else if (strncmp(buf, "S-", 2) == 0) {
                                             mod |= MOD_SHIFT;
-                                            memmove(buf, buf + 2, strlen(buf + 2) + 1);
-                                            call_carmack("Detected Shift modifier, "
-                                                         "remaining: %s",
-                                                         buf);
+                                            memmove(buf,
+                                                    buf + 2,
+                                                    strlen(buf + 2) + 1);
+                                            call_carmack(
+                                                "Detected Shift modifier, "
+                                                "remaining: %s",
+                                                buf);
                                         } else {
                                             break;
                                         }
@@ -2528,7 +3119,8 @@ void* war_window_render(void* args) {
                                         keysym = KEYSYM_TAB;
                                     else if (strcmp(buf, "Esc") == 0)
                                         keysym = KEYSYM_ESCAPE;
-                                    else if (strcmp(buf, "BS") == 0 || strcmp(buf, "Backspace") == 0)
+                                    else if (strcmp(buf, "BS") == 0 ||
+                                             strcmp(buf, "Backspace") == 0)
                                         keysym = XKB_KEY_BackSpace;
                                     else if (strcmp(buf, "Del") == 0)
                                         keysym = XKB_KEY_Delete;
@@ -2543,21 +3135,26 @@ void* war_window_render(void* args) {
                                     else if (strlen(buf) == 1) {
                                         char c = buf[0];
                                         if (c >= 'A' && c <= 'Z') {
-                                            keysym = (uint32_t)(c + ('a' - 'A'));
+                                            keysym =
+                                                (uint32_t)(c + ('a' - 'A'));
                                             mod |= MOD_SHIFT;
-                                            call_carmack("Detected uppercase letter: %c "
-                                                         "-> keysym %u + Shift",
-                                                         c,
-                                                         keysym);
+                                            call_carmack(
+                                                "Detected uppercase letter: "
+                                                "%c "
+                                                "-> keysym %u + Shift",
+                                                c,
+                                                keysym);
                                         } else {
                                             keysym = (uint32_t)c;
-                                            call_carmack("Detected literal character: "
-                                                         "%c -> keysym %u",
-                                                         c,
-                                                         keysym);
+                                            call_carmack(
+                                                "Detected literal character: "
+                                                "%c -> keysym %u",
+                                                c,
+                                                keysym);
                                         }
                                     } else {
-                                        call_carmack("Unknown key name: <%s>", buf);
+                                        call_carmack("Unknown key name: <%s>",
+                                                     buf);
                                         keysym = 0;
                                     }
 
@@ -2569,14 +3166,16 @@ void* war_window_render(void* args) {
                                     if (c >= 'A' && c <= 'Z') {
                                         keysym = (uint32_t)(c + ('a' - 'A'));
                                         mod |= MOD_SHIFT;
-                                        call_carmack("Uppercase literal key: %c -> "
-                                                     "keysym %u + Shift",
-                                                     c,
-                                                     keysym);
+                                        call_carmack(
+                                            "Uppercase literal key: %c -> "
+                                            "keysym %u + Shift",
+                                            c,
+                                            keysym);
                                     } else if (c == ':') {
                                         keysym = KEYSYM_SEMICOLON;
                                         mod |= MOD_SHIFT;
-                                        call_carmack("Colon ':' -> KEYSYM_SEMICOLON");
+                                        call_carmack(
+                                            "Colon ':' -> KEYSYM_SEMICOLON");
                                     } else if (c == '[') {
                                         keysym = KEYSYM_LEFTBRACKET;
                                     } else if (c == ']') {
@@ -2603,15 +3202,20 @@ void* war_window_render(void* args) {
                                                          {'|', '\\'}};
 
                                         int found = 0;
-                                        for (size_t i = 0; i < sizeof(shift_map) / sizeof(shift_map[0]); i++) {
+                                        for (size_t i = 0;
+                                             i < sizeof(shift_map) /
+                                                     sizeof(shift_map[0]);
+                                             i++) {
                                             if (c == shift_map[i].sym) {
-                                                keysym = (uint32_t)shift_map[i].base;
+                                                keysym =
+                                                    (uint32_t)shift_map[i].base;
                                                 mod |= MOD_SHIFT;
                                                 found = 1;
-                                                call_carmack("Shifted symbol: %c -> "
-                                                             "base %c + Shift",
-                                                             c,
-                                                             shift_map[i].base);
+                                                call_carmack(
+                                                    "Shifted symbol: %c -> "
+                                                    "base %c + Shift",
+                                                    c,
+                                                    shift_map[i].base);
                                                 break;
                                             }
                                         }
@@ -2626,7 +3230,11 @@ void* war_window_render(void* args) {
                                 }
 
                                 // --- FSM transition logic ---
-                                uint16_t next = fsm[parent].next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
+                                uint16_t next =
+                                    fsm[parent].next_state
+                                        [keysym * atomic_load(
+                                                      &ctx_lua->WR_MOD_COUNT) +
+                                         mod];
 
                                 // After FSM transition
                                 call_carmack("FSM: parent=%u keysym=%u mod=%u "
@@ -2638,9 +3246,15 @@ void* war_window_render(void* args) {
 
                                 if (next == 0) {
                                     next = state_counter++;
-                                    fsm[parent].next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = next;
+                                    fsm[parent].next_state
+                                        [keysym * atomic_load(
+                                                      &ctx_lua->WR_MOD_COUNT) +
+                                         mod] = next;
 
-                                    for (size_t m = 0; m < atomic_load(&ctx_lua->WR_MODE_COUNT); m++) {
+                                    for (size_t m = 0;
+                                         m <
+                                         atomic_load(&ctx_lua->WR_MODE_COUNT);
+                                         m++) {
                                         fsm[next].is_terminal[m] = false;
                                         fsm[next].is_prefix[m] = false;
                                         fsm[next].command[m] = NULL;
@@ -2650,7 +3264,11 @@ void* war_window_render(void* args) {
                                     }
                                     memset(fsm[next].next_state,
                                            0,
-                                           sizeof(uint16_t) * atomic_load(&ctx_lua->WR_MOD_COUNT) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT));
+                                           sizeof(uint16_t) *
+                                               atomic_load(
+                                                   &ctx_lua->WR_MOD_COUNT) *
+                                               atomic_load(
+                                                   &ctx_lua->WR_KEYSYM_COUNT));
                                 }
 
                                 parent = next;
@@ -2706,499 +3324,779 @@ void* war_window_render(void* args) {
                                 void* cmd_ptr = NULL;
                                 if (strcmp(cmd_name, "cmd_normal_k") == 0) {
                                     cmd_ptr = &&cmd_normal_k;
-                                } else if (strcmp(cmd_name, "cmd_views_k") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_k") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_k;
-                                } else if (strcmp(cmd_name, "cmd_record_k") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_k") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_k;
-                                } else if (strcmp(cmd_name, "cmd_normal_j") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_j") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_j;
-                                } else if (strcmp(cmd_name, "cmd_normal_i") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_i") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_i;
-                                } else if (strcmp(cmd_name, "cmd_normal_L") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_L") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_L;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_tab") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_tab") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_tab;
-                                } else if (strcmp(cmd_name, "cmd_views_j") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_j") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_j;
-                                } else if (strcmp(cmd_name, "cmd_record_j") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_j") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_j;
-                                } else if (strcmp(cmd_name, "cmd_normal_h") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_h") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_h;
-                                } else if (strcmp(cmd_name, "cmd_views_h") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_h") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_h;
-                                } else if (strcmp(cmd_name, "cmd_normal_l") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_l") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_l;
-                                } else if (strcmp(cmd_name, "cmd_views_l") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_l") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_l;
-                                } else if (strcmp(cmd_name, "cmd_midi_l") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_l") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_l;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_k") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_k") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_k;
-                                } else if (strcmp(cmd_name, "cmd_views_alt_k") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_k") == 0) {
                                     cmd_ptr = &&cmd_views_alt_k;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_j") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_j") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_j;
-                                } else if (strcmp(cmd_name, "cmd_views_alt_j") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_j") == 0) {
                                     cmd_ptr = &&cmd_views_alt_j;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_h") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_h") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_h;
-                                } else if (strcmp(cmd_name, "cmd_views_alt_h") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_h") == 0) {
                                     cmd_ptr = &&cmd_views_alt_h;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_l") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_l") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_l;
-                                } else if (strcmp(cmd_name, "cmd_views_alt_l") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_alt_l") == 0) {
                                     cmd_ptr = &&cmd_views_alt_l;
-                                } else if (strcmp(cmd_name, "cmd_normal_0") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_0") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_0;
-                                } else if (strcmp(cmd_name, "cmd_record_0") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_0") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_0;
-                                } else if (strcmp(cmd_name, "cmd_normal_$") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_$") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_$;
-                                } else if (strcmp(cmd_name, "cmd_normal_G") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_G") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_G;
-                                } else if (strcmp(cmd_name, "cmd_normal_gg") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_gg") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_gg;
-                                } else if (strcmp(cmd_name, "cmd_normal_1") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_1") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_1;
-                                } else if (strcmp(cmd_name, "cmd_record_1") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_1") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_1;
-                                } else if (strcmp(cmd_name, "cmd_midi_1") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_1") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_1;
-                                } else if (strcmp(cmd_name, "cmd_normal_2") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_2") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_2;
-                                } else if (strcmp(cmd_name, "cmd_record_2") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_2") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_2;
-                                } else if (strcmp(cmd_name, "cmd_midi_2") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_2") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_2;
-                                } else if (strcmp(cmd_name, "cmd_normal_3") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_3") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_3;
-                                } else if (strcmp(cmd_name, "cmd_record_3") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_3") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_3;
-                                } else if (strcmp(cmd_name, "cmd_midi_3") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_3") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_3;
-                                } else if (strcmp(cmd_name, "cmd_normal_4") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_4") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_4;
-                                } else if (strcmp(cmd_name, "cmd_record_4") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_4") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_4;
-                                } else if (strcmp(cmd_name, "cmd_midi_4") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_4") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_4;
-                                } else if (strcmp(cmd_name, "cmd_normal_5") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_5") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_5;
-                                } else if (strcmp(cmd_name, "cmd_record_5") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_5") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_5;
-                                } else if (strcmp(cmd_name, "cmd_midi_5") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_5") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_5;
-                                } else if (strcmp(cmd_name, "cmd_normal_6") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_6") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_6;
-                                } else if (strcmp(cmd_name, "cmd_record_6") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_6") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_6;
-                                } else if (strcmp(cmd_name, "cmd_midi_6") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_6") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_6;
-                                } else if (strcmp(cmd_name, "cmd_normal_7") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_7") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_7;
-                                } else if (strcmp(cmd_name, "cmd_record_7") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_7") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_7;
-                                } else if (strcmp(cmd_name, "cmd_midi_7") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_7") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_7;
-                                } else if (strcmp(cmd_name, "cmd_normal_8") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_8") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_8;
-                                } else if (strcmp(cmd_name, "cmd_record_8") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_8") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_8;
-                                } else if (strcmp(cmd_name, "cmd_midi_8") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_8") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_8;
-                                } else if (strcmp(cmd_name, "cmd_normal_9") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_9") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_9;
-                                } else if (strcmp(cmd_name, "cmd_record_9") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_9") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_9;
-                                } else if (strcmp(cmd_name, "cmd_midi_9") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_9") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_9;
-                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_equal") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_equal") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_ctrl_equal;
-                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_minus") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_minus") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_ctrl_minus;
-                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_alt_equal") == 0) {
+                                } else if (strcmp(
+                                               cmd_name,
+                                               "cmd_normal_ctrl_alt_equal") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_ctrl_alt_equal;
-                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_alt_minus") == 0) {
+                                } else if (strcmp(
+                                               cmd_name,
+                                               "cmd_normal_ctrl_alt_minus") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_ctrl_alt_minus;
-                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_0") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_0") == 0) {
                                     cmd_ptr = &&cmd_normal_ctrl_0;
-                                } else if (strcmp(cmd_name, "cmd_normal_esc") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_esc") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_esc;
-                                } else if (strcmp(cmd_name, "cmd_views_esc") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_esc") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_esc;
-                                } else if (strcmp(cmd_name, "cmd_record_esc") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_esc") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_esc;
-                                } else if (strcmp(cmd_name, "cmd_midi_esc") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_esc") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_esc;
-                                } else if (strcmp(cmd_name, "cmd_command_esc") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_command_esc") == 0) {
                                     cmd_ptr = &&cmd_command_esc;
-                                } else if (strcmp(cmd_name, "cmd_normal_f") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_f") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_f;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_f") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_f") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_f;
-                                } else if (strcmp(cmd_name, "cmd_normal_t") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_t") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_t;
-                                } else if (strcmp(cmd_name, "cmd_record_t") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_t") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_t;
-                                } else if (strcmp(cmd_name, "cmd_midi_t") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_t") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_t;
-                                } else if (strcmp(cmd_name, "cmd_normal_x") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_x") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_x;
-                                } else if (strcmp(cmd_name, "cmd_midi_x") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_x") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_x;
-                                } else if (strcmp(cmd_name, "cmd_normal_T") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_T") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_T;
-                                } else if (strcmp(cmd_name, "cmd_midi_T") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_T") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_T;
-                                } else if (strcmp(cmd_name, "cmd_normal_F") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_F") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_F;
-                                } else if (strcmp(cmd_name, "cmd_normal_gb") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_gb") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_gb;
-                                } else if (strcmp(cmd_name, "cmd_normal_gt") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_gt") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_gt;
-                                } else if (strcmp(cmd_name, "cmd_normal_gd") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_gd") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_gd;
-                                } else if (strcmp(cmd_name, "cmd_wav_esc") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_wav_esc") ==
+                                           0) {
                                     cmd_ptr = &&cmd_wav_esc;
-                                } else if (strcmp(cmd_name, "cmd_normal_gm") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_gm") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_gm;
-                                } else if (strcmp(cmd_name, "cmd_normal_s") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_s") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_s;
-                                } else if (strcmp(cmd_name, "cmd_normal_z") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_z") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_z;
-                                } else if (strcmp(cmd_name, "cmd_views_z") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_z") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_z;
-                                } else if (strcmp(cmd_name, "cmd_normal_return") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_return") == 0) {
                                     cmd_ptr = &&cmd_normal_return;
-                                } else if (strcmp(cmd_name, "cmd_normal_r") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_r") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_r;
-                                } else if (strcmp(cmd_name, "cmd_views_return") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_views_return") == 0) {
                                     cmd_ptr = &&cmd_views_return;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacediv") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacediv") == 0) {
                                     cmd_ptr = &&cmd_normal_spacediv;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacedov") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacedov") == 0) {
                                     cmd_ptr = &&cmd_normal_spacedov;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacediw") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacediw") == 0) {
                                     cmd_ptr = &&cmd_normal_spacediw;
-                                } else if (strcmp(cmd_name, "cmd_normal_spaceda") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceda") == 0) {
                                     cmd_ptr = &&cmd_normal_spaceda;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacehov") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacehov") == 0) {
                                     cmd_ptr = &&cmd_normal_spacehov;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacehiv") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacehiv") == 0) {
                                     cmd_ptr = &&cmd_normal_spacehiv;
-                                } else if (strcmp(cmd_name, "cmd_normal_spaceha") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceha") == 0) {
                                     cmd_ptr = &&cmd_normal_spaceha;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacesov") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesov") == 0) {
                                     cmd_ptr = &&cmd_normal_spacesov;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacesiv") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesiv") == 0) {
                                     cmd_ptr = &&cmd_normal_spacesiv;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacesa") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesa") == 0) {
                                     cmd_ptr = &&cmd_normal_spacesa;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacemov") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacemov") == 0) {
                                     cmd_ptr = &&cmd_normal_spacemov;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacemiv") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacemiv") == 0) {
                                     cmd_ptr = &&cmd_normal_spacemiv;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacema") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacema") == 0) {
                                     cmd_ptr = &&cmd_normal_spacema;
-                                } else if (strcmp(cmd_name, "cmd_normal_spaceumov") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceumov") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_spaceumov;
-                                } else if (strcmp(cmd_name, "cmd_normal_spaceumiv") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceumiv") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_spaceumiv;
-                                } else if (strcmp(cmd_name, "cmd_normal_spaceuma") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceuma") == 0) {
                                     cmd_ptr = &&cmd_normal_spaceuma;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacea") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacea") == 0) {
                                     cmd_ptr = &&cmd_normal_spacea;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_g") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_g") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_g;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_t") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_t") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_t;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_n") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_n") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_n;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_s") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_s") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_s;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_m") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_m") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_m;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_y") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_y") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_y;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_z") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_z") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_z;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_q") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_q") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_q;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_e") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_e") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_e;
-                                } else if (strcmp(cmd_name, "cmd_normal_a") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_a") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_a;
-                                } else if (strcmp(cmd_name, "cmd_normal_space1") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space1") == 0) {
                                     cmd_ptr = &&cmd_normal_space1;
-                                } else if (strcmp(cmd_name, "cmd_normal_space2") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space2") == 0) {
                                     cmd_ptr = &&cmd_normal_space2;
-                                } else if (strcmp(cmd_name, "cmd_normal_space3") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space3") == 0) {
                                     cmd_ptr = &&cmd_normal_space3;
-                                } else if (strcmp(cmd_name, "cmd_normal_space4") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space4") == 0) {
                                     cmd_ptr = &&cmd_normal_space4;
-                                } else if (strcmp(cmd_name, "cmd_normal_space5") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space5") == 0) {
                                     cmd_ptr = &&cmd_normal_space5;
-                                } else if (strcmp(cmd_name, "cmd_normal_space6") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space6") == 0) {
                                     cmd_ptr = &&cmd_normal_space6;
-                                } else if (strcmp(cmd_name, "cmd_normal_space7") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space7") == 0) {
                                     cmd_ptr = &&cmd_normal_space7;
-                                } else if (strcmp(cmd_name, "cmd_normal_space8") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space8") == 0) {
                                     cmd_ptr = &&cmd_normal_space8;
-                                } else if (strcmp(cmd_name, "cmd_normal_space9") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space9") == 0) {
                                     cmd_ptr = &&cmd_normal_space9;
-                                } else if (strcmp(cmd_name, "cmd_normal_space0") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_space0") == 0) {
                                     cmd_ptr = &&cmd_normal_space0;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_1") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_1") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_1;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_2") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_2") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_2;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_3") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_3") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_3;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_4") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_4") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_4;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_5") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_5") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_5;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_6") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_6") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_6;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_7") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_7") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_7;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_8") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_8") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_8;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_9") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_9") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_9;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_0") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_0") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_0;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_1") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_1") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_1;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_2") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_2") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_2;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_3") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_3") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_3;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_4") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_4") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_4;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_5") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_5") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_5;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_6") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_6") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_6;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_7") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_7") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_7;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_8") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_8") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_8;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_9") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_9") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_9;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_shift_0") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_shift_0") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_alt_shift_0;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_1") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_1") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_1;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_2") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_2") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_2;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_3") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_3") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_3;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_4") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_4") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_4;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_5") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_5") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_5;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_6") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_6") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_6;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_7") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_7") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_7;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_8") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_8") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_8;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_9") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_9") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_9;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_0") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_alt_0") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_0;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_1") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_1") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_1;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_2") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_2") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_2;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_3") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_3") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_3;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_4") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_4") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_4;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_5") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_5") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_5;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_6") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_6") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_6;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_7") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_7") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_7;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_8") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_8") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_8;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_9") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_9") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_9;
-                                } else if (strcmp(cmd_name, "cmd_midi_alt_shift_0") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_alt_shift_0") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_alt_shift_0;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacedspacea") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacedspacea") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_spacedspacea;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_K") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_K") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_K;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_J") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_J") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_J;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_H") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_H") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_H;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_L") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_L") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_L;
-                                } else if (strcmp(cmd_name, "cmd_normal_d") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_d") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_d;
-                                } else if (strcmp(cmd_name, "cmd_views_d") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_d") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_d;
-                                } else if (strcmp(cmd_name, "cmd_normal_m") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_m") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_m;
-                                } else if (strcmp(cmd_name, "cmd_midi_m") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_m") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_m;
-                                } else if (strcmp(cmd_name, "cmd_normal_X") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_X") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_X;
-                                } else if (strcmp(cmd_name, "cmd_normal_w") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_w") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_w;
-                                } else if (strcmp(cmd_name, "cmd_record_w") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_w") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_w;
-                                } else if (strcmp(cmd_name, "cmd_midi_w") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_w") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_w;
-                                } else if (strcmp(cmd_name, "cmd_normal_W") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_W") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_W;
-                                } else if (strcmp(cmd_name, "cmd_normal_e") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_e") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_e;
-                                } else if (strcmp(cmd_name, "cmd_record_e") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_e") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_e;
-                                } else if (strcmp(cmd_name, "cmd_midi_e") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_e") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_e;
-                                } else if (strcmp(cmd_name, "cmd_normal_E") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_E") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_E;
-                                } else if (strcmp(cmd_name, "cmd_normal_b") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_b") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_b;
-                                } else if (strcmp(cmd_name, "cmd_midi_b") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_b") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_b;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_u") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_u") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_u;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_d") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_d") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_d;
-                                } else if (strcmp(cmd_name, "cmd_normal_A") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_A") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_A;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_a") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_a") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_a;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_esc") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_esc") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_esc;
-                                } else if (strcmp(cmd_name, "cmd_normal_alt_A") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_alt_A") == 0) {
                                     cmd_ptr = &&cmd_normal_alt_A;
-                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_a") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_a") == 0) {
                                     cmd_ptr = &&cmd_normal_ctrl_a;
-                                } else if (strcmp(cmd_name, "cmd_normal_tab") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_tab") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_tab;
-                                } else if (strcmp(cmd_name, "cmd_record_tab") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_tab") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_tab;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacehiw") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacehiw") == 0) {
                                     cmd_ptr = &&cmd_normal_spacehiw;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacesiw") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacesiw") == 0) {
                                     cmd_ptr = &&cmd_normal_spacesiw;
-                                } else if (strcmp(cmd_name, "cmd_normal_spaceumiw") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spaceumiw") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_spaceumiw;
-                                } else if (strcmp(cmd_name, "cmd_normal_ga") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_ga") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_ga;
-                                } else if (strcmp(cmd_name, "cmd_normal_shift_tab") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_shift_tab") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_shift_tab;
-                                } else if (strcmp(cmd_name, "cmd_normal_V") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_V") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_V;
-                                } else if (strcmp(cmd_name, "cmd_views_V") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_V") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_V;
-                                } else if (strcmp(cmd_name, "cmd_normal_K") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_K") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_K;
-                                } else if (strcmp(cmd_name, "cmd_views_K") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_K") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_K;
-                                } else if (strcmp(cmd_name, "cmd_record_K") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_K") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_K;
-                                } else if (strcmp(cmd_name, "cmd_midi_K") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_K") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_K;
-                                } else if (strcmp(cmd_name, "cmd_normal_J") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_J") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_J;
-                                } else if (strcmp(cmd_name, "cmd_views_J") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_views_J") ==
+                                           0) {
                                     cmd_ptr = &&cmd_views_J;
-                                } else if (strcmp(cmd_name, "cmd_record_J") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_J") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_J;
-                                } else if (strcmp(cmd_name, "cmd_midi_J") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_J") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_J;
-                                } else if (strcmp(cmd_name, "cmd_normal_spacem") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_spacem") == 0) {
                                     cmd_ptr = &&cmd_normal_spacem;
-                                } else if (strcmp(cmd_name, "cmd_normal_B") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_B") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_B;
-                                } else if (strcmp(cmd_name, "cmd_normal_q") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_q") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_q;
-                                } else if (strcmp(cmd_name, "cmd_record_q") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_q") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_q;
-                                } else if (strcmp(cmd_name, "cmd_midi_q") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_q") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_q;
-                                } else if (strcmp(cmd_name, "cmd_normal_Q") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_Q") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_Q;
-                                } else if (strcmp(cmd_name, "cmd_record_Q") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_Q") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_Q;
-                                } else if (strcmp(cmd_name, "cmd_midi_Q") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_Q") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_Q;
-                                } else if (strcmp(cmd_name, "cmd_normal_u") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_normal_u") ==
+                                           0) {
                                     cmd_ptr = &&cmd_normal_u;
-                                } else if (strcmp(cmd_name, "cmd_normal_ctrl_r") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_ctrl_r") == 0) {
                                     cmd_ptr = &&cmd_normal_ctrl_r;
-                                } else if (strcmp(cmd_name, "cmd_record_r") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_r") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_r;
-                                } else if (strcmp(cmd_name, "cmd_midi_r") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_r") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_r;
-                                } else if (strcmp(cmd_name, "cmd_record_y") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_y") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_y;
-                                } else if (strcmp(cmd_name, "cmd_midi_y") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_y") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_y;
-                                } else if (strcmp(cmd_name, "cmd_record_u") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_u") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_u;
-                                } else if (strcmp(cmd_name, "cmd_midi_u") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_u") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_u;
-                                } else if (strcmp(cmd_name, "cmd_record_i") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_i") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_i;
-                                } else if (strcmp(cmd_name, "cmd_midi_i") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_i") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_i;
-                                } else if (strcmp(cmd_name, "cmd_record_o") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_o") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_o;
-                                } else if (strcmp(cmd_name, "cmd_midi_o") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_o") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_o;
-                                } else if (strcmp(cmd_name, "cmd_record_p") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_record_p") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_p;
-                                } else if (strcmp(cmd_name, "cmd_midi_p") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_p") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_p;
-                                } else if (strcmp(cmd_name, "cmd_record_leftbracket") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_leftbracket") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_leftbracket;
-                                } else if (strcmp(cmd_name, "cmd_midi_leftbracket") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_leftbracket") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_leftbracket;
-                                } else if (strcmp(cmd_name, "cmd_record_rightbracket") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_rightbracket") ==
+                                           0) {
                                     cmd_ptr = &&cmd_record_rightbracket;
-                                } else if (strcmp(cmd_name, "cmd_midi_rightbracket") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_midi_rightbracket") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_rightbracket;
-                                } else if (strcmp(cmd_name, "cmd_record_minus") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_minus") == 0) {
                                     cmd_ptr = &&cmd_record_minus;
-                                } else if (strcmp(cmd_name, "cmd_midi_minus") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_minus") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_minus;
                                 } else if (strcmp(cmd_name, "cmd_void") == 0) {
                                     cmd_ptr = &&cmd_void;
-                                } else if (strcmp(cmd_name, "cmd_midi_c") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_c") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_c;
-                                } else if (strcmp(cmd_name, "cmd_record_space") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_record_space") == 0) {
                                     cmd_ptr = &&cmd_record_space;
-                                } else if (strcmp(cmd_name, "cmd_midi_space") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_midi_space") ==
+                                           0) {
                                     cmd_ptr = &&cmd_midi_space;
-                                } else if (strcmp(cmd_name, "cmd_command_w") == 0) {
+                                } else if (strcmp(cmd_name, "cmd_command_w") ==
+                                           0) {
                                     cmd_ptr = &&cmd_command_w;
-                                } else if (strcmp(cmd_name, "cmd_normal_colon") == 0) {
+                                } else if (strcmp(cmd_name,
+                                                  "cmd_normal_colon") == 0) {
                                     cmd_ptr = &&cmd_normal_colon;
                                 } else {
-                                    call_carmack("unknown command: %s", cmd_name);
+                                    call_carmack("unknown command: %s",
+                                                 cmd_name);
                                 }
                                 fsm[parent].command[mode_idx] = cmd_ptr;
 
                                 lua_getfield(L, -1, "handle_release");
-                                if (lua_isnumber(L, -1)) fsm[parent].handle_release[mode_idx] = (uint8_t)lua_tointeger(L, -1);
+                                if (lua_isnumber(L, -1))
+                                    fsm[parent].handle_release[mode_idx] =
+                                        (uint8_t)lua_tointeger(L, -1);
                                 lua_pop(L, 1);
 
                                 lua_getfield(L, -1, "handle_timeout");
-                                if (lua_isnumber(L, -1)) fsm[parent].handle_timeout[mode_idx] = (uint8_t)lua_tointeger(L, -1);
+                                if (lua_isnumber(L, -1))
+                                    fsm[parent].handle_timeout[mode_idx] =
+                                        (uint8_t)lua_tointeger(L, -1);
                                 lua_pop(L, 1);
 
                                 lua_getfield(L, -1, "handle_repeat");
-                                if (lua_isnumber(L, -1)) fsm[parent].handle_repeat[mode_idx] = (uint8_t)lua_tointeger(L, -1);
+                                if (lua_isnumber(L, -1))
+                                    fsm[parent].handle_repeat[mode_idx] =
+                                        (uint8_t)lua_tointeger(L, -1);
                                 lua_pop(L, 1);
 
                                 lua_pop(L, 1); // pop command table
@@ -3234,13 +4132,20 @@ void* war_window_render(void* args) {
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
                 if (ctx_wr.end_window_render) { goto wayland_done; }
-                uint32_t wl_key_state = war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
-                uint32_t keycode = war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) + 8; // + 8 cuz wayland
-                xkb_keysym_t keysym = xkb_state_key_get_one_sym(xkb_state, keycode);
+                uint32_t wl_key_state = war_read_le32(
+                    msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4);
+                uint32_t keycode =
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) +
+                    8; // + 8 cuz wayland
+                xkb_keysym_t keysym =
+                    xkb_state_key_get_one_sym(xkb_state, keycode);
                 // TODO: Normalize the other things like '<' (regarding
                 // MOD_SHIFT and XKB)
-                keysym = war_normalize_keysym(keysym); // normalize to lowercase and prevent out of bounds
-                xkb_mod_mask_t mods = xkb_state_serialize_mods(xkb_state, XKB_STATE_MODS_DEPRESSED);
+                keysym =
+                    war_normalize_keysym(keysym); // normalize to lowercase and
+                                                  // prevent out of bounds
+                xkb_mod_mask_t mods = xkb_state_serialize_mods(
+                    xkb_state, XKB_STATE_MODS_DEPRESSED);
                 uint8_t mod = 0;
                 if (mods & (1 << mod_shift)) mod |= MOD_SHIFT;
                 if (mods & (1 << mod_ctrl)) mod |= MOD_CTRL;
@@ -3250,7 +4155,9 @@ void* war_window_render(void* args) {
                 if (mods & (1 << mod_num)) mod |= MOD_NUM;
                 if (keysym == KEYSYM_DEFAULT) {
                     // repeats
-                    key_down[repeat_keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + repeat_mod] = false;
+                    key_down[repeat_keysym *
+                                 atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                             repeat_mod] = false;
                     repeat_keysym = 0;
                     repeat_mod = 0;
                     repeating = false;
@@ -3258,249 +4165,15 @@ void* war_window_render(void* args) {
                 }
                 // if (mods & (1 << mod_fn)) mod |= MOD_FN;
                 bool pressed = (wl_key_state == 1);
-                if (ctx_wr.mode == MODE_COMMAND) {
-                    // command mode logic
-                    if (!pressed) {
-                        key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = false;
-                        key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = 0;
-                        if (repeat_keysym == keysym) {
-                            repeat_keysym = 0;
-                            repeat_mod = 0;
-                            repeating = false;
-                            timeout = false;
-                            timeout_state_index = 0;
-                            timeout_start_us = 0;
-                        }
-                        goto cmd_done;
-                    }
-                    switch (keysym) {
-                    case KEYSYM_RETURN: {
-                        switch (ctx_wr.prompt) {
-                        case PROMPT_NOTE: {
-                            int16_t note = 0;
-                            for (uint32_t i = 0; i < ctx_wr.num_chars_in_sequence; i++) {
-                                char ch = ctx_wr.input_sequence[i];
-                                if (isdigit(ch)) {
-                                    note = note * 10 + (ch - '0');
-                                } else if (isalpha(ch) && ctx_wr.num_chars_in_sequence == 1) {
-                                    switch (ch) {
-                                    case 'q': {
-                                        // atomic_store(&atomics->map_note, 0 + 12 * (ctx_wr.record_octave + 1));
-                                        note = 0 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'w': {
-                                        note = 1 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'e': {
-                                        note = 2 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'r': {
-                                        note = 3 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 't': {
-                                        note = 4 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'y': {
-                                        note = 5 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'u': {
-                                        note = 6 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'i': {
-                                        note = 7 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'o': {
-                                        note = 8 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case 'p': {
-                                        note = 9 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case '[': {
-                                        note = 10 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    case ']': {
-                                        note = 11 + 12 * (ctx_wr.record_octave + 1);
-                                        break;
-                                    }
-                                    default: {
-                                        note = -1;
-                                    }
-                                    }
-                                    break;
-                                } else {
-                                    note = -1;
-                                }
-                            }
-                            if (note < 0 || note > 127) {
-                                ctx_wr.mode = MODE_NORMAL;
-                                ctx_wr.prompt = 0;
-                                memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                                memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-                                ctx_wr.num_chars_in_sequence = 0;
-                                ctx_wr.num_chars_in_prompt = 0;
-                                ctx_wr.cursor_pos_x_command_mode = 0;
-                                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
-                                break;
-                            }
-                            atomic_store(&atomics->map_note, note);
-                            memcpy(prompt, "Enter layer", sizeof("Enter layer"));
-                            ctx_wr.prompt = PROMPT_LAYER;
-                            ctx_wr.num_chars_in_prompt = sizeof("Enter layer") - 1;
-                            memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                            ctx_wr.num_chars_in_sequence = 0;
-                            ctx_wr.cursor_pos_x_command_mode = 0;
-                            goto cmd_done;
-                        }
-                        case PROMPT_LAYER: {
-                            uint64_t layer = 0;
-                            bool valid = true;
-                            int layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
-                            if (ctx_wr.num_chars_in_sequence > 1 || ctx_wr.num_chars_in_sequence == 0) {
-                                valid = false;
-                            } else {
-                                for (size_t i = 0; i < ctx_wr.num_chars_in_sequence; i++) {
-                                    char c = ctx_wr.input_sequence[i];
-                                    if (!isdigit(c)) {
-                                        valid = false;
-                                        break;
-                                    }
-                                    int l = c - '0';
-                                    if (l > layer_count || (l < 1 && ctx_wr.num_chars_in_sequence > 1)) {
-                                        valid = false;
-                                        break;
-                                    }
-                                    if (l == 0) {
-                                        // all
-                                        layer = (1ULL << layer_count) - 1;
-                                        break;
-                                    }
-                                    layer = (1ULL << (l - 1)); // Set bit for layer (0-based index)
-                                }
-                            }
-                            if (!valid) {
-                                ctx_wr.mode = MODE_NORMAL;
-                                ctx_wr.prompt = 0;
-                                memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                                memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-                                ctx_wr.num_chars_in_sequence = 0;
-                                ctx_wr.num_chars_in_prompt = 0;
-                                ctx_wr.cursor_pos_x_command_mode = 0;
-                                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
-                                break;
-                            }
-                            atomic_store(&atomics->map_layer, layer);
-                            ctx_wr.prompt = PROMPT_NAME;
-                            memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                            memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-                            memcpy(prompt, "Enter name", sizeof("Enter name"));
-                            ctx_wr.num_chars_in_prompt = sizeof("Enter name") - 1;
-                            ctx_wr.num_chars_in_sequence = 0;
-                            ctx_wr.cursor_pos_x_command_mode = 0;
-                            goto cmd_done;
-                        }
-                        case PROMPT_NAME: {
-                            for (uint32_t i = 0; i < ctx_wr.num_chars_in_sequence; i++) {
-                                char ch = ctx_wr.input_sequence[i];
-                                if (ch == '/' || ch < 32) {
-                                    memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                                    memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-                                    ctx_wr.num_chars_in_sequence = 0;
-                                    ctx_wr.num_chars_in_prompt = 0;
-                                    ctx_wr.cursor_pos_x_command_mode = 0;
-                                    ctx_wr.mode = MODE_NORMAL;
-                                    war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
-                                    goto cmd_done;
-                                }
-                            }
-                            memcpy(tmp_payload, ctx_wr.input_sequence, ctx_wr.num_chars_in_sequence);
-                            memcpy(tmp_payload + ctx_wr.num_chars_in_sequence, ".wav", 4);
-                            war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, ctx_wr.num_chars_in_sequence + 4, tmp_payload);
-                            memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                            memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-                            ctx_wr.num_chars_in_sequence = 0;
-                            ctx_wr.num_chars_in_prompt = 0;
-                            ctx_wr.cursor_pos_x_command_mode = 0;
-                            ctx_wr.mode = MODE_NORMAL;
-                            goto cmd_done;
-                        }
-                        default:
-                            ctx_wr.mode = MODE_NORMAL;
-                            ctx_wr.prompt = 0;
-                            memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                            ctx_wr.num_chars_in_sequence = 0;
-                            ctx_wr.cursor_pos_x_command_mode = 0;
-                            goto cmd_done;
-                        }
-                        goto cmd_done;
-                    }
-                    case KEYSYM_ESCAPE: {
-                        ctx_wr.num_chars_in_sequence = 0;
-                        ctx_wr.mode = MODE_NORMAL;
-                        memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                        memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-                        ctx_wr.prompt = 0;
-                        ctx_wr.num_chars_in_prompt = 0;
-                        ctx_wr.cursor_pos_x_command_mode = 0;
-                        goto cmd_done;
-                    }
-                    case KEYSYM_BACKSPACE: {
-                        repeat_keysym = keysym;
-                        repeat_mod = mod;
-                        if (!key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
-                            key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = true;
-                            key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = ctx_wr.now;
-                        }
-                        if (ctx_wr.num_chars_in_sequence == 0) {
-                            ctx_wr.mode = MODE_NORMAL;
-                            memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                            memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-                            ctx_wr.prompt = 0;
-                            ctx_wr.num_chars_in_prompt = 0;
-                            goto cmd_done;
-                        }
-                        ctx_wr.num_chars_in_sequence--;
-                        ctx_wr.cursor_pos_x_command_mode--;
-                        goto cmd_done;
-                    }
-                    }
-                    char keysym_char = war_keysym_to_char(keysym, mod);
-                    if (ctx_wr.num_chars_in_sequence < atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
-                        if (keysym == KEYSYM_TAB) {
-                            for (uint32_t i = 0; i < 4; i++) {
-                                ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] = keysym_char;
-                                ctx_wr.num_chars_in_sequence++;
-                                ctx_wr.cursor_pos_x_command_mode++;
-                            }
-                        } else {
-                            ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] = keysym_char;
-                            ctx_wr.num_chars_in_sequence++;
-                            ctx_wr.cursor_pos_x_command_mode++;
-                        }
-                    }
-                    repeat_keysym = keysym;
-                    repeat_mod = mod;
-                    if (!key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
-                        key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = true;
-                        key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = ctx_wr.now;
-                    }
-                    goto cmd_done;
-                }
                 if (!pressed) {
-                    key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = false;
-                    key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = 0;
+                    key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                             mod] = false;
+                    key_last_event_us[keysym *
+                                          atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                      mod] = 0;
                     // repeats
-                    if (repeat_keysym == keysym && fsm[current_state_index].handle_repeat[ctx_wr.mode]) {
+                    if (repeat_keysym == keysym &&
+                        fsm[current_state_index].handle_repeat[ctx_wr.mode]) {
                         repeat_keysym = 0;
                         repeat_mod = 0;
                         repeating = false;
@@ -3513,24 +4186,43 @@ void* war_window_render(void* args) {
                         ctx_wr.skip_release = 0;
                         goto cmd_done;
                     }
-                    uint16_t idx = fsm[current_state_index].next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
-                    if (fsm[idx].handle_release[ctx_wr.mode] && !ctx_wr.midi_toggle && fsm[idx].command[ctx_wr.mode]) {
+                    uint16_t idx =
+                        fsm[current_state_index]
+                            .next_state[keysym * atomic_load(
+                                                     &ctx_lua->WR_MOD_COUNT) +
+                                        mod];
+                    if (fsm[idx].handle_release[ctx_wr.mode] &&
+                        !ctx_wr.midi_toggle && fsm[idx].command[ctx_wr.mode]) {
                         goto* fsm[idx].command[ctx_wr.mode];
                     }
                     goto cmd_done;
                 }
                 char keysym_char = war_keysym_to_char(keysym, mod);
-                if (ctx_wr.num_chars_in_sequence < atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
-                    ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] = keysym_char;
+                if (ctx_wr.num_chars_in_sequence <
+                    atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
+                    ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] =
+                        keysym_char;
                     ctx_wr.num_chars_in_sequence++;
                 }
-                if (!key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
-                    key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = true;
-                    key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] = ctx_wr.now;
+                if (!key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                              mod]) {
+                    key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                             mod] = true;
+                    key_last_event_us[keysym *
+                                          atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                      mod] = ctx_wr.now;
                 }
-                uint16_t next_state_index = fsm[current_state_index].next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
-                if (timeout && fsm[timeout_state_index].next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
-                    next_state_index = fsm[timeout_state_index].next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
+                uint16_t next_state_index =
+                    fsm[current_state_index].next_state
+                        [keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
+                if (timeout &&
+                    fsm[timeout_state_index].next_state
+                        [keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
+                    next_state_index =
+                        fsm[timeout_state_index]
+                            .next_state[keysym * atomic_load(
+                                                     &ctx_lua->WR_MOD_COUNT) +
+                                        mod];
                 }
                 if (next_state_index == 0) {
                     current_state_index = 0;
@@ -3542,28 +4234,37 @@ void* war_window_render(void* args) {
                 }
                 current_state_index = next_state_index;
                 fsm_state_last_event_us = ctx_wr.now;
-                if (fsm[current_state_index].is_terminal[ctx_wr.mode] && !fsm[current_state_index].is_prefix[ctx_wr.mode]) {
+                if (fsm[current_state_index].is_terminal[ctx_wr.mode] &&
+                    !fsm[current_state_index].is_prefix[ctx_wr.mode]) {
                     uint16_t temp = current_state_index;
                     current_state_index = 0;
                     // repeats
-                    if ((ctx_wr.mode != MODE_MIDI || (ctx_wr.mode == MODE_MIDI && ctx_wr.midi_toggle)) &&
+                    if ((ctx_wr.mode != MODE_MIDI ||
+                         (ctx_wr.mode == MODE_MIDI && ctx_wr.midi_toggle)) &&
                         fsm[temp].handle_repeat[ctx_wr.mode]) {
                         repeat_keysym = keysym;
                         repeat_mod = mod;
                         repeating = false;
                     }
                     // timeouts
-                    if (keysym != KEYSYM_ESCAPE && mod != 0) { timeout_state_index = 0; }
+                    if (keysym != KEYSYM_ESCAPE && mod != 0) {
+                        timeout_state_index = 0;
+                    }
                     timeout_start_us = 0;
                     timeout = false;
                     if (fsm[temp].command[ctx_wr.mode]) {
-                        if (ctx_wr.numeric_prefix == 0 && (keysym_char < '1' || keysym_char > '9')) {
+                        if (ctx_wr.numeric_prefix == 0 &&
+                            (keysym_char < '1' || keysym_char > '9')) {
                             ctx_wr.num_chars_in_sequence = 0;
-                            memset(ctx_wr.input_sequence, 0, atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
+                            memset(ctx_wr.input_sequence,
+                                   0,
+                                   atomic_load(
+                                       &ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
                         }
                         goto* fsm[temp].command[ctx_wr.mode];
                     }
-                } else if (fsm[current_state_index].is_terminal[ctx_wr.mode] && fsm[current_state_index].is_prefix[ctx_wr.mode]) {
+                } else if (fsm[current_state_index].is_terminal[ctx_wr.mode] &&
+                           fsm[current_state_index].is_prefix[ctx_wr.mode]) {
                     if (fsm[current_state_index].handle_timeout[ctx_wr.mode]) {
                         // repeats
                         repeat_keysym = 0;
@@ -3579,90 +4280,150 @@ void* war_window_render(void* args) {
                     uint16_t temp = current_state_index;
                     current_state_index = 0;
                     // repeats
-                    if ((ctx_wr.mode != MODE_MIDI || (ctx_wr.mode == MODE_MIDI && ctx_wr.midi_toggle)) &&
+                    if ((ctx_wr.mode != MODE_MIDI ||
+                         (ctx_wr.mode == MODE_MIDI && ctx_wr.midi_toggle)) &&
                         fsm[current_state_index].handle_timeout[ctx_wr.mode]) {
                         repeat_keysym = keysym;
                         repeat_mod = mod;
                         repeating = false;
                     }
                     // timeouts
-                    if (keysym != KEYSYM_ESCAPE && mod != 0) { timeout_state_index = 0; }
+                    if (keysym != KEYSYM_ESCAPE && mod != 0) {
+                        timeout_state_index = 0;
+                    }
                     timeout_start_us = 0;
                     timeout = false;
-                    if (fsm[temp].command[ctx_wr.mode]) { goto* fsm[temp].command[ctx_wr.mode]; }
+                    if (fsm[temp].command[ctx_wr.mode]) {
+                        goto* fsm[temp].command[ctx_wr.mode];
+                    }
                 }
                 goto cmd_done;
             }
             cmd_normal_k:
                 call_carmack("cmd_normal_k");
                 uint32_t increment = ctx_wr.row_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_row); }
-                uint32_t scaled_whole = (increment * ctx_wr.navigation_whole_number_row) / ctx_wr.navigation_sub_cells_row;
-                uint32_t scaled_frac = (increment * ctx_wr.navigation_whole_number_row) % ctx_wr.navigation_sub_cells_row;
-                ctx_wr.cursor_pos_y = war_clamp_add_uint32(ctx_wr.cursor_pos_y, scaled_whole, ctx_wr.max_row);
-                ctx_wr.sub_row = war_clamp_add_uint32(ctx_wr.sub_row, scaled_frac, ctx_wr.max_row);
-                ctx_wr.cursor_pos_y =
-                    war_clamp_add_uint32(ctx_wr.cursor_pos_y, ctx_wr.sub_row / ctx_wr.navigation_sub_cells_row, ctx_wr.max_row);
-                ctx_wr.sub_row = war_clamp_uint32(ctx_wr.sub_row % ctx_wr.navigation_sub_cells_row, ctx_wr.min_row, ctx_wr.max_row);
-                if (ctx_wr.cursor_pos_y > ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
-                    ctx_wr.bottom_row = war_clamp_add_uint32(ctx_wr.bottom_row, increment, ctx_wr.max_row);
-                    ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.top_row, increment, ctx_wr.max_row);
-                    uint32_t new_viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
+                }
+                uint32_t scaled_whole =
+                    (increment * ctx_wr.navigation_whole_number_row) /
+                    ctx_wr.navigation_sub_cells_row;
+                uint32_t scaled_frac =
+                    (increment * ctx_wr.navigation_whole_number_row) %
+                    ctx_wr.navigation_sub_cells_row;
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, scaled_whole, ctx_wr.max_row);
+                ctx_wr.sub_row = war_clamp_add_uint32(
+                    ctx_wr.sub_row, scaled_frac, ctx_wr.max_row);
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y,
+                    ctx_wr.sub_row / ctx_wr.navigation_sub_cells_row,
+                    ctx_wr.max_row);
+                ctx_wr.sub_row = war_clamp_uint32(
+                    ctx_wr.sub_row % ctx_wr.navigation_sub_cells_row,
+                    ctx_wr.min_row,
+                    ctx_wr.max_row);
+                if (ctx_wr.cursor_pos_y >
+                    ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.bottom_row = war_clamp_add_uint32(
+                        ctx_wr.bottom_row, increment, ctx_wr.max_row);
+                    ctx_wr.top_row = war_clamp_add_uint32(
+                        ctx_wr.top_row, increment, ctx_wr.max_row);
+                    uint32_t new_viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                        ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                            ctx_wr.bottom_row, diff, ctx_wr.min_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_j:
                 call_carmack("cmd_normal_j");
                 increment = ctx_wr.row_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_row); }
-                scaled_whole = (increment * ctx_wr.navigation_whole_number_row) / ctx_wr.navigation_sub_cells_row;
-                scaled_frac = (increment * ctx_wr.navigation_whole_number_row) % ctx_wr.navigation_sub_cells_row;
-                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, scaled_whole, ctx_wr.min_row);
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
+                }
+                scaled_whole =
+                    (increment * ctx_wr.navigation_whole_number_row) /
+                    ctx_wr.navigation_sub_cells_row;
+                scaled_frac = (increment * ctx_wr.navigation_whole_number_row) %
+                              ctx_wr.navigation_sub_cells_row;
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, scaled_whole, ctx_wr.min_row);
                 if (ctx_wr.sub_row < scaled_frac) {
-                    ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, 1, ctx_wr.min_row);
+                    ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                        ctx_wr.cursor_pos_y, 1, ctx_wr.min_row);
                     ctx_wr.sub_row += ctx_wr.navigation_sub_cells_row;
                 }
-                ctx_wr.sub_row = war_clamp_subtract_uint32(ctx_wr.sub_row, scaled_frac, ctx_wr.min_row);
-                ctx_wr.cursor_pos_y =
-                    war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, ctx_wr.sub_row / ctx_wr.navigation_sub_cells_row, ctx_wr.min_row);
-                ctx_wr.sub_row = war_clamp_uint32(ctx_wr.sub_row % ctx_wr.navigation_sub_cells_row, ctx_wr.min_row, ctx_wr.max_row);
-                if (ctx_wr.cursor_pos_y < ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
-                    ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, increment, ctx_wr.min_row);
-                    ctx_wr.top_row = war_clamp_subtract_uint32(ctx_wr.top_row, increment, ctx_wr.min_row);
-                    uint32_t new_viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                ctx_wr.sub_row = war_clamp_subtract_uint32(
+                    ctx_wr.sub_row, scaled_frac, ctx_wr.min_row);
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y,
+                    ctx_wr.sub_row / ctx_wr.navigation_sub_cells_row,
+                    ctx_wr.min_row);
+                ctx_wr.sub_row = war_clamp_uint32(
+                    ctx_wr.sub_row % ctx_wr.navigation_sub_cells_row,
+                    ctx_wr.min_row,
+                    ctx_wr.max_row);
+                if (ctx_wr.cursor_pos_y <
+                    ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                        ctx_wr.bottom_row, increment, ctx_wr.min_row);
+                    ctx_wr.top_row = war_clamp_subtract_uint32(
+                        ctx_wr.top_row, increment, ctx_wr.min_row);
+                    uint32_t new_viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                        ctx_wr.top_row = war_clamp_add_uint32(
+                            ctx_wr.top_row, diff, ctx_wr.max_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_l: {
                 call_carmack("cmd_normal_l");
                 double initial = ctx_wr.cursor_pos_x;
-                double increment = (double)ctx_wr.col_increment * ctx_wr.cursor_navigation_x;
-                if (ctx_wr.numeric_prefix) { increment *= ctx_wr.numeric_prefix; }
+                double increment =
+                    (double)ctx_wr.col_increment * ctx_wr.cursor_navigation_x;
+                if (ctx_wr.numeric_prefix) {
+                    increment *= ctx_wr.numeric_prefix;
+                }
                 ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x + increment;
-                if (ctx_wr.cursor_pos_x > ctx_wr.max_col) { ctx_wr.cursor_pos_x = ctx_wr.max_col; }
+                if (ctx_wr.cursor_pos_x > ctx_wr.max_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.max_col;
+                }
                 double pan = ctx_wr.cursor_pos_x - initial;
-                if (ctx_wr.cursor_pos_x > ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
-                    ctx_wr.left_col = war_clamp_add_uint32(ctx_wr.left_col, pan, ctx_wr.max_col);
-                    ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.right_col, pan, ctx_wr.max_col);
-                    uint32_t new_viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                if (ctx_wr.cursor_pos_x >
+                    ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
+                    ctx_wr.left_col = war_clamp_add_uint32(
+                        ctx_wr.left_col, pan, ctx_wr.max_col);
+                    ctx_wr.right_col = war_clamp_add_uint32(
+                        ctx_wr.right_col, pan, ctx_wr.max_col);
+                    uint32_t new_viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, diff, ctx_wr.min_col);
+                        ctx_wr.left_col = war_clamp_subtract_uint32(
+                            ctx_wr.left_col, diff, ctx_wr.min_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -3672,19 +4433,30 @@ void* war_window_render(void* args) {
             cmd_normal_h: {
                 call_carmack("cmd_normal_h");
                 double initial = ctx_wr.cursor_pos_x;
-                double increment = (double)ctx_wr.col_increment * ctx_wr.cursor_navigation_x;
-                if (ctx_wr.numeric_prefix) { increment *= ctx_wr.numeric_prefix; }
+                double increment =
+                    (double)ctx_wr.col_increment * ctx_wr.cursor_navigation_x;
+                if (ctx_wr.numeric_prefix) {
+                    increment *= ctx_wr.numeric_prefix;
+                }
                 ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x - increment;
-                if (ctx_wr.cursor_pos_x < ctx_wr.min_col) { ctx_wr.cursor_pos_x = ctx_wr.min_col; }
+                if (ctx_wr.cursor_pos_x < ctx_wr.min_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.min_col;
+                }
                 double pan = initial - ctx_wr.cursor_pos_x;
-                if (ctx_wr.cursor_pos_x < ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
-                    ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, pan, ctx_wr.min_col);
-                    ctx_wr.right_col = war_clamp_subtract_uint32(ctx_wr.right_col, pan, ctx_wr.min_col);
-                    uint32_t new_viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                if (ctx_wr.cursor_pos_x <
+                    ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
+                    ctx_wr.left_col = war_clamp_subtract_uint32(
+                        ctx_wr.left_col, pan, ctx_wr.min_col);
+                    ctx_wr.right_col = war_clamp_subtract_uint32(
+                        ctx_wr.right_col, pan, ctx_wr.min_col);
+                    uint32_t new_viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.right_col, diff, ctx_wr.max_col);
+                        ctx_wr.right_col = war_clamp_add_uint32(
+                            ctx_wr.right_col, diff, ctx_wr.max_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -3707,7 +4479,8 @@ void* war_window_render(void* args) {
             }
             cmd_normal_K: {
                 call_carmack("cmd_normal_K");
-                float gain = atomic_load(&atomics->play_gain) + ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->play_gain) + ctx_wr.gain_increment;
                 gain = fminf(gain, 1.0f);
                 atomic_store(&atomics->play_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -3716,7 +4489,8 @@ void* war_window_render(void* args) {
             }
             cmd_normal_J: {
                 call_carmack("cmd_normal_J");
-                float gain = atomic_load(&atomics->play_gain) - ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->play_gain) - ctx_wr.gain_increment;
                 gain = fmaxf(gain, 0.0f);
                 atomic_store(&atomics->play_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -3726,57 +4500,92 @@ void* war_window_render(void* args) {
             cmd_normal_alt_k:
                 call_carmack("cmd_normal_alt_k");
                 increment = ctx_wr.row_leap_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_row); }
-                ctx_wr.cursor_pos_y = war_clamp_add_uint32(ctx_wr.cursor_pos_y, increment, ctx_wr.max_row);
-                if (ctx_wr.cursor_pos_y > ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
-                    ctx_wr.bottom_row = war_clamp_add_uint32(ctx_wr.bottom_row, increment, ctx_wr.max_row);
-                    ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.top_row, increment, ctx_wr.max_row);
-                    uint32_t new_viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
+                }
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.max_row);
+                if (ctx_wr.cursor_pos_y >
+                    ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.bottom_row = war_clamp_add_uint32(
+                        ctx_wr.bottom_row, increment, ctx_wr.max_row);
+                    ctx_wr.top_row = war_clamp_add_uint32(
+                        ctx_wr.top_row, increment, ctx_wr.max_row);
+                    uint32_t new_viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                        ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                            ctx_wr.bottom_row, diff, ctx_wr.min_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_j:
                 call_carmack("cmd_normal_alt_j");
                 increment = ctx_wr.row_leap_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_row); }
-                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, increment, ctx_wr.min_row);
-                if (ctx_wr.cursor_pos_y < ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
-                    ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, increment, ctx_wr.min_row);
-                    ctx_wr.top_row = war_clamp_subtract_uint32(ctx_wr.top_row, increment, ctx_wr.min_row);
-                    uint32_t new_viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
+                }
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.min_row);
+                if (ctx_wr.cursor_pos_y <
+                    ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                        ctx_wr.bottom_row, increment, ctx_wr.min_row);
+                    ctx_wr.top_row = war_clamp_subtract_uint32(
+                        ctx_wr.top_row, increment, ctx_wr.min_row);
+                    uint32_t new_viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                        ctx_wr.top_row = war_clamp_add_uint32(
+                            ctx_wr.top_row, diff, ctx_wr.max_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_l: {
                 call_carmack("cmd_normal_l");
                 double initial = ctx_wr.cursor_pos_x;
-                double increment = (double)ctx_wr.col_leap_increment * ctx_wr.cursor_navigation_x;
-                if (ctx_wr.numeric_prefix) { increment *= ctx_wr.numeric_prefix; }
+                double increment = (double)ctx_wr.col_leap_increment *
+                                   ctx_wr.cursor_navigation_x;
+                if (ctx_wr.numeric_prefix) {
+                    increment *= ctx_wr.numeric_prefix;
+                }
                 ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x + increment;
-                if (ctx_wr.cursor_pos_x > ctx_wr.max_col) { ctx_wr.cursor_pos_x = ctx_wr.max_col; }
+                if (ctx_wr.cursor_pos_x > ctx_wr.max_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.max_col;
+                }
                 double pan = ctx_wr.cursor_pos_x - initial;
-                if (ctx_wr.cursor_pos_x > ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
-                    ctx_wr.left_col = war_clamp_add_uint32(ctx_wr.left_col, pan, ctx_wr.max_col);
-                    ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.right_col, pan, ctx_wr.max_col);
-                    uint32_t new_viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                if (ctx_wr.cursor_pos_x >
+                    ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
+                    ctx_wr.left_col = war_clamp_add_uint32(
+                        ctx_wr.left_col, pan, ctx_wr.max_col);
+                    ctx_wr.right_col = war_clamp_add_uint32(
+                        ctx_wr.right_col, pan, ctx_wr.max_col);
+                    uint32_t new_viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, diff, ctx_wr.min_col);
+                        ctx_wr.left_col = war_clamp_subtract_uint32(
+                            ctx_wr.left_col, diff, ctx_wr.min_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -3810,19 +4619,30 @@ void* war_window_render(void* args) {
             cmd_normal_alt_h: {
                 call_carmack("cmd_normal_h");
                 double initial = ctx_wr.cursor_pos_x;
-                double increment = (double)ctx_wr.col_leap_increment * ctx_wr.cursor_navigation_x;
-                if (ctx_wr.numeric_prefix) { increment *= ctx_wr.numeric_prefix; }
+                double increment = (double)ctx_wr.col_leap_increment *
+                                   ctx_wr.cursor_navigation_x;
+                if (ctx_wr.numeric_prefix) {
+                    increment *= ctx_wr.numeric_prefix;
+                }
                 ctx_wr.cursor_pos_x = ctx_wr.cursor_pos_x - increment;
-                if (ctx_wr.cursor_pos_x < ctx_wr.min_col) { ctx_wr.cursor_pos_x = ctx_wr.min_col; }
+                if (ctx_wr.cursor_pos_x < ctx_wr.min_col) {
+                    ctx_wr.cursor_pos_x = ctx_wr.min_col;
+                }
                 double pan = initial - ctx_wr.cursor_pos_x;
-                if (ctx_wr.cursor_pos_x < ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
-                    ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, pan, ctx_wr.min_col);
-                    ctx_wr.right_col = war_clamp_subtract_uint32(ctx_wr.right_col, pan, ctx_wr.min_col);
-                    uint32_t new_viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                if (ctx_wr.cursor_pos_x <
+                    ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
+                    ctx_wr.left_col = war_clamp_subtract_uint32(
+                        ctx_wr.left_col, pan, ctx_wr.min_col);
+                    ctx_wr.right_col = war_clamp_subtract_uint32(
+                        ctx_wr.right_col, pan, ctx_wr.min_col);
+                    uint32_t new_viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.right_col, diff, ctx_wr.max_col);
+                        ctx_wr.right_col = war_clamp_add_uint32(
+                            ctx_wr.right_col, diff, ctx_wr.max_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -3831,55 +4651,92 @@ void* war_window_render(void* args) {
             }
             cmd_normal_alt_K:
                 call_carmack("cmd_normal_alt_shift_k");
-                increment = ctx_wr.viewport_rows - ctx_wr.num_rows_for_status_bars;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_row); }
-                ctx_wr.cursor_pos_y = war_clamp_add_uint32(ctx_wr.cursor_pos_y, increment, ctx_wr.max_row);
-                if (ctx_wr.cursor_pos_y > ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
-                    ctx_wr.bottom_row = war_clamp_add_uint32(ctx_wr.bottom_row, increment, ctx_wr.max_row);
-                    ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.top_row, increment, ctx_wr.max_row);
-                    uint32_t new_viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                increment =
+                    ctx_wr.viewport_rows - ctx_wr.num_rows_for_status_bars;
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
+                }
+                ctx_wr.cursor_pos_y = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.max_row);
+                if (ctx_wr.cursor_pos_y >
+                    ctx_wr.top_row - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.bottom_row = war_clamp_add_uint32(
+                        ctx_wr.bottom_row, increment, ctx_wr.max_row);
+                    ctx_wr.top_row = war_clamp_add_uint32(
+                        ctx_wr.top_row, increment, ctx_wr.max_row);
+                    uint32_t new_viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                        ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                            ctx_wr.bottom_row, diff, ctx_wr.min_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_J:
                 call_carmack("cmd_normal_alt_shift_j");
-                increment = ctx_wr.viewport_rows - ctx_wr.num_rows_for_status_bars;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_row); }
-                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, increment, ctx_wr.min_row);
-                if (ctx_wr.cursor_pos_y < ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
-                    ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, increment, ctx_wr.min_row);
-                    ctx_wr.top_row = war_clamp_subtract_uint32(ctx_wr.top_row, increment, ctx_wr.min_row);
-                    uint32_t new_viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                increment =
+                    ctx_wr.viewport_rows - ctx_wr.num_rows_for_status_bars;
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_row);
+                }
+                ctx_wr.cursor_pos_y = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, increment, ctx_wr.min_row);
+                if (ctx_wr.cursor_pos_y <
+                    ctx_wr.bottom_row + ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                        ctx_wr.bottom_row, increment, ctx_wr.min_row);
+                    ctx_wr.top_row = war_clamp_subtract_uint32(
+                        ctx_wr.top_row, increment, ctx_wr.min_row);
+                    uint32_t new_viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                        ctx_wr.top_row = war_clamp_add_uint32(
+                            ctx_wr.top_row, diff, ctx_wr.max_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_L:
                 call_carmack("cmd_normal_alt_shift_l");
-                increment = ctx_wr.viewport_cols - ctx_wr.num_cols_for_line_numbers;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_col); }
-                ctx_wr.cursor_pos_x = war_clamp_add_uint32(ctx_wr.cursor_pos_x, increment, ctx_wr.max_col);
-                if (ctx_wr.cursor_pos_x > ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
-                    ctx_wr.left_col = war_clamp_add_uint32(ctx_wr.left_col, increment, ctx_wr.max_col);
-                    ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.right_col, increment, ctx_wr.max_col);
-                    uint32_t new_viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                increment =
+                    ctx_wr.viewport_cols - ctx_wr.num_cols_for_line_numbers;
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
+                }
+                ctx_wr.cursor_pos_x = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_x, increment, ctx_wr.max_col);
+                if (ctx_wr.cursor_pos_x >
+                    ctx_wr.right_col - ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
+                    ctx_wr.left_col = war_clamp_add_uint32(
+                        ctx_wr.left_col, increment, ctx_wr.max_col);
+                    ctx_wr.right_col = war_clamp_add_uint32(
+                        ctx_wr.right_col, increment, ctx_wr.max_col);
+                    uint32_t new_viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, diff, ctx_wr.min_col);
+                        ctx_wr.left_col = war_clamp_subtract_uint32(
+                            ctx_wr.left_col, diff, ctx_wr.min_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -3887,17 +4744,28 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_alt_H:
                 call_carmack("cmd_normal_alt_shift_h");
-                increment = ctx_wr.viewport_cols - ctx_wr.num_cols_for_line_numbers;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, ctx_wr.max_col); }
-                ctx_wr.cursor_pos_x = war_clamp_subtract_uint32(ctx_wr.cursor_pos_x, increment, ctx_wr.min_col);
-                if (ctx_wr.cursor_pos_x < ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
-                    ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, increment, ctx_wr.min_col);
-                    ctx_wr.right_col = war_clamp_subtract_uint32(ctx_wr.right_col, increment, ctx_wr.min_col);
-                    uint32_t new_viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                increment =
+                    ctx_wr.viewport_cols - ctx_wr.num_cols_for_line_numbers;
+                if (ctx_wr.numeric_prefix) {
+                    increment = war_clamp_multiply_uint32(
+                        increment, ctx_wr.numeric_prefix, ctx_wr.max_col);
+                }
+                ctx_wr.cursor_pos_x = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_x, increment, ctx_wr.min_col);
+                if (ctx_wr.cursor_pos_x <
+                    ctx_wr.left_col + ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
+                    ctx_wr.left_col = war_clamp_subtract_uint32(
+                        ctx_wr.left_col, increment, ctx_wr.min_col);
+                    ctx_wr.right_col = war_clamp_subtract_uint32(
+                        ctx_wr.right_col, increment, ctx_wr.min_col);
+                    uint32_t new_viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.right_col, diff, ctx_wr.max_col);
+                        ctx_wr.right_col = war_clamp_add_uint32(
+                            ctx_wr.right_col, diff, ctx_wr.max_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -3922,22 +4790,32 @@ void* war_window_render(void* args) {
             }
             cmd_normal_ga: {
                 call_carmack("cmd_normal_$");
-                uint32_t col = ((float)atomic_load(&atomics->play_clock) / ctx_a.sample_rate) /
-                               ((60.0f / ctx_a.BPM) / atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
-                ctx_wr.cursor_pos_x = war_clamp_uint32(col, ctx_wr.min_col, ctx_wr.max_col);
+                uint32_t col =
+                    ((float)atomic_load(&atomics->play_clock) /
+                     ctx_a.sample_rate) /
+                    ((60.0f / ctx_a.BPM) /
+                     atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
+                ctx_wr.cursor_pos_x =
+                    war_clamp_uint32(col, ctx_wr.min_col, ctx_wr.max_col);
                 ctx_wr.sub_col = 0;
                 uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
                 uint32_t distance = viewport_width / 2;
-                ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
-                ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
-                uint32_t new_viewport_width = war_clamp_subtract_uint32(ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
+                ctx_wr.left_col = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
+                ctx_wr.right_col = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
+                uint32_t new_viewport_width = war_clamp_subtract_uint32(
+                    ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
                 if (new_viewport_width < viewport_width) {
-                    uint32_t diff = war_clamp_subtract_uint32(viewport_width, new_viewport_width, ctx_wr.min_col);
-                    uint32_t sum = war_clamp_add_uint32(ctx_wr.right_col, diff, ctx_wr.max_col);
+                    uint32_t diff = war_clamp_subtract_uint32(
+                        viewport_width, new_viewport_width, ctx_wr.min_col);
+                    uint32_t sum = war_clamp_add_uint32(
+                        ctx_wr.right_col, diff, ctx_wr.max_col);
                     if (sum < ctx_wr.max_col) {
                         ctx_wr.right_col = sum;
                     } else {
-                        ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, diff, ctx_wr.min_col);
+                        ctx_wr.left_col = war_clamp_subtract_uint32(
+                            ctx_wr.left_col, diff, ctx_wr.min_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -3948,20 +4826,28 @@ void* war_window_render(void* args) {
             cmd_normal_$:
                 call_carmack("cmd_normal_$");
                 if (ctx_wr.numeric_prefix) {
-                    ctx_wr.cursor_pos_x = war_clamp_uint32(ctx_wr.numeric_prefix, ctx_wr.min_col, ctx_wr.max_col);
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(
+                        ctx_wr.numeric_prefix, ctx_wr.min_col, ctx_wr.max_col);
                     ctx_wr.sub_col = 0;
-                    uint32_t viewport_width = ctx_wr.right_col - ctx_wr.left_col;
+                    uint32_t viewport_width =
+                        ctx_wr.right_col - ctx_wr.left_col;
                     uint32_t distance = viewport_width / 2;
-                    ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
-                    ctx_wr.right_col = war_clamp_add_uint32(ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
-                    uint32_t new_viewport_width = war_clamp_subtract_uint32(ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
+                    ctx_wr.left_col = war_clamp_subtract_uint32(
+                        ctx_wr.cursor_pos_x, distance, ctx_wr.min_col);
+                    ctx_wr.right_col = war_clamp_add_uint32(
+                        ctx_wr.cursor_pos_x, distance, ctx_wr.max_col);
+                    uint32_t new_viewport_width = war_clamp_subtract_uint32(
+                        ctx_wr.right_col, ctx_wr.left_col, ctx_wr.min_col);
                     if (new_viewport_width < viewport_width) {
-                        uint32_t diff = war_clamp_subtract_uint32(viewport_width, new_viewport_width, ctx_wr.min_col);
-                        uint32_t sum = war_clamp_add_uint32(ctx_wr.right_col, diff, ctx_wr.max_col);
+                        uint32_t diff = war_clamp_subtract_uint32(
+                            viewport_width, new_viewport_width, ctx_wr.min_col);
+                        uint32_t sum = war_clamp_add_uint32(
+                            ctx_wr.right_col, diff, ctx_wr.max_col);
                         if (sum < ctx_wr.max_col) {
                             ctx_wr.right_col = sum;
                         } else {
-                            ctx_wr.left_col = war_clamp_subtract_uint32(ctx_wr.left_col, diff, ctx_wr.min_col);
+                            ctx_wr.left_col = war_clamp_subtract_uint32(
+                                ctx_wr.left_col, diff, ctx_wr.min_col);
                         }
                     }
                     ctx_wr.numeric_prefix = 0;
@@ -3978,123 +4864,152 @@ void* war_window_render(void* args) {
             cmd_normal_G:
                 call_carmack("cmd_normal_G");
                 if (ctx_wr.numeric_prefix) {
-                    ctx_wr.cursor_pos_y = war_clamp_uint32(ctx_wr.numeric_prefix, ctx_wr.min_row, ctx_wr.max_row);
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.cursor_pos_y = war_clamp_uint32(
+                        ctx_wr.numeric_prefix, ctx_wr.min_row, ctx_wr.max_row);
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     uint32_t distance = viewport_height / 2;
-                    ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
-                    ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
-                    uint32_t new_viewport_height = war_clamp_subtract_uint32(ctx_wr.top_row, ctx_wr.bottom_row, 0);
+                    ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                    ctx_wr.top_row = war_clamp_add_uint32(
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
+                    uint32_t new_viewport_height = war_clamp_subtract_uint32(
+                        ctx_wr.top_row, ctx_wr.bottom_row, 0);
                     if (new_viewport_height < viewport_height) {
-                        uint32_t diff = war_clamp_subtract_uint32(viewport_height, new_viewport_height, 0);
-                        uint32_t sum = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                        uint32_t diff = war_clamp_subtract_uint32(
+                            viewport_height, new_viewport_height, 0);
+                        uint32_t sum = war_clamp_add_uint32(
+                            ctx_wr.top_row, diff, ctx_wr.max_row);
                         if (sum < ctx_wr.max_row) {
                             ctx_wr.top_row = sum;
                         } else {
-                            ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                            ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                                ctx_wr.bottom_row, diff, ctx_wr.min_row);
                         }
                     }
-                    if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                    if (ctx_wr.layer_flux) {
+                        war_layer_flux(
+                            &ctx_wr, atomics, note_layers, ctx_color);
+                    }
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 ctx_wr.cursor_pos_y = ctx_wr.bottom_row;
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_gg:
                 call_carmack("cmd_normal_gg");
                 if (ctx_wr.numeric_prefix) {
-                    ctx_wr.cursor_pos_y = war_clamp_uint32(ctx_wr.numeric_prefix, ctx_wr.min_row, ctx_wr.max_row);
-                    uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
+                    ctx_wr.cursor_pos_y = war_clamp_uint32(
+                        ctx_wr.numeric_prefix, ctx_wr.min_row, ctx_wr.max_row);
+                    uint32_t viewport_height =
+                        ctx_wr.top_row - ctx_wr.bottom_row;
                     uint32_t distance = viewport_height / 2;
-                    ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
-                    ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
-                    uint32_t new_viewport_height = war_clamp_subtract_uint32(ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
+                    ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                    ctx_wr.top_row = war_clamp_add_uint32(
+                        ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
+                    uint32_t new_viewport_height = war_clamp_subtract_uint32(
+                        ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                     if (new_viewport_height < viewport_height) {
-                        uint32_t diff = war_clamp_subtract_uint32(viewport_height, new_viewport_height, ctx_wr.min_row);
-                        uint32_t sum = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                        uint32_t diff =
+                            war_clamp_subtract_uint32(viewport_height,
+                                                      new_viewport_height,
+                                                      ctx_wr.min_row);
+                        uint32_t sum = war_clamp_add_uint32(
+                            ctx_wr.top_row, diff, ctx_wr.max_row);
                         if (sum < ctx_wr.max_row) {
                             ctx_wr.top_row = sum;
                         } else {
-                            ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                            ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                                ctx_wr.bottom_row, diff, ctx_wr.min_row);
                         }
                     }
-                    if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                    if (ctx_wr.layer_flux) {
+                        war_layer_flux(
+                            &ctx_wr, atomics, note_layers, ctx_color);
+                    }
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 ctx_wr.cursor_pos_y = ctx_wr.top_row;
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_1:
                 call_carmack("cmd_normal_1");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 1, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 1, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_2:
                 call_carmack("cmd_normal_2");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 2, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 2, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_3:
                 call_carmack("cmd_normal_3");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 3, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 3, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_4:
                 call_carmack("cmd_normal_4");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 4, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 4, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_5:
                 call_carmack("cmd_normal_5");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 5, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 5, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_6:
                 call_carmack("cmd_normal_6");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 6, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 6, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_7:
                 call_carmack("cmd_normal_7");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 7, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 7, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_8:
                 call_carmack("cmd_normal_8");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 8, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 8, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_9:
                 call_carmack("cmd_normal_9");
-                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(ctx_wr.numeric_prefix, 10, UINT32_MAX);
-                ctx_wr.numeric_prefix = war_clamp_add_uint32(ctx_wr.numeric_prefix, 9, UINT32_MAX);
+                ctx_wr.numeric_prefix = war_clamp_multiply_uint32(
+                    ctx_wr.numeric_prefix, 10, UINT32_MAX);
+                ctx_wr.numeric_prefix =
+                    war_clamp_add_uint32(ctx_wr.numeric_prefix, 9, UINT32_MAX);
                 goto cmd_done;
             cmd_normal_r:
                 call_carmack("cmd_normal_r");
-                if (ctx_wr.numeric_prefix != 0) {
-                    double d_start_sec =
-                        ctx_wr.cursor_pos_x * ((60.0 / atomic_load(&ctx_lua->A_BPM) / atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT)));
-                    uint64_t start_frames = (uint64_t)llround(d_start_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-                    double d_duration_sec =
-                        ctx_wr.numeric_prefix * ((60.0 / atomic_load(&ctx_lua->A_BPM) / atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT)));
-                    uint64_t duration_frames = (uint64_t)llround(d_duration_sec * atomic_load(&ctx_lua->A_SAMPLE_RATE));
-                    uint64_t end_frames = start_frames + duration_frames;
-                    atomic_store(&atomics->repeat_start_frames, start_frames);
-                    atomic_store(&atomics->repeat_end_frames, end_frames);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_fetch_xor(&atomics->repeat_section, 1);
-                uint64_t start_frames = atomic_load(&atomics->repeat_start_frames);
-                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &start_frames);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4102,14 +5017,21 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_normal_ctrl_equal");
                 ctx_wr.zoom_scale += ctx_wr.zoom_increment;
                 if (ctx_wr.zoom_scale > 5.0f) { ctx_wr.zoom_scale = 5.0f; }
-                float viewport_cols_f = ctx_wr.physical_width / (ctx_wr.cell_width * ctx_wr.zoom_scale);
-                float viewport_rows_f = ctx_wr.physical_height / (ctx_wr.cell_height * ctx_wr.zoom_scale);
+                float viewport_cols_f = ctx_wr.physical_width /
+                                        (ctx_wr.cell_width * ctx_wr.zoom_scale);
+                float viewport_rows_f =
+                    ctx_wr.physical_height /
+                    (ctx_wr.cell_height * ctx_wr.zoom_scale);
                 int viewport_cols = fmax(5, (int)round(viewport_cols_f));
                 int viewport_rows = fmax(5, (int)round(viewport_rows_f));
                 ctx_wr.viewport_cols = viewport_cols;
                 ctx_wr.viewport_rows = viewport_rows;
-                ctx_wr.right_col = fmin(ctx_wr.max_col, ctx_wr.left_col + viewport_cols - 1 - ctx_wr.num_cols_for_line_numbers);
-                ctx_wr.top_row = fmin(ctx_wr.max_row, ctx_wr.bottom_row + viewport_rows - 1 - ctx_wr.num_rows_for_status_bars);
+                ctx_wr.right_col = fmin(ctx_wr.max_col,
+                                        ctx_wr.left_col + viewport_cols - 1 -
+                                            ctx_wr.num_cols_for_line_numbers);
+                ctx_wr.top_row = fmin(ctx_wr.max_row,
+                                      ctx_wr.bottom_row + viewport_rows - 1 -
+                                          ctx_wr.num_rows_for_status_bars);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4118,14 +5040,21 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_normal_ctrl_minus");
                 ctx_wr.zoom_scale -= ctx_wr.zoom_increment;
                 if (ctx_wr.zoom_scale <= 0.1f) { ctx_wr.zoom_scale = 0.1f; }
-                float viewport_cols_f = ctx_wr.physical_width / (ctx_wr.cell_width * ctx_wr.zoom_scale);
-                float viewport_rows_f = ctx_wr.physical_height / (ctx_wr.cell_height * ctx_wr.zoom_scale);
+                float viewport_cols_f = ctx_wr.physical_width /
+                                        (ctx_wr.cell_width * ctx_wr.zoom_scale);
+                float viewport_rows_f =
+                    ctx_wr.physical_height /
+                    (ctx_wr.cell_height * ctx_wr.zoom_scale);
                 int viewport_cols = fmax(5, (int)round(viewport_cols_f));
                 int viewport_rows = fmax(5, (int)round(viewport_rows_f));
                 ctx_wr.viewport_cols = viewport_cols;
                 ctx_wr.viewport_rows = viewport_rows;
-                ctx_wr.right_col = fmin(ctx_wr.max_col, ctx_wr.left_col + viewport_cols - 1 - ctx_wr.num_cols_for_line_numbers);
-                ctx_wr.top_row = fmin(ctx_wr.max_row, ctx_wr.bottom_row + viewport_rows - 1 - ctx_wr.num_rows_for_status_bars);
+                ctx_wr.right_col = fmin(ctx_wr.max_col,
+                                        ctx_wr.left_col + viewport_cols - 1 -
+                                            ctx_wr.num_cols_for_line_numbers);
+                ctx_wr.top_row = fmin(ctx_wr.max_row,
+                                      ctx_wr.bottom_row + viewport_rows - 1 -
+                                          ctx_wr.num_rows_for_status_bars);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4159,10 +5088,16 @@ void* war_window_render(void* args) {
             cmd_normal_ctrl_0: {
                 call_carmack("cmd_normal_ctrl_0");
                 ctx_wr.zoom_scale = 1.0f;
-                ctx_wr.viewport_cols = (uint32_t)(physical_width / ctx_vk.cell_width);
-                ctx_wr.viewport_rows = (uint32_t)(physical_height / ctx_vk.cell_height);
-                ctx_wr.right_col = fmin(ctx_wr.max_col, ctx_wr.left_col + viewport_cols - 1 - ctx_wr.num_cols_for_line_numbers);
-                ctx_wr.top_row = fmin(ctx_wr.max_row, ctx_wr.bottom_row + viewport_rows - 1 - ctx_wr.num_rows_for_status_bars);
+                ctx_wr.viewport_cols =
+                    (uint32_t)(physical_width / ctx_vk.cell_width);
+                ctx_wr.viewport_rows =
+                    (uint32_t)(physical_height / ctx_vk.cell_height);
+                ctx_wr.right_col = fmin(ctx_wr.max_col,
+                                        ctx_wr.left_col + viewport_cols - 1 -
+                                            ctx_wr.num_cols_for_line_numbers);
+                ctx_wr.top_row = fmin(ctx_wr.max_row,
+                                      ctx_wr.bottom_row + viewport_rows - 1 -
+                                          ctx_wr.num_rows_for_status_bars);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4200,13 +5135,17 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_normal_f");
                 if (ctx_wr.numeric_prefix) {
                     ctx_wr.cursor_width_whole_number = ctx_wr.numeric_prefix;
-                    ctx_wr.cursor_size_x = (double)ctx_wr.cursor_width_whole_number / ctx_wr.cursor_width_sub_cells;
+                    ctx_wr.cursor_size_x =
+                        (double)ctx_wr.cursor_width_whole_number /
+                        ctx_wr.cursor_width_sub_cells;
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 ctx_wr.cursor_width_whole_number = 1;
-                ctx_wr.cursor_size_x = (double)ctx_wr.cursor_width_whole_number / ctx_wr.cursor_width_sub_cells;
+                ctx_wr.cursor_size_x =
+                    (double)ctx_wr.cursor_width_whole_number /
+                    ctx_wr.cursor_width_sub_cells;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4214,13 +5153,17 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_normal_t");
                 if (ctx_wr.numeric_prefix) {
                     ctx_wr.cursor_width_sub_cells = ctx_wr.numeric_prefix;
-                    ctx_wr.cursor_size_x = (double)ctx_wr.cursor_width_whole_number / ctx_wr.cursor_width_sub_cells;
+                    ctx_wr.cursor_size_x =
+                        (double)ctx_wr.cursor_width_whole_number /
+                        ctx_wr.cursor_width_sub_cells;
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 ctx_wr.cursor_width_sub_cells = 1;
-                ctx_wr.cursor_size_x = (double)ctx_wr.cursor_width_whole_number / ctx_wr.cursor_width_sub_cells;
+                ctx_wr.cursor_size_x =
+                    (double)ctx_wr.cursor_width_whole_number /
+                    ctx_wr.cursor_width_sub_cells;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4228,13 +5171,17 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_normal_T");
                 if (ctx_wr.numeric_prefix) {
                     ctx_wr.navigation_sub_cells_col = ctx_wr.numeric_prefix;
-                    ctx_wr.cursor_navigation_x = (double)ctx_wr.navigation_whole_number_col / ctx_wr.navigation_sub_cells_col;
+                    ctx_wr.cursor_navigation_x =
+                        (double)ctx_wr.navigation_whole_number_col /
+                        ctx_wr.navigation_sub_cells_col;
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 ctx_wr.navigation_sub_cells_col = 1;
-                ctx_wr.cursor_navigation_x = (double)ctx_wr.navigation_whole_number_col / ctx_wr.navigation_sub_cells_col;
+                ctx_wr.cursor_navigation_x =
+                    (double)ctx_wr.navigation_whole_number_col /
+                    ctx_wr.navigation_sub_cells_col;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4242,21 +5189,22 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_normal_F");
                 if (ctx_wr.numeric_prefix) {
                     ctx_wr.navigation_whole_number_col = ctx_wr.numeric_prefix;
-                    ctx_wr.cursor_navigation_x = (double)ctx_wr.navigation_whole_number_col / ctx_wr.navigation_sub_cells_col;
+                    ctx_wr.cursor_navigation_x =
+                        (double)ctx_wr.navigation_whole_number_col /
+                        ctx_wr.navigation_sub_cells_col;
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 ctx_wr.navigation_whole_number_col = 1;
-                ctx_wr.cursor_navigation_x = (double)ctx_wr.navigation_whole_number_col / ctx_wr.navigation_sub_cells_col;
+                ctx_wr.cursor_navigation_x =
+                    (double)ctx_wr.navigation_whole_number_col /
+                    ctx_wr.navigation_sub_cells_col;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_f: {
                 call_carmack("cmd_normal_alt_f");
-                war_pc_to_a(pc, AUDIO_CMD_GET_NOTE_DURATION, 0, NULL);
-                ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_normal_gb:
@@ -4264,19 +5212,27 @@ void* war_window_render(void* args) {
                 ctx_wr.cursor_pos_y = ctx_wr.min_row;
                 uint32_t viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
                 uint32_t distance = viewport_height / 2;
-                ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
-                ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
-                uint32_t new_viewport_height = war_clamp_subtract_uint32(ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
+                ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                ctx_wr.top_row = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
+                uint32_t new_viewport_height = war_clamp_subtract_uint32(
+                    ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                 if (new_viewport_height < viewport_height) {
-                    uint32_t diff = war_clamp_subtract_uint32(viewport_height, new_viewport_height, ctx_wr.min_row);
-                    uint32_t sum = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                    uint32_t diff = war_clamp_subtract_uint32(
+                        viewport_height, new_viewport_height, ctx_wr.min_row);
+                    uint32_t sum = war_clamp_add_uint32(
+                        ctx_wr.top_row, diff, ctx_wr.max_row);
                     if (sum < ctx_wr.max_row) {
                         ctx_wr.top_row = sum;
                     } else {
-                        ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                        ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                            ctx_wr.bottom_row, diff, ctx_wr.min_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4285,19 +5241,27 @@ void* war_window_render(void* args) {
                 ctx_wr.cursor_pos_y = ctx_wr.max_row;
                 viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
                 distance = viewport_height / 2;
-                ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
-                ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
-                new_viewport_height = war_clamp_subtract_uint32(ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
+                ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                ctx_wr.top_row = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
+                new_viewport_height = war_clamp_subtract_uint32(
+                    ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                 if (new_viewport_height < viewport_height) {
-                    uint32_t diff = war_clamp_subtract_uint32(viewport_height, new_viewport_height, ctx_wr.min_row);
-                    uint32_t sum = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                    uint32_t diff = war_clamp_subtract_uint32(
+                        viewport_height, new_viewport_height, ctx_wr.min_row);
+                    uint32_t sum = war_clamp_add_uint32(
+                        ctx_wr.top_row, diff, ctx_wr.max_row);
                     if (sum < ctx_wr.max_row) {
                         ctx_wr.top_row = sum;
                     } else {
-                        ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                        ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                            ctx_wr.bottom_row, diff, ctx_wr.min_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4306,19 +5270,27 @@ void* war_window_render(void* args) {
                 ctx_wr.cursor_pos_y = 60;
                 viewport_height = ctx_wr.top_row - ctx_wr.bottom_row;
                 distance = viewport_height / 2;
-                ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
-                ctx_wr.top_row = war_clamp_add_uint32(ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
-                new_viewport_height = war_clamp_subtract_uint32(ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
+                ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.min_row);
+                ctx_wr.top_row = war_clamp_add_uint32(
+                    ctx_wr.cursor_pos_y, distance, ctx_wr.max_row);
+                new_viewport_height = war_clamp_subtract_uint32(
+                    ctx_wr.top_row, ctx_wr.bottom_row, ctx_wr.min_row);
                 if (new_viewport_height < viewport_height) {
-                    uint32_t diff = war_clamp_subtract_uint32(viewport_height, new_viewport_height, ctx_wr.min_row);
-                    uint32_t sum = war_clamp_add_uint32(ctx_wr.top_row, diff, ctx_wr.max_row);
+                    uint32_t diff = war_clamp_subtract_uint32(
+                        viewport_height, new_viewport_height, ctx_wr.min_row);
+                    uint32_t sum = war_clamp_add_uint32(
+                        ctx_wr.top_row, diff, ctx_wr.max_row);
                     if (sum < ctx_wr.max_row) {
                         ctx_wr.top_row = sum;
                     } else {
-                        ctx_wr.bottom_row = war_clamp_subtract_uint32(ctx_wr.bottom_row, diff, ctx_wr.min_row);
+                        ctx_wr.bottom_row = war_clamp_subtract_uint32(
+                            ctx_wr.bottom_row, diff, ctx_wr.min_row);
                     }
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4337,7 +5309,8 @@ void* war_window_render(void* args) {
                     .size_x_numerator = ctx_wr.cursor_width_whole_number,
                     .size_x_denominator = ctx_wr.cursor_width_sub_cells,
                     .navigation_x = ctx_wr.cursor_navigation_x,
-                    .navigation_x_numerator = ctx_wr.navigation_whole_number_col,
+                    .navigation_x_numerator =
+                        ctx_wr.navigation_whole_number_col,
                     .navigation_x_denominator = ctx_wr.navigation_sub_cells_col,
                     .color = ctx_wr.color_cursor,
                     .outline_color = ctx_wr.color_note_outline_default,
@@ -4347,12 +5320,15 @@ void* war_window_render(void* args) {
                 double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
                 double bpm = atomic_load(&ctx_lua->A_BPM);
                 double frames_per_beat = sample_rate * 60.0 / bpm;
-                double columns_per_beat = atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
+                double columns_per_beat =
+                    atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
                 war_note note;
                 double start_beats = note_quad.pos_x / columns_per_beat;
-                note.note_start_frames = (uint64_t)(start_beats * frames_per_beat + 0.5);
+                note.note_start_frames =
+                    (uint64_t)(start_beats * frames_per_beat + 0.5);
                 double duration_beats = note_quad.size_x / columns_per_beat;
-                note.note_duration_frames = (uint64_t)(duration_beats * frames_per_beat + 0.5);
+                note.note_duration_frames =
+                    (uint64_t)(duration_beats * frames_per_beat + 0.5);
                 note.note = note_quad.pos_y;
                 note.layer = note_quad.layer;
                 note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
@@ -4362,8 +5338,10 @@ void* war_window_render(void* args) {
                 note.note_phase_increment = 0;
                 note.alive = note_quad.alive;
                 note.id = note_quad.id;
-                uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-                uint32_t undo_notes_batch_max = atomic_load(&ctx_lua->WR_UNDO_NOTES_BATCH_MAX);
+                uint32_t note_quads_max =
+                    atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
+                uint32_t undo_notes_batch_max =
+                    atomic_load(&ctx_lua->WR_UNDO_NOTES_BATCH_MAX);
                 if (ctx_wr.numeric_prefix) {
                     // add notes
                     if (ctx_wr.numeric_prefix >= undo_notes_batch_max) {
@@ -4372,28 +5350,48 @@ void* war_window_render(void* args) {
                         ctx_wr.num_chars_in_sequence = 0;
                     }
                     // --- Compaction if needed ---
-                    if (note_quads.count + ctx_wr.numeric_prefix >= note_quads_max) {
-                        war_pc_to_a(pc, AUDIO_CMD_COMPACT, 0, NULL);
+                    if (note_quads.count + ctx_wr.numeric_prefix >=
+                        note_quads_max) {
                         uint32_t write_idx = 0;
-                        for (uint32_t read_idx = 0; read_idx < note_quads.count; read_idx++) {
+                        for (uint32_t read_idx = 0; read_idx < note_quads.count;
+                             read_idx++) {
                             if (note_quads.alive[read_idx]) {
                                 if (write_idx != read_idx) {
                                     // Copy all fields
-                                    note_quads.pos_x[write_idx] = note_quads.pos_x[read_idx];
-                                    note_quads.pos_y[write_idx] = note_quads.pos_y[read_idx];
-                                    note_quads.layer[write_idx] = note_quads.layer[read_idx];
-                                    note_quads.size_x[write_idx] = note_quads.size_x[read_idx];
-                                    note_quads.size_x_numerator[write_idx] = note_quads.size_x_numerator[read_idx];
-                                    note_quads.size_x_denominator[write_idx] = note_quads.size_x_denominator[read_idx];
-                                    note_quads.navigation_x[write_idx] = note_quads.navigation_x[read_idx];
-                                    note_quads.navigation_x_numerator[write_idx] = note_quads.navigation_x_numerator[read_idx];
-                                    note_quads.navigation_x_denominator[write_idx] = note_quads.navigation_x_denominator[read_idx];
-                                    note_quads.color[write_idx] = note_quads.color[read_idx];
-                                    note_quads.outline_color[write_idx] = note_quads.outline_color[read_idx];
-                                    note_quads.gain[write_idx] = note_quads.gain[read_idx];
-                                    note_quads.voice[write_idx] = note_quads.voice[read_idx];
-                                    note_quads.alive[write_idx] = note_quads.alive[read_idx];
-                                    note_quads.id[write_idx] = note_quads.id[read_idx];
+                                    note_quads.pos_x[write_idx] =
+                                        note_quads.pos_x[read_idx];
+                                    note_quads.pos_y[write_idx] =
+                                        note_quads.pos_y[read_idx];
+                                    note_quads.layer[write_idx] =
+                                        note_quads.layer[read_idx];
+                                    note_quads.size_x[write_idx] =
+                                        note_quads.size_x[read_idx];
+                                    note_quads.size_x_numerator[write_idx] =
+                                        note_quads.size_x_numerator[read_idx];
+                                    note_quads.size_x_denominator[write_idx] =
+                                        note_quads.size_x_denominator[read_idx];
+                                    note_quads.navigation_x[write_idx] =
+                                        note_quads.navigation_x[read_idx];
+                                    note_quads
+                                        .navigation_x_numerator[write_idx] =
+                                        note_quads
+                                            .navigation_x_numerator[read_idx];
+                                    note_quads
+                                        .navigation_x_denominator[write_idx] =
+                                        note_quads
+                                            .navigation_x_denominator[read_idx];
+                                    note_quads.color[write_idx] =
+                                        note_quads.color[read_idx];
+                                    note_quads.outline_color[write_idx] =
+                                        note_quads.outline_color[read_idx];
+                                    note_quads.gain[write_idx] =
+                                        note_quads.gain[read_idx];
+                                    note_quads.voice[write_idx] =
+                                        note_quads.voice[read_idx];
+                                    note_quads.alive[write_idx] =
+                                        note_quads.alive[read_idx];
+                                    note_quads.id[write_idx] =
+                                        note_quads.id[read_idx];
                                 }
                                 write_idx++;
                             }
@@ -4406,15 +5404,18 @@ void* war_window_render(void* args) {
                         };
                         note_quads.count = write_idx;
                     }
-                    war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
+                    war_undo_node* node =
+                        war_pool_alloc(pool_wr, sizeof(war_undo_node));
                     memset(node, 0, sizeof(war_undo_node));
                     node->id = undo_tree->next_id++;
                     node->seq_num = undo_tree->next_seq_num++;
                     node->command = CMD_ADD_NOTES_SAME;
                     node->payload.delete_notes_same.note = note;
                     node->payload.delete_notes_same.note_quad = note_quad;
-                    node->payload.delete_notes_same.ids = war_pool_alloc(pool_wr, sizeof(uint64_t) * ctx_wr.numeric_prefix);
-                    node->payload.delete_notes_same.count = ctx_wr.numeric_prefix;
+                    node->payload.delete_notes_same.ids = war_pool_alloc(
+                        pool_wr, sizeof(uint64_t) * ctx_wr.numeric_prefix);
+                    node->payload.delete_notes_same.count =
+                        ctx_wr.numeric_prefix;
                     node->cursor_pos_x = ctx_wr.cursor_pos_x;
                     node->cursor_pos_y = ctx_wr.cursor_pos_y;
                     node->left_col = ctx_wr.left_col;
@@ -4446,35 +5447,41 @@ void* war_window_render(void* args) {
                     }
                     // batch add
                     for (uint32_t i = 0; i < ctx_wr.numeric_prefix; i++) {
-                        note_quads.pos_x[note_quads.count + i] = note_quad.pos_x;
-                        note_quads.pos_y[note_quads.count + i] = note_quad.pos_y;
-                        note_quads.layer[note_quads.count + i] = note_quad.layer;
-                        note_quads.size_x[note_quads.count + i] = note_quad.size_x;
-                        note_quads.size_x_numerator[note_quads.count + i] = note_quad.size_x_numerator;
-                        note_quads.size_x_denominator[note_quads.count + i] = note_quad.size_x_denominator;
-                        note_quads.navigation_x[note_quads.count + i] = note_quad.navigation_x;
-                        note_quads.navigation_x_numerator[note_quads.count + i] = note_quad.navigation_x_numerator;
-                        note_quads.navigation_x_denominator[note_quads.count + i] = note_quad.navigation_x_denominator;
-                        note_quads.color[note_quads.count + i] = note_quad.color;
-                        note_quads.outline_color[note_quads.count + i] = note_quad.outline_color;
+                        note_quads.pos_x[note_quads.count + i] =
+                            note_quad.pos_x;
+                        note_quads.pos_y[note_quads.count + i] =
+                            note_quad.pos_y;
+                        note_quads.layer[note_quads.count + i] =
+                            note_quad.layer;
+                        note_quads.size_x[note_quads.count + i] =
+                            note_quad.size_x;
+                        note_quads.size_x_numerator[note_quads.count + i] =
+                            note_quad.size_x_numerator;
+                        note_quads.size_x_denominator[note_quads.count + i] =
+                            note_quad.size_x_denominator;
+                        note_quads.navigation_x[note_quads.count + i] =
+                            note_quad.navigation_x;
+                        note_quads
+                            .navigation_x_numerator[note_quads.count + i] =
+                            note_quad.navigation_x_numerator;
+                        note_quads
+                            .navigation_x_denominator[note_quads.count + i] =
+                            note_quad.navigation_x_denominator;
+                        note_quads.color[note_quads.count + i] =
+                            note_quad.color;
+                        note_quads.outline_color[note_quads.count + i] =
+                            note_quad.outline_color;
                         note_quads.gain[note_quads.count + i] = note_quad.gain;
-                        note_quads.voice[note_quads.count + i] = note_quad.voice;
-                        note_quads.alive[note_quads.count + i] = note_quad.alive;
+                        note_quads.voice[note_quads.count + i] =
+                            note_quad.voice;
+                        note_quads.alive[note_quads.count + i] =
+                            note_quad.alive;
                         note_quads.id[note_quads.count + i] = id;
                         node->payload.delete_notes_same.ids[i] = id;
                         id = atomic_fetch_add(&atomics->note_next_id, 1);
                     }
                     note_quads.count += ctx_wr.numeric_prefix;
                     // note, count, ids
-                    *(war_note*)(tmp_payload) = note;
-                    *(uint32_t*)(tmp_payload + sizeof(war_note)) = ctx_wr.numeric_prefix;
-                    memcpy(tmp_payload + sizeof(note) + sizeof(ctx_wr.numeric_prefix),
-                           node->payload.delete_notes_same.ids,
-                           sizeof(uint64_t) * ctx_wr.numeric_prefix);
-                    war_pc_to_a(pc,
-                                AUDIO_CMD_ADD_NOTES_SAME,
-                                sizeof(note) + sizeof(ctx_wr.numeric_prefix) + sizeof(uint64_t) * ctx_wr.numeric_prefix,
-                                tmp_payload);
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
@@ -4484,27 +5491,43 @@ void* war_window_render(void* args) {
                 //-------------------------------------------------------------
                 // --- Compaction if needed ---
                 if (note_quads.count + 1 >= note_quads_max) {
-                    war_pc_to_a(pc, AUDIO_CMD_COMPACT, 0, NULL);
                     uint32_t write_idx = 0;
-                    for (uint32_t read_idx = 0; read_idx < note_quads.count; read_idx++) {
+                    for (uint32_t read_idx = 0; read_idx < note_quads.count;
+                         read_idx++) {
                         if (note_quads.alive[read_idx]) {
                             if (write_idx != read_idx) {
                                 // Copy all fields
-                                note_quads.pos_x[write_idx] = note_quads.pos_x[read_idx];
-                                note_quads.pos_y[write_idx] = note_quads.pos_y[read_idx];
-                                note_quads.layer[write_idx] = note_quads.layer[read_idx];
-                                note_quads.size_x[write_idx] = note_quads.size_x[read_idx];
-                                note_quads.size_x_numerator[write_idx] = note_quads.size_x_numerator[read_idx];
-                                note_quads.size_x_denominator[write_idx] = note_quads.size_x_denominator[read_idx];
-                                note_quads.navigation_x[write_idx] = note_quads.navigation_x[read_idx];
-                                note_quads.navigation_x_numerator[write_idx] = note_quads.navigation_x_numerator[read_idx];
-                                note_quads.navigation_x_denominator[write_idx] = note_quads.navigation_x_denominator[read_idx];
-                                note_quads.color[write_idx] = note_quads.color[read_idx];
-                                note_quads.outline_color[write_idx] = note_quads.outline_color[read_idx];
-                                note_quads.gain[write_idx] = note_quads.gain[read_idx];
-                                note_quads.voice[write_idx] = note_quads.voice[read_idx];
-                                note_quads.alive[write_idx] = note_quads.alive[read_idx];
-                                note_quads.id[write_idx] = note_quads.id[read_idx];
+                                note_quads.pos_x[write_idx] =
+                                    note_quads.pos_x[read_idx];
+                                note_quads.pos_y[write_idx] =
+                                    note_quads.pos_y[read_idx];
+                                note_quads.layer[write_idx] =
+                                    note_quads.layer[read_idx];
+                                note_quads.size_x[write_idx] =
+                                    note_quads.size_x[read_idx];
+                                note_quads.size_x_numerator[write_idx] =
+                                    note_quads.size_x_numerator[read_idx];
+                                note_quads.size_x_denominator[write_idx] =
+                                    note_quads.size_x_denominator[read_idx];
+                                note_quads.navigation_x[write_idx] =
+                                    note_quads.navigation_x[read_idx];
+                                note_quads.navigation_x_numerator[write_idx] =
+                                    note_quads.navigation_x_numerator[read_idx];
+                                note_quads.navigation_x_denominator[write_idx] =
+                                    note_quads
+                                        .navigation_x_denominator[read_idx];
+                                note_quads.color[write_idx] =
+                                    note_quads.color[read_idx];
+                                note_quads.outline_color[write_idx] =
+                                    note_quads.outline_color[read_idx];
+                                note_quads.gain[write_idx] =
+                                    note_quads.gain[read_idx];
+                                note_quads.voice[write_idx] =
+                                    note_quads.voice[read_idx];
+                                note_quads.alive[write_idx] =
+                                    note_quads.alive[read_idx];
+                                note_quads.id[write_idx] =
+                                    note_quads.id[read_idx];
                             }
                             write_idx++;
                         }
@@ -4516,20 +5539,26 @@ void* war_window_render(void* args) {
                 note_quads.pos_y[note_quads.count] = note_quad.pos_y;
                 note_quads.layer[note_quads.count] = note_quad.layer;
                 note_quads.size_x[note_quads.count] = note_quad.size_x;
-                note_quads.size_x_numerator[note_quads.count] = note_quad.size_x_numerator;
-                note_quads.size_x_denominator[note_quads.count] = note_quad.size_x_denominator;
-                note_quads.navigation_x[note_quads.count] = note_quad.navigation_x;
-                note_quads.navigation_x_numerator[note_quads.count] = note_quad.navigation_x_numerator;
-                note_quads.navigation_x_denominator[note_quads.count] = note_quad.navigation_x_denominator;
+                note_quads.size_x_numerator[note_quads.count] =
+                    note_quad.size_x_numerator;
+                note_quads.size_x_denominator[note_quads.count] =
+                    note_quad.size_x_denominator;
+                note_quads.navigation_x[note_quads.count] =
+                    note_quad.navigation_x;
+                note_quads.navigation_x_numerator[note_quads.count] =
+                    note_quad.navigation_x_numerator;
+                note_quads.navigation_x_denominator[note_quads.count] =
+                    note_quad.navigation_x_denominator;
                 note_quads.color[note_quads.count] = note_quad.color;
-                note_quads.outline_color[note_quads.count] = note_quad.outline_color;
+                note_quads.outline_color[note_quads.count] =
+                    note_quad.outline_color;
                 note_quads.gain[note_quads.count] = note_quad.gain;
                 note_quads.voice[note_quads.count] = note_quad.voice;
                 note_quads.alive[note_quads.count] = note_quad.alive;
                 note_quads.id[note_quads.count] = note_quad.id;
                 note_quads.count++;
-                war_pc_to_a(pc, AUDIO_CMD_ADD_NOTE, sizeof(war_note), &note);
-                war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
+                war_undo_node* node =
+                    war_pool_alloc(pool_wr, sizeof(war_undo_node));
                 memset(node, 0, sizeof(war_undo_node));
                 node->id = undo_tree->next_id++;
                 node->seq_num = undo_tree->next_seq_num++;
@@ -4593,25 +5622,39 @@ void* war_window_render(void* args) {
                     // TODO: spillover swapfile
                     // TODO batch delete
                     uint32_t delete_count = 0;
-                    uint32_t undo_notes_batch_max = atomic_load(&ctx_lua->WR_UNDO_NOTES_BATCH_MAX);
+                    uint32_t undo_notes_batch_max =
+                        atomic_load(&ctx_lua->WR_UNDO_NOTES_BATCH_MAX);
                     war_undo_node* node;
                     for (int32_t i = note_quads.count - 1; i >= 0; i--) {
-                        if (note_quads.alive[i] == 0 || note_quads.hidden[i] || note_quads.layer[i] != layer) { continue; }
+                        if (note_quads.alive[i] == 0 || note_quads.hidden[i] ||
+                            note_quads.layer[i] != layer) {
+                            continue;
+                        }
                         double cursor_pos_x = ctx_wr.cursor_pos_x;
                         double cursor_pos_y = ctx_wr.cursor_pos_y;
-                        double cursor_end_x = cursor_pos_x + ctx_wr.cursor_size_x;
+                        double cursor_end_x =
+                            cursor_pos_x + ctx_wr.cursor_size_x;
                         double note_pos_x = note_quads.pos_x[i];
                         double note_pos_y = note_quads.pos_y[i];
                         double note_end_x = note_pos_x + note_quads.size_x[i];
-                        if (cursor_pos_y != note_pos_y || cursor_pos_x >= note_end_x || cursor_end_x <= note_pos_x) { continue; }
+                        if (cursor_pos_y != note_pos_y ||
+                            cursor_pos_x >= note_end_x ||
+                            cursor_end_x <= note_pos_x) {
+                            continue;
+                        }
                         if (delete_count == 0) {
-                            node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
+                            node =
+                                war_pool_alloc(pool_wr, sizeof(war_undo_node));
                             memset(node, 0, sizeof(war_undo_node));
                             node->id = undo_tree->next_id++;
                             node->seq_num = undo_tree->next_seq_num++;
                             node->command = CMD_DELETE_NOTES;
-                            node->payload.add_notes.note = war_pool_alloc(pool_wr, sizeof(war_note) * undo_notes_batch_max);
-                            node->payload.add_notes.note_quad = war_pool_alloc(pool_wr, sizeof(war_note_quad) * undo_notes_batch_max);
+                            node->payload.add_notes.note = war_pool_alloc(
+                                pool_wr,
+                                sizeof(war_note) * undo_notes_batch_max);
+                            node->payload.add_notes.note_quad = war_pool_alloc(
+                                pool_wr,
+                                sizeof(war_note_quad) * undo_notes_batch_max);
                             node->cursor_pos_x = ctx_wr.cursor_pos_x;
                             node->cursor_pos_y = ctx_wr.cursor_pos_y;
                             node->left_col = ctx_wr.left_col;
@@ -4650,38 +5693,50 @@ void* war_window_render(void* args) {
                         note_quad.layer = note_quads.layer[i];
                         note_quad.size_x = note_quads.size_x[i];
                         note_quad.navigation_x = note_quads.navigation_x[i];
-                        note_quad.navigation_x_numerator = note_quads.navigation_x_numerator[i];
-                        note_quad.navigation_x_denominator = note_quads.navigation_x_denominator[i];
-                        note_quad.size_x_numerator = note_quads.size_x_numerator[i];
-                        note_quad.size_x_denominator = note_quads.size_x_denominator[i];
+                        note_quad.navigation_x_numerator =
+                            note_quads.navigation_x_numerator[i];
+                        note_quad.navigation_x_denominator =
+                            note_quads.navigation_x_denominator[i];
+                        note_quad.size_x_numerator =
+                            note_quads.size_x_numerator[i];
+                        note_quad.size_x_denominator =
+                            note_quads.size_x_denominator[i];
                         note_quad.color = note_quads.color[i];
                         note_quad.outline_color = note_quads.outline_color[i];
                         note_quad.gain = note_quads.gain[i];
                         note_quad.voice = note_quads.voice[i];
                         note_quad.hidden = note_quads.hidden[i];
                         note_quad.mute = note_quads.mute[i];
-                        double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
+                        double sample_rate =
+                            atomic_load(&ctx_lua->A_SAMPLE_RATE);
                         double bpm = atomic_load(&ctx_lua->A_BPM);
                         double frames_per_beat = sample_rate * 60.0 / bpm;
-                        double columns_per_beat = atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
+                        double columns_per_beat =
+                            atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
                         war_note note;
                         double start_beats = note_quad.pos_x / columns_per_beat;
-                        note.note_start_frames = (uint64_t)(start_beats * frames_per_beat + 0.5);
-                        double duration_beats = note_quad.size_x / columns_per_beat;
-                        note.note_duration_frames = (uint64_t)(duration_beats * frames_per_beat + 0.5);
+                        note.note_start_frames =
+                            (uint64_t)(start_beats * frames_per_beat + 0.5);
+                        double duration_beats =
+                            note_quad.size_x / columns_per_beat;
+                        note.note_duration_frames =
+                            (uint64_t)(duration_beats * frames_per_beat + 0.5);
                         note.note = note_quad.pos_y;
                         note.layer = note_quad.layer;
-                        note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
-                        note.note_sustain = atomic_load(&ctx_lua->A_DEFAULT_SUSTAIN);
-                        note.note_release = atomic_load(&ctx_lua->A_DEFAULT_RELEASE);
+                        note.note_attack =
+                            atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
+                        note.note_sustain =
+                            atomic_load(&ctx_lua->A_DEFAULT_SUSTAIN);
+                        note.note_release =
+                            atomic_load(&ctx_lua->A_DEFAULT_RELEASE);
                         note.note_gain = atomic_load(&ctx_lua->A_DEFAULT_GAIN);
                         note.note_phase_increment = 0;
                         note.id = note_quad.id;
                         note.alive = note_quad.alive;
                         node->payload.add_notes.note[delete_count] = note;
-                        node->payload.add_notes.note_quad[delete_count] = note_quad;
+                        node->payload.add_notes.note_quad[delete_count] =
+                            note_quad;
                         note_quads.alive[i] = 0;
-                        *(uint32_t*)(tmp_payload + (delete_count + 1) * sizeof(uint32_t)) = i;
                         delete_count++;
                         if (delete_count >= undo_notes_batch_max) {
                             // spillover
@@ -4696,23 +5751,27 @@ void* war_window_render(void* args) {
                         ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
-                    *(uint32_t*)(tmp_payload) = delete_count;
-                    node->payload.add_notes.count = delete_count;
-                    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (delete_count + 1), tmp_payload);
                     ctx_wr.numeric_prefix = 0;
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 int32_t delete_idx = -1; // overflow impossible
                 for (uint32_t i = 0; i < note_quads.count; i++) {
-                    if (note_quads.alive[i] == 0 || note_quads.hidden[i] || note_quads.layer[i] != layer) { continue; }
+                    if (note_quads.alive[i] == 0 || note_quads.hidden[i] ||
+                        note_quads.layer[i] != layer) {
+                        continue;
+                    }
                     double cursor_pos_x = ctx_wr.cursor_pos_x;
                     double cursor_pos_y = ctx_wr.cursor_pos_y;
                     double cursor_end_x = cursor_pos_x + ctx_wr.cursor_size_x;
                     double note_pos_x = note_quads.pos_x[i];
                     double note_pos_y = note_quads.pos_y[i];
                     double note_end_x = note_pos_x + note_quads.size_x[i];
-                    if (cursor_pos_y != note_pos_y || cursor_pos_x >= note_end_x || cursor_end_x <= note_pos_x) { continue; }
+                    if (cursor_pos_y != note_pos_y ||
+                        cursor_pos_x >= note_end_x ||
+                        cursor_end_x <= note_pos_x) {
+                        continue;
+                    }
                     delete_idx = i;
                 }
                 if (delete_idx == -1) {
@@ -4728,10 +5787,14 @@ void* war_window_render(void* args) {
                 note_quad.layer = note_quads.layer[delete_idx];
                 note_quad.size_x = note_quads.size_x[delete_idx];
                 note_quad.navigation_x = note_quads.navigation_x[delete_idx];
-                note_quad.navigation_x_numerator = note_quads.navigation_x_numerator[delete_idx];
-                note_quad.navigation_x_denominator = note_quads.navigation_x_denominator[delete_idx];
-                note_quad.size_x_numerator = note_quads.size_x_numerator[delete_idx];
-                note_quad.size_x_denominator = note_quads.size_x_denominator[delete_idx];
+                note_quad.navigation_x_numerator =
+                    note_quads.navigation_x_numerator[delete_idx];
+                note_quad.navigation_x_denominator =
+                    note_quads.navigation_x_denominator[delete_idx];
+                note_quad.size_x_numerator =
+                    note_quads.size_x_numerator[delete_idx];
+                note_quad.size_x_denominator =
+                    note_quads.size_x_denominator[delete_idx];
                 note_quad.color = note_quads.color[delete_idx];
                 note_quad.outline_color = note_quads.outline_color[delete_idx];
                 note_quad.gain = note_quads.gain[delete_idx];
@@ -4741,12 +5804,15 @@ void* war_window_render(void* args) {
                 double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
                 double bpm = atomic_load(&ctx_lua->A_BPM);
                 double frames_per_beat = sample_rate * 60.0 / bpm;
-                double columns_per_beat = atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
+                double columns_per_beat =
+                    atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
                 war_note note;
                 double start_beats = note_quad.pos_x / columns_per_beat;
-                note.note_start_frames = (uint64_t)(start_beats * frames_per_beat + 0.5);
+                note.note_start_frames =
+                    (uint64_t)(start_beats * frames_per_beat + 0.5);
                 double duration_beats = note_quad.size_x / columns_per_beat;
-                note.note_duration_frames = (uint64_t)(duration_beats * frames_per_beat + 0.5);
+                note.note_duration_frames =
+                    (uint64_t)(duration_beats * frames_per_beat + 0.5);
                 note.note = note_quad.pos_y;
                 note.layer = note_quad.layer;
                 note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
@@ -4757,8 +5823,8 @@ void* war_window_render(void* args) {
                 note.id = note_quad.id;
                 note.alive = note_quad.alive;
                 note_quads.alive[delete_idx] = 0;
-                war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(uint32_t), &delete_idx);
-                war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
+                war_undo_node* node =
+                    war_pool_alloc(pool_wr, sizeof(war_undo_node));
                 memset(node, 0, sizeof(war_undo_node));
                 node->id = undo_tree->next_id++;
                 node->seq_num = undo_tree->next_seq_num++;
@@ -4909,7 +5975,8 @@ void* war_window_render(void* args) {
                 goto cmd_done;
             cmd_normal_spacea:
                 call_carmack("cmd_normal_spacea");
-                if (views.views_count < (uint32_t)atomic_load(&ctx_lua->WR_VIEWS_SAVED)) {
+                if (views.views_count <
+                    (uint32_t)atomic_load(&ctx_lua->WR_VIEWS_SAVED)) {
                     views.col[views.views_count] = ctx_wr.cursor_pos_x;
                     views.row[views.views_count] = ctx_wr.cursor_pos_y;
                     views.left_col[views.views_count] = ctx_wr.left_col;
@@ -4937,7 +6004,9 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4952,7 +6021,9 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4967,7 +6038,9 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4982,7 +6055,9 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -4997,7 +6072,9 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5012,7 +6089,9 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5027,7 +6106,9 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5042,13 +6123,16 @@ void* war_window_render(void* args) {
                     ctx_wr.right_col = views.right_col[i_views];
                     ctx_wr.top_row = views.top_row[i_views];
                 }
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             cmd_normal_alt_e:
                 call_carmack("cmd_normal_alt_e");
-                ctx_wr.mode = (ctx_wr.mode != MODE_VIEWS) ? MODE_VIEWS : MODE_NORMAL;
+                ctx_wr.mode =
+                    (ctx_wr.mode != MODE_VIEWS) ? MODE_VIEWS : MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5064,45 +6148,30 @@ void* war_window_render(void* args) {
             }
             cmd_normal_alt_a: {
                 call_carmack("cmd_normal_alt_a");
-                double d_seek_sec = (double)ctx_wr.left_col * ((60.0 / ctx_a.BPM) / atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
-                uint64_t seek_frames = (uint64_t)llround(d_seek_sec * ctx_a.sample_rate);
-                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_frames);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_normal_alt_A: {
                 call_carmack("cmd_normal_alt_A");
-                double d_seek_sec = ctx_wr.cursor_pos_x * ((60.0 / ctx_a.BPM) / atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
-                uint64_t seek_frames = (uint64_t)llround(d_seek_sec * ctx_a.sample_rate);
-                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_frames);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_normal_A: {
                 call_carmack("cmd_normal_A");
-                if (ctx_wr.numeric_prefix) {
-                    double d_seek_sec =
-                        (double)ctx_wr.numeric_prefix * ((60.0 / ctx_a.BPM) / atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
-                    uint64_t seek_frames = (uint64_t)llround(d_seek_sec * ctx_a.sample_rate);
-                    war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_frames);
-                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_normal_alt_esc: {
                 call_carmack("cmd_normal_alt_esc");
-                atomic_store(&atomics->state, AUDIO_CMD_STOP);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_normal_ctrl_a: {
                 call_carmack("cmd_normal_ctrl_a");
-                uint64_t seek_start = 0;
-                war_pc_to_a(pc, AUDIO_CMD_SEEK, sizeof(uint64_t), &seek_start);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5282,7 +6351,9 @@ void* war_window_render(void* args) {
                 ctx_wr.color_note_outline_default = white_hex;
                 atomic_store(&atomics->layer, (1ULL << layer_count) - 1);
                 ctx_wr.layers_active_count = 9;
-                for (int i = 0; i < ctx_wr.layers_active_count; i++) { ctx_wr.layers_active[i] = (i + 1) + '0'; }
+                for (int i = 0; i < ctx_wr.layers_active_count; i++) {
+                    ctx_wr.layers_active[i] = (i + 1) + '0';
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5693,7 +6764,8 @@ void* war_window_render(void* args) {
                     ctx_wr.cursor_blink_state = CURSOR_BLINK;
                     ctx_wr.cursor_blinking = false;
                     ctx_wr.cursor_blink_previous_us = ctx_wr.now;
-                    ctx_wr.cursor_blink_duration_us = DEFAULT_CURSOR_BLINK_DURATION;
+                    ctx_wr.cursor_blink_duration_us =
+                        DEFAULT_CURSOR_BLINK_DURATION;
                     break;
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -5707,13 +6779,15 @@ void* war_window_render(void* args) {
                     ctx_wr.hud_state = HUD_PIANO_AND_LINE_NUMBERS;
                     ctx_wr.num_cols_for_line_numbers = 6;
                     ctx_wr.right_col -= 3;
-                    ctx_wr.cursor_pos_x = war_clamp_uint32(ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(
+                        ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
                     break;
                 case HUD_PIANO_AND_LINE_NUMBERS:
                     ctx_wr.hud_state = HUD_LINE_NUMBERS;
                     ctx_wr.num_cols_for_line_numbers = 3;
                     ctx_wr.right_col += 3;
-                    ctx_wr.cursor_pos_x = war_clamp_uint32(ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
+                    ctx_wr.cursor_pos_x = war_clamp_uint32(
+                        ctx_wr.cursor_pos_x, 0, ctx_wr.right_col);
                     break;
                 case HUD_LINE_NUMBERS:
                     ctx_wr.hud_state = HUD_PIANO;
@@ -5733,14 +6807,6 @@ void* war_window_render(void* args) {
             cmd_normal_Q: {
                 call_carmack("cmd_normal_Q");
                 ctx_wr.mode = MODE_CAPTURE;
-                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_WAIT && atomic_load(&atomics->state) != AUDIO_CMD_RECORD) {
-                    atomic_store(&atomics->state, AUDIO_CMD_RECORD_WAIT);
-                    atomic_store(&atomics->capture, 1);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5748,14 +6814,6 @@ void* war_window_render(void* args) {
             cmd_normal_space: {
                 call_carmack("cmd_normal_space");
                 ctx_wr.mode = MODE_CAPTURE;
-                if (atomic_load(&atomics->state) != AUDIO_CMD_RECORD_WAIT && atomic_load(&atomics->state) != AUDIO_CMD_RECORD) {
-                    atomic_store(&atomics->state, AUDIO_CMD_RECORD_WAIT);
-                    atomic_store(&atomics->capture, 1);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -5775,27 +6833,21 @@ void* war_window_render(void* args) {
                     assert(node != NULL);
                     switch (node->command) {
                     case CMD_ADD_NOTE: {
-                        war_undo_tree_delete_note(node, &note_quads, pc);
                         break;
                     }
                     case CMD_DELETE_NOTE: {
-                        war_undo_tree_add_note(node, ctx_lua, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_ADD_NOTES: {
-                        war_undo_tree_delete_notes(node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_DELETE_NOTES: {
-                        war_undo_tree_add_notes(node, &note_quads, pc, tmp_payload, ctx_lua);
                         break;
                     }
                     case CMD_ADD_NOTES_SAME: {
-                        war_undo_tree_delete_notes_same(node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_DELETE_NOTES_SAME: {
-                        war_undo_tree_add_notes_same(node, &note_quads, pc, tmp_payload, ctx_lua);
                         break;
                     }
                     }
@@ -5820,27 +6872,21 @@ void* war_window_render(void* args) {
                     assert(next_node != NULL);
                     switch (next_node->command) {
                     case CMD_ADD_NOTE: {
-                        war_undo_tree_add_note(next_node, ctx_lua, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_DELETE_NOTE: {
-                        war_undo_tree_delete_note(next_node, &note_quads, pc);
                         break;
                     }
                     case CMD_ADD_NOTES: {
-                        war_undo_tree_add_notes(next_node, &note_quads, pc, tmp_payload, ctx_lua);
                         break;
                     }
                     case CMD_DELETE_NOTES: {
-                        war_undo_tree_delete_notes(next_node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     case CMD_ADD_NOTES_SAME: {
-                        war_undo_tree_add_notes_same(next_node, &note_quads, pc, tmp_payload, ctx_lua);
                         break;
                     }
                     case CMD_DELETE_NOTES_SAME: {
-                        war_undo_tree_delete_notes_same(next_node, &note_quads, pc, tmp_payload);
                         break;
                     }
                     }
@@ -5862,7 +6908,8 @@ void* war_window_render(void* args) {
             }
             cmd_record_K: {
                 call_carmack("cmd_record_K");
-                float gain = atomic_load(&atomics->play_gain) + ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->play_gain) + ctx_wr.gain_increment;
                 gain = fminf(gain, 1.0f);
                 atomic_store(&atomics->play_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -5871,7 +6918,8 @@ void* war_window_render(void* args) {
             }
             cmd_record_J: {
                 call_carmack("cmd_record_J");
-                float gain = atomic_load(&atomics->play_gain) - ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->play_gain) - ctx_wr.gain_increment;
                 gain = fmaxf(gain, 0.0f);
                 atomic_store(&atomics->play_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -5880,7 +6928,8 @@ void* war_window_render(void* args) {
             }
             cmd_record_k: {
                 call_carmack("cmd_record_k");
-                float gain = atomic_load(&atomics->capture_gain) + ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->capture_gain) + ctx_wr.gain_increment;
                 gain = fminf(gain, 1.0f);
                 atomic_store(&atomics->capture_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -5889,7 +6938,8 @@ void* war_window_render(void* args) {
             }
             cmd_record_j: {
                 call_carmack("cmd_record_j");
-                float gain = atomic_load(&atomics->capture_gain) - ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->capture_gain) - ctx_wr.gain_increment;
                 gain = fmaxf(gain, 0.0f);
                 atomic_store(&atomics->capture_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -5898,69 +6948,30 @@ void* war_window_render(void* args) {
             }
             cmd_record_Q: {
                 call_carmack("cmd_record_Q");
-                if (atomic_load(&atomics->state) == AUDIO_CMD_RECORD_WAIT) {
-                    atomic_store(&atomics->capture, 0);
-                    atomic_store(&atomics->state, AUDIO_CMD_STOP);
-                    ctx_wr.mode = MODE_NORMAL;
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->capture, 0);
-                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP);
-                ctx_wr.prompt = PROMPT_NOTE;
-                ctx_wr.mode = MODE_COMMAND;
-                memcpy(prompt, "Enter note", sizeof("Enter note"));
-                ctx_wr.num_chars_in_prompt = sizeof("Enter note") - 1;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_record_space: {
                 call_carmack("cmd_record_space");
-                atomic_store(&atomics->capture, 0);
-                atomic_store(&atomics->state, AUDIO_CMD_RECORD_MAP);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_record_q: {
                 call_carmack("cmd_record_q");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 0 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
-                ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_record_w: {
                 call_carmack("cmd_record_w");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 1 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
-                ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_record_e: {
                 call_carmack("cmd_record_e");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 2 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5968,13 +6979,6 @@ void* war_window_render(void* args) {
             }
             cmd_record_r: {
                 call_carmack("cmd_record_r");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 3 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5982,13 +6986,6 @@ void* war_window_render(void* args) {
             }
             cmd_record_t: {
                 call_carmack("cmd_record_t");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 4 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -5996,13 +6993,6 @@ void* war_window_render(void* args) {
             }
             cmd_record_y: {
                 call_carmack("cmd_record_y");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 5 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6010,13 +7000,6 @@ void* war_window_render(void* args) {
             }
             cmd_record_u: {
                 call_carmack("cmd_record_u");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 6 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6024,13 +7007,6 @@ void* war_window_render(void* args) {
             }
             cmd_record_i: {
                 call_carmack("cmd_record_i");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, 7 + 12 * (ctx_wr.record_octave + 1));
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6038,19 +7014,6 @@ void* war_window_render(void* args) {
             }
             cmd_record_o: {
                 call_carmack("cmd_record_o");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                float note = 8 + 12 * (ctx_wr.record_octave + 1);
-                if (note > 127) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, note);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6058,19 +7021,6 @@ void* war_window_render(void* args) {
             }
             cmd_record_p: {
                 call_carmack("cmd_record_p");
-                if (atomic_load(&atomics->capture)) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                float note = 9 + 12 * (ctx_wr.record_octave + 1);
-                if (note > 127) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                atomic_store(&atomics->map_note, note);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6090,7 +7040,6 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 atomic_store(&atomics->map_note, note);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6110,7 +7059,6 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 atomic_store(&atomics->map_note, note);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -6242,8 +7190,6 @@ void* war_window_render(void* args) {
                 ctx_wr.mode = MODE_NORMAL;
                 atomic_store(&atomics->capture, 0);
                 atomic_store(&atomics->map_note, -1);
-                atomic_store(&atomics->state, AUDIO_CMD_STOP);
-                war_pc_to_a(pc, AUDIO_CMD_RECORD_MAP, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -6253,16 +7199,34 @@ void* war_window_render(void* args) {
             cmd_views_k: {
                 call_carmack("cmd_views_k");
                 uint32_t increment = ctx_wr.row_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_row); }
-                views.warpoon_row = war_clamp_add_uint32(views.warpoon_row, increment, views.warpoon_max_row);
-                if (views.warpoon_row > views.warpoon_top_row - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
-                    views.warpoon_bottom_row = war_clamp_add_uint32(views.warpoon_bottom_row, increment, views.warpoon_max_row);
-                    views.warpoon_top_row = war_clamp_add_uint32(views.warpoon_top_row, increment, views.warpoon_max_row);
-                    uint32_t new_viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_row);
+                }
+                views.warpoon_row = war_clamp_add_uint32(
+                    views.warpoon_row, increment, views.warpoon_max_row);
+                if (views.warpoon_row >
+                    views.warpoon_top_row - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
+                    views.warpoon_bottom_row =
+                        war_clamp_add_uint32(views.warpoon_bottom_row,
+                                             increment,
+                                             views.warpoon_max_row);
+                    views.warpoon_top_row =
+                        war_clamp_add_uint32(views.warpoon_top_row,
+                                             increment,
+                                             views.warpoon_max_row);
+                    uint32_t new_viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        views.warpoon_bottom_row = war_clamp_subtract_uint32(views.warpoon_bottom_row, diff, views.warpoon_min_row);
+                        views.warpoon_bottom_row =
+                            war_clamp_subtract_uint32(views.warpoon_bottom_row,
+                                                      diff,
+                                                      views.warpoon_min_row);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6272,16 +7236,32 @@ void* war_window_render(void* args) {
             cmd_views_j: {
                 call_carmack("cmd_views_j");
                 uint32_t increment = ctx_wr.row_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_row); }
-                views.warpoon_row = war_clamp_subtract_uint32(views.warpoon_row, increment, views.warpoon_min_row);
-                if (views.warpoon_row < views.warpoon_bottom_row + ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
-                    views.warpoon_bottom_row = war_clamp_subtract_uint32(views.warpoon_bottom_row, increment, views.warpoon_min_row);
-                    views.warpoon_top_row = war_clamp_subtract_uint32(views.warpoon_top_row, increment, views.warpoon_min_row);
-                    uint32_t new_viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_row);
+                }
+                views.warpoon_row = war_clamp_subtract_uint32(
+                    views.warpoon_row, increment, views.warpoon_min_row);
+                if (views.warpoon_row <
+                    views.warpoon_bottom_row + ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
+                    views.warpoon_bottom_row =
+                        war_clamp_subtract_uint32(views.warpoon_bottom_row,
+                                                  increment,
+                                                  views.warpoon_min_row);
+                    views.warpoon_top_row =
+                        war_clamp_subtract_uint32(views.warpoon_top_row,
+                                                  increment,
+                                                  views.warpoon_min_row);
+                    uint32_t new_viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        views.warpoon_top_row = war_clamp_add_uint32(views.warpoon_top_row, diff, views.warpoon_max_row);
+                        views.warpoon_top_row = war_clamp_add_uint32(
+                            views.warpoon_top_row, diff, views.warpoon_max_row);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6296,16 +7276,34 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 uint32_t increment = ctx_wr.col_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_col); }
-                views.warpoon_col = war_clamp_subtract_uint32(views.warpoon_col, increment, views.warpoon_min_col);
-                if (views.warpoon_col < views.warpoon_left_col + ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = views.warpoon_right_col - views.warpoon_left_col;
-                    views.warpoon_left_col = war_clamp_subtract_uint32(views.warpoon_left_col, increment, views.warpoon_min_col);
-                    views.warpoon_right_col = war_clamp_subtract_uint32(views.warpoon_right_col, increment, views.warpoon_min_col);
-                    uint32_t new_viewport_width = views.warpoon_right_col - views.warpoon_left_col;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_col);
+                }
+                views.warpoon_col = war_clamp_subtract_uint32(
+                    views.warpoon_col, increment, views.warpoon_min_col);
+                if (views.warpoon_col <
+                    views.warpoon_left_col + ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
+                    views.warpoon_left_col =
+                        war_clamp_subtract_uint32(views.warpoon_left_col,
+                                                  increment,
+                                                  views.warpoon_min_col);
+                    views.warpoon_right_col =
+                        war_clamp_subtract_uint32(views.warpoon_right_col,
+                                                  increment,
+                                                  views.warpoon_min_col);
+                    uint32_t new_viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        views.warpoon_right_col = war_clamp_add_uint32(views.warpoon_right_col, diff, views.warpoon_max_col);
+                        views.warpoon_right_col =
+                            war_clamp_add_uint32(views.warpoon_right_col,
+                                                 diff,
+                                                 views.warpoon_max_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6320,16 +7318,34 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 uint32_t increment = ctx_wr.col_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_col); }
-                views.warpoon_col = war_clamp_add_uint32(views.warpoon_col, increment, views.warpoon_max_col);
-                if (views.warpoon_col > views.warpoon_right_col - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_width = views.warpoon_right_col - views.warpoon_left_col;
-                    views.warpoon_left_col = war_clamp_add_uint32(views.warpoon_left_col, increment, views.warpoon_max_col);
-                    views.warpoon_right_col = war_clamp_add_uint32(views.warpoon_right_col, increment, views.warpoon_max_col);
-                    uint32_t new_viewport_width = views.warpoon_right_col - views.warpoon_left_col;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_col);
+                }
+                views.warpoon_col = war_clamp_add_uint32(
+                    views.warpoon_col, increment, views.warpoon_max_col);
+                if (views.warpoon_col >
+                    views.warpoon_right_col - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
+                    views.warpoon_left_col =
+                        war_clamp_add_uint32(views.warpoon_left_col,
+                                             increment,
+                                             views.warpoon_max_col);
+                    views.warpoon_right_col =
+                        war_clamp_add_uint32(views.warpoon_right_col,
+                                             increment,
+                                             views.warpoon_max_col);
+                    uint32_t new_viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        views.warpoon_left_col = war_clamp_subtract_uint32(views.warpoon_left_col, diff, views.warpoon_min_col);
+                        views.warpoon_left_col =
+                            war_clamp_subtract_uint32(views.warpoon_left_col,
+                                                      diff,
+                                                      views.warpoon_min_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6340,16 +7356,34 @@ void* war_window_render(void* args) {
             cmd_views_alt_k: {
                 call_carmack("cmd_views_alt_k");
                 uint32_t increment = ctx_wr.row_leap_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_row); }
-                views.warpoon_row = war_clamp_add_uint32(views.warpoon_row, increment, views.warpoon_max_row);
-                if (views.warpoon_row > views.warpoon_top_row - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
-                    views.warpoon_bottom_row = war_clamp_add_uint32(views.warpoon_bottom_row, increment, views.warpoon_max_row);
-                    views.warpoon_top_row = war_clamp_add_uint32(views.warpoon_top_row, increment, views.warpoon_max_row);
-                    uint32_t new_viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_row);
+                }
+                views.warpoon_row = war_clamp_add_uint32(
+                    views.warpoon_row, increment, views.warpoon_max_row);
+                if (views.warpoon_row >
+                    views.warpoon_top_row - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
+                    views.warpoon_bottom_row =
+                        war_clamp_add_uint32(views.warpoon_bottom_row,
+                                             increment,
+                                             views.warpoon_max_row);
+                    views.warpoon_top_row =
+                        war_clamp_add_uint32(views.warpoon_top_row,
+                                             increment,
+                                             views.warpoon_max_row);
+                    uint32_t new_viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        views.warpoon_bottom_row = war_clamp_subtract_uint32(views.warpoon_bottom_row, diff, views.warpoon_min_row);
+                        views.warpoon_bottom_row =
+                            war_clamp_subtract_uint32(views.warpoon_bottom_row,
+                                                      diff,
+                                                      views.warpoon_min_row);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6359,16 +7393,32 @@ void* war_window_render(void* args) {
             cmd_views_alt_j: {
                 call_carmack("cmd_views_alt_j");
                 uint32_t increment = ctx_wr.row_leap_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_row); }
-                views.warpoon_row = war_clamp_subtract_uint32(views.warpoon_row, increment, views.warpoon_min_row);
-                if (views.warpoon_row < views.warpoon_bottom_row + ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
-                    views.warpoon_bottom_row = war_clamp_subtract_uint32(views.warpoon_bottom_row, increment, views.warpoon_min_row);
-                    views.warpoon_top_row = war_clamp_subtract_uint32(views.warpoon_top_row, increment, views.warpoon_min_row);
-                    uint32_t new_viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_row);
+                }
+                views.warpoon_row = war_clamp_subtract_uint32(
+                    views.warpoon_row, increment, views.warpoon_min_row);
+                if (views.warpoon_row <
+                    views.warpoon_bottom_row + ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
+                    views.warpoon_bottom_row =
+                        war_clamp_subtract_uint32(views.warpoon_bottom_row,
+                                                  increment,
+                                                  views.warpoon_min_row);
+                    views.warpoon_top_row =
+                        war_clamp_subtract_uint32(views.warpoon_top_row,
+                                                  increment,
+                                                  views.warpoon_min_row);
+                    uint32_t new_viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        views.warpoon_top_row = war_clamp_add_uint32(views.warpoon_top_row, diff, views.warpoon_max_row);
+                        views.warpoon_top_row = war_clamp_add_uint32(
+                            views.warpoon_top_row, diff, views.warpoon_max_row);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6383,16 +7433,34 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 uint32_t increment = ctx_wr.col_leap_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_col); }
-                views.warpoon_col = war_clamp_subtract_uint32(views.warpoon_col, increment, views.warpoon_min_col);
-                if (views.warpoon_col < views.warpoon_left_col + ctx_wr.scroll_margin_cols) {
-                    uint32_t viewport_width = views.warpoon_right_col - views.warpoon_left_col;
-                    views.warpoon_left_col = war_clamp_subtract_uint32(views.warpoon_left_col, increment, views.warpoon_min_col);
-                    views.warpoon_right_col = war_clamp_subtract_uint32(views.warpoon_right_col, increment, views.warpoon_min_col);
-                    uint32_t new_viewport_width = views.warpoon_right_col - views.warpoon_left_col;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_col);
+                }
+                views.warpoon_col = war_clamp_subtract_uint32(
+                    views.warpoon_col, increment, views.warpoon_min_col);
+                if (views.warpoon_col <
+                    views.warpoon_left_col + ctx_wr.scroll_margin_cols) {
+                    uint32_t viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
+                    views.warpoon_left_col =
+                        war_clamp_subtract_uint32(views.warpoon_left_col,
+                                                  increment,
+                                                  views.warpoon_min_col);
+                    views.warpoon_right_col =
+                        war_clamp_subtract_uint32(views.warpoon_right_col,
+                                                  increment,
+                                                  views.warpoon_min_col);
+                    uint32_t new_viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        views.warpoon_right_col = war_clamp_add_uint32(views.warpoon_right_col, diff, views.warpoon_max_col);
+                        views.warpoon_right_col =
+                            war_clamp_add_uint32(views.warpoon_right_col,
+                                                 diff,
+                                                 views.warpoon_max_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6407,16 +7475,34 @@ void* war_window_render(void* args) {
                     goto cmd_done;
                 }
                 uint32_t increment = ctx_wr.col_leap_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_col); }
-                views.warpoon_col = war_clamp_add_uint32(views.warpoon_col, increment, views.warpoon_max_col);
-                if (views.warpoon_col > views.warpoon_right_col - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_width = views.warpoon_right_col - views.warpoon_left_col;
-                    views.warpoon_left_col = war_clamp_add_uint32(views.warpoon_left_col, increment, views.warpoon_max_col);
-                    views.warpoon_right_col = war_clamp_add_uint32(views.warpoon_right_col, increment, views.warpoon_max_col);
-                    uint32_t new_viewport_width = views.warpoon_right_col - views.warpoon_left_col;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_col);
+                }
+                views.warpoon_col = war_clamp_add_uint32(
+                    views.warpoon_col, increment, views.warpoon_max_col);
+                if (views.warpoon_col >
+                    views.warpoon_right_col - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
+                    views.warpoon_left_col =
+                        war_clamp_add_uint32(views.warpoon_left_col,
+                                             increment,
+                                             views.warpoon_max_col);
+                    views.warpoon_right_col =
+                        war_clamp_add_uint32(views.warpoon_right_col,
+                                             increment,
+                                             views.warpoon_max_col);
+                    uint32_t new_viewport_width =
+                        views.warpoon_right_col - views.warpoon_left_col;
                     if (new_viewport_width < viewport_width) {
                         uint32_t diff = viewport_width - new_viewport_width;
-                        views.warpoon_left_col = war_clamp_subtract_uint32(views.warpoon_left_col, diff, views.warpoon_min_col);
+                        views.warpoon_left_col =
+                            war_clamp_subtract_uint32(views.warpoon_left_col,
+                                                      diff,
+                                                      views.warpoon_min_col);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6427,16 +7513,34 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_views_K");
                 war_warpoon_shift_up(&views);
                 uint32_t increment = ctx_wr.row_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_row); }
-                views.warpoon_row = war_clamp_add_uint32(views.warpoon_row, increment, views.warpoon_max_row);
-                if (views.warpoon_row > views.warpoon_top_row - ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
-                    views.warpoon_bottom_row = war_clamp_add_uint32(views.warpoon_bottom_row, increment, views.warpoon_max_row);
-                    views.warpoon_top_row = war_clamp_add_uint32(views.warpoon_top_row, increment, views.warpoon_max_row);
-                    uint32_t new_viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_row);
+                }
+                views.warpoon_row = war_clamp_add_uint32(
+                    views.warpoon_row, increment, views.warpoon_max_row);
+                if (views.warpoon_row >
+                    views.warpoon_top_row - ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
+                    views.warpoon_bottom_row =
+                        war_clamp_add_uint32(views.warpoon_bottom_row,
+                                             increment,
+                                             views.warpoon_max_row);
+                    views.warpoon_top_row =
+                        war_clamp_add_uint32(views.warpoon_top_row,
+                                             increment,
+                                             views.warpoon_max_row);
+                    uint32_t new_viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        views.warpoon_bottom_row = war_clamp_subtract_uint32(views.warpoon_bottom_row, diff, views.warpoon_min_row);
+                        views.warpoon_bottom_row =
+                            war_clamp_subtract_uint32(views.warpoon_bottom_row,
+                                                      diff,
+                                                      views.warpoon_min_row);
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
@@ -6447,16 +7551,32 @@ void* war_window_render(void* args) {
                 call_carmack("cmd_views_J");
                 war_warpoon_shift_down(&views);
                 uint32_t increment = ctx_wr.row_increment;
-                if (ctx_wr.numeric_prefix) { increment = war_clamp_multiply_uint32(increment, ctx_wr.numeric_prefix, views.warpoon_max_row); }
-                views.warpoon_row = war_clamp_subtract_uint32(views.warpoon_row, increment, views.warpoon_min_row);
-                if (views.warpoon_row < views.warpoon_bottom_row + ctx_wr.scroll_margin_rows) {
-                    uint32_t viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
-                    views.warpoon_bottom_row = war_clamp_subtract_uint32(views.warpoon_bottom_row, increment, views.warpoon_min_row);
-                    views.warpoon_top_row = war_clamp_subtract_uint32(views.warpoon_top_row, increment, views.warpoon_min_row);
-                    uint32_t new_viewport_height = views.warpoon_top_row - views.warpoon_bottom_row;
+                if (ctx_wr.numeric_prefix) {
+                    increment =
+                        war_clamp_multiply_uint32(increment,
+                                                  ctx_wr.numeric_prefix,
+                                                  views.warpoon_max_row);
+                }
+                views.warpoon_row = war_clamp_subtract_uint32(
+                    views.warpoon_row, increment, views.warpoon_min_row);
+                if (views.warpoon_row <
+                    views.warpoon_bottom_row + ctx_wr.scroll_margin_rows) {
+                    uint32_t viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
+                    views.warpoon_bottom_row =
+                        war_clamp_subtract_uint32(views.warpoon_bottom_row,
+                                                  increment,
+                                                  views.warpoon_min_row);
+                    views.warpoon_top_row =
+                        war_clamp_subtract_uint32(views.warpoon_top_row,
+                                                  increment,
+                                                  views.warpoon_min_row);
+                    uint32_t new_viewport_height =
+                        views.warpoon_top_row - views.warpoon_bottom_row;
                     if (new_viewport_height < viewport_height) {
                         uint32_t diff = viewport_height - new_viewport_height;
-                        views.warpoon_top_row = war_clamp_add_uint32(views.warpoon_top_row, diff, views.warpoon_max_row);
+                        views.warpoon_top_row = war_clamp_add_uint32(
+                            views.warpoon_top_row, diff, views.warpoon_max_row);
                     }
                 }
 
@@ -6521,7 +7641,9 @@ void* war_window_render(void* args) {
                 ctx_wr.bottom_row = views.bottom_row[i_views];
                 ctx_wr.right_col = views.right_col[i_views];
                 ctx_wr.top_row = views.top_row[i_views];
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -6541,7 +7663,9 @@ void* war_window_render(void* args) {
                 ctx_wr.bottom_row = views.bottom_row[i_views];
                 ctx_wr.right_col = views.right_col[i_views];
                 ctx_wr.top_row = views.top_row[i_views];
-                if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                if (ctx_wr.layer_flux) {
+                    war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -6672,7 +7796,9 @@ void* war_window_render(void* args) {
                 ctx_wr.color_note_outline_default = white_hex;
                 atomic_store(&atomics->layer, (1ULL << layer_count) - 1);
                 ctx_wr.layers_active_count = 9;
-                for (int i = 0; i < ctx_wr.layers_active_count; i++) { ctx_wr.layers_active[i] = (i + 1) + '0'; }
+                for (int i = 0; i < ctx_wr.layers_active_count; i++) {
+                    ctx_wr.layers_active[i] = (i + 1) + '0';
+                }
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -7042,21 +8168,20 @@ void* war_window_render(void* args) {
             }
             cmd_midi_x: {
                 call_carmack("cmd_midi_x");
-                war_pc_to_a(pc, AUDIO_CMD_RESET_MAPPINGS, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_c: {
                 call_carmack("cmd_midi_c");
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF_ALL, 0, NULL);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_K: {
                 call_carmack("cmd_midi_K");
-                float gain = atomic_load(&atomics->play_gain) + ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->play_gain) + ctx_wr.gain_increment;
                 gain = fminf(gain, 1.0f);
                 atomic_store(&atomics->play_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -7065,7 +8190,8 @@ void* war_window_render(void* args) {
             }
             cmd_midi_J: {
                 call_carmack("cmd_midi_J");
-                float gain = atomic_load(&atomics->play_gain) - ctx_wr.gain_increment;
+                float gain =
+                    atomic_load(&atomics->play_gain) - ctx_wr.gain_increment;
                 gain = fmaxf(gain, 0.0f);
                 atomic_store(&atomics->play_gain, gain);
                 ctx_wr.numeric_prefix = 0;
@@ -7086,246 +8212,66 @@ void* war_window_render(void* args) {
             }
             cmd_midi_q: {
                 call_carmack("cmd_midi_q");
-                int note = 0 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_w: {
                 call_carmack("cmd_midi_w");
-                int note = 1 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_e: {
                 call_carmack("cmd_midi_e");
-                int note = 2 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_r: {
                 call_carmack("cmd_midi_r");
-                int note = 3 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_t: {
                 call_carmack("cmd_midi_t");
-                int note = 4 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_y: {
                 call_carmack("cmd_midi_y");
-                int note = 5 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_u: {
                 call_carmack("cmd_midi_u");
-                int note = 6 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_i: {
                 call_carmack("cmd_midi_i");
-                int note = 7 + 12 * ((int)ctx_wr.midi_octave + 1);
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_o: {
                 call_carmack("cmd_midi_o");
-                int note = 8 + 12 * (ctx_wr.midi_octave + 1);
-                if (note > 127) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_p: {
                 call_carmack("cmd_midi_p");
-                int note = 9 + 12 * (ctx_wr.midi_octave + 1);
-                if (note > 127) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             cmd_midi_leftbracket: {
                 call_carmack("cmd_midi_leftbracket");
-                int note = 10 + 12 * (ctx_wr.midi_octave + 1);
-                if (note > 127) {
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -7338,20 +8284,6 @@ void* war_window_render(void* args) {
                     ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
-                if (atomic_load(&atomics->state) == AUDIO_CMD_MIDI_RECORD_MAP) {
-                    atomic_store(&atomics->map_note, note);
-                    war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                if (atomic_load(&atomics->notes_on[note])) {
-                    war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF, sizeof(note), &note);
-                    ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
-                    goto cmd_done;
-                }
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_ON, sizeof(note), &note);
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
@@ -7373,11 +8305,6 @@ void* war_window_render(void* args) {
             cmd_midi_esc: {
                 call_carmack("cmd_midi_esc");
                 ctx_wr.mode = MODE_NORMAL;
-                war_pc_to_a(pc, AUDIO_CMD_NOTE_OFF_ALL, 0, NULL);
-                atomic_store(&atomics->map_note, -1);
-                atomic_store(&atomics->state, AUDIO_CMD_STOP);
-                war_pc_to_a(pc, AUDIO_CMD_MIDI_RECORD_MAP, 0, NULL);
-                ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
@@ -7463,7 +8390,6 @@ void* war_window_render(void* args) {
             }
             cmd_command_w: {
                 call_carmack("cmd_command_w");
-                war_pc_to_a(pc, AUDIO_CMD_SAVE, 0, NULL);
                 ctx_wr.mode = MODE_NORMAL;
                 ctx_wr.numeric_prefix = 0;
                 ctx_wr.num_chars_in_sequence = 0;
@@ -7493,16 +8419,21 @@ void* war_window_render(void* args) {
                 // dump_bytes("wl_keyboard_modifiers event",
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
-                xkb_state_update_mask(xkb_state,
-                                      war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4),
-                                      war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4),
-                                      war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4),
-                                      war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4 + 4),
-                                      0,
-                                      0);
+                xkb_state_update_mask(
+                    xkb_state,
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4),
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4),
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 +
+                                  4),
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 +
+                                  4 + 4),
+                    0,
+                    0);
                 goto wayland_done;
             wl_keyboard_repeat_info:
-                dump_bytes("wl_keyboard_repeat_info event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_keyboard_repeat_info event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_pointer_enter:
                 // dump_bytes("wl_pointer_enter event",
@@ -7518,42 +8449,71 @@ void* war_window_render(void* args) {
                 // dump_bytes("wl_pointer_motion event",
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
-                ctx_wr.cursor_x = (float)(int32_t)war_read_le32(msg_buffer + msg_buffer_offset + 12) / 256.0f * scale_factor;
-                ctx_wr.cursor_y = (float)(int32_t)war_read_le32(msg_buffer + msg_buffer_offset + 16) / 256.0f * scale_factor;
+                ctx_wr.cursor_x = (float)(int32_t)war_read_le32(
+                                      msg_buffer + msg_buffer_offset + 12) /
+                                  256.0f * scale_factor;
+                ctx_wr.cursor_y = (float)(int32_t)war_read_le32(
+                                      msg_buffer + msg_buffer_offset + 16) /
+                                  256.0f * scale_factor;
                 goto wayland_done;
             wl_pointer_button:
                 // dump_bytes("wl_pointer_button event",
                 //            msg_buffer + msg_buffer_offset,
                 //            size);
-                switch (war_read_le32(msg_buffer + msg_buffer_offset + 8 + 12)) {
+                switch (
+                    war_read_le32(msg_buffer + msg_buffer_offset + 8 + 12)) {
                 case 1:
-                    if (war_read_le32(msg_buffer + msg_buffer_offset + 8 + 8) == BTN_LEFT) {
-                        if (((int)(ctx_wr.cursor_x / ctx_vk.cell_width) - (int)ctx_wr.num_cols_for_line_numbers) < 0) {
+                    if (war_read_le32(msg_buffer + msg_buffer_offset + 8 + 8) ==
+                        BTN_LEFT) {
+                        if (((int)(ctx_wr.cursor_x / ctx_vk.cell_width) -
+                             (int)ctx_wr.num_cols_for_line_numbers) < 0) {
                             ctx_wr.cursor_pos_x = ctx_wr.left_col;
                             break;
                         }
-                        if ((((physical_height - ctx_wr.cursor_y) / ctx_vk.cell_height) - ctx_wr.num_rows_for_status_bars) < 0) {
+                        if ((((physical_height - ctx_wr.cursor_y) /
+                              ctx_vk.cell_height) -
+                             ctx_wr.num_rows_for_status_bars) < 0) {
                             ctx_wr.cursor_pos_y = ctx_wr.bottom_row;
                             break;
                         }
                         ctx_wr.cursor_pos_x =
-                            (uint32_t)(ctx_wr.cursor_x / ctx_vk.cell_width) - ctx_wr.num_cols_for_line_numbers + ctx_wr.left_col;
-                        ctx_wr.cursor_pos_y = (uint32_t)((physical_height - ctx_wr.cursor_y) / ctx_vk.cell_height) -
-                                              ctx_wr.num_rows_for_status_bars + ctx_wr.bottom_row;
+                            (uint32_t)(ctx_wr.cursor_x / ctx_vk.cell_width) -
+                            ctx_wr.num_cols_for_line_numbers + ctx_wr.left_col;
+                        ctx_wr.cursor_pos_y =
+                            (uint32_t)((physical_height - ctx_wr.cursor_y) /
+                                       ctx_vk.cell_height) -
+                            ctx_wr.num_rows_for_status_bars + ctx_wr.bottom_row;
                         ctx_wr.cursor_blink_previous_us = ctx_wr.now;
                         ctx_wr.cursor_blinking = false;
-                        if (ctx_wr.cursor_pos_y > ctx_wr.max_row) { ctx_wr.cursor_pos_y = ctx_wr.max_row; }
-                        if (ctx_wr.cursor_pos_y > ctx_wr.top_row) { ctx_wr.cursor_pos_y = ctx_wr.top_row; }
-                        if (ctx_wr.cursor_pos_y < ctx_wr.bottom_row) { ctx_wr.cursor_pos_y = ctx_wr.bottom_row; }
-                        if (ctx_wr.cursor_pos_x > ctx_wr.max_col) { ctx_wr.cursor_pos_x = ctx_wr.max_col; }
-                        if (ctx_wr.cursor_pos_x > ctx_wr.right_col) { ctx_wr.cursor_pos_x = ctx_wr.right_col; }
-                        if (ctx_wr.cursor_pos_x < ctx_wr.left_col) { ctx_wr.cursor_pos_x = ctx_wr.left_col; }
-                        if (ctx_wr.layer_flux) { war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color); }
+                        if (ctx_wr.cursor_pos_y > ctx_wr.max_row) {
+                            ctx_wr.cursor_pos_y = ctx_wr.max_row;
+                        }
+                        if (ctx_wr.cursor_pos_y > ctx_wr.top_row) {
+                            ctx_wr.cursor_pos_y = ctx_wr.top_row;
+                        }
+                        if (ctx_wr.cursor_pos_y < ctx_wr.bottom_row) {
+                            ctx_wr.cursor_pos_y = ctx_wr.bottom_row;
+                        }
+                        if (ctx_wr.cursor_pos_x > ctx_wr.max_col) {
+                            ctx_wr.cursor_pos_x = ctx_wr.max_col;
+                        }
+                        if (ctx_wr.cursor_pos_x > ctx_wr.right_col) {
+                            ctx_wr.cursor_pos_x = ctx_wr.right_col;
+                        }
+                        if (ctx_wr.cursor_pos_x < ctx_wr.left_col) {
+                            ctx_wr.cursor_pos_x = ctx_wr.left_col;
+                        }
+                        if (ctx_wr.layer_flux) {
+                            war_layer_flux(
+                                &ctx_wr, atomics, note_layers, ctx_color);
+                        }
                     }
                 }
                 goto wayland_done;
             wl_pointer_axis:
-                dump_bytes("wl_pointer_axis event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_pointer_axis event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_pointer_frame:
                 // dump_bytes("wl_pointer_frame event",
@@ -7570,68 +8530,106 @@ void* war_window_render(void* args) {
                 //                           physical_height);
                 goto wayland_done;
             wl_pointer_axis_source:
-                dump_bytes("wl_pointer_axis_source event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_pointer_axis_source event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_pointer_axis_stop:
-                dump_bytes("wl_pointer_axis_stop event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_pointer_axis_stop event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_pointer_axis_discrete:
-                dump_bytes("wl_pointer_axis_discrete event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_pointer_axis_discrete event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_pointer_axis_value120:
-                dump_bytes("wl_pointer_axis_value120 event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_pointer_axis_value120 event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_pointer_axis_relative_direction:
-                dump_bytes("wl_pointer_axis_relative_direction event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_pointer_axis_relative_direction event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_touch_down:
-                dump_bytes("wl_touch_down event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_touch_down event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_touch_up:
-                dump_bytes("wl_touch_up event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes(
+                    "wl_touch_up event", msg_buffer + msg_buffer_offset, size);
                 goto wayland_done;
             wl_touch_motion:
-                dump_bytes("wl_touch_motion event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_touch_motion event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_touch_frame:
-                dump_bytes("wl_touch_frame event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_touch_frame event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_touch_cancel:
-                dump_bytes("wl_touch_cancel event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_touch_cancel event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_touch_shape:
-                dump_bytes("wl_touch_shape event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_touch_shape event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_touch_orientation:
-                dump_bytes("wl_touch_orientation event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_touch_orientation event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_output_geometry:
-                dump_bytes("wl_output_geometry event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_output_geometry event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_output_mode:
-                dump_bytes("wl_output_mode event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_output_mode event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_output_done:
-                dump_bytes("wl_output_done event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_output_done event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_output_scale:
-                dump_bytes("wl_output_scale event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_output_scale event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_output_name:
-                dump_bytes("wl_output_name event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_output_name event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wl_output_description:
-                dump_bytes("wl_output_description event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes("wl_output_description event",
+                           msg_buffer + msg_buffer_offset,
+                           size);
                 goto wayland_done;
             wayland_default:
-                dump_bytes("default event", msg_buffer + msg_buffer_offset, size);
+                dump_bytes(
+                    "default event", msg_buffer + msg_buffer_offset, size);
                 goto wayland_done;
             wayland_done:
                 msg_buffer_offset += size;
                 continue;
             }
             if (msg_buffer_offset > 0) {
-                memmove(msg_buffer, msg_buffer + msg_buffer_offset, msg_buffer_size - msg_buffer_offset);
+                memmove(msg_buffer,
+                        msg_buffer + msg_buffer_offset,
+                        msg_buffer_size - msg_buffer_offset);
                 msg_buffer_size -= msg_buffer_offset;
             }
         }
@@ -7639,10 +8637,8 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     // CLEANUP
     //-------------------------------------------------------------------------
-#if DMABUF
     close(ctx_vk.dmabuf_fd);
     ctx_vk.dmabuf_fd = -1;
-#endif
     xkb_state_unref(xkb_state);
     xkb_context_unref(xkb_context);
     end("war_window_render");
@@ -7650,413 +8646,11 @@ void* war_window_render(void* args) {
 }
 static void war_play(void* userdata) {
     void** data = (void**)userdata;
-    war_audio_context* ctx_a = data[0];
-    war_producer_consumer* pc = data[1];
-    war_atomics* atomics = data[2];
-    war_lua_context* ctx_lua = data[3];
-    war_notes* notes = data[4];
-    war_wav* capture_wav = data[5];
-    war_sequencer* sequencer = data[6];
-    war_cache_audio* cache = data[7];
-    war_midi_context* ctx_midi = data[8];
-    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->play_stream);
-    if (!b) return;
-    struct spa_buffer* buf = b->buffer;
-    if (!buf || !buf->datas[0].data) {
-        if (buf && buf->datas[0].maxsize > 0) {
-            memset(buf->datas[0].data, 0, buf->datas[0].maxsize);
-            if (buf->datas[0].chunk) {
-                buf->datas[0].chunk->offset = 0;
-                buf->datas[0].chunk->stride = sizeof(int16_t) * ctx_a->channel_count;
-                buf->datas[0].chunk->size = buf->datas[0].maxsize;
-            }
-        }
-        pw_stream_queue_buffer(ctx_a->play_stream, b);
-        return;
-    }
-    int16_t* dst = (int16_t*)buf->datas[0].data;
-    size_t stride = sizeof(int16_t) * ctx_a->channel_count;
-    uint32_t n_frames = buf->datas[0].maxsize / stride;
-    if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
-    memset(dst, 0, n_frames * stride);
-    float gain = atomic_load(&atomics->play_gain);
-    uint64_t global_frame = atomic_load(&atomics->play_clock);
-    uint8_t play = atomic_load(&atomics->play);
-    uint32_t A_NOTE_COUNT = atomic_load(&ctx_lua->A_NOTE_COUNT);
-    uint32_t A_LAYER_COUNT = atomic_load(&ctx_lua->A_LAYER_COUNT);
-    if (play && notes->notes_count > 0) {
-        uint64_t frame_start = atomic_load(&atomics->play_frames);
-        uint64_t frame_end = frame_start + n_frames;
-        float master_gain = atomic_load(&atomics->play_gain);
-        uint8_t loop_note_global = atomic_load(&atomics->loop);
-        for (uint32_t i = 0; i < notes->notes_count; i++) {
-            if (notes->alive[i] == 0) { continue; }
-            // --- Convert start/duration to frames using double precision
-            double d_note_start_sec = (double)notes->notes_start_frames[i] / ctx_a->sample_rate;
-            double d_note_duration_sec = (double)notes->notes_duration_frames[i] / ctx_a->sample_rate;
-            uint64_t note_start = (uint64_t)llround(d_note_start_sec * ctx_a->sample_rate);
-            uint64_t note_duration = (uint64_t)llround(d_note_duration_sec * ctx_a->sample_rate);
-            uint64_t note_end = note_start + note_duration; // exclusive
-            // --- Skip notes outside current buffer
-            if (note_start >= frame_end || note_end <= frame_start) continue;
-            uint32_t map_note = notes->note[i];
-            if (map_note >= A_NOTE_COUNT) continue;
-            uint64_t layer = notes->layer[i];
-            int layer_count = __builtin_popcountll(layer);
-            if (layer_count == 0) continue;
-            float note_gain = notes->notes_gain[i];
-            float note_attack = notes->notes_attack[i];
-            float note_sustain = notes->notes_sustain[i];
-            float note_release = notes->notes_release[i];
-            while (layer) {
-                int layer_i = __builtin_ctzll(layer);
-                uint32_t samples_i = map_note * A_LAYER_COUNT + layer_i;
-                uint64_t id = sequencer->id[samples_i];
-                if (id == 0) {
-                    layer &= layer - 1;
-                    continue;
-                }
-                int16_t* sample_ptr = NULL;
-                size_t size = 0;
-                uint32_t oldest_cache_idx = 0;
-                for (uint32_t k = 0; k < cache->count; k++) {
-                    if (cache->timestamp[k] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = k; }
-                    if (cache->id[k] != id) { continue; }
-                    sample_ptr = *(cache->wav + k) + 44;
-                    size = cache->size[k];
-                    cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-                }
-                if (size < 44) {
-                    char* fname = &sequencer->fname[samples_i * atomic_load(&ctx_lua->A_PATH_LIMIT)];
-                    uint32_t* fname_size = &sequencer->fname_size[samples_i];
-                    uint32_t* idx = &oldest_cache_idx;
-                    if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { idx = &cache->count; }
-                    if (cache->wav[*idx] != NULL) {
-                        munmap(cache->wav[*idx], cache->capacity[*idx]);
-                        cache->wav[*idx] = NULL;
-                    }
-                    int* fd = &cache->fd[*idx];
-                    if (*fd != -1) { close(*fd); }
-                    *fd = open(fname, O_RDWR);
-                    if (*fd == -1) {
-                        call_carmack("failed to open file: %s", fname);
-                        cache->size[*idx] = 0;
-                        cache->id[*idx] = 0;
-                        layer &= layer - 1;
-                        continue;
-                    }
-                    struct stat st;
-                    uint64_t* cache_size_ptr = &cache->size[*idx];
-                    *cache_size_ptr = 0;
-                    if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
-                    cache->wav[*idx] = mmap(NULL, *cache_size_ptr, PROT_READ | PROT_WRITE, MAP_PRIVATE, *fd, 0);
-                    if (cache->wav[*idx] == MAP_FAILED) {
-                        call_carmack("map failed");
-                        close(*fd);
-                        cache->fd[*idx] = -1;
-                        cache->wav[*idx] = NULL;
-                        cache->size[*idx] = 0;
-                        cache->id[*idx] = 0;
-                        layer &= layer - 1;
-                        continue;
-                    }
-                    memset(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
-                    memcpy(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], fname, *fname_size);
-                    cache->fname_size[*idx] = *fname_size;
-                    cache->layer[*idx] = 1ULL << layer_i;
-                    cache->note[*idx] = map_note;
-                    cache->id[*idx] = id;
-                    cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-                    sample_ptr = *(cache->wav + *idx) + 44;
-                    size = *cache_size_ptr;
-                    (*idx)++;
-                }
-                uint64_t sample_start = 0;
-                uint64_t sample_duration = (size - 44) / (sizeof(int16_t) * ctx_a->channel_count);
-                // uint64_t sample_trim_start = samples->samples_frames_trim_start[samples_i];
-                // uint64_t sample_trim_end = samples->samples_frames_trim_end[samples_i];
-                if (sample_duration == 0) {
-                    layer &= layer - 1;
-                    continue;
-                }
-                // --- Per-frame mixing
-                for (uint32_t f = 0; f < n_frames; f++) {
-                    uint64_t global_pos = frame_start + f;
-                    // Must fall inside note bounds
-                    if (global_pos < note_start || global_pos >= note_end) continue;
-                    uint64_t note_frame = global_pos - note_start;
-                    if (loop_note_global && note_duration > 0) note_frame %= note_duration;
-                    // Clip to sample duration minus trim
-                    uint64_t max_frame = SPA_MIN(note_duration, sample_duration); // - sample_trim_end
-                    if (note_frame >= max_frame) continue;
-                    uint64_t sample_phase = note_frame - sample_start; // + sample_trim_start
-                    if (sample_phase >= sample_duration) continue;
-                    // --- ADSR envelope
-                    float env = 1.0f;
-                    if (note_frame < note_attack) {
-                        env = (float)note_frame / note_attack;
-                    } else if (note_frame >= note_duration - note_release) {
-                        uint64_t rel_start = (note_duration > note_release) ? note_duration - note_release : 0;
-                        env = 1.0f - (float)(note_frame - rel_start) / note_release;
-                        if (env < 0.0f) env = 0.0f;
-                    } else {
-                        env = note_sustain;
-                    }
-                    // --- Per-channel mixing
-                    for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
-                        uint64_t src_idx = sample_phase * ctx_a->channel_count + c;
-                        uint64_t dst_idx = f * ctx_a->channel_count + c;
-                        float src_f = (float)sample_ptr[src_idx] / 32767.0f;
-                        float out_f = src_f * env * note_gain * master_gain;
-
-                        int32_t mixed = dst[dst_idx] + (int32_t)(out_f * 32767.0f);
-                        if (mixed > 32767) mixed = 32767;
-                        if (mixed < -32768) mixed = -32768;
-                        dst[dst_idx] = (int16_t)mixed;
-                    }
-                }
-                layer &= layer - 1;
-            }
-        }
-    }
-    // -------------------------------------------------------------------------
-    // Iterate over all notes
-    // Inside the main note loop
-    uint64_t layer = atomic_load(&atomics->layer);
-    uint8_t loop_note = atomic_load(&atomics->loop);
-    for (int note = 0; note < atomic_load(&ctx_lua->A_NOTE_COUNT); note++) {
-        uint8_t note_on = atomic_load(&atomics->notes_on[note]);
-        uint8_t prev_state = atomic_load(&atomics->notes_on_previous[note]);
-
-        // --- Start note timing
-        if (note_on && !prev_state) { ctx_midi->start_frames[note] = global_frame; }
-
-        // --- Skip notes that are off or have no samples
-        uint32_t layer_count = __builtin_popcountll(layer);
-        if (!note_on || layer_count == 0) { continue; }
-        atomic_store(&atomics->notes_on_previous[note], 1);
-
-        uint64_t note_start = ctx_midi->start_frames[note];
-
-        uint64_t max_loop_duration = 0;
-        uint64_t temp_layer = layer;
-        while (temp_layer) {
-            int layer_i = __builtin_ctzll(temp_layer);
-            uint32_t samples_i = note * A_LAYER_COUNT + layer_i;
-            uint64_t id = sequencer->id[samples_i];
-            if (id != 0) {
-                for (uint32_t k = 0; k < cache->count; k++) {
-                    if (cache->id[k] == id) {
-                        uint64_t sample_duration = (cache->size[k] - 44) / (sizeof(int16_t) * ctx_a->channel_count);
-                        if (sample_duration > max_loop_duration) { max_loop_duration = sample_duration; }
-                        break;
-                    }
-                }
-            }
-            temp_layer &= temp_layer - 1;
-        }
-        while (layer) {
-            int layer_i = __builtin_ctzll(layer);
-            uint32_t samples_i = note * A_LAYER_COUNT + layer_i;
-            uint64_t id = sequencer->id[samples_i];
-            if (id == 0) {
-                layer &= layer - 1;
-                continue;
-            }
-            int16_t* sample_ptr = NULL;
-            size_t size = 0;
-            uint32_t oldest_cache_idx = 0;
-            for (uint32_t k = 0; k < cache->count; k++) {
-                if (cache->timestamp[k] <= cache->timestamp[oldest_cache_idx]) { oldest_cache_idx = k; }
-                if (cache->id[k] != id) { continue; }
-                sample_ptr = *(cache->wav + k) + 44;
-                size = cache->size[k];
-                cache->timestamp[k] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-            }
-            if (size < 44) {
-                char* fname = &sequencer->fname[samples_i * atomic_load(&ctx_lua->A_PATH_LIMIT)];
-                uint32_t* fname_size = &sequencer->fname_size[samples_i];
-                uint32_t* idx = &oldest_cache_idx;
-                if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { idx = &cache->count; }
-                int* fd = &cache->fd[*idx];
-                if (*fd != -1) { close(*fd); }
-                *fd = open(fname, O_RDWR);
-                if (*fd == -1) {
-                    call_carmack("failed to open file: %s", fname);
-                    cache->size[*idx] = 0;
-                    cache->id[*idx] = 0;
-                    layer &= layer - 1;
-                    continue;
-                }
-                struct stat st;
-                uint64_t* cache_size_ptr = &cache->size[*idx];
-                *cache_size_ptr = 0;
-                if (stat(fname, &st) == 0) { *cache_size_ptr = st.st_size; }
-                ssize_t read_bytes = read(*fd, *(cache->wav + *idx), *cache_size_ptr);
-                if ((uint64_t)read_bytes != *cache_size_ptr) {
-                    if (read_bytes == -1) {
-                        call_carmack("read failed");
-                    } else {
-                        call_carmack("partial read: %zd/%u bytes", read_bytes, *cache_size_ptr);
-                    }
-                    call_carmack("closing fd");
-                    close(*fd);
-                    cache->size[*idx] = 0;
-                    cache->id[*idx] = 0;
-                    layer &= layer - 1;
-                    continue;
-                }
-                memset(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
-                memcpy(&cache->fname[*idx * atomic_load(&ctx_lua->A_PATH_LIMIT)], fname, *fname_size);
-                cache->fname_size[*idx] = *fname_size;
-                cache->layer[*idx] = 1ULL << layer_i;
-                cache->note[*idx] = note;
-                cache->id[*idx] = id;
-                cache->timestamp[*idx] = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-                sample_ptr = *(cache->wav + *idx) + 44;
-                size = *cache_size_ptr;
-                (*idx)++;
-            }
-            uint64_t note_duration = (size - 44) / (sizeof(int16_t) * ctx_a->channel_count);
-            // --- Mix each sample
-            for (uint32_t f = 0; f < n_frames; f++) {
-                uint64_t global_pos = global_frame + f;
-                uint64_t note_elapsed = global_pos - note_start;
-                if (loop_note && max_loop_duration > 0) { note_elapsed %= max_loop_duration; }
-                if (!loop_note && note_elapsed >= max_loop_duration) { continue; }
-                uint64_t sample_start = 0;
-                uint64_t sample_duration = note_duration;
-                if (note_elapsed < sample_start || note_elapsed >= sample_start + sample_duration) { continue; }
-                uint64_t sample_phase = note_elapsed - sample_start;
-                for (uint32_t c = 0; c < ctx_a->channel_count; c++) {
-                    uint64_t idx = sample_phase * ctx_a->channel_count + c;
-                    int32_t mixed = dst[f * ctx_a->channel_count + c] + (int32_t)(sample_ptr[idx] * gain);
-                    if (mixed > 32767) mixed = 32767;
-                    if (mixed < -32768) mixed = -32768;
-                    dst[f * ctx_a->channel_count + c] = (int16_t)mixed;
-                }
-            }
-            layer &= layer - 1;
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Queue buffer
-    if (buf->datas[0].chunk) {
-        buf->datas[0].chunk->offset = 0;
-        buf->datas[0].chunk->stride = stride;
-        buf->datas[0].chunk->size = n_frames * stride;
-    }
-    pw_stream_queue_buffer(ctx_a->play_stream, b);
-
-    //// -------------------------------------------------------------------------
-    //// Frame counters
-    atomic_fetch_add(&atomics->play_clock, n_frames);
-    if (play) {
-        // -------------------------------------------------------------------------
-        // Frame counters with repeat section logic
-        uint8_t repeat_section = atomic_load(&atomics->repeat_section);
-        uint64_t repeat_start_frames = atomic_load(&atomics->repeat_start_frames);
-        uint64_t repeat_end_frames = atomic_load(&atomics->repeat_end_frames);
-
-        if (repeat_section && repeat_end_frames > repeat_start_frames) {
-            uint64_t current_frame = atomic_load(&atomics->play_frames);
-            uint64_t next_frame = current_frame + n_frames;
-
-            // If we've reached or passed the repeat end, wrap around
-            if (next_frame >= repeat_end_frames) {
-                uint64_t overshoot = next_frame - repeat_end_frames;
-                uint64_t wrapped_frame = repeat_start_frames + overshoot;
-
-                atomic_store(&atomics->play_frames, wrapped_frame);
-            } else {
-                atomic_fetch_add(&atomics->play_frames, n_frames);
-            }
-        } else {
-            // Normal playback (no repeat section)
-            atomic_fetch_add(&atomics->play_frames, n_frames);
-        }
-    }
+    war_pipewire_context* ctx_pw = data[0];
 }
 static void war_capture(void* userdata) {
     void** data = (void**)userdata;
-    war_audio_context* ctx_a = data[0];
-    war_producer_consumer* pc = data[1];
-    war_atomics* atomics = data[2];
-    war_lua_context* ctx_lua = data[3];
-    war_notes* notes = data[4];
-    war_wav* capture_wav = data[5];
-    war_sequencer* sequencer = data[6];
-    war_cache_audio* cache = data[7];
-    war_midi_context* ctx_midi = data[8];
-    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_a->capture_stream);
-    if (!b) return;
-    struct spa_buffer* buf = b->buffer;
-    if (!buf || !buf->datas[0].data) {
-        pw_stream_queue_buffer(ctx_a->capture_stream, b);
-        return;
-    }
-    size_t stride = sizeof(int16_t) * ctx_a->channel_count;
-    uint32_t n_frames_in = buf->datas[0].chunk->size / stride;
-    int16_t* src = (int16_t*)buf->datas[0].data;
-    if (!atomic_load(&atomics->capture)) {
-        ctx_a->over_threshold = 0;
-        ctx_a->warmup_frames = ctx_a->sample_rate / atomic_load(&ctx_lua->A_WARMUP_FRAMES_FACTOR);
-        pw_stream_queue_buffer(ctx_a->capture_stream, b);
-        return;
-    }
-    if (ctx_a->warmup_frames > 0) {
-        uint32_t frames_to_consume = SPA_MIN(n_frames_in, (uint32_t)ctx_a->warmup_frames);
-        ctx_a->warmup_frames -= frames_to_consume;
-        pw_stream_queue_buffer(ctx_a->capture_stream, b);
-        return;
-    }
-    uint64_t total_samples = (uint64_t)n_frames_in * ctx_a->channel_count;
-    float threshold = atomic_load(&atomics->capture_threshold);
-    float sum_sq = 0.0f;
-    for (uint64_t i = 0; i < total_samples; i++) {
-        float s = (float)src[i] / 32767.0f;
-        sum_sq += s * s;
-    }
-    float rms = sqrtf(sum_sq / total_samples);
-    if (rms >= threshold && !ctx_a->over_threshold) {
-        ctx_a->over_threshold = 1;
-        atomic_store(&atomics->capture_frames, 0);
-        war_pc_to_wr(pc, AUDIO_CMD_RECORD, 0, NULL);
-    }
-    if (!ctx_a->over_threshold) {
-        pw_stream_queue_buffer(ctx_a->capture_stream, b);
-        return;
-    }
-    uint64_t frame_offset = atomic_fetch_add(&atomics->capture_frames, n_frames_in);
-    uint64_t buffer_frames = (ctx_a->sample_rate * ctx_a->sample_duration_seconds);
-    uint64_t start_frame = frame_offset % buffer_frames;
-    float gain = atomic_load(&atomics->capture_gain);
-    uint64_t first_part = buffer_frames - start_frame;
-    if (first_part > n_frames_in) first_part = n_frames_in;
-    uint64_t second_part = n_frames_in - first_part;
-    int16_t* capture_wav_samples = (int16_t*)(capture_wav->wav + 44);
-    for (uint64_t i = 0; i < first_part * ctx_a->channel_count; i++) {
-        capture_wav_samples[start_frame * ctx_a->channel_count + i] = (int16_t)(src[i] * gain);
-    }
-    for (uint64_t i = 0; i < second_part * ctx_a->channel_count; i++) {
-        capture_wav_samples[i] = (int16_t)(src[first_part * ctx_a->channel_count + i] * gain);
-    }
-    if (atomic_load(&atomics->capture_monitor) && ctx_a->play_stream) {
-        struct pw_buffer* out_b = pw_stream_dequeue_buffer(ctx_a->play_stream);
-        if (out_b && out_b->buffer && out_b->buffer->datas[0].data) {
-            uint32_t max_frames_out = out_b->buffer->datas[0].maxsize / stride;
-            uint32_t copy_frames = SPA_MIN(n_frames_in, max_frames_out);
-            memcpy(out_b->buffer->datas[0].data, src, copy_frames * stride);
-            if (out_b->buffer->datas[0].chunk) {
-                out_b->buffer->datas[0].chunk->offset = 0;
-                out_b->buffer->datas[0].chunk->stride = stride;
-                out_b->buffer->datas[0].chunk->size = copy_frames * stride;
-            }
-            pw_stream_queue_buffer(ctx_a->play_stream, out_b);
-        }
-    }
-    pw_stream_queue_buffer(ctx_a->capture_stream, b);
+    war_pipewire_context* ctx_pw = data[0];
 }
 //-----------------------------------------------------------------------------
 // THREAD AUDIO
@@ -8064,666 +8658,137 @@ static void war_capture(void* userdata) {
 void* war_audio(void* args) {
     header("war_audio");
     void** args_ptrs = (void**)args;
-    war_producer_consumer* pc = args_ptrs[0];
+    war_producer_consumer* pc_control = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
-    war_lua_context* ctx_lua = args_ptrs[3];
     war_pool* pool_a = args_ptrs[2];
+    war_lua_context* ctx_lua = args_ptrs[3];
+    war_producer_consumer* pc_data = args_ptrs[4];
     pool_a->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
-    pool_a->pool_size = war_get_pool_a_size(pool_a, ctx_lua, "src/lua/monaco/set.lua");
+    pool_a->pool_size =
+        war_get_pool_a_size(pool_a, ctx_lua, "src/lua/monaco/set.lua");
     pool_a->pool_size = ALIGN_UP(pool_a->pool_size, pool_a->pool_alignment);
     pool_a->pool_size += pool_a->pool_alignment * 10;
     call_carmack("pool_a hack size: %zu", pool_a->pool_size);
-    int pool_result = posix_memalign(&pool_a->pool, pool_a->pool_alignment, pool_a->pool_size);
+    int pool_result = posix_memalign(
+        &pool_a->pool, pool_a->pool_alignment, pool_a->pool_size);
     memset(pool_a->pool, 0, pool_a->pool_size);
     assert(pool_result == 0 && pool_a->pool);
     pool_a->pool_ptr = (uint8_t*)pool_a->pool;
-    atomics->notes_on = war_pool_alloc(pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) { atomic_init(&atomics->notes_on[i], 0); }
-    atomics->notes_on_previous = war_pool_alloc(pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) { atomic_init(&atomics->notes_on_previous[i], 0); }
-    struct sched_param param = {.sched_priority = 10};
+    struct sched_param param = {
+        .sched_priority = atomic_load(&ctx_lua->A_SCHED_FIFO_PRIORITY)};
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
         call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
         perror("pthread_setschedparam");
     }
     //-------------------------------------------------------------------------
-    // AUDIO CONTEXT
-    //-------------------------------------------------------------------------
-    war_audio_context* ctx_a = war_pool_alloc(pool_a, sizeof(war_audio_context));
-    assert(ctx_a);
-    ctx_a->sample_frames = war_pool_alloc(pool_a, atomic_load(&ctx_lua->A_NOTE_COUNT) * sizeof(uint64_t));
-    assert(ctx_a->sample_frames);
-    ctx_a->sample_frames_duration = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    assert(ctx_a->sample_frames_duration);
-    ctx_a->sample_phase = war_pool_alloc(pool_a, atomic_load(&ctx_lua->A_NOTE_COUNT) * sizeof(float));
-    assert(ctx_a->sample_phase);
-    ctx_a->sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
-    ctx_a->period_size = AUDIO_DEFAULT_PERIOD_SIZE;
-    ctx_a->sub_period_size = AUDIO_DEFAULT_PERIOD_SIZE / AUDIO_DEFAULT_SUB_PERIOD_FACTOR;
-    ctx_a->BPM = atomic_load(&ctx_lua->A_BPM);
-    ctx_a->channel_count = atomic_load(&ctx_lua->A_CHANNEL_COUNT);
-    ctx_a->phase = 0.0f;
-    ctx_a->sample_duration_seconds = atomic_load(&ctx_lua->A_SAMPLE_DURATION);
-    ctx_a->over_threshold = 0;
-    ctx_a->capture_buffer = war_pool_alloc(pool_a,
-                                           atomic_load(&ctx_lua->A_SAMPLE_RATE) * atomic_load(&ctx_lua->A_SAMPLE_DURATION) *
-                                               atomic_load(&ctx_lua->A_CHANNEL_COUNT) * sizeof(int16_t));
-    ctx_a->warmup_frames = 0;
-    ctx_a->default_attack = 0.0f;
-    ctx_a->default_sustain = 1.0f;
-    ctx_a->default_release = 0.0f;
-    ctx_a->default_gain = 1.0f;
-    ctx_a->resample_buffer =
-        war_pool_alloc(pool_a, ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count * sizeof(int16_t));
-    assert(ctx_a->resample_buffer);
-    void* tmp_payload = war_pool_alloc(pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->PC_BUFFER_SIZE));
-    //-------------------------------------------------------------------------
-    // MMAP CAPTURE_WAV
-    //-------------------------------------------------------------------------
-    chdir(atomic_load(&ctx_lua->CWD));
-    uint64_t wav_file_size_max = 44 + sizeof(int16_t) * ctx_a->sample_rate * ctx_a->sample_duration_seconds * ctx_a->channel_count;
-    war_wav* capture_wav = war_pool_alloc(pool_a, sizeof(war_wav));
-    capture_wav->fname = war_pool_alloc(pool_a, atomic_load(&ctx_lua->A_PATH_LIMIT));
-    memset(capture_wav->fname, 0, atomic_load(&ctx_lua->A_PATH_LIMIT));
-    memcpy(capture_wav->fname, "capture.wav", sizeof("capture.wav"));
-    capture_wav->fname_size = 11;
-    capture_wav->capacity = wav_file_size_max;
-    capture_wav->fd = open(capture_wav->fname, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    assert(capture_wav->fd >= 0);
-    int wav_result = ftruncate(capture_wav->fd, capture_wav->capacity);
-    assert(wav_result >= 0);
-    capture_wav->wav = mmap(NULL, capture_wav->capacity, PROT_READ | PROT_WRITE, MAP_PRIVATE, capture_wav->fd, 0);
-    if (capture_wav->wav == MAP_FAILED) { call_carmack("map failed"); }
-    *(war_riff_header*)capture_wav->wav = (war_riff_header){"RIFF", capture_wav->capacity - 8, "WAVE"};
-    *(war_fmt_chunk*)(capture_wav->wav + sizeof(war_riff_header)) =
-        (war_fmt_chunk){"fmt ",
-                        16,
-                        1,
-                        ctx_a->channel_count,
-                        ctx_a->sample_rate,
-                        ctx_a->sample_rate * ctx_a->channel_count * sizeof(int16_t),
-                        ctx_a->channel_count * sizeof(int16_t),
-                        16};
-    *(war_data_chunk*)(capture_wav->wav + sizeof(war_riff_header) + sizeof(war_fmt_chunk)) =
-        (war_data_chunk){"data", capture_wav->capacity - 44};
-    ssize_t wav_written = write(capture_wav->fd, capture_wav->wav, capture_wav->capacity);
-    if ((uint64_t)wav_written != wav_file_size_max) {
-        if (wav_written == -1) {
-            call_carmack("write failed");
-        } else {
-            call_carmack("partial write: %zd/%u bytes", wav_written, capture_wav->capacity);
-        }
-        call_carmack("closing fd");
-        close(capture_wav->fd);
-    }
-    //-----------------------------------------------------------------------------
-    //  SEQUENCER
-    //-----------------------------------------------------------------------------
-    war_sequencer* sequencer = war_pool_alloc(pool_a, sizeof(war_sequencer));
-    sequencer->id = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    memset(sequencer->id, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    sequencer->fname = war_pool_alloc(pool_a,
-                                      sizeof(char) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT) *
-                                          atomic_load(&ctx_lua->A_PATH_LIMIT));
-    memset(sequencer->fname,
-           0,
-           sizeof(char) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT) * atomic_load(&ctx_lua->A_PATH_LIMIT));
-    sequencer->fname_size =
-        war_pool_alloc(pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    //-------------------------------------------------------------------------
-    // MIDI CONTEXT
-    //-------------------------------------------------------------------------
-    war_midi_context* ctx_midi = war_pool_alloc(pool_a, sizeof(war_midi_context));
-    ctx_midi->start_frames = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    memset(ctx_midi->start_frames, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    //-------------------------------------------------------------------------
-    // CACHE AUDIO
-    //-------------------------------------------------------------------------
-    war_cache_audio* cache = war_pool_alloc(pool_a, sizeof(war_cache_audio));
-    cache->id = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    memset(cache->id, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->timestamp = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    memset(cache->timestamp, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->wav = war_pool_alloc(pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    memset(cache->wav, 0, sizeof(void*) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->size = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->capacity = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    memset(cache->capacity, wav_file_size_max, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->fname = war_pool_alloc(pool_a, sizeof(char) * atomic_load(&ctx_lua->A_CACHE_SIZE) * atomic_load(&ctx_lua->A_PATH_LIMIT));
-    memset(cache->fname, 0, sizeof(char) * atomic_load(&ctx_lua->A_CACHE_SIZE) * atomic_load(&ctx_lua->A_PATH_LIMIT));
-    cache->fname_size = war_pool_alloc(pool_a, sizeof(uint32_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->note = war_pool_alloc(pool_a, sizeof(int16_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    memset(cache->note, -1, sizeof(int16_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->layer = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->fd = war_pool_alloc(pool_a, sizeof(int) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    memset(cache->fd, -1, sizeof(int) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache->count = 0;
-    //-------------------------------------------------------------------------
-    // WAR_NOTES
-    //-------------------------------------------------------------------------
-    war_notes* notes = war_pool_alloc(pool_a, sizeof(war_notes));
-    notes->alive = war_pool_alloc(pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->id = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_start_frames = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_duration_frames = war_pool_alloc(pool_a, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->note = war_pool_alloc(pool_a, sizeof(int16_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->layer = war_pool_alloc(pool_a, sizeof(int16_t) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_phase_increment = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_gain = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_attack = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_sustain = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_release = war_pool_alloc(pool_a, sizeof(float) * atomic_load(&ctx_lua->A_NOTES_MAX));
-    notes->notes_count = 0;
-    //-------------------------------------------------------------------------
-    // USERDATA
-    //-------------------------------------------------------------------------
-    void** userdata = war_pool_alloc(pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_USERDATA));
-    assert(userdata);
-    userdata[0] = ctx_a;
-    userdata[1] = pc;
-    userdata[2] = atomics;
-    userdata[3] = ctx_lua;
-    userdata[4] = notes;
-    userdata[5] = capture_wav;
-    userdata[6] = sequencer;
-    userdata[7] = cache;
-    userdata[8] = ctx_midi;
-    //-------------------------------------------------------------------------
     //  PIPEWIRE
     //-------------------------------------------------------------------------
+    war_pipewire_context* ctx_pw =
+        war_pool_alloc(pool_a, sizeof(war_pipewire_context));
+    ctx_pw->data =
+        war_pool_alloc(pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_DATA));
+    ctx_pw->data[0] = ctx_pw;
     pw_init(NULL, NULL);
-    ctx_a->pw_loop = pw_loop_new(NULL);
-    struct spa_audio_info_raw play_info = {
-        .format = SPA_AUDIO_FORMAT_S16,
-        .rate = ctx_a->sample_rate,
-        .channels = ctx_a->channel_count,
+    ctx_pw->loop = pw_loop_new(NULL);
+    ctx_pw->play_info = (struct spa_audio_info_raw){
+        .format = SPA_AUDIO_FORMAT_F32_LE,
+        .rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
+        .channels = atomic_load(&ctx_lua->A_CHANNEL_COUNT),
         .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
     };
-    uint8_t* play_buffer = war_pool_alloc(pool_a, sizeof(uint8_t) * 1024);
-    struct spa_pod_builder play_builder;
-    spa_pod_builder_init(&play_builder, play_buffer, sizeof(uint8_t) * 1024);
-    const struct spa_pod* play_params[1];
-    play_params[0] = spa_format_audio_raw_build(&play_builder, SPA_PARAM_EnumFormat, &play_info);
-    struct pw_stream_events play_events = {
+    ctx_pw->play_builder_data = war_pool_alloc(
+        pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_BUILDER_DATA_SIZE));
+    spa_pod_builder_init(&ctx_pw->play_builder,
+                         ctx_pw->play_builder_data,
+                         sizeof(uint8_t) *
+                             atomic_load(&ctx_lua->A_BUILDER_DATA_SIZE));
+    ctx_pw->play_params = spa_format_audio_raw_build(
+        &ctx_pw->play_builder, SPA_PARAM_EnumFormat, &ctx_pw->play_info);
+    ctx_pw->play_events = (struct pw_stream_events){
         .version = PW_VERSION_STREAM_EVENTS,
         .process = war_play,
     };
-    ctx_a->play_stream = pw_stream_new_simple(ctx_a->pw_loop, "WAR_play", NULL, &play_events, userdata);
-    uint32_t sink_id = PW_ID_ANY;
-    pw_stream_connect(ctx_a->play_stream,
+    ctx_pw->play_stream = pw_stream_new_simple(
+        ctx_pw->loop, "WAR_play", NULL, &ctx_pw->play_events, ctx_pw->data);
+    pw_stream_connect(ctx_pw->play_stream,
                       PW_DIRECTION_OUTPUT,
-                      sink_id,
-                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS,
-                      play_params,
+                      PW_ID_ANY,
+                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
+                          PW_STREAM_FLAG_RT_PROCESS,
+                      &ctx_pw->play_params,
                       1);
-    struct spa_audio_info_raw capture_info = {
-        .format = SPA_AUDIO_FORMAT_S16,
-        .rate = ctx_a->sample_rate,
-        .channels = ctx_a->channel_count,
+    ctx_pw->capture_info = (struct spa_audio_info_raw){
+        .format = SPA_AUDIO_FORMAT_F32_LE,
+        .rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
+        .channels = atomic_load(&ctx_lua->A_CHANNEL_COUNT),
         .position = {SPA_AUDIO_CHANNEL_FL, SPA_AUDIO_CHANNEL_FR},
     };
-    uint8_t* capture_buffer = war_pool_alloc(pool_a, sizeof(uint8_t) * 1024);
-    struct spa_pod_builder capture_builder;
-    spa_pod_builder_init(&capture_builder, capture_buffer, sizeof(uint8_t) * 1024);
-    const struct spa_pod* capture_params[1];
-    capture_params[0] = spa_format_audio_raw_build(&capture_builder, SPA_PARAM_EnumFormat, &capture_info);
-    struct pw_stream_events capture_events = {
+    ctx_pw->capture_builder_data = war_pool_alloc(
+        pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->A_BUILDER_DATA_SIZE));
+    spa_pod_builder_init(&ctx_pw->capture_builder,
+                         ctx_pw->capture_builder_data,
+                         sizeof(uint8_t) *
+                             atomic_load(&ctx_lua->A_BUILDER_DATA_SIZE));
+    ctx_pw->capture_params = spa_format_audio_raw_build(
+        &ctx_pw->capture_builder, SPA_PARAM_EnumFormat, &ctx_pw->capture_info);
+    ctx_pw->capture_events = (struct pw_stream_events){
         .version = PW_VERSION_STREAM_EVENTS,
         .process = war_capture,
     };
-    ctx_a->capture_stream = pw_stream_new_simple(ctx_a->pw_loop, "WAR_capture", NULL, &capture_events, userdata);
-    uint32_t source_id = PW_ID_ANY;
-    pw_stream_connect(ctx_a->capture_stream,
+    ctx_pw->capture_stream = pw_stream_new_simple(ctx_pw->loop,
+                                                  "WAR_capture",
+                                                  NULL,
+                                                  &ctx_pw->capture_events,
+                                                  ctx_pw->data);
+    pw_stream_connect(ctx_pw->capture_stream,
                       PW_DIRECTION_INPUT,
-                      source_id,
-                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS,
-                      capture_params,
+                      PW_ID_ANY,
+                      PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS |
+                          PW_STREAM_FLAG_RT_PROCESS,
+                      &ctx_pw->capture_params,
                       1);
-    while (pw_stream_get_state(ctx_a->capture_stream, NULL) != PW_STREAM_STATE_PAUSED) {
-        pw_loop_iterate(ctx_a->pw_loop, 1);
+    while (pw_stream_get_state(ctx_pw->capture_stream, NULL) !=
+           PW_STREAM_STATE_PAUSED) {
+        pw_loop_iterate(ctx_pw->loop, 1);
         struct timespec ts = {0, 500000};
         nanosleep(&ts, NULL);
     }
     //-------------------------------------------------------------------------
-    // PC AUDIO
+    // PC CONTROL
     //-------------------------------------------------------------------------
     uint32_t header;
     uint32_t size;
-    uint8_t* payload = war_pool_alloc(pool_a, sizeof(uint8_t) * atomic_load(&ctx_lua->PC_BUFFER_SIZE));
-    void** pc_audio = war_pool_alloc(pool_a, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
-    pc_audio[AUDIO_CMD_STOP] = &&pc_stop;
-    pc_audio[AUDIO_CMD_PLAY] = &&pc_play;
-    pc_audio[AUDIO_CMD_PAUSE] = &&pc_pause;
-    pc_audio[AUDIO_CMD_GET_FRAMES] = &&pc_get_frames;
-    pc_audio[AUDIO_CMD_ADD_NOTE] = &&pc_add_note;
-    pc_audio[AUDIO_CMD_END_WAR] = &&pc_end_war;
-    pc_audio[AUDIO_CMD_SEEK] = &&pc_seek;
-    pc_audio[AUDIO_CMD_RECORD_WAIT] = &&pc_record_wait;
-    pc_audio[AUDIO_CMD_RECORD] = &&pc_record;
-    pc_audio[AUDIO_CMD_RECORD_MAP] = &&pc_record_map;
-    pc_audio[AUDIO_CMD_SET_THRESHOLD] = &&pc_set_threshold;
-    pc_audio[AUDIO_CMD_NOTE_ON] = &&pc_note_on;
-    pc_audio[AUDIO_CMD_NOTE_OFF] = &&pc_note_off;
-    pc_audio[AUDIO_CMD_NOTE_OFF_ALL] = &&pc_note_off_all;
-    pc_audio[AUDIO_CMD_RESET_MAPPINGS] = &&pc_reset_mappings;
-    pc_audio[AUDIO_CMD_MIDI_RECORD] = &&pc_midi_record;
-    pc_audio[AUDIO_CMD_MIDI_RECORD_MAP] = &&pc_midi_record_map;
-    pc_audio[AUDIO_CMD_MIDI_RECORD_WAIT] = &&pc_midi_record_wait;
-    pc_audio[AUDIO_CMD_SAVE] = &&pc_save;
-    pc_audio[AUDIO_CMD_DELETE_NOTE] = &&pc_delete_note;
-    pc_audio[AUDIO_CMD_DELETE_ALL_NOTES] = &&pc_delete_all_notes;
-    pc_audio[AUDIO_CMD_REPLACE_NOTE] = &&pc_replace_note;
-    pc_audio[AUDIO_CMD_REPLACE_NOTE_DURATION] = &&pc_replace_note_duration;
-    pc_audio[AUDIO_CMD_REPLACE_NOTE_START] = &&pc_replace_note_start;
-    pc_audio[AUDIO_CMD_COMPACT] = &&pc_compact;
-    pc_audio[AUDIO_CMD_INSERT_NOTE] = &&pc_insert_note;
-    pc_audio[AUDIO_CMD_REVIVE_NOTE] = &&pc_revive_note;
-    pc_audio[AUDIO_CMD_ADD_NOTES] = &&pc_add_notes;
-    pc_audio[AUDIO_CMD_DELETE_NOTES] = &&pc_delete_notes;
-    pc_audio[AUDIO_CMD_ADD_NOTES_SAME] = &&pc_add_notes_same;
-    pc_audio[AUDIO_CMD_DELETE_NOTES_SAME] = &&pc_delete_notes_same;
-    pc_audio[AUDIO_CMD_REVIVE_NOTES] = &&pc_revive_notes;
-    pc_audio[AUDIO_CMD_GET_NOTE_DURATION] = &&pc_get_note_duration;
+    uint8_t* control_payload =
+        war_pool_alloc(pool_a, sizeof(uint8_t) * pc_control->size);
+    memset(control_payload, 0, pc_control->size);
+    uint8_t* tmp_control_payload =
+        war_pool_alloc(pool_a, sizeof(uint8_t) * pc_control->size);
+    memset(tmp_control_payload, 0, pc_control->size);
+    void** pc_control_cmd = war_pool_alloc(
+        pool_a, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
+    pc_control_cmd[CONTROL_END_WAR] = &&end_a;
     atomic_store(&atomics->start_war, 1);
     struct timespec ts = {0, 500000}; // 0.5 ms
-pc_audio:
-    if (war_pc_from_wr(pc, &header, &size, payload)) { goto* pc_audio[header]; }
-    goto pc_audio_done;
-pc_stop:
-    goto pc_audio_done;
-pc_play:
-    goto pc_audio_done;
-pc_pause:
-    goto pc_audio_done;
-pc_get_frames:
-    goto pc_audio_done;
-pc_get_note_duration: {
-    call_carmack("from wr: GET_NOTE_DURATION");
-    goto pc_audio_done;
-}
-pc_add_notes_same: {
-    call_carmack("from wr: add_notes_same");
-    war_note note = *(war_note*)(payload);
-    uint32_t count = *(uint32_t*)(payload + sizeof(war_note));
-    memcpy(tmp_payload, payload + sizeof(note) + sizeof(count), sizeof(uint64_t) * count);
-    uint64_t* ids = (uint64_t*)tmp_payload;
-    for (uint32_t i = 0; i < count; i++) {
-        notes->notes_start_frames[notes->notes_count + i] = note.note_start_frames;
-        notes->notes_duration_frames[notes->notes_count + i] = note.note_duration_frames;
-        notes->note[notes->notes_count + i] = note.note;
-        notes->layer[notes->notes_count + i] = note.layer;
-        notes->notes_gain[notes->notes_count + i] = note.note_gain;
-        notes->notes_attack[notes->notes_count + i] = note.note_attack;
-        notes->notes_sustain[notes->notes_count + i] = note.note_sustain;
-        notes->notes_release[notes->notes_count + i] = note.note_release;
-        notes->id[notes->notes_count + i] = ids[i];
-        notes->alive[notes->notes_count + i] = note.alive;
+    //-------------------------------------------------------------------------
+    // AUDIO LOOP
+    //-------------------------------------------------------------------------
+pc_a: {
+    if (war_pc_from_wr(pc_control, &header, &size, control_payload)) {
+        goto* pc_control_cmd[header];
     }
-    notes->notes_count += count;
-    goto pc_audio_done;
+    goto pc_a_done;
 }
-pc_revive_notes: {
-    call_carmack("from wr: add_notes_already_in");
-    uint32_t* indices = (uint32_t*)(payload + sizeof(uint32_t));
-    uint32_t count = *(uint32_t*)(payload);
-    for (uint32_t i = 0; i < count; i++) { notes->alive[indices[i]] = 1; }
-    goto pc_audio_done;
-}
-pc_delete_notes_same: {
-    call_carmack("from wr: delete_notes_same");
-    uint32_t count = *(uint32_t*)payload;
-    uint32_t* indices = (uint32_t*)(payload + sizeof(uint32_t));
-    for (uint32_t i = 0; i < count; i++) { notes->alive[indices[i]] = 0; }
-    goto pc_audio_done;
-}
-pc_add_note: {
-    call_carmack("from wr: add_note");
-    war_note note = *(war_note*)(payload);
-    notes->notes_start_frames[notes->notes_count] = note.note_start_frames;
-    notes->notes_duration_frames[notes->notes_count] = note.note_duration_frames;
-    notes->note[notes->notes_count] = note.note;
-    notes->layer[notes->notes_count] = note.layer;
-    notes->notes_gain[notes->notes_count] = note.note_gain;
-    notes->notes_attack[notes->notes_count] = note.note_attack;
-    notes->notes_sustain[notes->notes_count] = note.note_sustain;
-    notes->notes_release[notes->notes_count] = note.note_release;
-    notes->id[notes->notes_count] = note.id;
-    notes->alive[notes->notes_count] = note.alive;
-    notes->notes_count++;
-    uint32_t note_quads_max = atomic_load(&ctx_lua->A_NOTES_MAX);
-    if (notes->notes_count >= note_quads_max) {
-        // compaction
-    }
-    goto pc_audio_done;
-}
-pc_delete_note: {
-    call_carmack("from wr: delete_note");
-    uint32_t delete_idx = *(uint32_t*)(payload);
-    notes->alive[delete_idx] = 0;
-    goto pc_audio_done;
-}
-pc_add_notes: {
-    call_carmack("from wr: pc_add_notes");
-    goto pc_audio_done;
-}
-pc_delete_notes: {
-    call_carmack("from wr: pc_delete_notes");
-    uint32_t delete_count = *(uint32_t*)(payload);
-    memcpy(tmp_payload, payload + sizeof(uint32_t), sizeof(uint32_t) * delete_count);
-    uint32_t* delete_indices = (uint32_t*)tmp_payload;
-    for (uint32_t i = 0; i < delete_count; i++) { notes->alive[delete_indices[i]] = 0; }
-    goto pc_audio_done;
-}
-pc_delete_all_notes: {
-    call_carmack("from wr: delete_all_notes");
-    notes->notes_count = 0;
-    goto pc_audio_done;
-}
-pc_compact: {
-    call_carmack("from wr: COMPACT");
-    uint32_t write_idx = 0;
-    for (uint32_t read_idx = 0; read_idx < notes->notes_count; read_idx++) {
-        if (notes->alive[read_idx]) {
-            if (write_idx != read_idx) {
-                notes->alive[write_idx] = notes->alive[read_idx];
-                notes->id[write_idx] = notes->id[read_idx];
-                notes->notes_start_frames[write_idx] = notes->notes_start_frames[read_idx];
-                notes->notes_duration_frames[write_idx] = notes->notes_duration_frames[read_idx];
-                notes->note[write_idx] = notes->note[read_idx];
-                notes->layer[write_idx] = notes->layer[read_idx];
-                notes->notes_phase_increment[write_idx] = notes->notes_phase_increment[read_idx];
-                notes->notes_gain[write_idx] = notes->notes_gain[read_idx];
-                notes->notes_attack[write_idx] = notes->notes_attack[read_idx];
-                notes->notes_sustain[write_idx] = notes->notes_sustain[read_idx];
-                notes->notes_release[write_idx] = notes->notes_release[read_idx];
-            }
-            write_idx++;
-        }
-    }
-    uint32_t note_quads_max = atomic_load(&ctx_lua->A_NOTES_MAX);
-    assert(write_idx < note_quads_max);
-    notes->notes_count = write_idx;
-    goto pc_audio_done;
-}
-pc_insert_note: {
-    call_carmack("from wr: INSERT_NOTE");
-    war_note note = *(war_note*)(payload);
-    uint32_t insert_idx = *(uint32_t*)(payload + sizeof(war_note));
-    // --- Shift elements forward to make space ---
-    for (uint32_t i = notes->notes_count; i > insert_idx; i--) {
-        notes->alive[i] = notes->alive[i - 1];
-        notes->id[i] = notes->id[i - 1];
-        notes->notes_start_frames[i] = notes->notes_start_frames[i - 1];
-        notes->notes_duration_frames[i] = notes->notes_duration_frames[i - 1];
-        notes->note[i] = notes->note[i - 1];
-        notes->layer[i] = notes->layer[i - 1];
-        notes->notes_phase_increment[i] = notes->notes_phase_increment[i - 1];
-        notes->notes_gain[i] = notes->notes_gain[i - 1];
-        notes->notes_attack[i] = notes->notes_attack[i - 1];
-        notes->notes_sustain[i] = notes->notes_sustain[i - 1];
-        notes->notes_release[i] = notes->notes_release[i - 1];
-    }
-    // --- Insert new note ---
-    notes->alive[insert_idx] = note.alive;
-    notes->id[insert_idx] = note.id;
-    notes->notes_start_frames[insert_idx] = note.note_start_frames;
-    notes->notes_duration_frames[insert_idx] = note.note_duration_frames;
-    notes->note[insert_idx] = note.note;
-    notes->layer[insert_idx] = note.layer;
-    notes->notes_phase_increment[insert_idx] = note.note_phase_increment;
-    notes->notes_gain[insert_idx] = note.note_gain;
-    notes->notes_attack[insert_idx] = note.note_attack;
-    notes->notes_sustain[insert_idx] = note.note_sustain;
-    notes->notes_release[insert_idx] = note.note_release;
-    notes->notes_count++;
-    goto pc_audio_done;
-}
-pc_revive_note: {
-    call_carmack("from wr: ADD_NOTE_ALREADY_IN");
-    uint32_t idx = *(uint32_t*)(payload);
-    notes->alive[idx] = 1;
-    goto pc_audio_done;
-}
-pc_replace_note: {
-    call_carmack("from wr: replace_note");
-    goto pc_audio_done;
-}
-pc_replace_note_duration: {
-    call_carmack("from wr: replace_note_duration");
-    goto pc_audio_done;
-}
-pc_replace_note_start: {
-    call_carmack("from wr: replace_note_duration");
-    goto pc_audio_done;
-}
-pc_end_war:
-    goto pc_audio_done;
-pc_seek:
-    call_carmack("from wr: SEEK");
-    uint64_t seek_frames = *(uint64_t*)payload;
-    atomic_store(&atomics->play_frames, seek_frames);
-    goto pc_audio_done;
-pc_record_wait:
-    goto pc_audio_done;
-pc_record:
-    goto pc_audio_done;
-pc_record_map: {
-    uint64_t capture_frames = atomic_load(&atomics->capture_frames);
-    capture_wav->size = 44 + capture_frames * ctx_a->channel_count * sizeof(int16_t);
-    *(war_riff_header*)capture_wav->wav = (war_riff_header){"RIFF", capture_wav->size - 8, "WAVE"};
-    *(war_fmt_chunk*)(capture_wav->wav + sizeof(war_riff_header)) =
-        (war_fmt_chunk){"fmt ",
-                        16,
-                        1,
-                        ctx_a->channel_count,
-                        ctx_a->sample_rate,
-                        ctx_a->sample_rate * ctx_a->channel_count * sizeof(int16_t),
-                        ctx_a->channel_count * sizeof(int16_t),
-                        16};
-    *(war_data_chunk*)(capture_wav->wav + sizeof(war_riff_header) + sizeof(war_fmt_chunk)) = (war_data_chunk){"data", capture_wav->size - 44};
-    wav_result = ftruncate(capture_wav->fd, capture_wav->size);
-    if (wav_result == -1) {
-        call_carmack("ftruncate failed with file_size: %u", capture_wav->size);
-        war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-        goto pc_audio_done;
-    }
-    wav_written = pwrite(capture_wav->fd, capture_wav->wav, capture_wav->size, 0);
-    if ((uint64_t)wav_written != capture_wav->size) {
-        if (wav_written == -1) {
-            call_carmack("write failed");
-        } else {
-            call_carmack("partial write: %zd/%u bytes", wav_written, capture_wav->size);
-        }
-        goto pc_audio_done;
-    }
-    if (size == 0) {
-        call_carmack("size is 0");
-        war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-        goto pc_audio_done;
-    }
-    int16_t note = atomic_exchange(&atomics->map_note, -1);
-    uint64_t layer = atomic_exchange(&atomics->map_layer, -1);
-    ctx_a->over_threshold = 0;
-    if (note == -1 || layer == 0) {
-        call_carmack("invalid note or layer");
-        war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-        goto pc_audio_done;
-    }
-    uint32_t idx = cache->count;
-    if (idx >= (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) {
-        idx = 0;
-        for (uint32_t i = 0; i < cache->count; i++) {
-            uint64_t ts = cache->timestamp[i];
-            if (ts <= cache->timestamp[idx]) { idx = i; }
-        }
-    }
-    *(uint64_t*)(cache->id + idx) = atomic_fetch_add(&atomics->cache_next_id, 1);
-    *(uint64_t*)(cache->timestamp + idx) = atomic_fetch_add(&atomics->cache_next_timestamp, 1);
-    *(int16_t*)(cache->note + idx) = note;
-    *(uint64_t*)(cache->layer + idx) = layer;
-    *(uint32_t*)(cache->fname_size + idx) = size;
-    char* fname = (char*)(cache->fname + idx * atomic_load(&ctx_lua->A_PATH_LIMIT));
-    memcpy(fname, payload, size);
-    int* fd = (int*)(cache->fd + idx);
-    if (*fd != -1) { close(*fd); }
-    *fd = open(fname, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    if (*fd == -1) {
-        call_carmack("failed to open file: %s", fname);
-        war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-        goto pc_audio_done;
-    }
-    void* wav = (void*)(cache->wav + idx * wav_file_size_max);
-    capture_frames = atomic_load(&atomics->capture_frames);
-    uint32_t* file_size = (uint32_t*)(cache->size + idx);
-    *file_size = 44 + capture_frames * ctx_a->channel_count * sizeof(int16_t);
-    *(war_riff_header*)wav = (war_riff_header){"RIFF", *file_size - 8, "WAVE"};
-    *(war_fmt_chunk*)(wav + sizeof(war_riff_header)) = (war_fmt_chunk){"fmt ",
-                                                                       16,
-                                                                       1,
-                                                                       ctx_a->channel_count,
-                                                                       ctx_a->sample_rate,
-                                                                       ctx_a->sample_rate * ctx_a->channel_count * sizeof(int16_t),
-                                                                       ctx_a->channel_count * sizeof(int16_t),
-                                                                       16};
-    *(war_data_chunk*)(wav + sizeof(war_riff_header) + sizeof(war_fmt_chunk)) = (war_data_chunk){"data", *file_size - 44};
-    memcpy(wav + 44, capture_wav + 44, *file_size - 44);
-    wav_result = ftruncate(*fd, *file_size);
-    if (wav_result == -1) {
-        call_carmack("ftruncate failed with file_size: %u", *file_size);
-        call_carmack("closing fd");
-        close(*fd);
-        war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-        goto pc_audio_done;
-    }
-    wav_written = write(*fd, wav, *file_size);
-    if (wav_written != *file_size) {
-        if (wav_written == -1) {
-            call_carmack("write failed");
-        } else {
-            call_carmack("partial write: %zd/%u bytes", wav_written, *file_size);
-        }
-        call_carmack("closing fd");
-        close(*fd);
-        goto pc_audio_done;
-    }
-    int layer_idx = __builtin_ctzll(layer);
-    if (layer == 0) { layer_idx = 0; } // for now just do this
-    memcpy(sequencer->fname + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx) * atomic_load(&ctx_lua->A_PATH_LIMIT), fname, size);
-    *(uint64_t*)(sequencer->id + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx)) = *(uint64_t*)(cache->id + idx);
-    *(uint32_t*)(sequencer->fname_size + (note * atomic_load(&ctx_lua->A_LAYER_COUNT) + layer_idx)) = *(uint32_t*)(cache->fname_size + idx);
-    if (cache->count < (uint32_t)atomic_load(&ctx_lua->A_CACHE_SIZE)) { cache->count++; }
-    memcpy(tmp_payload, &size, sizeof(uint32_t));
-    memcpy(tmp_payload + sizeof(uint32_t), fname, size);
-    memcpy(tmp_payload + sizeof(uint32_t) + size, file_size, sizeof(uint32_t));
-    war_pc_to_wr(pc, AUDIO_CMD_WRITE, sizeof(uint32_t) + size + sizeof(uint32_t), tmp_payload);
-    goto pc_audio_done;
-}
-pc_set_threshold:
-    goto pc_audio_done;
-pc_note_on: {
-    uint32_t note = *(uint32_t*)payload;
-    atomic_store(&atomics->notes_on_previous[note], atomic_load(&atomics->notes_on[note]));
-    atomic_store(&atomics->notes_on[note], 1);
-    goto pc_audio_done;
-}
-pc_note_off: {
-    uint32_t note = *(uint32_t*)payload;
-    atomic_store(&atomics->notes_on_previous[note], atomic_load(&atomics->notes_on[note]));
-    atomic_store(&atomics->notes_on[note], 0);
-    goto pc_audio_done;
-}
-pc_note_off_all: {
-    for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) {
-        atomic_store(&atomics->notes_on_previous[i], atomic_load(&atomics->notes_on[i]));
-        atomic_store(&atomics->notes_on[i], 0);
-    }
-    goto pc_audio_done;
-}
-pc_reset_mappings:
-    goto pc_audio_done;
-pc_midi_record: { goto pc_audio_done; }
-pc_midi_record_wait: { goto pc_audio_done; }
-pc_midi_record_map: {
-    // int16_t map_note = atomic_exchange(&atomics->map_note, -1);
-    // war_pc_to_wr(pc, AUDIO_CMD_NOTE_OFF, sizeof(map_note), &map_note);
-    // if (map_note == -1) {
-    //     war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-    //     for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) { record_samples_notes_indices[i] = -1; }
-    //     memset(record_samples->samples, 0, sizeof(int16_t*) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
-    //     atomic_load(&ctx_lua->A_LAYER_COUNT)); memset(record_samples->samples_frames_start,
-    //            0,
-    //            sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    //     memset(record_samples->samples_frames_duration,
-    //            0,
-    //            sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    //     memset(record_samples->samples_count, 0, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    //     memset(record_samples_notes_indices, -1, sizeof(int32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    //     record_samples->samples_count[0] = 0;
-    //     goto pc_audio_done;
-    // }
-    // uint64_t notes_frames_duration = 0;
-    // int samples_i = map_note * atomic_load(&ctx_lua->A_LAYER_COUNT);
-    // for (uint32_t i = 0; i < record_samples->samples_count[0]; i++) {
-    //     if (!record_samples->samples_active[i]) { continue; }
-    //     samples->samples[samples_i] = record_samples->samples[i];
-    //     samples->samples_frames_start[samples_i] = record_samples->samples_frames_start[i];
-    //     samples->samples_frames_duration[samples_i] = record_samples->samples_frames_duration[i];
-    //     samples->samples_frames[samples_i] = 0;
-    //     samples->samples_attack[samples_i] = record_samples->samples_attack[i];
-    //     samples->samples_sustain[samples_i] = record_samples->samples_sustain[i];
-    //     samples->samples_release[samples_i] = record_samples->samples_release[i];
-    //     samples->samples_gain[samples_i] = record_samples->samples_gain[i];
-    //     samples->samples_active[samples_i] = 1;
-    //     if (samples->samples_frames_start[samples_i] + samples->samples_frames_duration[samples_i] >= notes_frames_duration) {
-    //         notes_frames_duration = samples->samples_frames_start[samples_i] + samples->samples_frames_duration[samples_i];
-    //     }
-    //     samples->samples_count[map_note]++;
-    //     samples_i++;
-    //     call_carmack("sample: %u", samples->samples[samples_i]);
-    //     call_carmack("samples_frames_start: %u", samples->samples_frames_start[samples_i]);
-    //     call_carmack("samples_frames_duration: %u", samples->samples_frames_duration[samples_i]);
-    // }
-    // samples->notes_attack[map_note] = record_samples->notes_attack[0];
-    // samples->notes_sustain[map_note] = record_samples->notes_sustain[0];
-    // samples->notes_release[map_note] = record_samples->notes_release[0];
-    // samples->notes_gain[map_note] = record_samples->notes_gain[0];
-    // samples->notes_frames_start[map_note] = 0;
-    // samples->notes_frames_duration[map_note] = notes_frames_duration;
-    // for (int i = 0; i < atomic_load(&ctx_lua->A_NOTE_COUNT); i++) { record_samples_notes_indices[i] = -1; }
-    // memset(record_samples->samples, 0, sizeof(int16_t*) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    // memset(record_samples->samples_frames_start,
-    //        0,
-    //        sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    // memset(record_samples->samples_frames_duration,
-    //        0,
-    //        sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) * atomic_load(&ctx_lua->A_LAYER_COUNT));
-    // memset(record_samples->samples_count, 0, sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    // memset(record_samples_notes_indices, -1, sizeof(int32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    // record_samples->samples_count[0] = 0;
-    // war_pc_to_wr(pc, AUDIO_CMD_STOP, 0, NULL);
-    goto pc_audio_done;
-}
-pc_save: {
-    call_carmack("from wr: SAVE");
-    goto pc_audio_done;
-}
-pc_audio_done:
-    switch (atomics->state) {
-    case AUDIO_CMD_END_WAR: {
-        goto end_audio;
-    }
-    }
-    pw_loop_iterate(ctx_a->pw_loop, 1);
+pc_a_done: {
+    pw_loop_iterate(ctx_pw->loop, 1);
     nanosleep(&ts, NULL);
-    goto pc_audio;
-end_audio:
-    pw_stream_destroy(ctx_a->play_stream);
-    pw_stream_destroy(ctx_a->capture_stream);
-    pw_loop_destroy(ctx_a->pw_loop);
+    goto pc_a;
+}
+end_a: {
+    pw_stream_destroy(ctx_pw->play_stream);
+    pw_stream_destroy(ctx_pw->capture_stream);
+    pw_loop_destroy(ctx_pw->loop);
     pw_deinit();
-    for (uint32_t i = 0; i < cache->count; i++) {
-        if (cache->fd[i] != -1) { close(cache->fd[i]); }
-    }
     end("war_audio");
     return 0;
+}
 }

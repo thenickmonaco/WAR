@@ -35,7 +35,7 @@ ctx_lua = {
     A_NOTE_COUNT                        = 128,
     A_LAYERS_IN_RAM                     = 13,
     A_LAYER_COUNT                       = 9,
-    A_USERDATA                          = 9,
+    A_DATA                              = 1,
     A_WARMUP_FRAMES_FACTOR              = 1000, -- bigger value means less recording warmup frames
     A_NOTES_MAX                         = 20000,
     A_DEFAULT_ATTACK                    = 0.0,
@@ -45,6 +45,8 @@ ctx_lua = {
     A_DEFAULT_COLUMNS_PER_BEAT          = 4.0,
     A_CACHE_SIZE                        = 100,
     A_PATH_LIMIT                        = 4096,
+    A_SCHED_FIFO_PRIORITY               = 10,
+    A_BUILDER_DATA_SIZE                 = 1024,
     -- window render
     WR_VIEWS_SAVED                      = 13,
     WR_COLOR_STEP                       = 43.2,
@@ -74,9 +76,10 @@ ctx_lua = {
     -- pool
     POOL_ALIGNMENT                      = 256,
     -- cmd
-    CMD_COUNT                           = 35,
+    CMD_COUNT                           = 1,
     -- pc
-    PC_BUFFER_SIZE                      = 32864, -- 32864
+    PC_CONTROL_BUFFER_SIZE              = 65536, -- 2^16
+    PC_DATA_BUFFER_SIZE                 = 65536, -- 2^16
     -- vk
     VK_ATLAS_WIDTH                      = 8192,
     VK_ATLAS_HEIGHT                     = 8192,
@@ -2298,79 +2301,13 @@ end
 war_flattened = war_flatten_keymap(keymap)
 
 pool_a = {
-    { name = "capture_wav",                          type = "war_wav",           count = 1 },
-    { name = "capture_wav.fname",                    type = "char",              count = ctx_lua.A_PATH_LIMIT },
-    -- midi
-    { name = "ctx_midi",                             type = "war_midi_context",  count = 1 },
-    { name = "ctx_midi.start_frames",                type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    -- sequencer
-    { name = "sequencer",                            type = "war_sequencer",     count = 1 },
-    { name = "sequencer.id",                         type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
-    { name = "sequencer.fname",                      type = "char",              count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT * ctx_lua.A_PATH_LIMIT },
-    { name = "sequencer.fname_size",                 type = "uint32_t",          count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
-
-    -- Cache
-    { name = "cache",                                type = "war_cache_audio",   count = 1 },
-    { name = "cache.id",                             type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.timestamp",                      type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.fd",                             type = "int",               count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.wav",                            type = "void*",             count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.size",                           type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.size",                           type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.fname",                          type = "char",              count = ctx_lua.A_CACHE_SIZE * ctx_lua.A_PATH_LIMIT },
-    { name = "cache.fname_size",                     type = "uint32_t",          count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.note",                           type = "int16_t",           count = ctx_lua.A_CACHE_SIZE },
-    { name = "cache.layer",                          type = "uint64_t",          count = ctx_lua.A_CACHE_SIZE },
-
-    -- Atoms
-    { name = "atomics.notes_on",                     type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT },
-    { name = "atomics.notes_on_previous",            type = "uint8_t",           count = ctx_lua.A_NOTE_COUNT },
-
-    -- Audio Context struct itself
-    { name = "audio_context",                        type = "war_audio_context", count = 1 },
-    { name = "audio_context.sample_frames",          type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "audio_context.sample_frames_duration", type = "uint64_t",          count = ctx_lua.A_NOTE_COUNT },
-    { name = "audio_context.sample_phase",           type = "float",             count = ctx_lua.A_NOTE_COUNT },
-    { name = "audio_context.record_buffer",          type = "int16_t",           count = ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
-    { name = "audio_context.resample_buffer",        type = "int16_t",           count = ctx_lua.A_SAMPLE_RATE * ctx_lua.A_SAMPLE_DURATION * ctx_lua.A_CHANNEL_COUNT },
-
-    -- war_notes
-    { name = "notes",                                type = "war_notes",         count = 1 },
-    { name = "notes.alive",                          type = "uint8_t",           count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.id",                             type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_start_frames",             type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_duration_frames",          type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_phase_increment",          type = "float",             count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_velocity",                 type = "float",             count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_sample_index",             type = "int16_t",           count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_layer",                    type = "uint64_t",          count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_attack",                   type = "float",             count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_sustain",                  type = "float",             count = ctx_lua.A_NOTES_MAX },
-    { name = "notes.notes_release",                  type = "float",             count = ctx_lua.A_NOTES_MAX },
-
-    -- war_notes undo batch
-    { name = "notes",                                type = "war_notes",         count = 1 },
-    { name = "notes.alive",                          type = "uint8_t",           count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.id",                             type = "uint64_t",          count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_start_frames",             type = "uint64_t",          count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_duration_frames",          type = "uint64_t",          count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_phase_increment",          type = "float",             count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_velocity",                 type = "float",             count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_sample_index",             type = "uint32_t",          count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_attack",                   type = "float",             count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_sustain",                  type = "float",             count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-    { name = "notes.notes_release",                  type = "float",             count = ctx_lua.WR_UNDO_NODES_MAX * ctx_lua.WR_UNDO_NOTES_BATCH_MAX },
-
-    -- Record indices and userdata
-    { name = "record_samples_notes_indices",         type = "int32_t",           count = ctx_lua.A_NOTE_COUNT },
-    { name = "userdata",                             type = "void*",             count = ctx_lua.A_USERDATA },
-
-    -- payload, pc_audio, play_buffer, record_buffer
-    { name = "pc_audio",                             type = "void*",             count = ctx_lua.CMD_COUNT },
-    { name = "payload",                              type = "uint8_t",           count = ctx_lua.PC_BUFFER_SIZE },
-    { name = "tmp_payload",                          type = "uint8_t",           count = ctx_lua.PC_BUFFER_SIZE },
-    { name = "play_buffer",                          type = "uint8_t",           count = 1024 },
-    { name = "record_buffer",                        type = "uint8_t",           count = 1024 },
+    { name = "ctx_pw",                      type = "war_pipewire_context", count = 1 },
+    { name = "ctx_pw.play_builder_data",    type = "uint8_t",              count = ctx_lua.A_BUILDER_DATA_SIZE },
+    { name = "ctx_pw.capture_builder_data", type = "uint8_t",              count = ctx_lua.A_BUILDER_DATA_SIZE },
+    { name = "ctx_pw.data",                 type = "void*",                count = ctx_lua.A_DATA },
+    { name = "control_payload",             type = "uint8_t",              count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
+    { name = "tmp_control_payload",         type = "uint8_t",              count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
+    { name = "pc_control_cmd",              type = "void*",                count = ctx_lua.CMD_COUNT },
 }
 
 pool_wr = {
@@ -2457,8 +2394,8 @@ pool_wr = {
     { name = "msg_buffer",                          type = "uint8_t",                 count = ctx_lua.WR_WAYLAND_MSG_BUFFER_SIZE },
     { name = "obj_op",                              type = "void*",                   count = ctx_lua.WR_WAYLAND_MAX_OBJECTS * ctx_lua.WR_WAYLAND_MAX_OP_CODES },
     { name = "pc_window_render",                    type = "void*",                   count = ctx_lua.CMD_COUNT },
-    { name = "payload",                             type = "uint8_t",                 count = ctx_lua.PC_BUFFER_SIZE },
-    { name = "tmp_payload",                         type = "uint8_t",                 count = ctx_lua.PC_BUFFER_SIZE },
+    { name = "control_payload",                     type = "uint8_t",                 count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
+    { name = "tmp_control_payload",                 type = "uint8_t",                 count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
     { name = "input_sequence",                      type = "char",                    count = ctx_lua.WR_INPUT_SEQUENCE_LENGTH_MAX },
     { name = "prompt",                              type = "char",                    count = ctx_lua.WR_INPUT_SEQUENCE_LENGTH_MAX },
     -- { name = "cwd",                                 type = "char",              count = ctx_lua.A_PATH_LIMIT },

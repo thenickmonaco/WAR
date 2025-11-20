@@ -52,7 +52,8 @@
 
 #define STR(x) #x
 
-static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
+static inline int war_load_lua_config(war_lua_context* ctx_lua,
+                                      const char* lua_file) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
@@ -69,12 +70,12 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
         return -1;
     }
 
-#define LOAD_INT(field)                                                                                                                       \
-    lua_getfield(L, -1, #field);                                                                                                              \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                                                                                                     \
-        ctx_lua->field = (int)lua_tointeger(L, -1);                                                                                           \
-        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field);                                                                             \
-    }                                                                                                                                         \
+#define LOAD_INT(field)                                                        \
+    lua_getfield(L, -1, #field);                                               \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
+        ctx_lua->field = (int)lua_tointeger(L, -1);                            \
+        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field);              \
+    }                                                                          \
     lua_pop(L, 1);
 
     // audio
@@ -83,7 +84,7 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(A_NOTE_COUNT)
     LOAD_INT(A_LAYER_COUNT)
     LOAD_INT(A_LAYERS_IN_RAM)
-    LOAD_INT(A_USERDATA)
+    LOAD_INT(A_DATA)
     LOAD_INT(A_BASE_FREQUENCY)
     LOAD_INT(A_BASE_NOTE)
     LOAD_INT(A_EDO)
@@ -91,6 +92,7 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     LOAD_INT(A_CACHE_SIZE)
     LOAD_INT(A_PATH_LIMIT)
     LOAD_INT(A_WARMUP_FRAMES_FACTOR)
+    LOAD_INT(A_SCHED_FIFO_PRIORITY)
     // window render
     LOAD_INT(WR_VIEWS_SAVED)
     LOAD_INT(WR_WARPOON_TEXT_COLS)
@@ -121,16 +123,17 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     // cmd
     LOAD_INT(CMD_COUNT)
     // pc
-    LOAD_INT(PC_BUFFER_SIZE)
+    LOAD_INT(PC_CONTROL_BUFFER_SIZE)
+    LOAD_INT(PC_DATA_BUFFER_SIZE)
 
 #undef LOAD_INT
 
-#define LOAD_FLOAT(field)                                                                                                                     \
-    lua_getfield(L, -1, #field);                                                                                                              \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                                                                                                     \
-        ctx_lua->field = (float)lua_tonumber(L, -1);                                                                                          \
-        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);                                                                             \
-    }                                                                                                                                         \
+#define LOAD_FLOAT(field)                                                      \
+    lua_getfield(L, -1, #field);                                               \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
+        ctx_lua->field = (float)lua_tonumber(L, -1);                           \
+        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);              \
+    }                                                                          \
     lua_pop(L, 1);
 
     LOAD_FLOAT(A_DEFAULT_ATTACK)
@@ -151,12 +154,12 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
 
 #undef LOAD_FLOAT
 
-#define LOAD_DOUBLE(field)                                                                                                                    \
-    lua_getfield(L, -1, #field);                                                                                                              \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                                                                                                     \
-        ctx_lua->field = (double)lua_tonumber(L, -1);                                                                                         \
-        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);                                                                             \
-    }                                                                                                                                         \
+#define LOAD_DOUBLE(field)                                                     \
+    lua_getfield(L, -1, #field);                                               \
+    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
+        ctx_lua->field = (double)lua_tonumber(L, -1);                          \
+        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);              \
+    }                                                                          \
     lua_pop(L, 1);
 
     LOAD_DOUBLE(A_DEFAULT_COLUMNS_PER_BEAT)
@@ -166,15 +169,16 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
 
 #undef LOAD_DOUBLE
 
-#define LOAD_STRING(field)                                                                                                                    \
-    lua_getfield(L, -1, #field);                                                                                                              \
-    if (lua_isstring(L, -1)) {                                                                                                                \
-        char* str = strdup(lua_tostring(L, -1));                                                                                              \
-        if (str) {                                                                                                                            \
-            atomic_store(&ctx_lua->field, str);                                                                                               \
-            call_carmack("ctx_lua: %s = %s", #field, atomic_load(&ctx_lua->field));                                                           \
-        }                                                                                                                                     \
-    }                                                                                                                                         \
+#define LOAD_STRING(field)                                                     \
+    lua_getfield(L, -1, #field);                                               \
+    if (lua_isstring(L, -1)) {                                                 \
+        char* str = strdup(lua_tostring(L, -1));                               \
+        if (str) {                                                             \
+            atomic_store(&ctx_lua->field, str);                                \
+            call_carmack(                                                      \
+                "ctx_lua: %s = %s", #field, atomic_load(&ctx_lua->field));     \
+        }                                                                      \
+    }                                                                          \
     lua_pop(L, 1);
 
     LOAD_STRING(CWD)
@@ -185,7 +189,9 @@ static inline int war_load_lua(war_lua_context* ctx_lua, const char* lua_file) {
     return 0;
 }
 
-static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lua, const char* lua_file) {
+static inline size_t war_get_pool_a_size(war_pool* pool,
+                                         war_lua_context* ctx_lua,
+                                         const char* lua_file) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
@@ -245,6 +251,8 @@ static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lu
                 type_size = sizeof(char);
             else if (strcmp(type, "war_midi_context") == 0)
                 type_size = sizeof(war_midi_context);
+            else if (strcmp(type, "war_pipewire_context") == 0)
+                type_size = sizeof(war_pipewire_context);
             else if (strcmp(type, "ssize_t") == 0)
                 type_size = sizeof(ssize_t);
             else if (strcmp(type, "int16_t*") == 0)
@@ -288,7 +296,9 @@ static inline size_t war_get_pool_a_size(war_pool* pool, war_lua_context* ctx_lu
     return total_size;
 }
 
-static inline size_t war_get_pool_wr_size(war_pool* pool, war_lua_context* ctx_lua, const char* lua_file) {
+static inline size_t war_get_pool_wr_size(war_pool* pool,
+                                          war_lua_context* ctx_lua,
+                                          const char* lua_file) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
@@ -410,21 +420,10 @@ static inline void* war_pool_alloc(war_pool* pool, size_t size) {
     return ptr;
 }
 
-static inline void war_get_top_text(war_window_render_context* ctx_wr, war_lua_context* ctx_lua, char* tmp_str, char* prompt) {
-    memset(ctx_wr->text_top_status_bar, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    if (getcwd(tmp_str, atomic_load(&ctx_lua->A_PATH_LIMIT)) != NULL) {
-        memcpy(ctx_wr->text_top_status_bar, tmp_str + 1, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    }
-    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    snprintf(tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX), "%.0f,%.0f", ctx_wr->cursor_pos_y, ctx_wr->cursor_pos_x);
-    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index, tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_middle_index, ctx_wr->layers_active, ctx_wr->layers_active_count);
-}
-
-static inline void
-war_layer_flux(war_window_render_context* ctx_wr, war_atomics* atomics, uint64_t* note_layers, war_color_context* ctx_color) {
+static inline void war_layer_flux(war_window_render_context* ctx_wr,
+                                  war_atomics* atomics,
+                                  uint64_t* note_layers,
+                                  war_color_context* ctx_color) {
     uint64_t layer = note_layers[(int)ctx_wr->cursor_pos_y];
     atomic_store(&atomics->layer, layer);
     ctx_wr->layers_active_count = __builtin_popcountll(layer);
@@ -458,109 +457,31 @@ war_layer_flux(war_window_render_context* ctx_wr, war_atomics* atomics, uint64_t
     }
 }
 
-static inline void war_get_middle_text(
-    war_window_render_context* ctx_wr, war_views* views, war_atomics* atomics, war_lua_context* ctx_lua, char* tmp_str, char* prompt) {
-    memset(ctx_wr->text_middle_status_bar, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    switch (ctx_wr->mode) {
-    case MODE_NORMAL:
-        uint8_t repeat = atomic_load(&atomics->repeat_section);
-        if (repeat) {
-            double start_frames = (double)atomic_load(&atomics->repeat_start_frames);
-            double end_frames = (double)atomic_load(&atomics->repeat_end_frames);
-            double bpm = atomic_load(&ctx_lua->A_BPM);
-            double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
-            uint32_t grid_start = (uint32_t)((start_frames * bpm * 4.0) / (60.0 * sample_rate));
-            uint32_t grid_end = (uint32_t)((end_frames * bpm * 4.0) / (60.0 * sample_rate));
-            memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-            snprintf(tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX), "R:%u,%u", grid_start, grid_end);
-            memcpy(
-                ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, tmp_str, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        }
-        if (ctx_wr->layer_flux) {
-            int offset = (repeat) ? 6 : 0;
-            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index + offset, "FLUX", sizeof("FLUX"));
-        }
-        if (ctx_wr->cursor_blink_state) {
-            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
-            uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ? sizeof("BLINK") : sizeof("BPM");
-            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_end_index + 2, (size == sizeof("BLINK")) ? "BLINK" : "BPM", size);
-        }
-        int offset = ctx_wr->text_status_bar_end_index;
-        memcpy(ctx_wr->text_middle_status_bar + offset, ctx_wr->input_sequence, ctx_wr->num_chars_in_sequence);
-        break;
-    case MODE_VISUAL:
-        memcpy(ctx_wr->text_middle_status_bar, "-- VISUAL --", sizeof("-- VISUAL --"));
-        break;
-    case MODE_VIEWS:
-        if (views->warpoon_mode == MODE_VISUAL_LINE) {
-            memcpy(ctx_wr->text_middle_status_bar, "-- VIEWS -- -- VISUAL LINE --", sizeof("-- VIEWS -- -- VISUAL LINE --"));
-            break;
-        }
-        memcpy(ctx_wr->text_middle_status_bar, "-- VIEWS --", sizeof("-- VIEWS --"));
-        break;
-    case MODE_COMMAND: {
-        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        uint32_t max_cols = atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX);
-        if (ctx_wr->num_chars_in_prompt > 0) {
-            snprintf(tmp_str, ctx_wr->num_chars_in_sequence + ctx_wr->num_chars_in_prompt + 3, "%s: %s", prompt, ctx_wr->input_sequence);
-            memcpy(ctx_wr->text_middle_status_bar, tmp_str, ctx_wr->num_chars_in_prompt + ctx_wr->num_chars_in_sequence + 3);
-            break;
-        }
-        snprintf(tmp_str, ctx_wr->num_chars_in_sequence + 2, ":%s", ctx_wr->input_sequence);
-        memcpy(ctx_wr->text_middle_status_bar, tmp_str, ctx_wr->num_chars_in_sequence + 2);
-        break;
-    }
-    case MODE_MIDI: {
-        switch (atomic_load(&atomics->state)) {
-        case AUDIO_CMD_MIDI_RECORD_WAIT:
-            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI CAPTURE WAIT --", sizeof("-- MIDI CAPTURE WAIT --"));
-            break;
-        case AUDIO_CMD_MIDI_RECORD:
-            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI CAPTURE --", sizeof("-- MIDI CAPTURE --"));
-            break;
-        case AUDIO_CMD_MIDI_RECORD_MAP:
-            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI CAPTURE MAP --", sizeof("-- MIDI CAPTURE MAP --"));
-            break;
-        default:
-            memcpy(ctx_wr->text_middle_status_bar, "-- MIDI --", sizeof("-- MIDI --"));
-            break;
-        }
-        uint8_t loop = atomic_load(&atomics->loop);
-        uint8_t midi_toggle = ctx_wr->midi_toggle;
-        if (loop && midi_toggle) {
-            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, "LOOP TOGGLE", sizeof("LOOP TOGGLE"));
-        } else if (loop && !midi_toggle) {
-            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, "LOOP", sizeof("LOOP"));
-        } else if (!loop && midi_toggle) {
-            memcpy(ctx_wr->text_middle_status_bar + ctx_wr->text_status_bar_middle_index, "TOGGLE", sizeof("TOGGLE"));
-        }
-        break;
-    }
-    case MODE_CAPTURE:
-        switch (atomic_load(&atomics->state)) {
-        case AUDIO_CMD_RECORD_WAIT:
-            memcpy(ctx_wr->text_middle_status_bar, "-- CAPTURE WAIT --", sizeof("-- CAPTURE WAIT --"));
-            break;
-        case AUDIO_CMD_RECORD:
-            memcpy(ctx_wr->text_middle_status_bar, "-- CAPTURE --", sizeof("-- CAPTURE --"));
-            break;
-        case AUDIO_CMD_RECORD_MAP:
-            memcpy(ctx_wr->text_middle_status_bar, "-- CAPTURE MAP --", sizeof("-- CAPTURE MAP --"));
-            break;
-        }
-        break;
-    }
-}
+static inline void war_get_top_text(war_window_render_context* ctx_wr,
+                                    war_lua_context* ctx_lua,
+                                    char* tmp_str,
+                                    char* prompt) {}
 
-static inline void war_get_bottom_text(war_window_render_context* ctx_wr, war_lua_context* ctx_lua, char* tmp_str, char* prompt) {
-    memset(ctx_wr->text_bottom_status_bar, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memcpy(ctx_wr->text_bottom_status_bar, "[WAR] 1:roll*", sizeof("[WAR] 1:roll*"));
-}
+static inline void war_get_middle_text(war_window_render_context* ctx_wr,
+                                       war_views* views,
+                                       war_atomics* atomics,
+                                       war_lua_context* ctx_lua,
+                                       char* tmp_str,
+                                       char* prompt) {}
 
-static inline void war_get_local_time(char* timestamp, war_lua_context* ctx_lua) {
+static inline void war_get_bottom_text(war_window_render_context* ctx_wr,
+                                       war_lua_context* ctx_lua,
+                                       char* tmp_str,
+                                       char* prompt) {}
+
+static inline void war_get_local_time(char* timestamp,
+                                      war_lua_context* ctx_lua) {
     time_t now = time(NULL);
     struct tm* tm_info = localtime(&now);
-    strftime(timestamp, atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX), "%H:%M:%S, %m-%d-%Y", tm_info);
+    strftime(timestamp,
+             atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX),
+             "%H:%M:%S, %m-%d-%Y",
+             tm_info);
 }
 
 static inline void war_get_warpoon_text(war_views* views) {
@@ -581,7 +502,8 @@ static inline void war_get_warpoon_text(war_views* views) {
     }
 }
 
-static inline void war_warpoon_delete_at_i(war_views* views, uint32_t i_delete) {
+static inline void war_warpoon_delete_at_i(war_views* views,
+                                           uint32_t i_delete) {
     if (i_delete >= views->views_count) return;
     uint32_t last = views->views_count - 1;
     // Shift all SoA arrays to the left to fill the gap
@@ -623,7 +545,8 @@ static inline void war_warpoon_shift_up(war_views* views) {
 }
 
 static inline void war_warpoon_shift_down(war_views* views) {
-    if (views->warpoon_row == 0) return; // already at bottom in your indexing logic
+    if (views->warpoon_row == 0)
+        return; // already at bottom in your indexing logic
 
     uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
     if (i_views + 1 >= views->views_count) return;
@@ -652,15 +575,19 @@ static inline void war_warpoon_shift_down(war_views* views) {
 
 // --------------------------
 // Writer: WR -> Audio (to_a)
-static inline bool war_pc_to_a(war_producer_consumer* pc, uint32_t header, uint32_t payload_size, const void* payload) {
+static inline bool war_pc_to_a(war_producer_consumer* pc,
+                               uint32_t header,
+                               uint32_t payload_size,
+                               const void* payload) {
     uint32_t total_size = 8 + payload_size; // header(4) + size(4) + payload
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
     // free bytes calculation (circular buffer)
-    uint32_t free_bytes = (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
+    uint32_t free_bytes =
+        (pc->size + read_index - write_index - 1) & (pc->size - 1);
     if (free_bytes < total_size) return false;
     // --- write header (4) + size (4) allowing split ---
-    uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
+    uint32_t cont_bytes = pc->size - write_index;
     if (cont_bytes >= 8) {
         // contiguous place for header+size
         *(uint32_t*)(pc->to_a + write_index) = header;
@@ -678,30 +605,36 @@ static inline bool war_pc_to_a(war_producer_consumer* pc, uint32_t header, uint3
     }
     // --- write payload (may be zero length) allowing split ---
     if (payload_size) {
-        uint32_t payload_write_pos = (write_index + 8) & (PC_BUFFER_SIZE - 1);
-        uint32_t first_chunk = PC_BUFFER_SIZE - payload_write_pos;
+        uint32_t payload_write_pos = (write_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_write_pos;
         if (first_chunk >= payload_size) {
             memcpy(pc->to_a + payload_write_pos, payload, payload_size);
         } else {
             // wrap
             memcpy(pc->to_a + payload_write_pos, payload, first_chunk);
-            memcpy(pc->to_a, (const uint8_t*)payload + first_chunk, payload_size - first_chunk);
+            memcpy(pc->to_a,
+                   (const uint8_t*)payload + first_chunk,
+                   payload_size - first_chunk);
         }
     }
     // commit write index
-    pc->i_to_a = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
+    pc->i_to_a = (write_index + total_size) & (pc->size - 1);
     return true;
 }
 
 // --------------------------
 // Reader: Audio <- WR (from_wr)
-static inline bool war_pc_from_wr(war_producer_consumer* pc, uint32_t* out_header, uint32_t* out_size, void* out_payload) {
+static inline bool war_pc_from_wr(war_producer_consumer* pc,
+                                  uint32_t* out_header,
+                                  uint32_t* out_size,
+                                  void* out_payload) {
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
-    uint32_t used_bytes = (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
+    uint32_t used_bytes =
+        (pc->size + write_index - read_index) & (pc->size - 1);
     if (used_bytes < 8) return false; // need at least header+size
     // read header+size (handle split)
-    uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
+    uint32_t cont_bytes = pc->size - read_index;
     if (cont_bytes >= 8) {
         *out_header = *(uint32_t*)(pc->to_a + read_index);
         *out_size = *(uint32_t*)(pc->to_a + read_index + 4);
@@ -720,30 +653,36 @@ static inline bool war_pc_from_wr(war_producer_consumer* pc, uint32_t* out_heade
     if (used_bytes < total_size) return false; // not all payload present yet
     // read payload (if any)
     if (*out_size) {
-        uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
-        uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
+        uint32_t payload_start = (read_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_start;
         if (first_chunk >= *out_size) {
             memcpy(out_payload, pc->to_a + payload_start, *out_size);
         } else {
             memcpy(out_payload, pc->to_a + payload_start, first_chunk);
-            memcpy((uint8_t*)out_payload + first_chunk, pc->to_a, *out_size - first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk,
+                   pc->to_a,
+                   *out_size - first_chunk);
         }
     }
     // commit read index
-    pc->i_from_wr = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
+    pc->i_from_wr = (read_index + total_size) & (pc->size - 1);
     return true;
 }
 
 // --------------------------
 // Writer: Main -> WR (to_wr)
-static inline bool war_pc_to_wr(war_producer_consumer* pc, uint32_t header, uint32_t payload_size, const void* payload) {
+static inline bool war_pc_to_wr(war_producer_consumer* pc,
+                                uint32_t header,
+                                uint32_t payload_size,
+                                const void* payload) {
     uint32_t total_size = 8 + payload_size;
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
-    uint32_t free_bytes = (PC_BUFFER_SIZE + read_index - write_index - 1) & (PC_BUFFER_SIZE - 1);
+    uint32_t free_bytes =
+        (pc->size + read_index - write_index - 1) & (pc->size - 1);
     if (free_bytes < total_size) return false;
     // header+size
-    uint32_t cont_bytes = PC_BUFFER_SIZE - write_index;
+    uint32_t cont_bytes = pc->size - write_index;
     if (cont_bytes >= 8) {
         *(uint32_t*)(pc->to_wr + write_index) = header;
         *(uint32_t*)(pc->to_wr + write_index + 4) = payload_size;
@@ -753,33 +692,40 @@ static inline bool war_pc_to_wr(war_producer_consumer* pc, uint32_t header, uint
             *(uint32_t*)pc->to_wr = payload_size;
         } else {
             *(uint16_t*)(pc->to_wr + write_index) = (uint16_t)header;
-            *(uint16_t*)(pc->to_wr + write_index + 2) = (uint16_t)(header >> 16);
+            *(uint16_t*)(pc->to_wr + write_index + 2) =
+                (uint16_t)(header >> 16);
             *(uint32_t*)pc->to_wr = payload_size;
         }
     }
     // payload
     if (payload_size) {
-        uint32_t payload_write_pos = (write_index + 8) & (PC_BUFFER_SIZE - 1);
-        uint32_t first_chunk = PC_BUFFER_SIZE - payload_write_pos;
+        uint32_t payload_write_pos = (write_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_write_pos;
         if (first_chunk >= payload_size) {
             memcpy(pc->to_wr + payload_write_pos, payload, payload_size);
         } else {
             memcpy(pc->to_wr + payload_write_pos, payload, first_chunk);
-            memcpy(pc->to_wr, (const uint8_t*)payload + first_chunk, payload_size - first_chunk);
+            memcpy(pc->to_wr,
+                   (const uint8_t*)payload + first_chunk,
+                   payload_size - first_chunk);
         }
     }
-    pc->i_to_wr = (write_index + total_size) & (PC_BUFFER_SIZE - 1);
+    pc->i_to_wr = (write_index + total_size) & (pc->size - 1);
     return true;
 }
 
 // --------------------------
 // Reader: WR <- Main (from_a)
-static inline bool war_pc_from_a(war_producer_consumer* pc, uint32_t* out_header, uint32_t* out_size, void* out_payload) {
+static inline bool war_pc_from_a(war_producer_consumer* pc,
+                                 uint32_t* out_header,
+                                 uint32_t* out_size,
+                                 void* out_payload) {
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
-    uint32_t used_bytes = (PC_BUFFER_SIZE + write_index - read_index) & (PC_BUFFER_SIZE - 1);
+    uint32_t used_bytes =
+        (pc->size + write_index - read_index) & (pc->size - 1);
     if (used_bytes < 8) return false;
-    uint32_t cont_bytes = PC_BUFFER_SIZE - read_index;
+    uint32_t cont_bytes = pc->size - read_index;
     if (cont_bytes >= 8) {
         *out_header = *(uint32_t*)(pc->to_wr + read_index);
         *out_size = *(uint32_t*)(pc->to_wr + read_index + 4);
@@ -797,16 +743,18 @@ static inline bool war_pc_from_a(war_producer_consumer* pc, uint32_t* out_header
     uint32_t total_size = 8 + *out_size;
     if (used_bytes < total_size) return false;
     if (*out_size) {
-        uint32_t payload_start = (read_index + 8) & (PC_BUFFER_SIZE - 1);
-        uint32_t first_chunk = PC_BUFFER_SIZE - payload_start;
+        uint32_t payload_start = (read_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_start;
         if (first_chunk >= *out_size) {
             memcpy(out_payload, pc->to_wr + payload_start, *out_size);
         } else {
             memcpy(out_payload, pc->to_wr + payload_start, first_chunk);
-            memcpy((uint8_t*)out_payload + first_chunk, pc->to_wr, *out_size - first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk,
+                   pc->to_wr,
+                   *out_size - first_chunk);
         }
     }
-    pc->i_from_a = (read_index + total_size) & (PC_BUFFER_SIZE - 1);
+    pc->i_from_a = (read_index + total_size) & (pc->size - 1);
     return true;
 }
 
@@ -833,15 +781,20 @@ static inline uint32_t war_pad_to_scale(float value, uint32_t scale) {
 }
 
 static inline uint64_t war_read_le64(const uint8_t* p) {
-    return ((uint64_t)p[0]) | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) | ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) |
-           ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) | ((uint64_t)p[7] << 56);
+    return ((uint64_t)p[0]) | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
+           ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) |
+           ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) |
+           ((uint64_t)p[7] << 56);
 }
 
 static inline uint32_t war_read_le32(const uint8_t* p) {
-    return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
 }
 
-static inline uint16_t war_read_le16(const uint8_t* p) { return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8); }
+static inline uint16_t war_read_le16(const uint8_t* p) {
+    return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8);
+}
 
 static inline void war_write_le64(uint8_t* p, uint64_t v) {
     p[0] = (uint8_t)(v);
@@ -866,36 +819,46 @@ static inline void war_write_le16(uint8_t* p, uint16_t v) {
     p[1] = (uint8_t)(v >> 8);
 }
 
-static inline uint32_t war_clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+static inline uint32_t
+war_clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t sum = (uint64_t)a + b;
     uint64_t mask = -(sum > max_value);
     return (uint32_t)((sum & ~mask) | ((uint64_t)max_value & mask));
 }
 
-static inline uint32_t war_clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
+static inline uint32_t
+war_clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
     uint32_t diff = a - b;
     uint32_t underflow_mask = -(a < b);
     uint32_t below_min_mask = -(diff < min_value);
-    uint32_t clamped_diff = (diff & ~below_min_mask) | (min_value & below_min_mask);
+    uint32_t clamped_diff =
+        (diff & ~below_min_mask) | (min_value & below_min_mask);
     return (clamped_diff & ~underflow_mask) | (min_value & underflow_mask);
 }
 
-static inline uint32_t war_clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+static inline uint32_t
+war_clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
     uint64_t prod = (uint64_t)a * (uint64_t)b;
     uint64_t mask = -(prod > max_value);
     return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
 }
 
-static inline uint32_t war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
+static inline uint32_t
+war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
     a = a < min_value ? min_value : a;
     a = a > max_value ? max_value : a;
     return a;
 }
 
-static inline uint64_t war_align64(uint64_t value) { return (value + 63) & ~63ULL; }
+static inline uint64_t war_align64(uint64_t value) {
+    return (value + 63) & ~63ULL;
+}
 
 static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
-    if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) || (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) { return (uint16_t)ks; }
+    if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
+        (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) {
+        return (uint16_t)ks;
+    }
     switch (ks) {
     case XKB_KEY_Escape:
         return KEYSYM_ESCAPE;
@@ -1010,16 +973,19 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     }
 }
 
-static inline void war_get_frame_duration_us(war_window_render_context* ctx_wr) {
+static inline void
+war_get_frame_duration_us(war_window_render_context* ctx_wr) {
     const double microsecond_conversion = 1000000;
-    ctx_wr->frame_duration_us = (uint64_t)round((1.0 / (double)ctx_wr->FPS) * microsecond_conversion);
+    ctx_wr->frame_duration_us =
+        (uint64_t)round((1.0 / (double)ctx_wr->FPS) * microsecond_conversion);
 }
 
 static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
     char lowercase = ks;
     int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
     // Letters a-z or A-Z -> always lowercase
-    if (ks >= XKB_KEY_a && ks <= XKB_KEY_z) return (char)ks - mod_shift_difference;
+    if (ks >= XKB_KEY_a && ks <= XKB_KEY_z)
+        return (char)ks - mod_shift_difference;
     if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (char)(ks - XKB_KEY_A + 'a');
 
     // Numbers 0-9
@@ -1057,7 +1023,9 @@ int war_compare_desc_uint32(const void* a, const void* b) {
     return 0;
 }
 
-static inline void war_wl_surface_set_opaque_region(int fd, uint32_t wl_surface_id, uint32_t wl_region_id) {
+static inline void war_wl_surface_set_opaque_region(int fd,
+                                                    uint32_t wl_surface_id,
+                                                    uint32_t wl_region_id) {
     uint8_t set_opaque_region[12];
     war_write_le32(set_opaque_region, wl_surface_id);
     war_write_le16(set_opaque_region + 4, 4);
@@ -1095,7 +1063,9 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     };
     text_vertices[*text_vertices_count + 1] = (war_text_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
         .uv = {glyph_info->uv_x1, glyph_info->uv_y1},
         .glyph_size = {glyph_info->width, glyph_info->height},
         .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
@@ -1108,7 +1078,9 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     };
     text_vertices[*text_vertices_count + 2] = (war_text_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
         .uv = {glyph_info->uv_x1, glyph_info->uv_y0},
         .glyph_size = {glyph_info->width, glyph_info->height},
         .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
@@ -1121,7 +1093,9 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     };
     text_vertices[*text_vertices_count + 3] = (war_text_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_pos[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
         .uv = {glyph_info->uv_x0, glyph_info->uv_y0},
         .color = color,
         .glyph_size = {glyph_info->width, glyph_info->height},
@@ -1142,8 +1116,10 @@ static inline void war_make_text_quad(war_text_vertex* text_vertices,
     (*text_indices_count) += 6;
 }
 
-static inline void
-war_make_blank_text_quad(war_text_vertex* text_vertices, uint16_t* text_indices, uint32_t* text_vertices_count, uint32_t* text_indices_count) {
+static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
+                                            uint16_t* text_indices,
+                                            uint32_t* text_vertices_count,
+                                            uint32_t* text_indices_count) {
     text_vertices[*text_vertices_count] = (war_text_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
@@ -1229,7 +1205,9 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     };
     quad_vertices[*vertices_count + 1] = (war_quad_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1239,7 +1217,9 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     };
     quad_vertices[*vertices_count + 2] = (war_quad_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1249,7 +1229,9 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     };
     quad_vertices[*vertices_count + 3] = (war_quad_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_pos[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1267,17 +1249,18 @@ static inline void war_make_quad(war_quad_vertex* quad_vertices,
     (*indices_count) += 6;
 }
 
-static inline void war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
-                                             uint16_t* transparent_quad_indices,
-                                             uint32_t* vertices_count,
-                                             uint32_t* indices_count,
-                                             float bottom_left_pos[3],
-                                             float span[2],
-                                             uint32_t color,
-                                             float outline_thickness,
-                                             uint32_t outline_color,
-                                             float line_thickness[2],
-                                             uint32_t flags) {
+static inline void
+war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
+                          uint16_t* transparent_quad_indices,
+                          uint32_t* vertices_count,
+                          uint32_t* indices_count,
+                          float bottom_left_pos[3],
+                          float span[2],
+                          uint32_t color,
+                          float outline_thickness,
+                          uint32_t outline_color,
+                          float line_thickness[2],
+                          uint32_t flags) {
     transparent_quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
@@ -1290,7 +1273,9 @@ static inline void war_make_transparent_quad(war_quad_vertex* transparent_quad_v
     };
     transparent_quad_vertices[*vertices_count + 1] = (war_quad_vertex){
         .corner = {1, 0},
-        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1300,7 +1285,9 @@ static inline void war_make_transparent_quad(war_quad_vertex* transparent_quad_v
     };
     transparent_quad_vertices[*vertices_count + 2] = (war_quad_vertex){
         .corner = {1, 1},
-        .pos = {bottom_left_pos[0] + span[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1310,7 +1297,9 @@ static inline void war_make_transparent_quad(war_quad_vertex* transparent_quad_v
     };
     transparent_quad_vertices[*vertices_count + 3] = (war_quad_vertex){
         .corner = {0, 1},
-        .pos = {bottom_left_pos[0], bottom_left_pos[1] + span[1], bottom_left_pos[2]},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
         .span = {span[0], span[1]},
         .color = color,
         .outline_thickness = outline_thickness,
@@ -1328,8 +1317,10 @@ static inline void war_make_transparent_quad(war_quad_vertex* transparent_quad_v
     (*indices_count) += 6;
 }
 
-static inline void
-war_make_blank_quad(war_quad_vertex* quad_vertices, uint16_t* quad_indices, uint32_t* vertices_count, uint32_t* indices_count) {
+static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
+                                       uint16_t* quad_indices,
+                                       uint32_t* vertices_count,
+                                       uint32_t* indices_count) {
     quad_vertices[*vertices_count] = (war_quad_vertex){
         .corner = {0, 0},
         .pos = {0, 0, 0},
@@ -1389,447 +1380,17 @@ static inline uint32_t war_gcd(uint32_t a, uint32_t b) {
     return a;
 }
 
-static inline uint32_t war_lcm(uint32_t a, uint32_t b) { return a / war_gcd(a, b) * b; }
+static inline uint32_t war_lcm(uint32_t a, uint32_t b) {
+    return a / war_gcd(a, b) * b;
+}
 
-static inline float war_midi_to_frequency(float midi_note) { return 440.0f * pow(2.0f, (midi_note - 69) / 12.0f); }
+static inline float war_midi_to_frequency(float midi_note) {
+    return 440.0f * pow(2.0f, (midi_note - 69) / 12.0f);
+}
 
-static inline float war_sine_phase_increment(war_audio_context* ctx_a, float frequency) {
+static inline float war_sine_phase_increment(war_audio_context* ctx_a,
+                                             float frequency) {
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
-}
-
-static inline void war_undo_tree_add_note(
-    war_undo_node* node, war_lua_context* ctx_lua, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
-    call_carmack("undo_add_note");
-    war_note_quad note_quad = node->payload.add_note.note_quad;
-    war_note note = node->payload.add_note.note;
-    // --- Binary search for existing note ---
-    uint32_t left = 0;
-    uint32_t right = note_quads->count;
-    bool already_in = false;
-    while (left < right) {
-        uint32_t mid = left + (right - left) / 2;
-        if (note_quads->id[mid] == note.id) {
-            note_quads->alive[mid] = 1; // revive existing note
-            already_in = true;
-            war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTE, sizeof(mid), &mid);
-            break;
-        } else if (note_quads->id[mid] < note.id) {
-            left = mid + 1;
-        } else {
-            right = mid;
-        }
-    }
-    if (already_in) { return; } // nothing more to do
-    uint32_t insert_idx = left;
-    uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    // --- Compaction if needed ---
-    if (note_quads->count + 1 >= note_quads_max) {
-        war_pc_to_a(pc, AUDIO_CMD_COMPACT, 0, NULL);
-        uint32_t write_idx = 0;
-        uint32_t new_insert_idx = 0xFFFFFFFF; // invalid sentinel
-        for (uint32_t read_idx = 0; read_idx < note_quads->count; read_idx++) {
-            if (note_quads->alive[read_idx]) {
-                if (write_idx != read_idx) {
-                    // Copy all fields
-                    note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
-                    note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
-                    note_quads->layer[write_idx] = note_quads->layer[read_idx];
-                    note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
-                    note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
-                    note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
-                    note_quads->navigation_x[write_idx] = note_quads->navigation_x[read_idx];
-                    note_quads->navigation_x_numerator[write_idx] = note_quads->navigation_x_numerator[read_idx];
-                    note_quads->navigation_x_denominator[write_idx] = note_quads->navigation_x_denominator[read_idx];
-                    note_quads->color[write_idx] = note_quads->color[read_idx];
-                    note_quads->outline_color[write_idx] = note_quads->outline_color[read_idx];
-                    note_quads->gain[write_idx] = note_quads->gain[read_idx];
-                    note_quads->voice[write_idx] = note_quads->voice[read_idx];
-                    note_quads->alive[write_idx] = note_quads->alive[read_idx];
-                    note_quads->id[write_idx] = note_quads->id[read_idx];
-                }
-                // Track new insert index
-                if (note_quads->id[write_idx] < note.id) { new_insert_idx = write_idx + 1; }
-                write_idx++;
-            }
-        }
-        if (write_idx >= note_quads_max) {
-            call_carmack("TODO: implement spillover swapfile");
-            return;
-        };
-        note_quads->count = write_idx;
-        // Update insert_idx after compaction
-        insert_idx = (new_insert_idx != 0xFFFFFFFF) ? new_insert_idx : note_quads->count;
-    }
-    // --- Shift elements forward to make space ---
-    for (uint32_t i = note_quads->count; i > insert_idx; i--) {
-        note_quads->pos_x[i] = note_quads->pos_x[i - 1];
-        note_quads->pos_y[i] = note_quads->pos_y[i - 1];
-        note_quads->layer[i] = note_quads->layer[i - 1];
-        note_quads->size_x[i] = note_quads->size_x[i - 1];
-        note_quads->size_x_numerator[i] = note_quads->size_x_numerator[i - 1];
-        note_quads->size_x_denominator[i] = note_quads->size_x_denominator[i - 1];
-        note_quads->navigation_x[i] = note_quads->navigation_x[i - 1];
-        note_quads->navigation_x_numerator[i] = note_quads->navigation_x_numerator[i - 1];
-        note_quads->navigation_x_denominator[i] = note_quads->navigation_x_denominator[i - 1];
-        note_quads->color[i] = note_quads->color[i - 1];
-        note_quads->outline_color[i] = note_quads->outline_color[i - 1];
-        note_quads->gain[i] = note_quads->gain[i - 1];
-        note_quads->voice[i] = note_quads->voice[i - 1];
-        note_quads->alive[i] = note_quads->alive[i - 1];
-        note_quads->id[i] = note_quads->id[i - 1];
-    }
-    // --- Insert new note ---
-    note_quads->pos_x[insert_idx] = note_quad.pos_x;
-    note_quads->pos_y[insert_idx] = note_quad.pos_y;
-    note_quads->layer[insert_idx] = note_quad.layer;
-    note_quads->size_x[insert_idx] = note_quad.size_x;
-    note_quads->size_x_numerator[insert_idx] = note_quad.size_x_numerator;
-    note_quads->size_x_denominator[insert_idx] = note_quad.size_x_denominator;
-    note_quads->navigation_x[insert_idx] = note_quad.navigation_x;
-    note_quads->navigation_x_numerator[insert_idx] = note_quad.navigation_x_numerator;
-    note_quads->navigation_x_denominator[insert_idx] = note_quad.navigation_x_denominator;
-    note_quads->color[insert_idx] = note_quad.color;
-    note_quads->outline_color[insert_idx] = note_quad.outline_color;
-    note_quads->gain[insert_idx] = note_quad.gain;
-    note_quads->voice[insert_idx] = note_quad.voice;
-    note_quads->alive[insert_idx] = 1;
-    note_quads->id[insert_idx] = note_quad.id;
-    note_quads->count++;
-    *(war_note*)tmp_payload = note;
-    *(uint32_t*)(tmp_payload + sizeof(war_note)) = insert_idx;
-    war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(note) + sizeof(insert_idx), tmp_payload);
-}
-
-static inline void war_undo_tree_delete_note(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc) {
-    call_carmack("undo_delete_note");
-    int32_t delete_idx = -1;
-    for (uint32_t i = 0; i < note_quads->count; i++) {
-        assert(i < note_quads->count); // bounds check
-        if (note_quads->id[i] == node->payload.delete_note.note.id) {
-            note_quads->alive[i] = 0;
-            delete_idx = i;
-            break;
-        }
-    }
-    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTE, sizeof(int32_t), &delete_idx);
-}
-
-static inline void
-war_undo_tree_delete_notes(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
-    call_carmack("undo_delete_notes");
-    uint32_t delete_count = node->payload.delete_notes.count;
-    war_note_quad* note_quad = node->payload.delete_notes.note_quad;
-    uint32_t count = 0;
-    for (int32_t i = note_quads->count - 1; i >= 0 && count < delete_count; i--) {
-        for (uint32_t k = 0; k < delete_count; k++) {
-            if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
-            if (note_quads->id[i] != note_quad[k].id) { continue; }
-            note_quads->alive[i] = 0;
-            *(uint32_t*)(tmp_payload + sizeof(uint32_t) * (count + 1)) = i;
-            count++;
-        }
-    }
-    *(uint32_t*)(tmp_payload) = count;
-    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES, sizeof(uint32_t) * (count + 1), tmp_payload);
-}
-
-static inline void war_undo_tree_add_notes(
-    war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload, war_lua_context* ctx_lua) {
-    call_carmack("undo_add_notes");
-    war_note* note = node->payload.add_notes.note;
-    war_note_quad* note_quad = node->payload.add_notes.note_quad;
-    uint32_t count = node->payload.add_notes.count;
-    // --- Binary search for existing note ---
-    uint32_t already_in_count = 0;
-    uint32_t insert_indices_count = 0;
-    for (uint32_t i = 0; i < count; i++) {
-        uint32_t left = 0;
-        uint32_t right = note_quads->count;
-        while (left < right) {
-            uint32_t mid = left + (right - left) / 2;
-            if (note_quads->id[mid] == note[i].id) {
-                note_quads->alive[mid] = 1; // revive existing note
-                *(uint32_t*)(tmp_payload + (already_in_count + 1) * sizeof(uint32_t)) = mid;
-                already_in_count++;
-                break;
-            } else if (note_quads->id[mid] < note[i].id) {
-                left = mid + 1;
-            } else {
-                right = mid;
-            }
-        }
-        *(uint32_t*)(tmp_payload + (count + 1 + insert_indices_count) * sizeof(uint32_t)) = left; // not sture if right
-        insert_indices_count++;
-    }
-    *(uint32_t*)tmp_payload = already_in_count;
-    *(uint32_t*)(tmp_payload + count * sizeof(uint32_t)) = insert_indices_count;
-    if (already_in_count == count) {
-        war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTES, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
-        return;
-    } else if (already_in_count > 0) {
-        war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTES, sizeof(uint32_t) * (already_in_count + 1), tmp_payload);
-    }
-    uint32_t* insert_indices = (uint32_t*)(tmp_payload + (count + 1) * sizeof(uint32_t));
-    uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    // --- Compaction if needed ---
-    if (note_quads->count + insert_indices_count >= note_quads_max) { // Check against actual new notes count
-        war_pc_to_a(pc, AUDIO_CMD_COMPACT, 0, NULL);
-        uint32_t write_idx = 0;
-        for (uint32_t read_idx = 0; read_idx < note_quads->count; read_idx++) {
-            if (note_quads->alive[read_idx]) {
-                if (write_idx != read_idx) {
-                    // Copy all fields (same as original)
-                    note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
-                    note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
-                    note_quads->layer[write_idx] = note_quads->layer[read_idx];
-                    note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
-                    note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
-                    note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
-                    note_quads->navigation_x[write_idx] = note_quads->navigation_x[read_idx];
-                    note_quads->navigation_x_numerator[write_idx] = note_quads->navigation_x_numerator[read_idx];
-                    note_quads->navigation_x_denominator[write_idx] = note_quads->navigation_x_denominator[read_idx];
-                    note_quads->color[write_idx] = note_quads->color[read_idx];
-                    note_quads->outline_color[write_idx] = note_quads->outline_color[read_idx];
-                    note_quads->gain[write_idx] = note_quads->gain[read_idx];
-                    note_quads->voice[write_idx] = note_quads->voice[read_idx];
-                    note_quads->alive[write_idx] = note_quads->alive[read_idx];
-                    note_quads->id[write_idx] = note_quads->id[read_idx];
-                }
-                write_idx++;
-            }
-        }
-        if (write_idx + insert_indices_count >= note_quads_max) {
-            call_carmack("TODO: implement spillover swapfile");
-            return; // Or return, depending on context
-        }
-        note_quads->count = write_idx;
-
-        // Update all insert_indices after compaction
-        for (uint32_t i = 0; i < insert_indices_count; i++) {
-            uint32_t left = 0;
-            uint32_t right = note_quads->count;
-            while (left < right) {
-                uint32_t mid = left + (right - left) / 2;
-                if (note_quads->id[mid] < note[i].id) {
-                    left = mid + 1;
-                } else {
-                    right = mid;
-                }
-            }
-            insert_indices[i] = left;
-        }
-    }
-    // After compaction... issues here probably
-    // Collect new notes (not already-in) and their indices
-    uint32_t new_notes_count = 0;
-    uint32_t* new_note_indices = (uint32_t*)(tmp_payload + (count + 1) * sizeof(uint32_t));             // Reuse space
-    uint32_t* final_insert_indices = (uint32_t*)(tmp_payload + (count + 1 + count) * sizeof(uint32_t)); // After potential max
-    for (uint32_t i = 0; i < count; i++) {
-        bool is_already_in = false;
-        for (uint32_t j = 0; j < already_in_count; j++) {
-            if (*(uint32_t*)(tmp_payload + (j + 1) * sizeof(uint32_t)) ==
-                i) { // Check if i is in already_in (assuming payload tracks original indices)
-                is_already_in = true;
-                break;
-            }
-        }
-        if (!is_already_in) {
-            new_note_indices[new_notes_count] = i;
-            final_insert_indices[new_notes_count] = insert_indices[i];
-            new_notes_count++;
-        }
-    }
-    insert_indices_count = new_notes_count; // Update count
-    *(uint32_t*)(tmp_payload + count * sizeof(uint32_t)) = insert_indices_count;
-    // Sort new notes by descending insert index
-    for (uint32_t p = 0; p < new_notes_count - 1; p++) {
-        for (uint32_t q = p + 1; q < new_notes_count; q++) {
-            if (final_insert_indices[p] < final_insert_indices[q]) {
-                // Swap
-                uint32_t temp_idx = final_insert_indices[p];
-                uint32_t temp_note = new_note_indices[p];
-                final_insert_indices[p] = final_insert_indices[q];
-                new_note_indices[p] = new_note_indices[q];
-                final_insert_indices[q] = temp_idx;
-                new_note_indices[q] = temp_note;
-            }
-        }
-    }
-    // Insert in descending order
-    for (uint32_t k = 0; k < new_notes_count; k++) {
-        uint32_t insert_idx = final_insert_indices[k];
-        uint32_t note_idx = new_note_indices[k];
-
-        // Shift elements forward
-        for (uint32_t i = note_quads->count; i > insert_idx; i--) {
-            note_quads->pos_x[i] = note_quads->pos_x[i - 1];
-            note_quads->pos_y[i] = note_quads->pos_y[i - 1];
-            note_quads->layer[i] = note_quads->layer[i - 1];
-            note_quads->size_x[i] = note_quads->size_x[i - 1];
-            note_quads->size_x_numerator[i] = note_quads->size_x_numerator[i - 1];
-            note_quads->size_x_denominator[i] = note_quads->size_x_denominator[i - 1];
-            note_quads->navigation_x[i] = note_quads->navigation_x[i - 1];
-            note_quads->navigation_x_numerator[i] = note_quads->navigation_x_numerator[i - 1];
-            note_quads->navigation_x_denominator[i] = note_quads->navigation_x_denominator[i - 1];
-            note_quads->color[i] = note_quads->color[i - 1];
-            note_quads->outline_color[i] = note_quads->outline_color[i - 1];
-            note_quads->gain[i] = note_quads->gain[i - 1];
-            note_quads->voice[i] = note_quads->voice[i - 1];
-            note_quads->alive[i] = note_quads->alive[i - 1];
-            note_quads->id[i] = note_quads->id[i - 1];
-        }
-
-        // Insert new note
-        note_quads->pos_x[insert_idx] = note_quad[note_idx].pos_x;
-        note_quads->pos_y[insert_idx] = note_quad[note_idx].pos_y;
-        note_quads->layer[insert_idx] = note_quad[note_idx].layer;
-        note_quads->size_x[insert_idx] = note_quad[note_idx].size_x;
-        note_quads->size_x_numerator[insert_idx] = note_quad[note_idx].size_x_numerator;
-        note_quads->size_x_denominator[insert_idx] = note_quad[note_idx].size_x_denominator;
-        note_quads->navigation_x[insert_idx] = note_quad[note_idx].navigation_x;
-        note_quads->navigation_x_numerator[insert_idx] = note_quad[note_idx].navigation_x_numerator;
-        note_quads->navigation_x_denominator[insert_idx] = note_quad[note_idx].navigation_x_denominator;
-        note_quads->color[insert_idx] = note_quad[note_idx].color;
-        note_quads->outline_color[insert_idx] = note_quad[note_idx].outline_color;
-        note_quads->gain[insert_idx] = note_quad[note_idx].gain;
-        note_quads->voice[insert_idx] = note_quad[note_idx].voice;
-        note_quads->alive[insert_idx] = 1;
-        note_quads->id[insert_idx] = note_quad[note_idx].id;
-        note_quads->count++;
-
-        // Send insert command
-        *(war_note*)(tmp_payload) = note[note_idx];
-        *(uint32_t*)(tmp_payload + sizeof(war_note)) = insert_idx;
-        war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(war_note) + sizeof(uint32_t), tmp_payload);
-    }
-}
-
-static inline void war_undo_tree_add_notes_same(
-    war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload, war_lua_context* ctx_lua) {
-    call_carmack("undo_add_notes_same");
-    war_note note = node->payload.add_notes_same.note;
-    war_note_quad note_quad = node->payload.add_notes_same.note_quad;
-    uint64_t* ids = node->payload.add_notes_same.ids;
-    uint32_t count = node->payload.add_notes_same.count;
-    for (uint32_t i = 0; i < count; i++) {
-        war_note_quad nq = note_quad;
-        nq.id = ids[i];
-        war_note n = note;
-        n.id = ids[i];
-        // --- Binary search for existing note ---
-        uint32_t left = 0;
-        uint32_t right = note_quads->count;
-        bool already_in = false;
-        while (left < right) {
-            uint32_t mid = left + (right - left) / 2;
-            if (note_quads->id[mid] == n.id) {
-                note_quads->alive[mid] = 1; // revive existing note
-                already_in = true;
-                war_pc_to_a(pc, AUDIO_CMD_REVIVE_NOTE, sizeof(mid), &mid);
-                break;
-            } else if (note_quads->id[mid] < n.id) {
-                left = mid + 1;
-            } else {
-                right = mid;
-            }
-        }
-        if (already_in) { continue; } // nothing more to do
-        uint32_t insert_idx = left;
-        uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-        // --- Compaction if needed ---
-        if (note_quads->count + 1 >= note_quads_max) {
-            war_pc_to_a(pc, AUDIO_CMD_COMPACT, 0, NULL);
-            uint32_t write_idx = 0;
-            uint32_t new_insert_idx = 0xFFFFFFFF; // invalid sentinel
-            for (uint32_t read_idx = 0; read_idx < note_quads->count; read_idx++) {
-                if (note_quads->alive[read_idx]) {
-                    if (write_idx != read_idx) {
-                        // Copy all fields
-                        note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
-                        note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
-                        note_quads->layer[write_idx] = note_quads->layer[read_idx];
-                        note_quads->size_x[write_idx] = note_quads->size_x[read_idx];
-                        note_quads->size_x_numerator[write_idx] = note_quads->size_x_numerator[read_idx];
-                        note_quads->size_x_denominator[write_idx] = note_quads->size_x_denominator[read_idx];
-                        note_quads->navigation_x[write_idx] = note_quads->navigation_x[read_idx];
-                        note_quads->navigation_x_numerator[write_idx] = note_quads->navigation_x_numerator[read_idx];
-                        note_quads->navigation_x_denominator[write_idx] = note_quads->navigation_x_denominator[read_idx];
-                        note_quads->color[write_idx] = note_quads->color[read_idx];
-                        note_quads->outline_color[write_idx] = note_quads->outline_color[read_idx];
-                        note_quads->gain[write_idx] = note_quads->gain[read_idx];
-                        note_quads->voice[write_idx] = note_quads->voice[read_idx];
-                        note_quads->alive[write_idx] = note_quads->alive[read_idx];
-                        note_quads->id[write_idx] = note_quads->id[read_idx];
-                    }
-                    // Track new insert index
-                    if (note_quads->id[write_idx] < n.id) { new_insert_idx = write_idx + 1; }
-                    write_idx++;
-                }
-            }
-            if (write_idx >= note_quads_max) {
-                call_carmack("TODO: implement spillover swapfile");
-                continue;
-            };
-            note_quads->count = write_idx;
-            // Update insert_idx after compaction
-            insert_idx = (new_insert_idx != 0xFFFFFFFF) ? new_insert_idx : note_quads->count;
-        }
-        // --- Shift elements forward to make space ---
-        for (uint32_t j = note_quads->count; j > insert_idx; j--) {
-            note_quads->pos_x[j] = note_quads->pos_x[j - 1];
-            note_quads->pos_y[j] = note_quads->pos_y[j - 1];
-            note_quads->layer[j] = note_quads->layer[j - 1];
-            note_quads->size_x[j] = note_quads->size_x[j - 1];
-            note_quads->size_x_numerator[j] = note_quads->size_x_numerator[j - 1];
-            note_quads->size_x_denominator[j] = note_quads->size_x_denominator[j - 1];
-            note_quads->navigation_x[j] = note_quads->navigation_x[j - 1];
-            note_quads->navigation_x_numerator[j] = note_quads->navigation_x_numerator[j - 1];
-            note_quads->navigation_x_denominator[j] = note_quads->navigation_x_denominator[j - 1];
-            note_quads->color[j] = note_quads->color[j - 1];
-            note_quads->outline_color[j] = note_quads->outline_color[j - 1];
-            note_quads->gain[j] = note_quads->gain[j - 1];
-            note_quads->voice[j] = note_quads->voice[j - 1];
-            note_quads->alive[j] = note_quads->alive[j - 1];
-            note_quads->id[j] = note_quads->id[j - 1];
-        }
-        // --- Insert new note ---
-        note_quads->pos_x[insert_idx] = nq.pos_x;
-        note_quads->pos_y[insert_idx] = nq.pos_y;
-        note_quads->layer[insert_idx] = nq.layer;
-        note_quads->size_x[insert_idx] = nq.size_x;
-        note_quads->size_x_numerator[insert_idx] = nq.size_x_numerator;
-        note_quads->size_x_denominator[insert_idx] = nq.size_x_denominator;
-        note_quads->navigation_x[insert_idx] = nq.navigation_x;
-        note_quads->navigation_x_numerator[insert_idx] = nq.navigation_x_numerator;
-        note_quads->navigation_x_denominator[insert_idx] = nq.navigation_x_denominator;
-        note_quads->color[insert_idx] = nq.color;
-        note_quads->outline_color[insert_idx] = nq.outline_color;
-        note_quads->gain[insert_idx] = nq.gain;
-        note_quads->voice[insert_idx] = nq.voice;
-        note_quads->alive[insert_idx] = 1;
-        note_quads->id[insert_idx] = nq.id;
-        note_quads->count++;
-        *(war_note*)(tmp_payload) = n;
-        *(uint32_t*)(tmp_payload + sizeof(war_note)) = insert_idx;
-        war_pc_to_a(pc, AUDIO_CMD_INSERT_NOTE, sizeof(n) + sizeof(insert_idx), tmp_payload);
-    }
-}
-
-static inline void
-war_undo_tree_delete_notes_same(war_undo_node* node, war_note_quads* note_quads, war_producer_consumer* pc, uint8_t* tmp_payload) {
-    call_carmack("undo_delete_notes_same");
-    uint64_t* ids = node->payload.delete_notes_same.ids;
-    uint32_t delete_count = node->payload.delete_notes_same.count;
-    uint32_t count = 0;
-    for (int32_t i = note_quads->count - 1; i >= 0 && count < delete_count; i--) {
-        if (note_quads->alive[i] == 0 || note_quads->hidden[i]) { continue; }
-        if (note_quads->id[i] != ids[delete_count - count - 1]) { continue; }
-        note_quads->alive[i] = 0;
-        *(uint32_t*)(tmp_payload + sizeof(uint32_t) * (count + 1)) = i;
-        count++;
-    }
-    *(uint32_t*)tmp_payload = count;
-    war_pc_to_a(pc, AUDIO_CMD_DELETE_NOTES_SAME, sizeof(uint32_t) * (count + 1), tmp_payload);
 }
 
 #endif // WAR_MACROS_H

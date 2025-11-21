@@ -87,6 +87,7 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_INT(A_DATA)
     LOAD_INT(A_BASE_FREQUENCY)
     LOAD_INT(A_BASE_NOTE)
+    LOAD_INT(A_BYTES_NEEDED)
     LOAD_INT(A_EDO)
     LOAD_INT(A_NOTES_MAX)
     LOAD_INT(A_CACHE_SIZE)
@@ -101,6 +102,7 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_INT(WR_SEQUENCE_LENGTH_MAX)
     LOAD_INT(WR_MODE_COUNT)
     LOAD_INT(WR_KEYSYM_COUNT)
+    LOAD_INT(WR_CALLBACK_SIZE)
     LOAD_INT(WR_MOD_COUNT)
     LOAD_INT(WR_NOTE_QUADS_MAX)
     LOAD_INT(WR_STATUS_BAR_COLS_MAX)
@@ -164,9 +166,11 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     lua_pop(L, 1);
 
     LOAD_DOUBLE(A_DEFAULT_COLUMNS_PER_BEAT)
+    LOAD_DOUBLE(A_TARGET_SAMPLES_FACTOR)
     LOAD_DOUBLE(A_BPM)
     LOAD_DOUBLE(A_SAMPLE_DURATION)
     LOAD_DOUBLE(WR_FPS)
+    LOAD_DOUBLE(WR_CALLBACK_FPS)
 
 #undef LOAD_DOUBLE
 

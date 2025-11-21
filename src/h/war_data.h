@@ -354,6 +354,7 @@ typedef struct war_lua_context {
     // audio
     _Atomic int A_SAMPLE_RATE;
     _Atomic double A_SAMPLE_DURATION;
+    _Atomic double A_TARGET_SAMPLES_FACTOR;
     _Atomic int A_CHANNEL_COUNT;
     _Atomic int A_NOTE_COUNT;
     _Atomic int A_LAYER_COUNT;
@@ -369,6 +370,7 @@ typedef struct war_lua_context {
     _Atomic float A_DEFAULT_RELEASE;
     _Atomic float A_DEFAULT_GAIN;
     _Atomic double A_DEFAULT_COLUMNS_PER_BEAT;
+    _Atomic int A_BYTES_NEEDED;
     _Atomic int A_BUILDER_DATA_SIZE;
     _Atomic int A_DATA;
     _Atomic int A_CACHE_SIZE;
@@ -377,10 +379,12 @@ typedef struct war_lua_context {
     // window render
     _Atomic int WR_VIEWS_SAVED;
     _Atomic float WR_COLOR_STEP;
+    _Atomic double WR_CALLBACK_FPS;
     _Atomic int WR_WARPOON_TEXT_COLS;
     _Atomic int WR_STATES;
     _Atomic int WR_SEQUENCE_COUNT;
     _Atomic int WR_SEQUENCE_LENGTH_MAX;
+    _Atomic int WR_CALLBACK_SIZE;
     _Atomic int WR_MODE_COUNT;
     _Atomic int WR_KEYSYM_COUNT;
     _Atomic int WR_MOD_COUNT;
@@ -530,6 +534,7 @@ typedef struct war_atomics {
     _Atomic uint64_t note_next_id;
     _Atomic uint64_t cache_next_id;
     _Atomic uint64_t cache_next_timestamp;
+    _Atomic uint32_t bytes_needed;
 } war_atomics;
 
 typedef struct war_producer_consumer {
@@ -639,6 +644,8 @@ typedef struct war_pipewire_context {
     struct spa_pod_builder capture_builder;
     struct pw_stream_events play_events;
     struct pw_stream_events capture_events;
+    struct pw_properties* play_properties;
+    struct pw_properties* capture_properties;
     uint8_t* play_builder_data;
     uint8_t* capture_builder_data;
     void** data;
@@ -733,6 +740,7 @@ typedef struct war_window_render_context {
     float playback_bar_pos_x_increment;
     double FPS;
     uint64_t frame_duration_us;
+    uint64_t callback_duration_us;
     bool sleep;
     uint64_t sleep_duration_us;
     bool end_window_render;
@@ -783,6 +791,7 @@ typedef struct war_window_render_context {
     uint32_t cursor_pos_x_command_mode;
     uint8_t layer_flux;
     uint8_t play;
+    uint64_t callback_size;
 } war_window_render_context;
 
 typedef struct war_glyph_info {

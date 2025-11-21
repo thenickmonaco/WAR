@@ -35,7 +35,7 @@ ctx_lua = {
     A_NOTE_COUNT                        = 128,
     A_LAYERS_IN_RAM                     = 13,
     A_LAYER_COUNT                       = 9,
-    A_DATA                              = 2,
+    A_DATA                              = 3,
     A_WARMUP_FRAMES_FACTOR              = 1000, -- bigger value means less recording warmup frames
     A_NOTES_MAX                         = 20000,
     A_DEFAULT_ATTACK                    = 0.0,
@@ -73,6 +73,10 @@ ctx_lua = {
     WR_CURSOR_BLINK_DURATION_US         = 700000, -- 700000
     WR_UNDO_NOTES_BATCH_MAX             = 100,    -- <= 100
     WR_FPS                              = 240.0,
+    WR_CALLBACK_FPS                     = 240.0,
+    WR_CALLBACK_SIZE                    = 4192,
+    A_BYTES_NEEDED                      = 2048,
+    A_TARGET_SAMPLES_FACTOR             = 2.0,
     -- pool
     POOL_ALIGNMENT                      = 256,
     -- cmd

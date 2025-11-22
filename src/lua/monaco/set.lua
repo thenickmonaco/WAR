@@ -35,7 +35,8 @@ ctx_lua = {
     A_NOTE_COUNT                        = 128,
     A_LAYERS_IN_RAM                     = 13,
     A_LAYER_COUNT                       = 9,
-    A_DATA                              = 3,
+    A_PLAY_DATA_SIZE                    = 6,
+    A_CAPTURE_DATA_SIZE                 = 6,
     A_WARMUP_FRAMES_FACTOR              = 1000, -- bigger value means less recording warmup frames
     A_NOTES_MAX                         = 20000,
     A_DEFAULT_ATTACK                    = 0.0,
@@ -73,7 +74,8 @@ ctx_lua = {
     WR_CURSOR_BLINK_DURATION_US         = 700000, -- 700000
     WR_UNDO_NOTES_BATCH_MAX             = 100,    -- <= 100
     WR_FPS                              = 240.0,
-    WR_CALLBACK_FPS                     = 240.0,
+    WR_PLAY_CALLBACK_FPS                = 173.0,
+    WR_CAPTURE_CALLBACK_FPS             = 47.0,
     WR_CALLBACK_SIZE                    = 4192,
     A_BYTES_NEEDED                      = 2048,
     A_TARGET_SAMPLES_FACTOR             = 2.0,
@@ -83,7 +85,8 @@ ctx_lua = {
     CMD_COUNT                           = 1,
     -- pc
     PC_CONTROL_BUFFER_SIZE              = 65536, -- 2^16
-    PC_DATA_BUFFER_SIZE                 = 65536, -- 2^16
+    PC_PLAY_BUFFER_SIZE                 = 65536, -- 2^16
+    PC_CAPTURE_BUFFER_SIZE              = 65536, -- 2^16
     -- vk
     VK_ATLAS_WIDTH                      = 8192,
     VK_ATLAS_HEIGHT                     = 8192,
@@ -801,6 +804,17 @@ keymap = {
         commands = {
             {
                 cmd = "cmd_normal_s",
+                mode = "normal",
+            },
+        },
+    },
+    {
+        sequences = {
+            "S",
+        },
+        commands = {
+            {
+                cmd = "cmd_normal_S",
                 mode = "normal",
             },
         },
@@ -2308,13 +2322,39 @@ pool_a = {
     { name = "ctx_pw",                      type = "war_pipewire_context", count = 1 },
     { name = "ctx_pw.play_builder_data",    type = "uint8_t",              count = ctx_lua.A_BUILDER_DATA_SIZE },
     { name = "ctx_pw.capture_builder_data", type = "uint8_t",              count = ctx_lua.A_BUILDER_DATA_SIZE },
-    { name = "ctx_pw.data",                 type = "void*",                count = ctx_lua.A_DATA },
+    { name = "ctx_pw.play_data",            type = "void*",                count = ctx_lua.A_PLAY_DATA_SIZE },
+    { name = "ctx_pw.capture_data",         type = "void*",                count = ctx_lua.A_CAPTURE_DATA_SIZE },
     { name = "control_payload",             type = "uint8_t",              count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
     { name = "tmp_control_payload",         type = "uint8_t",              count = ctx_lua.PC_CONTROL_BUFFER_SIZE },
     { name = "pc_control_cmd",              type = "void*",                count = ctx_lua.CMD_COUNT },
+    { name = "play_read_count",             type = "uint64_t",             count = 1 },
+    { name = "play_last_read_time",         type = "uint64_t",             count = 1 },
+    { name = "capture_read_count",          type = "uint64_t",             count = 1 },
+    { name = "capture_last_read_time",      type = "uint64_t",             count = 1 },
 }
 
 pool_wr = {
+    -- capture_wav
+    { name = "capture_wav",                         type = "war_wav",                 count = 1 },
+    { name = "capture_wav.fname",                   type = "char",                    count = ctx_lua.A_PATH_LIMIT },
+    -- cache_wav
+    { name = "cache_wav",                           type = "war_cache_wav",           count = 1 },
+    { name = "cache_wav.id",                        type = "uint64_t",                count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache_wav.timestamp",                 type = "uint64_t",                count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache_wav.wav",                       type = "uint8_t*",                count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache_wav.fd_size",                   type = "uint64_t",                count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache_wav.memfd_size",                type = "uint64_t",                count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache_wav.memfd_capacity",            type = "uint64_t",                count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache_wav.fd",                        type = "int",                     count = ctx_lua.A_CACHE_SIZE },
+    { name = "cache_wav.memfd",                     type = "int",                     count = ctx_lua.A_CACHE_SIZE },
+    -- map_wav
+    { name = "map_wav",                             type = "war_map_wav",             count = 1 },
+    { name = "map_wav.id",                          type = "uint64_t",                count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
+    { name = "map_wav.fname",                       type = "char",                    count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT * ctx_lua.A_PATH_LIMIT },
+    { name = "map_wav.fname_size",                  type = "uint32_t",                count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
+    { name = "map_wav.note",                        type = "uint32_t",                count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
+    { name = "map_wav.layer",                       type = "uint32_t",                count = ctx_lua.A_NOTE_COUNT * ctx_lua.A_LAYER_COUNT },
+    -- color
     { name = "ctx_color",                           type = "war_color_context",       count = 1 },
     -- layres
     { name = "layers_active",                       type = "char",                    count = ctx_lua.A_LAYER_COUNT },

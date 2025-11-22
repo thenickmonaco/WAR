@@ -372,14 +372,16 @@ typedef struct war_lua_context {
     _Atomic double A_DEFAULT_COLUMNS_PER_BEAT;
     _Atomic int A_BYTES_NEEDED;
     _Atomic int A_BUILDER_DATA_SIZE;
-    _Atomic int A_DATA;
+    _Atomic int A_PLAY_DATA_SIZE;
+    _Atomic int A_CAPTURE_DATA_SIZE;
     _Atomic int A_CACHE_SIZE;
     _Atomic int A_PATH_LIMIT;
     _Atomic int A_WARMUP_FRAMES_FACTOR;
     // window render
     _Atomic int WR_VIEWS_SAVED;
     _Atomic float WR_COLOR_STEP;
-    _Atomic double WR_CALLBACK_FPS;
+    _Atomic double WR_PLAY_CALLBACK_FPS;
+    _Atomic double WR_CAPTURE_CALLBACK_FPS;
     _Atomic int WR_WARPOON_TEXT_COLS;
     _Atomic int WR_STATES;
     _Atomic int WR_SEQUENCE_COUNT;
@@ -411,7 +413,8 @@ typedef struct war_lua_context {
     _Atomic int CMD_COUNT;
     // pc
     _Atomic int PC_CONTROL_BUFFER_SIZE;
-    _Atomic int PC_DATA_BUFFER_SIZE;
+    _Atomic int PC_PLAY_BUFFER_SIZE;
+    _Atomic int PC_CAPTURE_BUFFER_SIZE;
     // vk
     _Atomic int VK_ATLAS_WIDTH;
     _Atomic int VK_ATLAS_HEIGHT;
@@ -515,6 +518,10 @@ typedef struct war_atomics {
     _Atomic float capture_threshold;
     _Atomic uint8_t capture;
     _Atomic uint8_t play;
+    _Atomic double play_reader_rate;
+    _Atomic double play_writer_rate;
+    _Atomic double capture_reader_rate;
+    _Atomic double capture_writer_rate;
     _Atomic float bpm;
     _Atomic int16_t map_note;
     _Atomic uint64_t layer;
@@ -554,56 +561,42 @@ typedef struct war_pool {
     size_t pool_alignment;
 } war_pool;
 
-typedef struct war_cache_audio {
+typedef struct war_map_wav {
+    uint64_t* id;
+    char* fname;
+    uint32_t* fname_size;
+    uint32_t* note;
+    uint32_t* layer;
+} war_map_wav;
+
+typedef struct war_cache_wav {
     uint64_t* id;
     uint64_t* timestamp;
-    void** wav;
-    uint64_t* size;
-    uint64_t* capacity;
-    char* fname;
-    uint32_t* fname_size;
-    int16_t* note;
-    uint64_t* layer;
+    uint8_t** wav;
+    int* memfd;
+    uint64_t* memfd_size;
+    uint64_t* memfd_capacity;
     int* fd;
+    uint64_t* fd_size;
     uint32_t count;
-} war_cache_audio;
+    uint64_t next_id;
+    uint64_t next_timestamp;
+} war_cache_wav;
 
 typedef struct war_wav {
-    void* wav;
+    uint8_t* wav;
+    int memfd;
+    uint64_t memfd_size;
+    uint64_t memfd_capacity;
     int fd;
+    uint64_t fd_size;
     char* fname;
     uint32_t fname_size;
-    uint64_t size;
-    uint64_t capacity;
-    void* tmp_wav;
-    uint64_t tmp_size;
-    uint64_t tmp_capacity;
 } war_wav;
-
-typedef struct war_sequencer {
-    uint64_t* id;
-    char* fname;
-    uint32_t* fname_size;
-} war_sequencer;
 
 typedef struct war_midi_context {
     uint64_t* start_frames;
 } war_midi_context;
-
-typedef struct war_cache_window_render {
-    uint64_t* id;
-    int* fd;
-    void** map;
-    size_t* size;
-    war_riff_header* riff;
-    war_fmt_chunk* fmt;
-    war_data_chunk* data_chunk;
-    int16_t** sample;
-    char** fname;
-    int16_t* note;
-    uint64_t* layer;
-    size_t count;
-} war_cache_window_render;
 
 typedef struct war_audio_context {
     double BPM;
@@ -648,7 +641,8 @@ typedef struct war_pipewire_context {
     struct pw_properties* capture_properties;
     uint8_t* play_builder_data;
     uint8_t* capture_builder_data;
-    void** data;
+    void** play_data;
+    void** capture_data;
 } war_pipewire_context;
 
 typedef struct war_color_context {
@@ -740,7 +734,8 @@ typedef struct war_window_render_context {
     float playback_bar_pos_x_increment;
     double FPS;
     uint64_t frame_duration_us;
-    uint64_t callback_duration_us;
+    uint64_t play_callback_duration_us;
+    uint64_t capture_callback_duration_us;
     bool sleep;
     uint64_t sleep_duration_us;
     bool end_window_render;
@@ -791,7 +786,7 @@ typedef struct war_window_render_context {
     uint32_t cursor_pos_x_command_mode;
     uint8_t layer_flux;
     uint8_t play;
-    uint64_t callback_size;
+    uint8_t capture;
 } war_window_render_context;
 
 typedef struct war_glyph_info {

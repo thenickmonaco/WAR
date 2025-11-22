@@ -84,7 +84,8 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_INT(A_NOTE_COUNT)
     LOAD_INT(A_LAYER_COUNT)
     LOAD_INT(A_LAYERS_IN_RAM)
-    LOAD_INT(A_DATA)
+    LOAD_INT(A_PLAY_DATA_SIZE)
+    LOAD_INT(A_CAPTURE_DATA_SIZE)
     LOAD_INT(A_BASE_FREQUENCY)
     LOAD_INT(A_BASE_NOTE)
     LOAD_INT(A_BYTES_NEEDED)
@@ -126,7 +127,8 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_INT(CMD_COUNT)
     // pc
     LOAD_INT(PC_CONTROL_BUFFER_SIZE)
-    LOAD_INT(PC_DATA_BUFFER_SIZE)
+    LOAD_INT(PC_PLAY_BUFFER_SIZE)
+    LOAD_INT(PC_CAPTURE_BUFFER_SIZE)
     LOAD_INT(A_BUILDER_DATA_SIZE)
 
 #undef LOAD_INT
@@ -170,7 +172,8 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_DOUBLE(A_BPM)
     LOAD_DOUBLE(A_SAMPLE_DURATION)
     LOAD_DOUBLE(WR_FPS)
-    LOAD_DOUBLE(WR_CALLBACK_FPS)
+    LOAD_DOUBLE(WR_PLAY_CALLBACK_FPS)
+    LOAD_DOUBLE(WR_CAPTURE_CALLBACK_FPS)
 
 #undef LOAD_DOUBLE
 
@@ -246,10 +249,6 @@ static inline size_t war_get_pool_a_size(war_pool* pool,
                 type_size = sizeof(void*);
             else if (strcmp(type, "war_audio_context") == 0)
                 type_size = sizeof(war_audio_context);
-            else if (strcmp(type, "war_cache_audio") == 0)
-                type_size = sizeof(war_cache_audio);
-            else if (strcmp(type, "war_sequencer") == 0)
-                type_size = sizeof(war_sequencer);
             else if (strcmp(type, "char*") == 0)
                 type_size = sizeof(char*);
             else if (strcmp(type, "char") == 0)
@@ -375,8 +374,12 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_text_vertex);
             else if (strcmp(type, "war_audio_context") == 0)
                 type_size = sizeof(war_audio_context);
-            else if (strcmp(type, "war_cache_window_render") == 0)
-                type_size = sizeof(war_cache_window_render);
+            else if (strcmp(type, "war_cache_wav") == 0)
+                type_size = sizeof(war_cache_wav);
+            else if (strcmp(type, "war_map_wav") == 0)
+                type_size = sizeof(war_map_wav);
+            else if (strcmp(type, "war_wav") == 0)
+                type_size = sizeof(war_wav);
             else if (strcmp(type, "war_color_context") == 0)
                 type_size = sizeof(war_color_context);
             else if (strcmp(type, "war_undo_tree") == 0)

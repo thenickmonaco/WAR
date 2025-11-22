@@ -52,6 +52,7 @@
 #include <spa-0.2/spa/utils/string.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -82,34 +83,60 @@ int main() {
     pc_control.i_to_wr = 0;
     pc_control.i_from_a = 0;
     pc_control.i_from_wr = 0;
-    war_producer_consumer pc_data;
-    pc_data.size = atomic_load(&ctx_lua.PC_DATA_BUFFER_SIZE);
-    pc_data.to_a = mmap(NULL,
-                        pc_data.size,
+    war_producer_consumer pc_play;
+    pc_play.size = atomic_load(&ctx_lua.PC_PLAY_BUFFER_SIZE);
+    pc_play.to_a = mmap(NULL,
+                        pc_play.size,
                         PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS,
                         -1,
                         0);
-    assert(pc_data.to_a);
-    memset(pc_data.to_a, 0, pc_data.size);
-    pc_data.to_wr = mmap(NULL,
-                         pc_data.size,
+    assert(pc_play.to_a);
+    memset(pc_play.to_a, 0, pc_play.size);
+    pc_play.to_wr = mmap(NULL,
+                         pc_play.size,
                          PROT_READ | PROT_WRITE,
                          MAP_PRIVATE | MAP_ANONYMOUS,
                          -1,
                          0);
-    assert(pc_data.to_wr);
-    memset(pc_data.to_wr, 0, pc_data.size);
-    pc_data.i_to_a = 0;
-    pc_data.i_to_wr = 0;
-    pc_data.i_from_a = 0;
-    pc_data.i_from_wr = 0;
+    assert(pc_play.to_wr);
+    memset(pc_play.to_wr, 0, pc_play.size);
+    pc_play.i_to_a = 0;
+    pc_play.i_to_wr = 0;
+    pc_play.i_from_a = 0;
+    pc_play.i_from_wr = 0;
+    war_producer_consumer pc_capture;
+    pc_capture.size = atomic_load(&ctx_lua.PC_CAPTURE_BUFFER_SIZE);
+    pc_capture.to_a = mmap(NULL,
+                           pc_capture.size,
+                           PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS,
+                           -1,
+                           0);
+    assert(pc_capture.to_a);
+    memset(pc_capture.to_a, 0, pc_capture.size);
+    pc_capture.to_wr = mmap(NULL,
+                            pc_capture.size,
+                            PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1,
+                            0);
+    assert(pc_capture.to_wr);
+    memset(pc_capture.to_wr, 0, pc_capture.size);
+    pc_capture.i_to_a = 0;
+    pc_capture.i_to_wr = 0;
+    pc_capture.i_from_a = 0;
+    pc_capture.i_from_wr = 0;
     war_atomics atomics = {
         .play_clock = 0,
         .play_frames = 0,
         .capture_frames = 0,
         .capture_monitor = 0,
         .capture_threshold = 0.01f,
+        .play_writer_rate = 0,
+        .play_reader_rate = 0,
+        .capture_writer_rate = 0,
+        .capture_reader_rate = 0,
         .play_gain = 1.0f,
         .capture_gain = 1.0f,
         .capture = 0,
@@ -134,13 +161,15 @@ int main() {
         &war_window_render_thread,
         NULL,
         war_window_render,
-        (void* [5]){&pc_control, &atomics, &pool_wr, &ctx_lua, &pc_data});
+        (void* [6]){
+            &pc_control, &atomics, &pool_wr, &ctx_lua, &pc_play, &pc_capture});
     pthread_t war_audio_thread;
     pthread_create(
         &war_audio_thread,
         NULL,
         war_audio,
-        (void* [5]){&pc_control, &atomics, &pool_a, &ctx_lua, &pc_data});
+        (void* [6]){
+            &pc_control, &atomics, &pool_a, &ctx_lua, &pc_play, &pc_capture});
     pthread_join(war_window_render_thread, NULL);
     pthread_join(war_audio_thread, NULL);
     END("war");
@@ -156,7 +185,8 @@ void* war_window_render(void* args) {
     war_atomics* atomics = args_ptrs[1];
     war_pool* pool_wr = args_ptrs[2];
     war_lua_context* ctx_lua = args_ptrs[3];
-    war_producer_consumer* pc_data = args_ptrs[4];
+    war_producer_consumer* pc_play = args_ptrs[4];
+    war_producer_consumer* pc_capture = args_ptrs[5];
     call_carmack("ctx_lua WR_STATES: %i", atomic_load(&ctx_lua->WR_STATES));
     pool_wr->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     pool_wr->pool_size =
@@ -328,8 +358,8 @@ void* war_window_render(void* args) {
     memset(
         note_layers, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     war_window_render_context ctx_wr = {
-        .callback_size = atomic_load(&ctx_lua->WR_CALLBACK_SIZE),
         .play = 0,
+        .capture = 0,
         .prompt = 0,
         .layers_active = layers_active,
         .layer_flux = 0,
@@ -766,11 +796,19 @@ void* war_window_render(void* args) {
     ctx_wr.sleep_duration_us = 50000;
     ctx_wr.frame_duration_us =
         (uint64_t)round((1.0 / (double)ctx_wr.FPS) * microsecond_conversion);
-    ctx_wr.callback_duration_us =
-        (uint64_t)round((1.0 / (double)atomic_load(&ctx_lua->WR_CALLBACK_FPS)) *
-                        microsecond_conversion);
+    ctx_wr.play_callback_duration_us = (uint64_t)round(
+        (1.0 / (double)atomic_load(&ctx_lua->WR_PLAY_CALLBACK_FPS)) *
+        microsecond_conversion);
+    ctx_wr.capture_callback_duration_us = (uint64_t)round(
+        (1.0 / (double)atomic_load(&ctx_lua->WR_CAPTURE_CALLBACK_FPS)) *
+        microsecond_conversion);
     uint64_t last_frame_time = war_get_monotonic_time_us();
-    uint64_t callback_last_frame_time = last_frame_time;
+    uint64_t play_callback_last_frame_time = last_frame_time;
+    uint64_t play_last_write_time = 0;
+    uint64_t play_write_count = 0;
+    uint64_t capture_callback_last_frame_time = last_frame_time;
+    uint64_t capture_last_read_time = 0;
+    uint64_t capture_read_count = 0;
     ctx_wr.cursor_blink_previous_us = last_frame_time;
     ctx_wr.cursor_blinking = false;
 
@@ -778,21 +816,221 @@ void* war_window_render(void* args) {
     uint32_t size;
     uint8_t* control_payload =
         war_pool_alloc(pool_wr, sizeof(uint8_t) * pc_control->size);
-    memset(control_payload, 0, pc_control->size);
     uint8_t* tmp_control_payload =
         war_pool_alloc(pool_wr, sizeof(uint8_t) * pc_control->size);
-    memset(tmp_control_payload, 0, pc_control->size);
     void** pc_control_cmd = war_pool_alloc(
         pool_wr, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
     pc_control_cmd[0] = &&end_wr;
+    //-------------------------------------------------------------------------
+    // CAPTURE WAV
+    //-------------------------------------------------------------------------
+    war_wav* capture_wav = war_pool_alloc(pool_wr, sizeof(war_wav));
+    capture_wav->memfd_size = 44;
+    uint64_t init_capacity = 44 + sizeof(float) *
+                                      atomic_load(&ctx_lua->A_SAMPLE_RATE) *
+                                      atomic_load(&ctx_lua->A_SAMPLE_DURATION) *
+                                      atomic_load(&ctx_lua->A_CHANNEL_COUNT);
+    capture_wav->memfd_capacity = init_capacity;
+    capture_wav->fname = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_PATH_LIMIT));
+    capture_wav->fname_size = sizeof("capture.wav") - 1;
+    memcpy(capture_wav->fname, "capture.wav", capture_wav->fname_size);
+    capture_wav->memfd = memfd_create(capture_wav->fname, MFD_CLOEXEC);
+    if (capture_wav->memfd < 0) {
+        call_carmack("memfd failed to open: %s", capture_wav->fname);
+    }
+    if (ftruncate(capture_wav->memfd, capture_wav->memfd_capacity) == -1) {
+        call_carmack("memfd ftruncate failed: %s", capture_wav->fname);
+    }
+    capture_wav->wav = mmap(NULL,
+                            capture_wav->memfd_capacity,
+                            PROT_READ | PROT_WRITE,
+                            MAP_SHARED,
+                            capture_wav->memfd,
+                            0);
+    if (capture_wav->wav == MAP_FAILED) {
+        call_carmack("mmap failed: %s", capture_wav->fname);
+    }
+    war_riff_header init_riff_header = (war_riff_header){
+        .chunk_id = "RIFF",
+        .chunk_size = init_capacity - 8,
+        .format = "WAVE",
+    };
+    war_fmt_chunk init_fmt_chunk = (war_fmt_chunk){
+        .subchunk1_id = "fmt ",
+        .subchunk1_size = 16,
+        .audio_format = 3,
+        .num_channels = atomic_load(&ctx_lua->A_CHANNEL_COUNT),
+        .sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
+        .byte_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE) *
+                     atomic_load(&ctx_lua->A_CHANNEL_COUNT) * sizeof(float),
+        .block_align = atomic_load(&ctx_lua->A_CHANNEL_COUNT) * sizeof(float),
+        .bits_per_sample = 32,
+    };
+    war_data_chunk init_data_chunk = (war_data_chunk){
+        .subchunk2_id = "data",
+        .subchunk2_size = init_capacity - 44,
+    };
+    *(war_riff_header*)capture_wav->wav = init_riff_header;
+    *(war_fmt_chunk*)(capture_wav->wav + sizeof(war_riff_header)) =
+        init_fmt_chunk;
+    *(war_data_chunk*)(capture_wav->wav + sizeof(war_riff_header) +
+                       sizeof(war_fmt_chunk)) = init_data_chunk;
+    capture_wav->fd =
+        open(capture_wav->fname, O_TRUNC | O_CREAT | O_RDWR, 0644);
+    if (capture_wav->fd < 0) {
+        call_carmack("fd failed to open: %s", capture_wav->fname);
+    }
+    capture_wav->fd_size = 0;
+    //-------------------------------------------------------------------------
+    // CACHE WAV
+    //-------------------------------------------------------------------------
+    war_cache_wav* cache_wav = war_pool_alloc(pool_wr, sizeof(war_cache_wav));
+    cache_wav->id = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->timestamp = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->wav = war_pool_alloc(
+        pool_wr, sizeof(uint8_t*) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->memfd = war_pool_alloc(
+        pool_wr, sizeof(int) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->memfd_size = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->memfd_capacity = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->fd = war_pool_alloc(
+        pool_wr, sizeof(int) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->fd_size = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->count = 0;
+    cache_wav->next_id = 1;
+    cache_wav->next_timestamp = 1;
+    //-------------------------------------------------------------------------
+    // MAP WAV
+    //-------------------------------------------------------------------------
+    war_map_wav* map_wav = war_pool_alloc(pool_wr, sizeof(war_map_wav));
+    map_wav->id =
+        war_pool_alloc(pool_wr,
+                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_LAYER_COUNT));
+    map_wav->fname =
+        war_pool_alloc(pool_wr,
+                       sizeof(char) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_LAYER_COUNT) *
+                           atomic_load(&ctx_lua->A_PATH_LIMIT));
+    map_wav->fname_size =
+        war_pool_alloc(pool_wr,
+                       sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_LAYER_COUNT));
+    map_wav->note =
+        war_pool_alloc(pool_wr,
+                       sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_LAYER_COUNT));
+    map_wav->layer =
+        war_pool_alloc(pool_wr,
+                       sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
+                           atomic_load(&ctx_lua->A_LAYER_COUNT));
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
 wr: {
     if (war_pc_from_a(pc_control, &header, &size, control_payload)) {
         goto* pc_control_cmd[header];
     }
     ctx_wr.now = war_get_monotonic_time_us();
+    if (ctx_wr.now - play_callback_last_frame_time >=
+        ctx_wr.play_callback_duration_us) {
+        play_callback_last_frame_time += ctx_wr.play_callback_duration_us;
+        if (!ctx_wr.play) { goto skip_play; }
+        if (ctx_wr.now - play_last_write_time >= 1000000) {
+            atomic_store(&atomics->play_writer_rate, (double)play_write_count);
+            play_write_count = 0;
+            play_last_write_time = ctx_wr.now;
+        }
+        play_write_count++;
+        uint64_t write_pos = pc_play->i_to_a;
+        uint64_t read_pos = pc_play->i_from_wr;
+        int64_t used_bytes = write_pos - read_pos;
+        if (used_bytes < 0) used_bytes += pc_play->size;
+        float buffer_percent = ((float)used_bytes / pc_play->size) * 100.0f;
+        // uint64_t target_samples =
+        //     (uint64_t)(((double)atomic_load(&ctx_lua->A_BYTES_NEEDED) *
+        //                 atomic_load(&atomics->writer_rate)) /
+        //                ((double)atomic_load(&atomics->reader_rate) * 8.0));
+        uint64_t target_samples =
+            (uint64_t)((double)atomic_load(&ctx_lua->A_BYTES_NEEDED) / 8.0);
+        //---------------------------------------------------------------------
+        // MIX SAMPLES
+        //---------------------------------------------------------------------
+        static float phase = 0.0f;
+        const float phase_inc = 2.0f * M_PI * 440.0f / 44100.0f;
+        for (uint64_t i = 0; i < target_samples; i++) {
+            float sample = sinf(phase) * 0.1f;
+            uint64_t byte_offset = pc_play->i_to_a;
+            uint8_t* audio_ptr = pc_play->to_a + byte_offset;
+            ((float*)audio_ptr)[0] = sample;
+            ((float*)audio_ptr)[1] = sample;
+            pc_play->i_to_a = (byte_offset + 8) & (pc_play->size - 1);
+            phase += phase_inc;
+            if (phase >= 2.0f * M_PI) { phase -= 2.0f * M_PI; }
+        }
+    }
+skip_play:
+    if (ctx_wr.now - capture_callback_last_frame_time >=
+        ctx_wr.capture_callback_duration_us) {
+        capture_callback_last_frame_time += ctx_wr.capture_callback_duration_us;
+        if (!ctx_wr.capture) {
+            pc_capture->i_from_a = pc_capture->i_to_a;
+            goto skip_capture;
+        }
+        call_carmack("capturing");
+        if (ctx_wr.now - capture_last_read_time >= 1000000) {
+            atomic_store(&atomics->capture_reader_rate,
+                         (double)capture_read_count);
+            // call_carmack("capture_reader_rate: %.2f Hz",
+            //              atomic_load(&atomics->capture_reader_rate));
+            capture_read_count = 0;
+            capture_last_read_time = ctx_wr.now;
+        }
+        capture_read_count++;
+        uint64_t write_pos = pc_capture->i_to_a;
+        uint64_t read_pos = pc_capture->i_from_a;
+        int64_t available_bytes;
+        if (write_pos >= read_pos) {
+            available_bytes = write_pos - read_pos;
+        } else {
+            available_bytes = pc_capture->size + write_pos - read_pos;
+        }
+        if (available_bytes > 0) {
+            uint64_t space_left =
+                capture_wav->memfd_capacity - capture_wav->memfd_size;
+            uint64_t bytes_to_copy =
+                available_bytes < space_left ? available_bytes : space_left;
+            if (bytes_to_copy > 0) {
+                uint64_t read_idx = read_pos;
+                uint64_t samples_to_copy = bytes_to_copy / sizeof(float);
+                float* wav_samples =
+                    (float*)(capture_wav->wav + 44 +
+                             (capture_wav->memfd_size - 44)); // Skip WAV header
+
+                for (uint64_t i = 0; i < samples_to_copy; i++) {
+                    wav_samples[i] = ((float*)pc_capture->to_a)[read_idx / 4];
+                    read_idx = (read_idx + 4) & (pc_capture->size - 1);
+                }
+                pc_capture->i_from_a = read_idx;
+                capture_wav->memfd_size += bytes_to_copy;
+                war_riff_header* riff_header =
+                    (war_riff_header*)capture_wav->wav;
+                riff_header->chunk_size = capture_wav->memfd_size - 8;
+                war_data_chunk* data_chunk =
+                    (war_data_chunk*)(capture_wav->wav +
+                                      sizeof(war_riff_header) +
+                                      sizeof(war_fmt_chunk));
+                data_chunk->subchunk2_size = capture_wav->memfd_size - 44;
+            }
+        }
+    }
+skip_capture:
     if (ctx_wr.now - last_frame_time >= ctx_wr.frame_duration_us) {
-        war_get_frame_duration_us(&ctx_wr);
+        // war_get_frame_duration_us(&ctx_wr);
         last_frame_time += ctx_wr.frame_duration_us;
         if (ctx_wr.trinity) {
             war_wayland_holy_trinity(fd,
@@ -804,50 +1042,6 @@ wr: {
                                      0,
                                      physical_width,
                                      physical_height);
-        }
-        if (ctx_wr.play) {
-            call_carmack("playing");
-            uint64_t write_pos = pc_data->i_to_a;
-            uint64_t read_pos = pc_data->i_from_wr;
-            int64_t used_bytes = write_pos - read_pos;
-            if (used_bytes < 0) used_bytes += pc_data->size;
-            float buffer_percent = ((float)used_bytes / pc_data->size) * 100.0f;
-            float ratio = (buffer_percent > 80.0f) ? 0.98f :
-                          (buffer_percent < 20.0f) ? 1.02f :
-                                                     1.0f;
-            double writer_rate = 1000000.0 / 4192.0;           // ~238.5 Hz
-            double reader_rate = 86.0;                         // Pipewire rate
-            double perfect_factor = writer_rate / reader_rate; // ~0.361
-            uint64_t target_samples =
-                (uint64_t)((double)atomic_load(&ctx_lua->A_BYTES_NEEDED) *
-                           perfect_factor / 8.0);
-            uint64_t resampled_samples = (uint64_t)(target_samples * ratio);
-            static float phase = 0.0f;
-            const float phase_inc = 2.0f * M_PI * 440.0f / 44100.0f;
-
-            for (uint64_t i = 0; i < resampled_samples; i++) {
-                float input_phase = i / ratio;
-                uint32_t phase_int = (uint32_t)input_phase;
-                float phase_frac = input_phase - phase_int;
-                float s0 = sinf((phase_int - 1) * phase_inc);
-                float s1 = sinf(phase_int * phase_inc);
-                float s2 = sinf((phase_int + 1) * phase_inc);
-                float s3 = sinf((phase_int + 2) * phase_inc);
-                float a0 = s3 - s2 - s0 + s1;
-                float a1 = s0 - s1 - a0;
-                float a2 = s2 - s0;
-                float a3 = s1;
-                float frac2 = phase_frac * phase_frac;
-                float sample =
-                    a0 * phase_frac * frac2 + a1 * frac2 + a2 * phase_frac + a3;
-
-                // Write to byte buffer
-                uint64_t byte_offset = pc_data->i_to_a;
-                uint8_t* audio_ptr = pc_data->to_a + byte_offset;
-                ((float*)audio_ptr)[0] = sample * 0.1f;
-                ((float*)audio_ptr)[1] = sample * 0.1f;
-                pc_data->i_to_a = (byte_offset + 8) & (pc_data->size - 1);
-            }
         }
     }
     // cursor blink
@@ -3904,6 +4098,8 @@ cmd_timeout_done:
                             } else if (strcmp(cmd_name, "cmd_normal_colon") ==
                                        0) {
                                 cmd_ptr = &&cmd_normal_colon;
+                            } else if (strcmp(cmd_name, "cmd_normal_S") == 0) {
+                                cmd_ptr = &&cmd_normal_S;
                             } else {
                                 call_carmack("unknown command: %s", cmd_name);
                             }
@@ -4899,6 +5095,27 @@ cmd_timeout_done:
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
+            goto cmd_done;
+        }
+        cmd_normal_S: {
+            call_carmack("cmd_normal_S");
+            if (ftruncate(capture_wav->fd, capture_wav->memfd_size) == -1) {
+                call_carmack("save_file: fd ftruncate failed: %s",
+                             capture_wav->fname);
+                goto cmd_done;
+            }
+            off_t offset = 0;
+            ssize_t result = sendfile(capture_wav->fd,
+                                      capture_wav->memfd,
+                                      &offset,
+                                      capture_wav->memfd_size);
+            if (result == -1) {
+                call_carmack("save_file: sendfile failed: %s",
+                             capture_wav->fname);
+            }
+            lseek(capture_wav->fd, 0, SEEK_SET);
+            memset(capture_wav->wav + 44, 0, capture_wav->memfd_capacity - 44);
+            capture_wav->memfd_size = 44;
             goto cmd_done;
         }
         cmd_normal_s: {
@@ -6561,7 +6778,7 @@ cmd_timeout_done:
         }
         cmd_normal_Q: {
             call_carmack("cmd_normal_Q");
-            ctx_wr.mode = MODE_CAPTURE;
+            ctx_wr.capture = !ctx_wr.capture;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
@@ -8317,36 +8534,46 @@ end_wr:
 static void war_play(void* userdata) {
     void** data = (void**)userdata;
     war_pipewire_context* ctx_pw = data[0];
-    war_producer_consumer* pc_data = data[1];
+    war_producer_consumer* pc_play = data[1];
     war_lua_context* ctx_lua = data[2];
+    uint64_t* play_last_read_time = data[3];
+    uint64_t* play_read_count = data[4];
+    war_atomics* atomics = data[5];
+    uint64_t now = war_get_monotonic_time_us();
+    if (now - *play_last_read_time >= 1000000) {
+        atomic_store(&atomics->play_reader_rate, (double)*play_read_count);
+        *play_read_count = 0;
+        *play_last_read_time = now;
+    }
+    (*play_read_count)++;
     struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_pw->play_stream);
     if (!b) { return; }
     float* dst = (float*)b->buffer->datas[0].data;
     uint64_t bytes_needed = atomic_load(&ctx_lua->A_BYTES_NEEDED);
-    uint64_t write_pos = pc_data->i_to_a;
-    uint64_t read_pos = pc_data->i_from_a;
+    uint64_t write_pos = pc_play->i_to_a;
+    uint64_t read_pos = pc_play->i_from_a;
     int64_t available_bytes;
     if (write_pos >= read_pos) {
         available_bytes = write_pos - read_pos;
     } else {
-        available_bytes = pc_data->size + write_pos - read_pos;
+        available_bytes = pc_play->size + write_pos - read_pos;
     }
     if (available_bytes >= bytes_needed) {
         uint64_t read_idx = read_pos;
         uint64_t samples_needed = bytes_needed / sizeof(float);
         for (uint64_t i = 0; i < samples_needed; i++) {
-            dst[i] = ((float*)pc_data->to_a)[read_idx / 4];
-            read_idx = (read_idx + 4) & (pc_data->size - 1);
+            dst[i] = ((float*)pc_play->to_a)[read_idx / 4];
+            read_idx = (read_idx + 4) & (pc_play->size - 1);
         }
-        pc_data->i_from_a = read_idx;
+        pc_play->i_from_a = read_idx;
     } else {
         uint64_t samples_available = available_bytes / sizeof(float);
         uint64_t read_idx = read_pos;
         for (uint64_t i = 0; i < samples_available; i++) {
-            dst[i] = ((float*)pc_data->to_a)[read_idx / 4];
-            read_idx = (read_idx + 4) & (pc_data->size - 1);
+            dst[i] = ((float*)pc_play->to_a)[read_idx / 4];
+            read_idx = (read_idx + 4) & (pc_play->size - 1);
         }
-        pc_data->i_from_a = read_idx;
+        pc_play->i_from_a = read_idx;
         memset(dst + samples_available, 0, bytes_needed - available_bytes);
     }
     b->buffer->datas[0].chunk->size = bytes_needed;
@@ -8355,8 +8582,47 @@ static void war_play(void* userdata) {
 static void war_capture(void* userdata) {
     void** data = (void**)userdata;
     war_pipewire_context* ctx_pw = data[0];
-    war_producer_consumer* pc_data = data[1];
+    war_producer_consumer* pc_capture = data[1];
     war_lua_context* ctx_lua = data[2];
+    uint64_t* capture_last_write_time = data[3];
+    uint64_t* capture_write_count = data[4];
+    war_atomics* atomics = data[5];
+    uint64_t now = war_get_monotonic_time_us();
+    if (now - *capture_last_write_time >= 1000000) {
+        atomic_store(&atomics->capture_writer_rate,
+                     (double)*capture_write_count);
+        // call_carmack("capture_writer_rate: %.2f Hz",
+        //              atomic_load(&atomics->capture_writer_rate));
+        *capture_write_count = 0;
+        *capture_last_write_time = now;
+    }
+    (*capture_write_count)++;
+    struct pw_buffer* b = pw_stream_dequeue_buffer(ctx_pw->capture_stream);
+    if (!b) { return; }
+    float* src = (float*)b->buffer->datas[0].data;
+    uint64_t available_bytes = b->buffer->datas[0].chunk->size;
+    uint64_t write_pos = pc_capture->i_to_a;
+    uint64_t read_pos = pc_capture->i_from_a;
+    int64_t space_available;
+    if (read_pos > write_pos) {
+        space_available = read_pos - write_pos;
+    } else {
+        space_available = pc_capture->size + read_pos - write_pos;
+    }
+    uint64_t bytes_to_write = available_bytes;
+    if (bytes_to_write > space_available - 4) {
+        bytes_to_write = space_available - 4;
+    }
+    if (bytes_to_write > 0) {
+        uint64_t write_idx = write_pos;
+        uint64_t samples_to_write = bytes_to_write / sizeof(float);
+        for (uint64_t i = 0; i < samples_to_write; i++) {
+            ((float*)pc_capture->to_a)[write_idx / 4] = src[i];
+            write_idx = (write_idx + 4) & (pc_capture->size - 1);
+        }
+        pc_capture->i_to_a = write_idx;
+    }
+    pw_stream_queue_buffer(ctx_pw->capture_stream, b);
 }
 //-----------------------------------------------------------------------------
 // THREAD AUDIO
@@ -8368,7 +8634,8 @@ void* war_audio(void* args) {
     war_atomics* atomics = args_ptrs[1];
     war_pool* pool_a = args_ptrs[2];
     war_lua_context* ctx_lua = args_ptrs[3];
-    war_producer_consumer* pc_data = args_ptrs[4];
+    war_producer_consumer* pc_play = args_ptrs[4];
+    war_producer_consumer* pc_capture = args_ptrs[5];
     pool_a->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     pool_a->pool_size =
         war_get_pool_a_size(pool_a, ctx_lua, "src/lua/monaco/set.lua");
@@ -8391,12 +8658,32 @@ void* war_audio(void* args) {
     //-------------------------------------------------------------------------
     war_pipewire_context* ctx_pw =
         war_pool_alloc(pool_a, sizeof(war_pipewire_context));
-    ctx_pw->data =
-        war_pool_alloc(pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_DATA));
-    // data
-    ctx_pw->data[0] = ctx_pw;
-    ctx_pw->data[1] = pc_data;
-    ctx_pw->data[2] = ctx_lua;
+    ctx_pw->play_data = war_pool_alloc(
+        pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_PLAY_DATA_SIZE));
+    // play_data
+    ctx_pw->play_data[0] = ctx_pw;
+    ctx_pw->play_data[1] = pc_play;
+    ctx_pw->play_data[2] = ctx_lua;
+    uint64_t* play_last_read_time = war_pool_alloc(pool_a, sizeof(uint64_t));
+    uint64_t* play_read_count = war_pool_alloc(pool_a, sizeof(uint64_t));
+    *play_last_read_time = 0;
+    *play_read_count = 0;
+    ctx_pw->play_data[3] = play_last_read_time;
+    ctx_pw->play_data[4] = play_read_count;
+    ctx_pw->play_data[5] = atomics;
+    ctx_pw->capture_data = war_pool_alloc(
+        pool_a, sizeof(void*) * atomic_load(&ctx_lua->A_CAPTURE_DATA_SIZE));
+    ctx_pw->capture_data[0] = ctx_pw;
+    ctx_pw->capture_data[1] = pc_capture;
+    ctx_pw->capture_data[2] = ctx_lua;
+    uint64_t* capture_last_write_time =
+        war_pool_alloc(pool_a, sizeof(uint64_t));
+    uint64_t* capture_write_count = war_pool_alloc(pool_a, sizeof(uint64_t));
+    *capture_last_write_time = 0;
+    *capture_write_count = 0;
+    ctx_pw->capture_data[3] = capture_last_write_time;
+    ctx_pw->capture_data[4] = capture_write_count;
+    ctx_pw->capture_data[5] = atomics;
     pw_init(NULL, NULL);
     ctx_pw->loop = pw_loop_new(NULL);
     ctx_pw->play_info = (struct spa_audio_info_raw){
@@ -8418,8 +8705,11 @@ void* war_audio(void* args) {
         .process = war_play,
     };
     // ctx_pw->play_properties = pw_properties_new(...
-    ctx_pw->play_stream = pw_stream_new_simple(
-        ctx_pw->loop, "WAR_play", NULL, &ctx_pw->play_events, ctx_pw->data);
+    ctx_pw->play_stream = pw_stream_new_simple(ctx_pw->loop,
+                                               "WAR_play",
+                                               NULL,
+                                               &ctx_pw->play_events,
+                                               ctx_pw->play_data);
     if (!ctx_pw->play_stream) { call_carmack("play_stream init issue"); }
     int pw_stream_result = pw_stream_connect(ctx_pw->play_stream,
                                              PW_DIRECTION_OUTPUT,
@@ -8452,7 +8742,7 @@ void* war_audio(void* args) {
                                                   "WAR_capture",
                                                   NULL,
                                                   &ctx_pw->capture_events,
-                                                  ctx_pw->data);
+                                                  ctx_pw->capture_data);
     if (!ctx_pw->capture_stream) { call_carmack("capture_stream init issue"); }
     pw_stream_result = pw_stream_connect(ctx_pw->capture_stream,
                                          PW_DIRECTION_INPUT,
@@ -8497,8 +8787,7 @@ pc_a: {
     goto pc_a_done;
 }
 pc_a_done: {
-    pw_loop_iterate(ctx_pw->loop, 1);
-    nanosleep(&ts, NULL);
+    pw_loop_iterate(ctx_pw->loop, 0);
     goto pc_a;
 }
 end_a: {

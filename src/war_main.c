@@ -59,8 +59,14 @@
 
 int main() {
     CALL_CARMACK("war");
+    //-------------------------------------------------------------------------
+    // LUA CONTEXT
+    //-------------------------------------------------------------------------
     war_lua_context ctx_lua;
     war_load_lua_config(&ctx_lua, "src/lua/monaco/set.lua");
+    //-------------------------------------------------------------------------
+    // PC CONTROL
+    //-------------------------------------------------------------------------
     war_producer_consumer pc_control;
     pc_control.size = atomic_load(&ctx_lua.PC_CONTROL_BUFFER_SIZE);
     pc_control.to_a = mmap(NULL,
@@ -83,6 +89,9 @@ int main() {
     pc_control.i_to_wr = 0;
     pc_control.i_from_a = 0;
     pc_control.i_from_wr = 0;
+    //-------------------------------------------------------------------------
+    // PC PLAY
+    //-------------------------------------------------------------------------
     war_producer_consumer pc_play;
     pc_play.size = atomic_load(&ctx_lua.PC_PLAY_BUFFER_SIZE);
     pc_play.to_a = mmap(NULL,
@@ -105,6 +114,9 @@ int main() {
     pc_play.i_to_wr = 0;
     pc_play.i_from_a = 0;
     pc_play.i_from_wr = 0;
+    //-------------------------------------------------------------------------
+    // PC CAPTURE
+    //-------------------------------------------------------------------------
     war_producer_consumer pc_capture;
     pc_capture.size = atomic_load(&ctx_lua.PC_CAPTURE_BUFFER_SIZE);
     pc_capture.to_a = mmap(NULL,
@@ -127,6 +139,9 @@ int main() {
     pc_capture.i_to_wr = 0;
     pc_capture.i_from_a = 0;
     pc_capture.i_from_wr = 0;
+    //-------------------------------------------------------------------------
+    // ATOMICS
+    //-------------------------------------------------------------------------
     war_atomics atomics = {
         .play_clock = 0,
         .play_frames = 0,
@@ -154,6 +169,9 @@ int main() {
         .cache_next_timestamp = 1,
         .layer = 0,
     };
+    //-------------------------------------------------------------------------
+    // THREADS
+    //-------------------------------------------------------------------------
     war_pool pool_wr;
     war_pool pool_a;
     pthread_t war_window_render_thread;
@@ -196,30 +214,28 @@ void* war_window_render(void* args) {
     pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
     int pool_result = posix_memalign(
         &pool_wr->pool, pool_wr->pool_alignment, pool_wr->pool_size);
-    memset(pool_wr->pool, 0, pool_wr->pool_size);
     assert(pool_result == 0 && pool_wr->pool);
+    memset(pool_wr->pool, 0, pool_wr->pool_size);
     pool_wr->pool_ptr = (uint8_t*)pool_wr->pool;
-
+    //-------------------------------------------------------------------------
+    // VULKAN CONTEXT
+    //-------------------------------------------------------------------------
     // const uint32_t internal_width = 1920;
     // const uint32_t internal_height = 1080;
-
     double physical_width = 2560;
     double physical_height = 1600;
     const uint32_t stride = physical_width * 4;
-
     war_vulkan_context ctx_vk =
         war_vulkan_init(ctx_lua, physical_width, physical_height);
     assert(ctx_vk.dmabuf_fd >= 0);
-    uint32_t zwp_linux_dmabuf_v1_id = 0;
-    uint32_t zwp_linux_buffer_params_v1_id = 0;
-    uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
-
+    //-------------------------------------------------------------------------
+    // COLOR CONTEXT
+    //-------------------------------------------------------------------------
     // constants
     const uint32_t light_gray_hex = 0xFF454950;
     const uint32_t darker_light_gray_hex = 0xFF36383C; // gutter / line numbers
     const uint32_t dark_gray_hex = 0xFF282828;
     // rainbow
-    uint32_t layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
     uint32_t* colors = war_pool_alloc(
         pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->A_LAYER_COUNT));
     const uint32_t red_hex = 0xFF0000DE;
@@ -244,49 +260,14 @@ void* war_window_render(void* args) {
     colors[6] = magenta_hex;
     colors[7] = purple_hex;
     colors[8] = gray_hex;
-    // float color_step = atomic_load(&ctx_lua->WR_COLOR_STEP);
-    // float base_h = 0.0f;
-    // float s = 1.0f;
-    // float v = 0.87f;
-    // for (uint32_t i = 1; i < layer_count; i++) {
-    //     float h = fmodf(base_h + i * color_step, 360.0f);
-    //     float c = v * s;
-    //     float x = c * (1 - fabsf(fmodf(h / 60.0f, 2) - 1));
-    //     float m = v - c;
-    //     float r, g, b;
-    //     if (h < 60) {
-    //         r = c;
-    //         g = x;
-    //         b = 0;
-    //     } else if (h < 120) {
-    //         r = x;
-    //         g = c;
-    //         b = 0;
-    //     } else if (h < 180) {
-    //         r = 0;
-    //         g = c;
-    //         b = x;
-    //     } else if (h < 240) {
-    //         r = 0;
-    //         g = x;
-    //         b = c;
-    //     } else if (h < 300) {
-    //         r = x;
-    //         g = 0;
-    //         b = c;
-    //     } else {
-    //         r = c;
-    //         g = 0;
-    //         b = x;
-    //     }
-    //     r += m;
-    //     g += m;
-    //     b += m;
-    //     uint8_t R = (uint8_t)(r * 255);
-    //     uint8_t G = (uint8_t)(g * 255);
-    //     uint8_t B = (uint8_t)(b * 255);
-    //     colors[i] = (0xFF << 24) | (B << 16) | (G << 8) | R;
-    // }
+    war_color_context* ctx_color =
+        war_pool_alloc(pool_wr, sizeof(war_color_context));
+    ctx_color->full_white_hex = full_white_hex;
+    ctx_color->white_hex = white_hex;
+    ctx_color->colors = colors;
+    //-------------------------------------------------------------------------
+    // DEFAULTS
+    //-------------------------------------------------------------------------
     const float default_horizontal_line_thickness = 0.018;
     const float piano_horizontal_line_thickness = 0.018;
     const float default_vertical_line_thickness = 0.018; // default: 0.018
@@ -294,11 +275,6 @@ void* war_window_render(void* args) {
         0.04; // 0.027 is minimum for preventing 1/4, 1/7, 1/9, max = 0.075f
               // sub_cursor right outline from disappearing
               // defualt outline = 0.04f
-    war_color_context* ctx_color =
-        war_pool_alloc(pool_wr, sizeof(war_color_context));
-    ctx_color->full_white_hex = full_white_hex;
-    ctx_color->white_hex = white_hex;
-    ctx_color->colors = colors;
     float default_alpha_scale = atomic_load(&ctx_lua->DEFAULT_ALPHA_SCALE);
     float default_cursor_alpha_scale =
         atomic_load(&ctx_lua->DEFAULT_CURSOR_ALPHA_SCALE);
@@ -314,6 +290,9 @@ void* war_window_render(void* args) {
         atomic_load(&ctx_lua->DEFAULT_WINDOWED_ALPHA_SCALE);
     float default_windowed_cursor_alpha_scale =
         atomic_load(&ctx_lua->DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE);
+    //-------------------------------------------------------------------------
+    // VIEWPORT
+    //-------------------------------------------------------------------------
     double scale_factor = 1.483333; // 1.483333
     const uint32_t logical_width =
         (uint32_t)floor(physical_width / scale_factor);
@@ -329,37 +308,37 @@ void* war_window_render(void* args) {
         (uint32_t)((physical_height -
                     ((float)num_rows_for_status_bars * ctx_vk.cell_height)) /
                    ctx_vk.cell_height);
-    war_audio_context ctx_a = {
-        .sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
-        .BPM = atomic_load(&ctx_lua->A_BPM),
-        .channel_count = atomic_load(&ctx_lua->A_CHANNEL_COUNT),
-        .period_size = AUDIO_DEFAULT_PERIOD_SIZE,
-    };
+    //-------------------------------------------------------------------------
+    // UNDO TREE
+    //-------------------------------------------------------------------------
     war_undo_tree* undo_tree = war_pool_alloc(pool_wr, sizeof(war_undo_tree));
-    memset(undo_tree, 0, sizeof(war_undo_tree));
     undo_tree->root = NULL;
     undo_tree->current = NULL;
     undo_tree->next_id = 1;
     undo_tree->next_seq_num = 1;
     undo_tree->next_branch_id = 1;
+    //-------------------------------------------------------------------------
+    // STRING ARRAYS
+    //-------------------------------------------------------------------------
     char* input_sequence = war_pool_alloc(
         pool_wr,
         sizeof(char) * atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
     char* prompt = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memset(prompt, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     char* tmp_str = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     char* layers_active = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_LAYER_COUNT));
     chdir(atomic_load(&ctx_lua->CWD));
+    //-------------------------------------------------------------------------
+    // NOTE LAYER MAPPINGS
+    //-------------------------------------------------------------------------
     uint64_t* note_layers = war_pool_alloc(
         pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
-    memset(
-        note_layers, 0, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
+    //-------------------------------------------------------------------------
+    // WINDOW RENDER CONTEXT
+    //-------------------------------------------------------------------------
     war_window_render_context ctx_wr = {
-        .play = 0,
-        .capture = 0,
         .prompt = 0,
         .layers_active = layers_active,
         .layer_flux = 0,
@@ -482,6 +461,13 @@ void* war_window_render(void* args) {
     for (int i = 0; i < LAYER_COUNT; i++) {
         ctx_wr.layers[i] = i / ctx_wr.layer_count;
     }
+    uint32_t max_viewport_cols =
+        (uint32_t)(physical_width /
+                   (ctx_vk.cell_width * ctx_wr.min_zoom_scale));
+    uint32_t max_viewport_rows =
+        (uint32_t)(physical_height /
+                   (ctx_vk.cell_height * ctx_wr.min_zoom_scale));
+    uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
     war_views views;
     {
         uint32_t* views_col = war_pool_alloc(
@@ -502,9 +488,6 @@ void* war_window_render(void* args) {
             warpoon_text[i] = war_pool_alloc(
                 pool_wr,
                 sizeof(char) * atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
-            memset(warpoon_text[i],
-                   0,
-                   atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
         }
         uint32_t warpoon_viewport_cols = 25;
         uint32_t warpoon_viewport_rows = 8;
@@ -546,7 +529,9 @@ void* war_window_render(void* args) {
             .warpoon_color_cursor = ctx_wr.white_hex,
         };
     }
-
+    //-------------------------------------------------------------------------
+    // REPEATS TIMEOUTS
+    //-------------------------------------------------------------------------
     const uint64_t repeat_delay_us = 150000;
     const uint64_t repeat_rate_us = 40000;
     uint32_t repeat_keysym = 0;
@@ -558,67 +543,39 @@ void* war_window_render(void* args) {
     uint64_t timeout_start_us = 0;
     bool timeout = false;
     bool goto_cmd_timeout_done = false;
+    //-------------------------------------------------------------------------
+    // FSM KEYS MODS
+    //-------------------------------------------------------------------------
     war_fsm_state* fsm = war_pool_alloc(
         pool_wr, sizeof(war_fsm_state) * atomic_load(&ctx_lua->WR_STATES));
     for (int i = 0; i < atomic_load(&ctx_lua->WR_STATES); i++) {
         fsm[i].is_terminal = war_pool_alloc(
             pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].is_terminal,
-               0,
-               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         fsm[i].is_prefix = war_pool_alloc(
             pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].is_prefix,
-               0,
-               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         fsm[i].handle_release = war_pool_alloc(
             pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].handle_release,
-               0,
-               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         fsm[i].handle_repeat = war_pool_alloc(
             pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].handle_repeat,
-               0,
-               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         fsm[i].handle_timeout = war_pool_alloc(
             pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].handle_timeout,
-               0,
-               sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         fsm[i].command = war_pool_alloc(
             pool_wr, sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        memset(fsm[i].command,
-               0,
-               sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
         fsm[i].next_state = war_pool_alloc(
             pool_wr,
             sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
                 atomic_load(&ctx_lua->WR_MOD_COUNT));
-        memset(fsm[i].next_state,
-               0,
-               sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
-                   atomic_load(&ctx_lua->WR_MOD_COUNT));
     }
     uint16_t current_state_index = 0;
     bool* key_down =
         war_pool_alloc(pool_wr,
                        sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
                            atomic_load(&ctx_lua->WR_MOD_COUNT));
-    memset(key_down,
-           0,
-           sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
-               atomic_load(&ctx_lua->WR_MOD_COUNT));
     uint64_t* key_last_event_us = war_pool_alloc(
         pool_wr,
         sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
             atomic_load(&ctx_lua->WR_MOD_COUNT));
-    memset(key_last_event_us,
-           0,
-           sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
-               atomic_load(&ctx_lua->WR_MOD_COUNT));
     uint64_t fsm_state_last_event_us = 0;
-
     uint32_t mod_shift;
     uint32_t mod_ctrl;
     uint32_t mod_alt;
@@ -628,21 +585,12 @@ void* war_window_render(void* args) {
     uint32_t mod_fn;
     struct xkb_context* xkb_context;
     struct xkb_state* xkb_state;
-
-    enum war_pixel_format {
-        ARGB8888 = 0,
-    };
-
-    int shm_fd = syscall(SYS_memfd_create, "shm", MFD_CLOEXEC);
-    if (shm_fd < 0) {
-        call_carmack("error: memfd_create");
-        return NULL;
-    }
-    if (syscall(SYS_ftruncate, shm_fd, stride * physical_height) < 0) {
-        call_carmack("error: ftruncate");
-        close(shm_fd);
-        return NULL;
-    }
+    //-------------------------------------------------------------------------
+    // WAYLAND
+    //-------------------------------------------------------------------------
+    uint32_t zwp_linux_dmabuf_v1_id = 0;
+    uint32_t zwp_linux_buffer_params_v1_id = 0;
+    uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
     uint32_t wl_display_id = 1;
     uint32_t wl_registry_id = 2;
     uint32_t wl_buffer_id = 0;
@@ -679,34 +627,27 @@ void* war_window_render(void* args) {
     // uint32_t wl_keyboard_id = 0;
     // uint32_t wl_pointer_id = 0;
     // uint32_t zwp_linux_explicit_synchronization_v1_id = 0;
-
     int fd = war_wayland_make_fd();
     assert(fd >= 0);
-
     uint32_t new_id;
-    {
-        uint8_t get_registry[12];
-        war_write_le32(get_registry, wl_display_id);
-        war_write_le16(get_registry + 4, 1);
-        war_write_le16(get_registry + 6, 12);
-        war_write_le32(get_registry + 8, wl_registry_id);
-        ssize_t written = write(fd, get_registry, 12);
-        call_carmack("written size: %lu", written);
-        dump_bytes("written", get_registry, 12);
-        assert(written == 12);
-        new_id = wl_registry_id + 1;
-    }
-
+    uint8_t get_registry[12];
+    war_write_le32(get_registry, wl_display_id);
+    war_write_le16(get_registry + 4, 1);
+    war_write_le16(get_registry + 6, 12);
+    war_write_le32(get_registry + 8, wl_registry_id);
+    ssize_t written = write(fd, get_registry, 12);
+    call_carmack("written size: %lu", written);
+    dump_bytes("written", get_registry, 12);
+    assert(written == 12);
+    new_id = wl_registry_id + 1;
     uint8_t* msg_buffer = war_pool_alloc(
         pool_wr,
         sizeof(uint8_t) * atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE));
     size_t msg_buffer_size = 0;
-
     struct pollfd pfd = {
         .fd = fd,
         .events = POLLIN,
     };
-
     void** obj_op = war_pool_alloc(
         pool_wr,
         sizeof(void*) * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OBJECTS) *
@@ -719,16 +660,9 @@ void* war_window_render(void* args) {
            0] = &&wl_registry_global;
     obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
            1] = &&wl_registry_global_remove;
-
-    uint32_t max_viewport_cols =
-        (uint32_t)(physical_width /
-                   (ctx_vk.cell_width * ctx_wr.min_zoom_scale));
-    uint32_t max_viewport_rows =
-        (uint32_t)(physical_height /
-                   (ctx_vk.cell_height * ctx_wr.min_zoom_scale));
-    uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
-
-    // --- WAR_NOTE_QUADS ALLOCATION ---
+    //-------------------------------------------------------------------------
+    // NOTE QUADS
+    //-------------------------------------------------------------------------
     war_note_quads note_quads;
     note_quads.alive = war_pool_alloc(
         pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
@@ -784,34 +718,28 @@ void* war_window_render(void* args) {
     uint16_t* text_indices = war_pool_alloc(
         pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_indices_count = 0;
-
+    //-------------------------------------------------------------------------
+    // STATUS BARS
+    //-------------------------------------------------------------------------
     ctx_wr.text_bottom_status_bar = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     ctx_wr.text_middle_status_bar = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     ctx_wr.text_top_status_bar = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-
+    //-------------------------------------------------------------------------
+    // RENDERING FPS
+    //-------------------------------------------------------------------------
     const double microsecond_conversion = 1000000.0;
     ctx_wr.sleep_duration_us = 50000;
     ctx_wr.frame_duration_us =
         (uint64_t)round((1.0 / (double)ctx_wr.FPS) * microsecond_conversion);
-    ctx_wr.play_callback_duration_us = (uint64_t)round(
-        (1.0 / (double)atomic_load(&ctx_lua->WR_PLAY_CALLBACK_FPS)) *
-        microsecond_conversion);
-    ctx_wr.capture_callback_duration_us = (uint64_t)round(
-        (1.0 / (double)atomic_load(&ctx_lua->WR_CAPTURE_CALLBACK_FPS)) *
-        microsecond_conversion);
     uint64_t last_frame_time = war_get_monotonic_time_us();
-    uint64_t play_callback_last_frame_time = last_frame_time;
-    uint64_t play_last_write_time = 0;
-    uint64_t play_write_count = 0;
-    uint64_t capture_callback_last_frame_time = last_frame_time;
-    uint64_t capture_last_read_time = 0;
-    uint64_t capture_read_count = 0;
     ctx_wr.cursor_blink_previous_us = last_frame_time;
     ctx_wr.cursor_blinking = false;
-
+    //-------------------------------------------------------------------------
+    // PC CONTROL
+    //-------------------------------------------------------------------------
     uint32_t header;
     uint32_t size;
     uint8_t* control_payload =
@@ -930,22 +858,55 @@ void* war_window_render(void* args) {
         war_pool_alloc(pool_wr,
                        sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
                            atomic_load(&ctx_lua->A_LAYER_COUNT));
+    //-------------------------------------------------------------------------
+    // CAPTURE CONTEXT
+    //-------------------------------------------------------------------------
+    war_capture_context* ctx_capture =
+        war_pool_alloc(pool_wr, sizeof(war_capture_context));
+    // rate
+    ctx_capture->rate_us = (uint64_t)round(
+        (1.0 / (double)atomic_load(&ctx_lua->WR_CAPTURE_CALLBACK_FPS)) *
+        microsecond_conversion);
+    ctx_capture->last_frame_time = war_get_monotonic_time_us();
+    ctx_capture->last_read_time = 0;
+    ctx_capture->read_count = 0;
+    // misc
+    ctx_capture->capture = 0;
+    ctx_capture->capture_wait = 1;
+    ctx_capture->capture_delay = 0;
+    //-------------------------------------------------------------------------
+    // PLAY CONTEXT
+    //-------------------------------------------------------------------------
+    war_play_context* ctx_play =
+        war_pool_alloc(pool_wr, sizeof(war_capture_context));
+    // rate
+    ctx_play->rate_us = (uint64_t)round(
+        (1.0 / (double)atomic_load(&ctx_lua->WR_PLAY_CALLBACK_FPS)) *
+        microsecond_conversion);
+    ctx_play->last_frame_time = war_get_monotonic_time_us();
+    ctx_play->last_write_time = 0;
+    ctx_play->write_count = 0;
+    // misc
+    ctx_play->play = 0;
     while (!atomic_load(&atomics->start_war)) { usleep(1000); }
 wr: {
     if (war_pc_from_a(pc_control, &header, &size, control_payload)) {
         goto* pc_control_cmd[header];
     }
     ctx_wr.now = war_get_monotonic_time_us();
-    if (ctx_wr.now - play_callback_last_frame_time >=
-        ctx_wr.play_callback_duration_us) {
-        play_callback_last_frame_time += ctx_wr.play_callback_duration_us;
-        if (!ctx_wr.play) { goto skip_play; }
-        if (ctx_wr.now - play_last_write_time >= 1000000) {
-            atomic_store(&atomics->play_writer_rate, (double)play_write_count);
-            play_write_count = 0;
-            play_last_write_time = ctx_wr.now;
+    //-------------------------------------------------------------------------
+    // PLAY
+    //-------------------------------------------------------------------------
+    if (ctx_wr.now - ctx_play->last_frame_time >= ctx_play->rate_us) {
+        ctx_play->last_frame_time += ctx_play->rate_us;
+        if (!ctx_play->play) { goto skip_play; }
+        if (ctx_wr.now - ctx_play->last_write_time >= 1000000) {
+            atomic_store(&atomics->play_writer_rate,
+                         (double)ctx_play->write_count);
+            ctx_play->write_count = 0;
+            ctx_play->last_write_time = ctx_wr.now;
         }
-        play_write_count++;
+        ctx_play->write_count++;
         uint64_t write_pos = pc_play->i_to_a;
         uint64_t read_pos = pc_play->i_from_wr;
         int64_t used_bytes = write_pos - read_pos;
@@ -974,23 +935,25 @@ wr: {
         }
     }
 skip_play:
-    if (ctx_wr.now - capture_callback_last_frame_time >=
-        ctx_wr.capture_callback_duration_us) {
-        capture_callback_last_frame_time += ctx_wr.capture_callback_duration_us;
-        if (!ctx_wr.capture) {
+    //-------------------------------------------------------------------------
+    // CAPTURE
+    //-------------------------------------------------------------------------
+    if (ctx_wr.now - ctx_capture->last_frame_time >= ctx_capture->rate_us) {
+        ctx_capture->last_frame_time += ctx_capture->rate_us;
+        if (!ctx_capture->capture) {
             pc_capture->i_from_a = pc_capture->i_to_a;
             goto skip_capture;
         }
         call_carmack("capturing");
-        if (ctx_wr.now - capture_last_read_time >= 1000000) {
+        if (ctx_wr.now - ctx_capture->last_read_time >= 1000000) {
             atomic_store(&atomics->capture_reader_rate,
-                         (double)capture_read_count);
+                         (double)ctx_capture->read_count);
             // call_carmack("capture_reader_rate: %.2f Hz",
             //              atomic_load(&atomics->capture_reader_rate));
-            capture_read_count = 0;
-            capture_last_read_time = ctx_wr.now;
+            ctx_capture->read_count = 0;
+            ctx_capture->last_read_time = ctx_wr.now;
         }
-        capture_read_count++;
+        ctx_capture->read_count++;
         uint64_t write_pos = pc_capture->i_to_a;
         uint64_t read_pos = pc_capture->i_from_a;
         int64_t available_bytes;
@@ -1030,7 +993,6 @@ skip_play:
     }
 skip_capture:
     if (ctx_wr.now - last_frame_time >= ctx_wr.frame_duration_us) {
-        // war_get_frame_duration_us(&ctx_wr);
         last_frame_time += ctx_wr.frame_duration_us;
         if (ctx_wr.trinity) {
             war_wayland_holy_trinity(fd,
@@ -1054,8 +1016,9 @@ skip_capture:
         ctx_wr.cursor_blink_duration_us =
             (ctx_wr.cursor_blink_state == CURSOR_BLINK) ?
                 atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US) :
-                (uint64_t)round((60.0 / ((double)ctx_a.BPM)) *
-                                microsecond_conversion);
+                (uint64_t)round(
+                    (60.0 / ((double)atomic_load(&ctx_lua->A_BPM))) *
+                    microsecond_conversion);
         ;
         ctx_wr.cursor_blink_previous_us += ctx_wr.cursor_blink_duration_us;
         ctx_wr.cursor_blinking = !ctx_wr.cursor_blinking;
@@ -1898,8 +1861,8 @@ cmd_timeout_done:
                 &quad_indices_count,
                 (float[3]){
                     ((float)atomic_load(&atomics->play_frames) /
-                     ctx_a.sample_rate) /
-                        ((60.0f / ctx_a.BPM) /
+                     atomic_load(&ctx_lua->A_SAMPLE_RATE)) /
+                        ((60.0f / atomic_load(&ctx_lua->A_BPM)) /
                          atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT)),
                     ctx_wr.bottom_row,
                     ctx_wr.layers[LAYER_PLAYBACK_BAR]},
@@ -4477,13 +4440,6 @@ cmd_timeout_done:
             ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
-        cmd_wav_esc: {
-            call_carmack("cmd_wav_esc");
-            ctx_wr.mode = MODE_NORMAL;
-            ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
-            goto cmd_done;
-        }
         cmd_normal_K: {
             call_carmack("cmd_normal_K");
             float gain =
@@ -4781,10 +4737,10 @@ cmd_timeout_done:
         }
         cmd_normal_ga: {
             call_carmack("cmd_normal_$");
-            uint32_t col =
-                ((float)atomic_load(&atomics->play_clock) / ctx_a.sample_rate) /
-                ((60.0f / ctx_a.BPM) /
-                 atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
+            uint32_t col = ((float)atomic_load(&atomics->play_clock) /
+                            atomic_load(&ctx_lua->A_SAMPLE_RATE)) /
+                           ((60.0f / atomic_load(&ctx_lua->A_BPM)) /
+                            atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
             ctx_wr.cursor_pos_x =
                 war_clamp_uint32(col, ctx_wr.min_col, ctx_wr.max_col);
             ctx_wr.sub_col = 0;
@@ -5099,23 +5055,6 @@ cmd_timeout_done:
         }
         cmd_normal_S: {
             call_carmack("cmd_normal_S");
-            if (ftruncate(capture_wav->fd, capture_wav->memfd_size) == -1) {
-                call_carmack("save_file: fd ftruncate failed: %s",
-                             capture_wav->fname);
-                goto cmd_done;
-            }
-            off_t offset = 0;
-            ssize_t result = sendfile(capture_wav->fd,
-                                      capture_wav->memfd,
-                                      &offset,
-                                      capture_wav->memfd_size);
-            if (result == -1) {
-                call_carmack("save_file: sendfile failed: %s",
-                             capture_wav->fname);
-            }
-            lseek(capture_wav->fd, 0, SEEK_SET);
-            memset(capture_wav->wav + 44, 0, capture_wav->memfd_capacity - 44);
-            capture_wav->memfd_size = 44;
             goto cmd_done;
         }
         cmd_normal_s: {
@@ -5401,7 +5340,6 @@ cmd_timeout_done:
                 }
                 war_undo_node* node =
                     war_pool_alloc(pool_wr, sizeof(war_undo_node));
-                memset(node, 0, sizeof(war_undo_node));
                 node->id = undo_tree->next_id++;
                 node->seq_num = undo_tree->next_seq_num++;
                 node->command = CMD_ADD_NOTES_SAME;
@@ -5541,7 +5479,6 @@ cmd_timeout_done:
             note_quads.count++;
             war_undo_node* node =
                 war_pool_alloc(pool_wr, sizeof(war_undo_node));
-            memset(node, 0, sizeof(war_undo_node));
             node->id = undo_tree->next_id++;
             node->seq_num = undo_tree->next_seq_num++;
             node->command = CMD_ADD_NOTE;
@@ -5625,7 +5562,6 @@ cmd_timeout_done:
                     }
                     if (delete_count == 0) {
                         node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-                        memset(node, 0, sizeof(war_undo_node));
                         node->id = undo_tree->next_id++;
                         node->seq_num = undo_tree->next_seq_num++;
                         node->command = CMD_DELETE_NOTES;
@@ -5798,7 +5734,6 @@ cmd_timeout_done:
             note_quads.alive[delete_idx] = 0;
             war_undo_node* node =
                 war_pool_alloc(pool_wr, sizeof(war_undo_node));
-            memset(node, 0, sizeof(war_undo_node));
             node->id = undo_tree->next_id++;
             node->seq_num = undo_tree->next_seq_num++;
             node->command = CMD_DELETE_NOTE;
@@ -6114,7 +6049,7 @@ cmd_timeout_done:
         //-----------------------------------------------------------------
         cmd_normal_a: {
             call_carmack("cmd_normal_a");
-            ctx_wr.play = !ctx_wr.play;
+            ctx_play->play = !ctx_play->play;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
@@ -6778,7 +6713,8 @@ cmd_timeout_done:
         }
         cmd_normal_Q: {
             call_carmack("cmd_normal_Q");
-            ctx_wr.capture = !ctx_wr.capture;
+            ctx_capture->capture = !ctx_capture->capture;
+            ctx_wr.mode = MODE_WAV;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
@@ -8297,6 +8233,37 @@ cmd_timeout_done:
             call_carmack("cmd_command_space");
             goto cmd_done;
         }
+        //--------------------------------------------------------------------
+        // WAV COMMANDS
+        //--------------------------------------------------------------------
+        cmd_wav_Q: {
+            call_carmack("cmd_wav_Q");
+            if (ftruncate(capture_wav->fd, capture_wav->memfd_size) == -1) {
+                call_carmack("save_file: fd ftruncate failed: %s",
+                             capture_wav->fname);
+                goto cmd_done;
+            }
+            off_t offset = 0;
+            ssize_t result = sendfile(capture_wav->fd,
+                                      capture_wav->memfd,
+                                      &offset,
+                                      capture_wav->memfd_size);
+            if (result == -1) {
+                call_carmack("save_file: sendfile failed: %s",
+                             capture_wav->fname);
+            }
+            lseek(capture_wav->fd, 0, SEEK_SET);
+            memset(capture_wav->wav + 44, 0, capture_wav->memfd_capacity - 44);
+            capture_wav->memfd_size = 44;
+            goto cmd_done;
+        }
+        cmd_wav_esc: {
+            call_carmack("cmd_wav_esc");
+            ctx_wr.mode = MODE_NORMAL;
+            ctx_wr.numeric_prefix = 0;
+            ctx_wr.num_chars_in_sequence = 0;
+            goto cmd_done;
+        }
         cmd_void:
             goto cmd_done;
         cmd_done: {
@@ -8521,9 +8488,6 @@ cmd_timeout_done:
     goto wr;
 }
 end_wr:
-    //-------------------------------------------------------------------------
-    // CLEANUP
-    //-------------------------------------------------------------------------
     close(ctx_vk.dmabuf_fd);
     ctx_vk.dmabuf_fd = -1;
     xkb_state_unref(xkb_state);
@@ -8768,10 +8732,8 @@ void* war_audio(void* args) {
     uint32_t size;
     uint8_t* control_payload =
         war_pool_alloc(pool_a, sizeof(uint8_t) * pc_control->size);
-    memset(control_payload, 0, pc_control->size);
     uint8_t* tmp_control_payload =
         war_pool_alloc(pool_a, sizeof(uint8_t) * pc_control->size);
-    memset(tmp_control_payload, 0, pc_control->size);
     void** pc_control_cmd = war_pool_alloc(
         pool_a, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
     pc_control_cmd[CONTROL_END_WAR] = &&end_a;

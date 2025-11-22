@@ -96,6 +96,7 @@ enum war_misc {
     PROMPT_NOTE = 2,
     PROMPT_NAME = 3,
     ALL_NOTE_LAYERS = -13,
+    ARGB8888 = 0,
 };
 
 enum war_layers {
@@ -734,8 +735,6 @@ typedef struct war_window_render_context {
     float playback_bar_pos_x_increment;
     double FPS;
     uint64_t frame_duration_us;
-    uint64_t play_callback_duration_us;
-    uint64_t capture_callback_duration_us;
     bool sleep;
     uint64_t sleep_duration_us;
     bool end_window_render;
@@ -785,9 +784,29 @@ typedef struct war_window_render_context {
     uint32_t num_chars_in_prompt;
     uint32_t cursor_pos_x_command_mode;
     uint8_t layer_flux;
-    uint8_t play;
-    uint8_t capture;
 } war_window_render_context;
+
+typedef struct war_play_context {
+    // rate
+    uint64_t last_frame_time;
+    uint64_t last_write_time;
+    uint64_t write_count;
+    uint64_t rate_us;
+    // misc
+    uint8_t play;
+} war_play_context;
+
+typedef struct war_capture_context {
+    // rate
+    uint64_t last_frame_time;
+    uint64_t last_read_time;
+    uint64_t read_count;
+    uint64_t rate_us;
+    // misc
+    uint8_t capture;
+    uint8_t capture_wait;
+    uint32_t capture_delay;
+} war_capture_context;
 
 typedef struct war_glyph_info {
     float advance_x;

@@ -346,6 +346,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(int16_t);
             else if (strcmp(type, "int32_t") == 0)
                 type_size = sizeof(int32_t);
+            else if (strcmp(type, "int") == 0)
+                type_size = sizeof(int);
             else if (strcmp(type, "float") == 0)
                 type_size = sizeof(float);
             else if (strcmp(type, "double") == 0)
@@ -372,6 +374,10 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_note_quads);
             else if (strcmp(type, "war_text_vertex") == 0)
                 type_size = sizeof(war_text_vertex);
+            else if (strcmp(type, "war_capture_context") == 0)
+                type_size = sizeof(war_capture_context);
+            else if (strcmp(type, "war_play_context") == 0)
+                type_size = sizeof(war_play_context);
             else if (strcmp(type, "war_audio_context") == 0)
                 type_size = sizeof(war_audio_context);
             else if (strcmp(type, "war_cache_wav") == 0)
@@ -469,28 +475,43 @@ static inline void war_get_top_text(war_window_render_context* ctx_wr,
                                     war_lua_context* ctx_lua,
                                     char* tmp_str,
                                     char* prompt) {
-    memset(ctx_wr->text_top_status_bar,
-           0,
-           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    if (getcwd(tmp_str, atomic_load(&ctx_lua->A_PATH_LIMIT)) != NULL) {
-        memcpy(ctx_wr->text_top_status_bar,
-               tmp_str + 1,
+    switch (ctx_wr->mode) {
+    case MODE_WAV: {
+        memset(ctx_wr->text_top_status_bar,
+               0,
                atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        memcpy(
+            ctx_wr->text_top_status_bar, "[No Name]", sizeof("[No Name]") - 1);
+        break;
     }
-    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    snprintf(tmp_str,
-             atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX),
-             "%.0f,%.0f",
-             ctx_wr->cursor_pos_y,
-             ctx_wr->cursor_pos_x);
-    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
-           tmp_str,
-           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_middle_index,
-           ctx_wr->layers_active,
-           ctx_wr->layers_active_count);
+    default: {
+        memset(ctx_wr->text_top_status_bar,
+               0,
+               atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        if (getcwd(tmp_str, atomic_load(&ctx_lua->A_PATH_LIMIT)) != NULL) {
+            memcpy(ctx_wr->text_top_status_bar,
+                   tmp_str + 1,
+                   atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        }
+        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        snprintf(tmp_str,
+                 atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX),
+                 "%.0f,%.0f",
+                 ctx_wr->cursor_pos_y,
+                 ctx_wr->cursor_pos_x);
+        memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
+               tmp_str,
+               atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+        memcpy(ctx_wr->text_top_status_bar +
+                   ctx_wr->text_status_bar_middle_index,
+               ctx_wr->layers_active,
+               ctx_wr->layers_active_count);
+        break;
+    }
+    }
 }
 
 static inline void war_get_middle_text(war_window_render_context* ctx_wr,

@@ -759,15 +759,6 @@ typedef struct war_window_render_context {
     float text_thickness;
     float text_feather_bold;
     float text_thickness_bold;
-    char* text_top_status_bar;
-    uint32_t text_top_status_bar_count;
-    char* text_middle_status_bar;
-    uint32_t text_middle_status_bar_count;
-    char* text_bottom_status_bar;
-    uint32_t text_bottom_status_bar_count;
-    uint32_t text_status_bar_start_index;
-    uint32_t text_status_bar_middle_index;
-    uint32_t text_status_bar_end_index;
     uint8_t cursor_blink_state;
     uint64_t cursor_blink_duration_us;
     uint64_t cursor_blink_previous_us;
@@ -787,6 +778,23 @@ typedef struct war_window_render_context {
     uint32_t cursor_pos_x_command_mode;
     uint8_t layer_flux;
 } war_window_render_context;
+
+typedef struct war_command_context {
+    uint8_t command;
+    int32_t cursor_pos_x;
+    uint8_t prompt;
+    uint32_t prompt_size;
+} war_command_context;
+
+typedef struct war_status_context {
+    char* middle;
+    uint32_t middle_size;
+    char* top;
+    uint32_t top_size;
+    char* bottom;
+    uint32_t bottom_size;
+    uint32_t capacity;
+} war_status_context;
 
 typedef struct war_play_context {
     // rate

@@ -121,6 +121,13 @@ pool_a = {
 }
 
 pool_wr = {
+    -- command context
+    { name = "ctx_command",                         type = "war_command_context", count = 1 },
+    -- status context
+    { name = "ctx_status",                          type = "war_status_context",  count = 1 },
+    { name = "ctx_status.top",                      type = "char",                count = ctx_lua.A_PATH_LIMIT },
+    { name = "ctx_status.middle",                   type = "char",                count = ctx_lua.A_PATH_LIMIT },
+    { name = "ctx_status.bottom",                   type = "char",                count = ctx_lua.A_PATH_LIMIT },
     -- char input
     { name = "char_input",                          type = "char",                count = ctx_lua.A_PATH_LIMIT * 2 },
     -- play context
@@ -179,10 +186,6 @@ pool_wr = {
     { name = "transparent_quad_indices",            type = "uint16_t",            count = ctx_lua.WR_QUADS_MAX },
     { name = "text_vertices",                       type = "war_text_vertex",     count = ctx_lua.WR_TEXT_QUADS_MAX },
     { name = "text_indices",                        type = "uint16_t",            count = ctx_lua.WR_TEXT_QUADS_MAX },
-    -- status bars
-    { name = "text_top_status_bar",                 type = "char",                count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
-    { name = "text_middle_status_bar",              type = "char",                count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
-    { name = "text_bottom_status_bar",              type = "char",                count = ctx_lua.WR_STATUS_BAR_COLS_MAX },
     -- note quads
     { name = "note_quads.alive",                    type = "uint8_t",             count = ctx_lua.WR_NOTE_QUADS_MAX },
     { name = "note_quads.id",                       type = "uint64_t",            count = ctx_lua.WR_NOTE_QUADS_MAX },

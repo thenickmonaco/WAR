@@ -341,6 +341,33 @@ void* war_window_render(void* args) {
     uint64_t* note_layers = war_pool_alloc(
         pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT));
     //-------------------------------------------------------------------------
+    // STATUS CONTEXT
+    //-------------------------------------------------------------------------
+    war_status_context* ctx_status =
+        war_pool_alloc(pool_wr, sizeof(war_status_context));
+    ctx_status->capacity = atomic_load(&ctx_lua->A_PATH_LIMIT);
+    ctx_status->top =
+        war_pool_alloc(pool_wr, sizeof(char) * ctx_status->capacity);
+    ctx_status->top_size = 0;
+    getcwd(ctx_status->top, ctx_status->capacity);
+    ctx_status->middle =
+        war_pool_alloc(pool_wr, sizeof(char) * ctx_status->capacity);
+    memcpy(ctx_status->middle, "tesslfkjasdlfjt", 10);
+    ctx_status->middle_size = 0;
+    ctx_status->bottom =
+        war_pool_alloc(pool_wr, sizeof(char) * ctx_status->capacity);
+    memcpy(ctx_status->bottom, "tessdlkfjasdlkfjt", 10);
+    ctx_status->bottom_size = 0;
+    //-------------------------------------------------------------------------
+    // COMMAND CONTEXT
+    //-------------------------------------------------------------------------
+    war_command_context* ctx_command =
+        war_pool_alloc(pool_wr, sizeof(war_command_context));
+    ctx_command->command = 0;
+    ctx_command->cursor_pos_x = 0;
+    ctx_command->prompt = 0;
+    ctx_command->prompt_size = 0;
+    //-------------------------------------------------------------------------
     // WINDOW RENDER CONTEXT
     //-------------------------------------------------------------------------
     war_window_render_context ctx_wr = {
@@ -348,7 +375,6 @@ void* war_window_render(void* args) {
         .layers_active = layers_active,
         .layer_flux = 0,
         .layers_active_count = 0,
-        .cursor_pos_x_command_mode = 0,
         .skip_release = 0,
         .midi_toggle = 0,
         .midi_octave = 4,
@@ -455,9 +481,6 @@ void* war_window_render(void* args) {
         .text_thickness = default_text_thickness,
         .text_feather_bold = 0.20f,
         .text_thickness_bold = 0.30f,
-        .text_top_status_bar_count = 0,
-        .text_middle_status_bar_count = 0,
-        .text_bottom_status_bar_count = 0,
         .color_note_default = white_hex,
         .color_note_outline_default = full_white_hex,
         .color_cursor = white_hex,
@@ -723,15 +746,6 @@ void* war_window_render(void* args) {
     uint16_t* text_indices = war_pool_alloc(
         pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
     uint32_t text_indices_count = 0;
-    //-------------------------------------------------------------------------
-    // STATUS BARS
-    //-------------------------------------------------------------------------
-    ctx_wr.text_bottom_status_bar = war_pool_alloc(
-        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    ctx_wr.text_middle_status_bar = war_pool_alloc(
-        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    ctx_wr.text_top_status_bar = war_pool_alloc(
-        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     //-------------------------------------------------------------------------
     // RENDERING FPS
     //-------------------------------------------------------------------------
@@ -1048,6 +1062,38 @@ skip_capture:
                                      physical_height);
         }
     }
+    //-------------------------------------------------------------------------
+    // COMMAND MODE HANDLING
+    //-------------------------------------------------------------------------
+    if (ctx_command->command) {
+        if (char_input_write_index == 0) { goto skip_command; }
+        char c = char_input[char_input_write_index - 1];
+        if (c == 27) {
+            ctx_command->command = 0;
+            memset(ctx_status->middle, 0, ctx_status->capacity);
+            ctx_status->middle_size = 0;
+            goto skip_command;
+        }
+        if (c == '\n' || c == '\r') {
+            if (ctx_capture->state == CAPTURE_PROMPT) {
+                switch (ctx_capture->prompt_step) {
+                case 0: {
+                    break;
+                }
+                case 1: {
+                    break;
+                }
+                case 2: {
+                    break;
+                }
+                }
+            }
+            ctx_command->command = 0;
+            goto skip_command;
+        } else {
+        }
+    }
+skip_command:
     // cursor blink
     if (ctx_wr.cursor_blink_state &&
         ctx_wr.now - ctx_wr.cursor_blink_previous_us >=
@@ -1094,11 +1140,21 @@ skip_capture:
                     // READ INPUT CHARS REPEATS
                     //---------------------------------------------------------
                     char keysym_char = war_keysym_to_char(k, m);
-                    call_carmack("%c", keysym_char);
                     char_input[char_input_write_index++] = keysym_char;
                     if (char_input_write_index >= char_input_capacity) {
                         char_input_write_index = 0;
                         memset(char_input, 0, char_input_capacity);
+                    }
+                    if (ctx_command->command) {
+                        ctx_command->cursor_pos_x++;
+                        ctx_status->middle[ctx_status->middle_size++] =
+                            keysym_char;
+                        if (ctx_status->middle_size >= ctx_status->capacity) {
+                            memset(ctx_status->middle, 0, ctx_status->capacity);
+                            ctx_status->middle_size = 0;
+                            ctx_command->cursor_pos_x = 1;
+                        }
+                        goto cmd_done;
                     }
                     if (next_state_index != 0) {
                         current_state_index = next_state_index;
@@ -1669,30 +1725,9 @@ cmd_timeout_done:
                 cursor_color = cursor_color_transparent;
             }
             switch (ctx_wr.mode) {
-            case MODE_COMMAND: {
-                if (ctx_wr.cursor_blinking) { break; }
-                int offset = 0;
-                if (ctx_wr.num_chars_in_prompt > 0) { offset = 1; }
-                war_make_transparent_quad(
-                    transparent_quad_vertices,
-                    transparent_quad_indices,
-                    &transparent_quad_vertices_count,
-                    &transparent_quad_indices_count,
-                    (float[3]){ctx_wr.cursor_pos_x_command_mode +
-                                   ctx_wr.left_col +
-                                   ctx_wr.num_chars_in_prompt + 1 + offset,
-                               ctx_wr.bottom_row + 1,
-                               ctx_wr.layers[LAYER_CURSOR]},
-                    (float[2]){1, 1},
-                    cursor_color,
-                    0,
-                    0,
-                    (float[2]){0.0f, 0.0f},
-                    0);
-                break;
-            }
             case MODE_NORMAL: {
                 if (ctx_wr.cursor_blinking) { break; }
+                if (ctx_command->command) { break; }
                 war_make_transparent_quad(
                     transparent_quad_vertices,
                     transparent_quad_indices,
@@ -1754,7 +1789,7 @@ cmd_timeout_done:
                               (float[2]){0.0f, 0.0f},
                               QUAD_OUTLINE);
                 // draw views cursor
-                if (!ctx_wr.cursor_blinking) {
+                if (!ctx_wr.cursor_blinking && !ctx_command->command) {
                     uint32_t cursor_span_x = 1;
                     uint32_t cursor_pos_x = views.warpoon_col;
                     if (views.warpoon_mode == MODE_VISUAL_LINE) {
@@ -1849,6 +1884,25 @@ cmd_timeout_done:
                 }
                 break;
             }
+            }
+            //-----------------------------------------------------------------
+            // COMMAND MODE CURSOR
+            //-----------------------------------------------------------------
+            if (ctx_command->command) {
+                war_make_transparent_quad(
+                    transparent_quad_vertices,
+                    transparent_quad_indices,
+                    &transparent_quad_vertices_count,
+                    &transparent_quad_indices_count,
+                    (float[3]){ctx_wr.left_col + ctx_command->cursor_pos_x,
+                               ctx_wr.bottom_row + 1,
+                               ctx_wr.layers[LAYER_CURSOR]},
+                    (float[2]){1, 1},
+                    cursor_color,
+                    0,
+                    0,
+                    (float[2]){0.0f, 0.0f},
+                    0);
             }
             // draw playback bar
             uint32_t playback_bar_color = ctx_wr.red_hex;
@@ -2216,21 +2270,11 @@ cmd_timeout_done:
                                     &ctx_vk.font_descriptor_set,
                                     0,
                                     NULL);
-            // draw status bar text
-            ctx_wr.text_status_bar_start_index = 0;
-            ctx_wr.text_status_bar_middle_index = ctx_wr.viewport_cols / 2;
-            ctx_wr.text_status_bar_end_index = (ctx_wr.viewport_cols * 3) / 4;
-            war_get_top_text(&ctx_wr, ctx_lua, tmp_str, prompt);
-            war_get_middle_text(&ctx_wr,
-                                &views,
-                                atomics,
-                                ctx_lua,
-                                tmp_str,
-                                prompt,
-                                prompt_size);
-            war_get_bottom_text(&ctx_wr, ctx_lua, tmp_str, prompt);
+            //---------------------------------------------------------
+            // STATUS BARS
+            //---------------------------------------------------------
             for (float col = 0; col < ctx_wr.viewport_cols; col++) {
-                if (ctx_wr.text_top_status_bar[(int)col] != 0) {
+                if (ctx_status->top[(int)col] != 0) {
                     war_make_text_quad(
                         text_vertices,
                         text_indices,
@@ -2241,13 +2285,12 @@ cmd_timeout_done:
                                    ctx_wr.layers[LAYER_HUD_TEXT]},
                         (float[2]){1, 1},
                         ctx_wr.white_hex,
-                        &ctx_vk
-                             .glyphs[(int)ctx_wr.text_top_status_bar[(int)col]],
+                        &ctx_vk.glyphs[(int)ctx_status->top[(int)col]],
                         ctx_wr.text_thickness,
                         ctx_wr.text_feather,
                         0);
                 }
-                if (ctx_wr.text_middle_status_bar[(int)col] != 0) {
+                if (ctx_status->middle[(int)col] != 0) {
                     war_make_text_quad(
                         text_vertices,
                         text_indices,
@@ -2258,13 +2301,12 @@ cmd_timeout_done:
                                    ctx_wr.layers[LAYER_HUD_TEXT]},
                         (float[2]){1, 1},
                         ctx_wr.red_hex,
-                        &ctx_vk.glyphs[(int)ctx_wr
-                                           .text_middle_status_bar[(int)col]],
+                        &ctx_vk.glyphs[(int)ctx_status->middle[(int)col]],
                         ctx_wr.text_thickness_bold,
                         ctx_wr.text_feather_bold,
                         0);
                 }
-                if (ctx_wr.text_bottom_status_bar[(int)col] != 0) {
+                if (ctx_status->bottom[(int)col] != 0) {
                     war_make_text_quad(
                         text_vertices,
                         text_indices,
@@ -2275,8 +2317,7 @@ cmd_timeout_done:
                                    ctx_wr.layers[LAYER_HUD_TEXT]},
                         (float[2]){1, 1},
                         ctx_wr.full_white_hex,
-                        &ctx_vk.glyphs[(int)ctx_wr
-                                           .text_bottom_status_bar[(int)col]],
+                        &ctx_vk.glyphs[(int)ctx_status->bottom[(int)col]],
                         ctx_wr.text_thickness,
                         ctx_wr.text_feather,
                         0);
@@ -4191,11 +4232,12 @@ cmd_timeout_done:
             // READ INPUT CHARS
             //-----------------------------------------------------------------
             char keysym_char = war_keysym_to_char(keysym, mod);
-            call_carmack("%c", keysym_char);
-            char_input[char_input_write_index++] = keysym_char;
-            if (char_input_write_index >= char_input_capacity) {
-                char_input_write_index = 0;
-                memset(char_input, 0, char_input_capacity);
+            if ((keysym_char < 1 || keysym_char > 4) && keysym_char != 8) {
+                char_input[char_input_write_index++] = keysym_char;
+                if (char_input_write_index >= char_input_capacity) {
+                    char_input_write_index = 0;
+                    memset(char_input, 0, char_input_capacity);
+                }
             }
             if (ctx_wr.num_chars_in_sequence <
                 atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
@@ -6745,7 +6787,13 @@ cmd_timeout_done:
         }
         cmd_normal_colon: {
             call_carmack("cmd_normal_colon");
-            ctx_wr.mode = MODE_COMMAND;
+            ctx_command->command = 1;
+            memset(char_input, 0, char_input_capacity);
+            char_input_write_index = 0;
+            memset(ctx_status->middle, 0, ctx_status->middle_size);
+            ctx_status->middle[0] = ':';
+            ctx_status->middle_size = 1;
+            ctx_command->cursor_pos_x = 1;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;

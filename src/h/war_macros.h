@@ -375,8 +375,12 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_note_quads);
             else if (strcmp(type, "war_text_vertex") == 0)
                 type_size = sizeof(war_text_vertex);
+            else if (strcmp(type, "war_status_context") == 0)
+                type_size = sizeof(war_status_context);
             else if (strcmp(type, "war_capture_context") == 0)
                 type_size = sizeof(war_capture_context);
+            else if (strcmp(type, "war_command_context") == 0)
+                type_size = sizeof(war_command_context);
             else if (strcmp(type, "war_play_context") == 0)
                 type_size = sizeof(war_play_context);
             else if (strcmp(type, "war_audio_context") == 0)
@@ -470,180 +474,6 @@ static inline void war_layer_flux(war_window_render_context* ctx_wr,
         break;
     }
     }
-}
-
-static inline void war_get_top_text(war_window_render_context* ctx_wr,
-                                    war_lua_context* ctx_lua,
-                                    char* tmp_str,
-                                    char* prompt) {
-    switch (ctx_wr->mode) {
-    case MODE_WAV: {
-        memset(ctx_wr->text_top_status_bar,
-               0,
-               atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        memcpy(
-            ctx_wr->text_top_status_bar, "[No Name]", sizeof("[No Name]") - 1);
-        break;
-    }
-    default: {
-        memset(ctx_wr->text_top_status_bar,
-               0,
-               atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        if (getcwd(tmp_str, atomic_load(&ctx_lua->A_PATH_LIMIT)) != NULL) {
-            memcpy(ctx_wr->text_top_status_bar,
-                   tmp_str + 1,
-                   atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        }
-        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        snprintf(tmp_str,
-                 atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX),
-                 "%.0f,%.0f",
-                 ctx_wr->cursor_pos_y,
-                 ctx_wr->cursor_pos_x);
-        memcpy(ctx_wr->text_top_status_bar + ctx_wr->text_status_bar_end_index,
-               tmp_str,
-               atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        memcpy(ctx_wr->text_top_status_bar +
-                   ctx_wr->text_status_bar_middle_index,
-               ctx_wr->layers_active,
-               ctx_wr->layers_active_count);
-        break;
-    }
-    }
-}
-
-static inline void war_get_middle_text(war_window_render_context* ctx_wr,
-                                       war_views* views,
-                                       war_atomics* atomics,
-                                       war_lua_context* ctx_lua,
-                                       char* tmp_str,
-                                       char* prompt,
-                                       uint32_t prompt_size) {
-    memset(ctx_wr->text_middle_status_bar,
-           0,
-           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    switch (ctx_wr->mode) {
-    case MODE_NORMAL:
-        uint8_t repeat = atomic_load(&atomics->repeat_section);
-        if (repeat) {
-            double start_frames =
-                (double)atomic_load(&atomics->repeat_start_frames);
-            double end_frames =
-                (double)atomic_load(&atomics->repeat_end_frames);
-            double bpm = atomic_load(&ctx_lua->A_BPM);
-            double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
-            uint32_t grid_start =
-                (uint32_t)((start_frames * bpm * 4.0) / (60.0 * sample_rate));
-            uint32_t grid_end =
-                (uint32_t)((end_frames * bpm * 4.0) / (60.0 * sample_rate));
-            memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-            snprintf(tmp_str,
-                     atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX),
-                     "R:%u,%u",
-                     grid_start,
-                     grid_end);
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_middle_index,
-                   tmp_str,
-                   atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        }
-        if (ctx_wr->layer_flux) {
-            int offset = (repeat) ? 6 : 0;
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_middle_index + offset,
-                   "FLUX",
-                   sizeof("FLUX"));
-        }
-        if (ctx_wr->cursor_blink_state) {
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_end_index,
-                   ctx_wr->input_sequence,
-                   ctx_wr->num_chars_in_sequence);
-            uint32_t size = (ctx_wr->cursor_blink_state == CURSOR_BLINK) ?
-                                sizeof("BLINK") :
-                                sizeof("BPM");
-            memcpy(ctx_wr->text_middle_status_bar +
-                       ctx_wr->text_status_bar_end_index + 2,
-                   (size == sizeof("BLINK")) ? "BLINK" : "BPM",
-                   size);
-        }
-        int offset = ctx_wr->text_status_bar_end_index;
-        memcpy(ctx_wr->text_middle_status_bar + offset,
-               ctx_wr->input_sequence,
-               ctx_wr->num_chars_in_sequence);
-        break;
-    case MODE_VISUAL:
-        memcpy(ctx_wr->text_middle_status_bar,
-               "-- VISUAL --",
-               sizeof("-- VISUAL --"));
-        break;
-    case MODE_WAV: {
-        memcpy(ctx_wr->text_middle_status_bar, prompt, prompt_size);
-        call_carmack("why");
-        break;
-    }
-    case MODE_VIEWS:
-        if (views->warpoon_mode == MODE_VISUAL_LINE) {
-            memcpy(ctx_wr->text_middle_status_bar,
-                   "-- VIEWS -- -- VISUAL LINE --",
-                   sizeof("-- VIEWS -- -- VISUAL LINE --"));
-            break;
-        }
-        memcpy(ctx_wr->text_middle_status_bar,
-               "-- VIEWS --",
-               sizeof("-- VIEWS --"));
-        break;
-    case MODE_COMMAND: {
-        memset(tmp_str, 0, atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-        uint32_t max_cols = atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX);
-        if (ctx_wr->num_chars_in_prompt > 0) {
-            snprintf(tmp_str,
-                     ctx_wr->num_chars_in_sequence +
-                         ctx_wr->num_chars_in_prompt + 3,
-                     "%s: %s",
-                     prompt,
-                     ctx_wr->input_sequence);
-            memcpy(ctx_wr->text_middle_status_bar,
-                   tmp_str,
-                   ctx_wr->num_chars_in_prompt + ctx_wr->num_chars_in_sequence +
-                       3);
-            break;
-        }
-        snprintf(tmp_str,
-                 ctx_wr->num_chars_in_sequence + 2,
-                 ":%s",
-                 ctx_wr->input_sequence);
-        memcpy(ctx_wr->text_middle_status_bar,
-               tmp_str,
-               ctx_wr->num_chars_in_sequence + 2);
-        break;
-    }
-    }
-}
-
-static inline void war_get_bottom_text(war_window_render_context* ctx_wr,
-                                       war_lua_context* ctx_lua,
-                                       char* tmp_str,
-                                       char* prompt) {
-    memset(ctx_wr->text_bottom_status_bar,
-           0,
-           atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    memcpy(ctx_wr->text_bottom_status_bar,
-           "[WAR] 1:roll*",
-           sizeof("[WAR] 1:roll*"));
-}
-
-static inline void war_get_local_time(char* timestamp,
-                                      war_lua_context* ctx_lua) {
-    time_t now = time(NULL);
-    struct tm* tm_info = localtime(&now);
-    strftime(timestamp,
-             atomic_load(&ctx_lua->WR_TIMESTAMP_LENGTH_MAX),
-             "%H:%M:%S, %m-%d-%Y",
-             tm_info);
 }
 
 static inline void war_get_warpoon_text(war_views* views) {
@@ -1137,7 +967,7 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     }
 }
 
-static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
+static inline int war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
     char lowercase = ks;
     int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
     // Letters a-z or A-Z -> always lowercase
@@ -1161,6 +991,18 @@ static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
         return '_';
     case KEYSYM_RETURN:
         return '\n';
+    case KEYSYM_ESCAPE:
+        return 27;
+    case KEYSYM_UP:
+        return 1;
+    case KEYSYM_DOWN:
+        return 2;
+    case KEYSYM_LEFT:
+        return 3;
+    case KEYSYM_RIGHT:
+        return 4;
+    case KEYSYM_BACKSPACE:
+        return 8;
     }
 
     return 0; // non-printable / special keys

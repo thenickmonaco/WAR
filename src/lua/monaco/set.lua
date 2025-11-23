@@ -123,6 +123,8 @@ pool_a = {
 pool_wr = {
     -- command context
     { name = "ctx_command",                         type = "war_command_context", count = 1 },
+    { name = "ctx_command.input",                   type = "int",                 count = ctx_lua.A_PATH_LIMIT },
+    { name = "ctx_command.text",                    type = "char",                count = ctx_lua.A_PATH_LIMIT },
     -- status context
     { name = "ctx_status",                          type = "war_status_context",  count = 1 },
     { name = "ctx_status.top",                      type = "char",                count = ctx_lua.A_PATH_LIMIT },

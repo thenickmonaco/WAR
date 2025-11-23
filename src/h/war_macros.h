@@ -967,16 +967,16 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     }
 }
 
-static inline int war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
-    char lowercase = ks;
+static inline int war_keysym_to_int(xkb_keysym_t ks, uint8_t mod) {
+    int lowercase = ks;
     int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
     // Letters a-z or A-Z -> always lowercase
     if (ks >= XKB_KEY_a && ks <= XKB_KEY_z)
-        return (char)ks - mod_shift_difference;
-    if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (char)(ks - XKB_KEY_A + 'a');
+        return (int)ks - mod_shift_difference;
+    if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (int)(ks - XKB_KEY_A + 'a');
 
     // Numbers 0-9
-    if (ks >= XKB_KEY_0 && ks <= XKB_KEY_9 && mod == 0) return (char)ks;
+    if (ks >= XKB_KEY_0 && ks <= XKB_KEY_9 && mod == 0) return (int)ks;
 
     switch (ks) {
     case KEYSYM_SPACE:

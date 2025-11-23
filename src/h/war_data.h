@@ -728,8 +728,6 @@ typedef struct war_window_render_context {
     uint32_t num_rows_for_status_bars;
     uint32_t num_cols_for_line_numbers;
     uint32_t mode;
-    char* input_sequence;
-    uint8_t num_chars_in_sequence;
     war_note_quads note_quads;
     float layers[LAYER_COUNT];
     float layer_count;
@@ -781,9 +779,13 @@ typedef struct war_window_render_context {
 
 typedef struct war_command_context {
     uint8_t command;
-    int32_t cursor_pos_x;
     uint8_t prompt;
-    uint32_t prompt_size;
+    int* input;
+    uint32_t input_write_index;
+    uint32_t input_read_index;
+    char* text;
+    uint32_t text_write_index;
+    uint32_t capacity;
 } war_command_context;
 
 typedef struct war_status_context {

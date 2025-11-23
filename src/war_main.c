@@ -320,9 +320,6 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     // STRING ARRAYS
     //-------------------------------------------------------------------------
-    char* input_sequence = war_pool_alloc(
-        pool_wr,
-        sizeof(char) * atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
     char* prompt = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     uint32_t prompt_size = 0;
@@ -352,21 +349,25 @@ void* war_window_render(void* args) {
     getcwd(ctx_status->top, ctx_status->capacity);
     ctx_status->middle =
         war_pool_alloc(pool_wr, sizeof(char) * ctx_status->capacity);
-    memcpy(ctx_status->middle, "tesslfkjasdlfjt", 10);
     ctx_status->middle_size = 0;
     ctx_status->bottom =
         war_pool_alloc(pool_wr, sizeof(char) * ctx_status->capacity);
-    memcpy(ctx_status->bottom, "tessdlkfjasdlkfjt", 10);
     ctx_status->bottom_size = 0;
     //-------------------------------------------------------------------------
     // COMMAND CONTEXT
     //-------------------------------------------------------------------------
     war_command_context* ctx_command =
         war_pool_alloc(pool_wr, sizeof(war_command_context));
+    ctx_command->capacity = atomic_load(&ctx_lua->A_PATH_LIMIT);
+    ctx_command->input =
+        war_pool_alloc(pool_wr, sizeof(int) * ctx_command->capacity);
+    ctx_command->text =
+        war_pool_alloc(pool_wr, sizeof(char) * ctx_command->capacity);
     ctx_command->command = 0;
-    ctx_command->cursor_pos_x = 0;
     ctx_command->prompt = 0;
-    ctx_command->prompt_size = 0;
+    ctx_command->input_write_index = 0;
+    ctx_command->text_write_index = 0;
+    ctx_command->input_read_index = 0;
     //-------------------------------------------------------------------------
     // WINDOW RENDER CONTEXT
     //-------------------------------------------------------------------------
@@ -413,7 +414,6 @@ void* war_window_render(void* args) {
         .cursor_width_sub_cells = 1,
         .f_cursor_width_whole_number = 1,
         .f_cursor_width_sub_cells = 1,
-        .input_sequence = input_sequence,
         .t_cursor_width_whole_number = 1,
         .t_cursor_width_sub_cells = 1,
         .gridline_splits = {4, 1, 0, 0},
@@ -461,7 +461,6 @@ void* war_window_render(void* args) {
         .max_row = atomic_load(&ctx_lua->A_NOTE_COUNT) - 1,
         .min_col = 0,
         .min_row = 0,
-        .num_chars_in_sequence = 0,
         .layer_count = (float)LAYER_COUNT,
         .sleep = false,
         .playback_bar_pos_x = 0.0f,
@@ -1066,32 +1065,46 @@ skip_capture:
     // COMMAND MODE HANDLING
     //-------------------------------------------------------------------------
     if (ctx_command->command) {
-        if (char_input_write_index == 0) { goto skip_command; }
-        char c = char_input[char_input_write_index - 1];
-        if (c == 27) {
-            ctx_command->command = 0;
-            memset(ctx_status->middle, 0, ctx_status->capacity);
-            ctx_status->middle_size = 0;
+        // Check if there's input to process
+        if (ctx_command->input_write_index == 0) { goto skip_command; }
+        if (ctx_command->input_read_index == ctx_command->input_write_index) {
             goto skip_command;
         }
-        if (c == '\n' || c == '\r') {
-            if (ctx_capture->state == CAPTURE_PROMPT) {
-                switch (ctx_capture->prompt_step) {
-                case 0: {
-                    break;
-                }
-                case 1: {
-                    break;
-                }
-                case 2: {
-                    break;
-                }
-                }
+
+        int input = ctx_command->input[ctx_command->input_read_index];
+
+        // Handle character input for command mode
+        if (input >= 32 && input <= 126) { // Printable ASCII characters
+            // Add character to command text buffer
+            if (ctx_command->text_write_index < ctx_command->capacity - 1) {
+                ctx_command->text[ctx_command->text_write_index] = (char)input;
+                ctx_command->text_write_index++;
+                ctx_command->text[ctx_command->text_write_index] = '\0';
             }
+        } else if (input == KEYSYM_BACKSPACE) {
+            // Handle backspace
+            if (ctx_command->text_write_index > 0) {
+                ctx_command->text_write_index--;
+                ctx_command->text[ctx_command->text_write_index] = '\0';
+            }
+        } else if (input == KEYSYM_RETURN) {
+            // Execute command
+            call_carmack("Executing command: %s", ctx_command->text);
+            // TODO: Add command execution logic here
+
+            // Clear command mode
             ctx_command->command = 0;
-            goto skip_command;
-        } else {
+            ctx_command->text_write_index = 0;
+            ctx_command->text[0] = '\0';
+        } else if (input == KEYSYM_ESCAPE) {
+            // Cancel command mode
+            ctx_command->command = 0;
+            ctx_command->text_write_index = 0;
+            ctx_command->text[0] = '\0';
         }
+
+        call_carmack("Command input: %c (%i)", input, input);
+        ctx_command->input_read_index++;
     }
 skip_command:
     // cursor blink
@@ -1129,33 +1142,23 @@ skip_command:
                                       m] = ctx_wr.now; // reset timer
                 }
             } else {
-                // normal repeating
                 if (elapsed >= repeat_rate_us) {
                     key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) +
                                       m] = ctx_wr.now;
+                    // ADD COMMAND MODE REPEAT HANDLING HERE
+                    if (ctx_command->command) {
+                        // Write repeated key to command input buffer
+                        if (ctx_command->input_write_index <
+                            ctx_command->capacity) {
+                            ctx_command->input[ctx_command->input_write_index] =
+                                (int)k;
+                            ctx_command->input_write_index++;
+                        }
+                        goto cmd_repeat_done; // Skip FSM processing
+                    }
                     uint16_t next_state_index =
                         fsm[current_state_index].next_state
                             [k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
-                    //---------------------------------------------------------
-                    // READ INPUT CHARS REPEATS
-                    //---------------------------------------------------------
-                    char keysym_char = war_keysym_to_char(k, m);
-                    char_input[char_input_write_index++] = keysym_char;
-                    if (char_input_write_index >= char_input_capacity) {
-                        char_input_write_index = 0;
-                        memset(char_input, 0, char_input_capacity);
-                    }
-                    if (ctx_command->command) {
-                        ctx_command->cursor_pos_x++;
-                        ctx_status->middle[ctx_status->middle_size++] =
-                            keysym_char;
-                        if (ctx_status->middle_size >= ctx_status->capacity) {
-                            memset(ctx_status->middle, 0, ctx_status->capacity);
-                            ctx_status->middle_size = 0;
-                            ctx_command->cursor_pos_x = 1;
-                        }
-                        goto cmd_done;
-                    }
                     if (next_state_index != 0) {
                         current_state_index = next_state_index;
                         fsm_state_last_event_us = ctx_wr.now;
@@ -1884,25 +1887,6 @@ cmd_timeout_done:
                 }
                 break;
             }
-            }
-            //-----------------------------------------------------------------
-            // COMMAND MODE CURSOR
-            //-----------------------------------------------------------------
-            if (ctx_command->command) {
-                war_make_transparent_quad(
-                    transparent_quad_vertices,
-                    transparent_quad_indices,
-                    &transparent_quad_vertices_count,
-                    &transparent_quad_indices_count,
-                    (float[3]){ctx_wr.left_col + ctx_command->cursor_pos_x,
-                               ctx_wr.bottom_row + 1,
-                               ctx_wr.layers[LAYER_CURSOR]},
-                    (float[2]){1, 1},
-                    cursor_color,
-                    0,
-                    0,
-                    (float[2]){0.0f, 0.0f},
-                    0);
             }
             // draw playback bar
             uint32_t playback_bar_color = ctx_wr.red_hex;
@@ -4199,6 +4183,7 @@ cmd_timeout_done:
             }
             // if (mods & (1 << mod_fn)) mod |= MOD_FN;
             bool pressed = (wl_key_state == 1);
+            // In wl_keyboard_key, after your command mode input writing:
             if (!pressed) {
                 key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] =
                     false;
@@ -4206,7 +4191,8 @@ cmd_timeout_done:
                                   mod] = 0;
                 // repeats
                 if (repeat_keysym == keysym &&
-                    fsm[current_state_index].handle_repeat[ctx_wr.mode]) {
+                    fsm[current_state_index].handle_repeat[ctx_wr.mode] &&
+                    !ctx_command->command) {
                     repeat_keysym = 0;
                     repeat_mod = 0;
                     repeating = false;
@@ -4228,28 +4214,28 @@ cmd_timeout_done:
                 }
                 goto cmd_done;
             }
-            //-----------------------------------------------------------------
-            // READ INPUT CHARS
-            //-----------------------------------------------------------------
-            char keysym_char = war_keysym_to_char(keysym, mod);
-            if ((keysym_char < 1 || keysym_char > 4) && keysym_char != 8) {
-                char_input[char_input_write_index++] = keysym_char;
-                if (char_input_write_index >= char_input_capacity) {
-                    char_input_write_index = 0;
-                    memset(char_input, 0, char_input_capacity);
-                }
-            }
-            if (ctx_wr.num_chars_in_sequence <
-                atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
-                ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] =
-                    keysym_char;
-                ctx_wr.num_chars_in_sequence++;
-            }
             if (!key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
                 key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] =
                     true;
                 key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
                                   mod] = ctx_wr.now;
+            }
+            if (ctx_command->command && pressed) {
+                // Write to input buffer for command mode
+                if (ctx_command->input_write_index < ctx_command->capacity) {
+                    ctx_command->input[ctx_command->input_write_index] =
+                        (int)keysym;
+                    ctx_command->input_write_index++;
+                }
+
+                // SET UP REPEATS FOR COMMAND MODE
+                repeat_keysym = keysym;
+                repeat_mod = mod;
+                repeating = false;
+                key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
+                                  mod] = ctx_wr.now;
+
+                goto cmd_done;
             }
             uint16_t next_state_index =
                 fsm[current_state_index]
@@ -4292,14 +4278,6 @@ cmd_timeout_done:
                 timeout_start_us = 0;
                 timeout = false;
                 if (fsm[temp].command[ctx_wr.mode]) {
-                    if (ctx_wr.numeric_prefix == 0 &&
-                        (keysym_char < '1' || keysym_char > '9')) {
-                        ctx_wr.num_chars_in_sequence = 0;
-                        memset(ctx_wr.input_sequence,
-                               0,
-                               atomic_load(
-                                   &ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                    }
                     goto* fsm[temp].command[ctx_wr.mode];
                 }
             } else if (fsm[current_state_index].is_terminal[ctx_wr.mode] &&
@@ -4382,7 +4360,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_j:
             call_carmack("cmd_normal_j");
@@ -4431,7 +4408,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_l: {
             call_carmack("cmd_normal_l");
@@ -4460,7 +4436,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_h: {
@@ -4490,14 +4465,12 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_gd: {
             call_carmack("cmd_normal_gd");
             ctx_wr.mode = MODE_WAV;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_K: {
@@ -4507,7 +4480,6 @@ cmd_timeout_done:
             gain = fminf(gain, 1.0f);
             atomic_store(&atomics->play_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_J: {
@@ -4517,7 +4489,6 @@ cmd_timeout_done:
             gain = fmaxf(gain, 0.0f);
             atomic_store(&atomics->play_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_k:
@@ -4548,7 +4519,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_j:
             call_carmack("cmd_normal_alt_j");
@@ -4578,7 +4548,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_l: {
             call_carmack("cmd_normal_l");
@@ -4607,7 +4576,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_i: {
@@ -4615,14 +4583,12 @@ cmd_timeout_done:
             uint64_t layer = atomic_load(&atomics->layer);
             note_layers[(int)ctx_wr.cursor_pos_y] = layer;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_L: {
             call_carmack("cmd_normal_L");
             war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_tab: {
@@ -4630,7 +4596,6 @@ cmd_timeout_done:
             ctx_wr.layer_flux = !ctx_wr.layer_flux;
             war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_h: {
@@ -4660,7 +4625,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_K:
@@ -4691,7 +4655,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_J:
             call_carmack("cmd_normal_alt_shift_j");
@@ -4721,7 +4684,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_L:
             call_carmack("cmd_normal_alt_shift_l");
@@ -4748,7 +4710,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_H:
             call_carmack("cmd_normal_alt_shift_h");
@@ -4775,7 +4736,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_0:
             call_carmack("cmd_normal_0");
@@ -4786,12 +4746,10 @@ cmd_timeout_done:
             ctx_wr.cursor_pos_x = ctx_wr.left_col;
             ctx_wr.sub_col = 0;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_V: {
             call_carmack("cmd_normal_V");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_ga: {
@@ -4824,8 +4782,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_$:
@@ -4855,15 +4811,11 @@ cmd_timeout_done:
                     }
                 }
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.cursor_pos_x = ctx_wr.right_col;
             ctx_wr.sub_col = 0;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_G:
             call_carmack("cmd_normal_G");
@@ -4894,7 +4846,6 @@ cmd_timeout_done:
                     war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
                 }
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.cursor_pos_y = ctx_wr.bottom_row;
@@ -4902,7 +4853,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_gg:
             call_carmack("cmd_normal_gg");
@@ -4933,7 +4883,6 @@ cmd_timeout_done:
                     war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
                 }
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.cursor_pos_y = ctx_wr.top_row;
@@ -4941,7 +4890,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_1:
             call_carmack("cmd_normal_1");
@@ -5009,7 +4957,6 @@ cmd_timeout_done:
         cmd_normal_r:
             call_carmack("cmd_normal_r");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_ctrl_equal: {
             call_carmack("cmd_normal_ctrl_equal");
@@ -5030,7 +4977,6 @@ cmd_timeout_done:
                                   ctx_wr.bottom_row + viewport_rows - 1 -
                                       ctx_wr.num_rows_for_status_bars);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_ctrl_minus: {
@@ -5052,7 +4998,6 @@ cmd_timeout_done:
                                   ctx_wr.bottom_row + viewport_rows - 1 -
                                       ctx_wr.num_rows_for_status_bars);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_ctrl_alt_equal:
@@ -5066,7 +5011,6 @@ cmd_timeout_done:
             // ctx_wr.panning_y = ctx_wr.anchor_ndc_y
             // - ctx_wr.anchor_y * ctx_wr.zoom_scale;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_ctrl_alt_minus:
             call_carmack("cmd_normal_ctrl_alt_minus");
@@ -5079,7 +5023,6 @@ cmd_timeout_done:
             // ctx_wr.panning_y = ctx_wr.anchor_ndc_y
             // - ctx_wr.anchor_y * ctx_wr.zoom_scale;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_ctrl_0: {
             call_carmack("cmd_normal_ctrl_0");
@@ -5095,7 +5038,6 @@ cmd_timeout_done:
                                   ctx_wr.bottom_row + viewport_rows - 1 -
                                       ctx_wr.num_rows_for_status_bars);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_esc: {
@@ -5109,7 +5051,6 @@ cmd_timeout_done:
             }
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_S: {
@@ -5128,7 +5069,6 @@ cmd_timeout_done:
             uint32_t whole_pos_x = llround(ctx_wr.cursor_pos_x);
             ctx_wr.cursor_pos_x = whole_pos_x;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_f:
@@ -5139,14 +5079,12 @@ cmd_timeout_done:
                     (double)ctx_wr.cursor_width_whole_number /
                     ctx_wr.cursor_width_sub_cells;
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.cursor_width_whole_number = 1;
             ctx_wr.cursor_size_x = (double)ctx_wr.cursor_width_whole_number /
                                    ctx_wr.cursor_width_sub_cells;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_t:
             call_carmack("cmd_normal_t");
@@ -5156,14 +5094,12 @@ cmd_timeout_done:
                     (double)ctx_wr.cursor_width_whole_number /
                     ctx_wr.cursor_width_sub_cells;
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.cursor_width_sub_cells = 1;
             ctx_wr.cursor_size_x = (double)ctx_wr.cursor_width_whole_number /
                                    ctx_wr.cursor_width_sub_cells;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_T:
             call_carmack("cmd_normal_T");
@@ -5173,7 +5109,6 @@ cmd_timeout_done:
                     (double)ctx_wr.navigation_whole_number_col /
                     ctx_wr.navigation_sub_cells_col;
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.navigation_sub_cells_col = 1;
@@ -5181,7 +5116,6 @@ cmd_timeout_done:
                 (double)ctx_wr.navigation_whole_number_col /
                 ctx_wr.navigation_sub_cells_col;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_F:
             call_carmack("cmd_normal_F");
@@ -5191,7 +5125,6 @@ cmd_timeout_done:
                     (double)ctx_wr.navigation_whole_number_col /
                     ctx_wr.navigation_sub_cells_col;
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.navigation_whole_number_col = 1;
@@ -5199,7 +5132,6 @@ cmd_timeout_done:
                 (double)ctx_wr.navigation_whole_number_col /
                 ctx_wr.navigation_sub_cells_col;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_f: {
             call_carmack("cmd_normal_alt_f");
@@ -5232,7 +5164,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_gt:
             call_carmack("cmd_normal_gt");
@@ -5261,7 +5192,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_gm:
             call_carmack("cmd_normal_gm");
@@ -5290,7 +5220,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_return:
         cmd_normal_z: {
@@ -5343,7 +5272,6 @@ cmd_timeout_done:
                 if (ctx_wr.numeric_prefix >= undo_notes_batch_max) {
                     // swapfile logic (memmove probably)
                     ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
                 }
                 // --- Compaction if needed ---
                 if (note_quads.count + ctx_wr.numeric_prefix >=
@@ -5392,7 +5320,6 @@ cmd_timeout_done:
                     if (write_idx >= note_quads_max) {
                         call_carmack("TODO: implement spillover swapfile");
                         ctx_wr.numeric_prefix = 0;
-                        ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     };
                     note_quads.count = write_idx;
@@ -5465,7 +5392,6 @@ cmd_timeout_done:
                 note_quads.count += ctx_wr.numeric_prefix;
                 // note, count, ids
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             //-------------------------------------------------------------
@@ -5573,18 +5499,15 @@ cmd_timeout_done:
                 undo_tree->current = node;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_x:
             call_carmack("cmd_normal_x");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_X: {
             call_carmack("cmd_normal_X");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_d: {
@@ -5592,7 +5515,6 @@ cmd_timeout_done:
             call_carmack("cmd_normal_d");
             if (note_quads.count == 0) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             uint64_t layer = atomic_load(&atomics->layer);
@@ -5710,18 +5632,15 @@ cmd_timeout_done:
                     if (delete_count >= undo_notes_batch_max) {
                         // spillover
                         ctx_wr.numeric_prefix = 0;
-                        ctx_wr.num_chars_in_sequence = 0;
                         goto cmd_done;
                     }
                     if (delete_count >= ctx_wr.numeric_prefix) { break; }
                 }
                 if (delete_count == 0) {
                     ctx_wr.numeric_prefix = 0;
-                    ctx_wr.num_chars_in_sequence = 0;
                     goto cmd_done;
                 }
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             int32_t delete_idx = -1; // overflow impossible
@@ -5744,7 +5663,6 @@ cmd_timeout_done:
             }
             if (delete_idx == -1) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             war_note_quad note_quad;
@@ -5828,117 +5746,95 @@ cmd_timeout_done:
                 undo_tree->current = node;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_spacediv: {
             call_carmack("cmd_normal_spacediv");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_spacedov:
             call_carmack("cmd_normal_spacedov");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacediw: {
             call_carmack("cmd_normal_spacediw");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_spaceda:
             call_carmack("cmd_normal_spaceda");
             note_quads.count = 0;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacehov:
             call_carmack("cmd_normal_spacehov");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacehiv:
             call_carmack("cmd_normal_spacehiv");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacehiw:
             call_carmack("cmd_normal_spacehiw");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spaceha:
             call_carmack("cmd_normal_spaceha");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacesov:
             call_carmack("cmd_normal_spacesov");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacesiv:
             call_carmack("cmd_normal_spacesiv");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacesiw:
             call_carmack("cmd_normal_spacesiw");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacesa:
             call_carmack("cmd_normal_spacesa");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacem:
             call_carmack("cmd_normal_spacem");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacemov:
             call_carmack("cmd_normal_spacemov");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacemiv:
             call_carmack("cmd_normal_spacemiv");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacema:
             call_carmack("cmd_normal_spacema");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_m:
             call_carmack("cmd_normal_m");
             ctx_wr.mode = MODE_MIDI;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spaceumov:
             call_carmack("cmd_normal_spaceumov");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spaceumiv:
             call_carmack("cmd_normal_spaceumiv");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spaceumiw:
             call_carmack("cmd_normal_spaceumiw");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spaceuma:
             call_carmack("cmd_normal_spaceuma");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacea:
             call_carmack("cmd_normal_spacea");
@@ -5953,12 +5849,10 @@ cmd_timeout_done:
                 views.views_count++;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_spacedspacea:
             call_carmack("cmd_normal_spacedspacea");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_g:
             call_carmack("cmd_normal_alt_g");
@@ -5975,7 +5869,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_t:
             call_carmack("cmd_normal_alt_t");
@@ -5992,7 +5885,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_n:
             call_carmack("cmd_normal_alt_n");
@@ -6009,7 +5901,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_s:
             call_carmack("cmd_normal_alt_s");
@@ -6026,7 +5917,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_m:
             call_carmack("cmd_normal_alt_m");
@@ -6043,7 +5933,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_y:
             call_carmack("cmd_normal_alt_y");
@@ -6060,7 +5949,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_z:
             call_carmack("cmd_normal_alt_z");
@@ -6077,7 +5965,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_q:
             call_carmack("cmd_normal_alt_q");
@@ -6094,14 +5981,12 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_e:
             call_carmack("cmd_normal_alt_e");
             ctx_wr.mode =
                 (ctx_wr.mode != MODE_VIEWS) ? MODE_VIEWS : MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         //-----------------------------------------------------------------
         // PLAYBACK COMMANDS
@@ -6110,88 +5995,72 @@ cmd_timeout_done:
             call_carmack("cmd_normal_a");
             ctx_play->play = !ctx_play->play;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_a: {
             call_carmack("cmd_normal_alt_a");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_A: {
             call_carmack("cmd_normal_alt_A");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_A: {
             call_carmack("cmd_normal_A");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_esc: {
             call_carmack("cmd_normal_alt_esc");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_ctrl_a: {
             call_carmack("cmd_normal_ctrl_a");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_space1:
             call_carmack("cmd_normal_space1");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space2:
             call_carmack("cmd_normal_space2");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space3:
             call_carmack("cmd_normal_space3");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space4:
             call_carmack("cmd_normal_space4");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space5:
             call_carmack("cmd_normal_space5");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space6:
             call_carmack("cmd_normal_space6");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space7:
             call_carmack("cmd_normal_space7");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space8:
             call_carmack("cmd_normal_space8");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space9:
             call_carmack("cmd_normal_space9");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_space0:
             call_carmack("cmd_normal_space0");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_alt_1: {
             call_carmack("cmd_normal_alt_1");
@@ -6203,7 +6072,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_2: {
@@ -6216,7 +6084,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_3: {
@@ -6229,7 +6096,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_4: {
@@ -6242,7 +6108,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_5: {
@@ -6255,7 +6120,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_6: {
@@ -6268,7 +6132,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_7: {
@@ -6281,7 +6144,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_8: {
@@ -6294,7 +6156,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_9: {
@@ -6307,7 +6168,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_0: {
@@ -6322,7 +6182,6 @@ cmd_timeout_done:
                 ctx_wr.layers_active[i] = (i + 1) + '0';
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_1: {
@@ -6360,7 +6219,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_2: {
@@ -6398,7 +6256,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_3: {
@@ -6436,7 +6293,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_4: {
@@ -6473,7 +6329,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_5: {
@@ -6510,7 +6365,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_6: {
@@ -6547,7 +6401,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_7: {
@@ -6584,7 +6437,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_8: {
@@ -6621,7 +6473,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_9: {
@@ -6658,60 +6509,50 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_shift_0: {
             call_carmack("cmd_normal_alt_shift_0");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_w: {
             call_carmack("cmd_normal_w");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_W:
             call_carmack("cmd_normal_W");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_normal_e: {
             call_carmack("cmd_normal_e");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_E: {
             call_carmack("cmd_normal_E");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_b: {
             call_carmack("cmd_normal_b");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_B: {
             call_carmack("cmd_normal_B");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_u: {
             call_carmack("cmd_normal_alt_u");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_alt_d: {
             call_carmack("cmd_normal_alt_d");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_tab: {
@@ -6735,7 +6576,6 @@ cmd_timeout_done:
                 break;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_shift_tab: {
@@ -6761,13 +6601,11 @@ cmd_timeout_done:
                 break;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_q: {
             call_carmack("cmd_normal_q");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_Q: {
@@ -6775,27 +6613,18 @@ cmd_timeout_done:
             ctx_capture->capture = 1;
             ctx_wr.mode = MODE_WAV;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_space: {
             call_carmack("cmd_normal_space");
             ctx_wr.mode = MODE_CAPTURE;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_colon: {
             call_carmack("cmd_normal_colon");
             ctx_command->command = 1;
-            memset(char_input, 0, char_input_capacity);
-            char_input_write_index = 0;
-            memset(ctx_status->middle, 0, ctx_status->middle_size);
-            ctx_status->middle[0] = ':';
-            ctx_status->middle_size = 1;
-            ctx_command->cursor_pos_x = 1;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_u: {
@@ -6827,7 +6656,6 @@ cmd_timeout_done:
                 undo_tree->current = node->prev ? node->prev : NULL;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_normal_ctrl_r: {
@@ -6866,7 +6694,6 @@ cmd_timeout_done:
                 undo_tree->current = next_node;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         //------------------------------------------------------------------
@@ -6876,7 +6703,6 @@ cmd_timeout_done:
             call_carmack("cmd_record_tab");
             atomic_fetch_xor(&atomics->capture_monitor, 1);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_K: {
@@ -6886,7 +6712,6 @@ cmd_timeout_done:
             gain = fminf(gain, 1.0f);
             atomic_store(&atomics->play_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_J: {
@@ -6896,7 +6721,6 @@ cmd_timeout_done:
             gain = fmaxf(gain, 0.0f);
             atomic_store(&atomics->play_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_k: {
@@ -6906,7 +6730,6 @@ cmd_timeout_done:
             gain = fminf(gain, 1.0f);
             atomic_store(&atomics->capture_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_j: {
@@ -6916,247 +6739,206 @@ cmd_timeout_done:
             gain = fmaxf(gain, 0.0f);
             atomic_store(&atomics->capture_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_Q: {
             call_carmack("cmd_record_Q");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_space: {
             call_carmack("cmd_record_space");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_q: {
             call_carmack("cmd_record_q");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_w: {
             call_carmack("cmd_record_w");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_e: {
             call_carmack("cmd_record_e");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_r: {
             call_carmack("cmd_record_r");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_t: {
             call_carmack("cmd_record_t");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_y: {
             call_carmack("cmd_record_y");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_u: {
             call_carmack("cmd_record_u");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_i: {
             call_carmack("cmd_record_i");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_o: {
             call_carmack("cmd_record_o");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_p: {
             call_carmack("cmd_record_p");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_leftbracket: {
             call_carmack("cmd_record_leftbracket");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             float note = 10 + 12 * (ctx_wr.record_octave + 1);
             if (note > 127) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             atomic_store(&atomics->map_note, note);
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_rightbracket: {
             call_carmack("cmd_record_rightbracket");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             float note = 11 + 12 * (ctx_wr.record_octave + 1);
             if (note > 127) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             atomic_store(&atomics->map_note, note);
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_record_minus:
             call_carmack("cmd_record_minus");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = -1;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_0:
             call_carmack("cmd_record_0");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 0;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_1:
             call_carmack("cmd_record_1");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 1;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_2:
             call_carmack("cmd_record_2");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 2;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_3:
             call_carmack("cmd_record_3");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 3;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_4:
             call_carmack("cmd_record_4");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 4;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_5:
             call_carmack("cmd_record_5");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 5;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_6:
             call_carmack("cmd_record_6");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 6;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_7:
             call_carmack("cmd_record_7");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 7;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_8:
             call_carmack("cmd_record_8");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 8;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_9:
             call_carmack("cmd_record_9");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.record_octave = 9;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         cmd_record_esc:
             call_carmack("cmd_record_esc");
@@ -7164,7 +6946,6 @@ cmd_timeout_done:
             atomic_store(&atomics->capture, 0);
             atomic_store(&atomics->map_note, -1);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         //-----------------------------------------------------------------
         // COMMANDS VIEWS
@@ -7195,7 +6976,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_j: {
@@ -7224,14 +7004,12 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_h: {
             call_carmack("cmd_views_h");
             if (views.warpoon_mode == MODE_VISUAL_LINE) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             uint32_t increment = ctx_wr.col_increment;
@@ -7258,14 +7036,12 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_l: {
             call_carmack("cmd_views_l");
             if (views.warpoon_mode == MODE_VISUAL_LINE) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             uint32_t increment = ctx_wr.col_increment;
@@ -7292,7 +7068,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             call_carmack("warpoon col: %u", views.warpoon_col);
             goto cmd_done;
         }
@@ -7322,7 +7097,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_alt_j: {
@@ -7351,14 +7125,12 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_alt_h: {
             call_carmack("cmd_views_alt_h");
             if (views.warpoon_mode == MODE_VISUAL_LINE) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             uint32_t increment = ctx_wr.col_leap_increment;
@@ -7385,14 +7157,12 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_alt_l: {
             call_carmack("cmd_views_alt_l");
             if (views.warpoon_mode == MODE_VISUAL_LINE) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             uint32_t increment = ctx_wr.col_leap_increment;
@@ -7419,7 +7189,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_K: {
@@ -7449,7 +7218,6 @@ cmd_timeout_done:
                 }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_J: {
@@ -7480,7 +7248,6 @@ cmd_timeout_done:
             }
 
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_d: {
@@ -7488,12 +7255,10 @@ cmd_timeout_done:
             uint32_t i_views = views.warpoon_max_row - views.warpoon_row;
             if (i_views >= views.views_count) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             war_warpoon_delete_at_i(&views, i_views);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_V: {
@@ -7508,7 +7273,6 @@ cmd_timeout_done:
                 break;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_esc: {
@@ -7517,12 +7281,10 @@ cmd_timeout_done:
                 views.warpoon_mode = MODE_NORMAL;
                 // logic for undoing the selection
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_z: {
@@ -7531,7 +7293,6 @@ cmd_timeout_done:
             uint32_t i_views = views.warpoon_max_row - views.warpoon_row;
             if (i_views >= views.views_count) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.cursor_pos_x = views.col[i_views];
@@ -7544,7 +7305,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_views_return: {
@@ -7553,7 +7313,6 @@ cmd_timeout_done:
             uint32_t i_views = views.warpoon_max_row - views.warpoon_row;
             if (i_views >= views.views_count) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.cursor_pos_x = views.col[i_views];
@@ -7566,7 +7325,6 @@ cmd_timeout_done:
                 war_layer_flux(&ctx_wr, atomics, note_layers, ctx_color);
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         // midi
@@ -7580,7 +7338,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_2: {
@@ -7593,7 +7350,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_3: {
@@ -7606,7 +7362,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_4: {
@@ -7619,7 +7374,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_5: {
@@ -7632,7 +7386,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_6: {
@@ -7645,7 +7398,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_7: {
@@ -7658,7 +7410,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_8: {
@@ -7671,7 +7422,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_9: {
@@ -7684,7 +7434,6 @@ cmd_timeout_done:
             ctx_wr.layers_active_count = 1;
             ctx_wr.layers_active[0] = (idx + 1) + '0';
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_0: {
@@ -7699,7 +7448,6 @@ cmd_timeout_done:
                 ctx_wr.layers_active[i] = (i + 1) + '0';
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_1: {
@@ -7737,7 +7485,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_2: {
@@ -7775,7 +7522,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_3: {
@@ -7813,7 +7559,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_4: {
@@ -7850,7 +7595,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_5: {
@@ -7887,7 +7631,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_6: {
@@ -7924,7 +7667,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_7: {
@@ -7961,7 +7703,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_8: {
@@ -7998,7 +7739,6 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_9: {
@@ -8035,46 +7775,39 @@ cmd_timeout_done:
             }
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_alt_shift_0: {
             call_carmack("cmd_normal_alt_shift_0");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_m: {
             call_carmack("cmd_midi_m");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_T: {
             call_carmack("cmd_midi_T");
             ctx_wr.midi_toggle ^= 1;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_b: {
             call_carmack("cmd_midi_b");
             ctx_wr.midi_toggle ^= 1;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_x: {
             call_carmack("cmd_midi_x");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_c: {
             call_carmack("cmd_midi_c");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_K: {
@@ -8084,7 +7817,6 @@ cmd_timeout_done:
             gain = fminf(gain, 1.0f);
             atomic_store(&atomics->play_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_J: {
@@ -8094,85 +7826,71 @@ cmd_timeout_done:
             gain = fmaxf(gain, 0.0f);
             atomic_store(&atomics->play_gain, gain);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_Q: {
             call_carmack("cmd_midi_Q");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_space: {
             call_carmack("cmd_midi_space");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_q: {
             call_carmack("cmd_midi_q");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_w: {
             call_carmack("cmd_midi_w");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_e: {
             call_carmack("cmd_midi_e");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_r: {
             call_carmack("cmd_midi_r");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_t: {
             call_carmack("cmd_midi_t");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_y: {
             call_carmack("cmd_midi_y");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_u: {
             call_carmack("cmd_midi_u");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_i: {
             call_carmack("cmd_midi_i");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_o: {
             call_carmack("cmd_midi_o");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_p: {
             call_carmack("cmd_midi_p");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_leftbracket: {
             call_carmack("cmd_midi_leftbracket");
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_rightbracket: {
@@ -8180,101 +7898,86 @@ cmd_timeout_done:
             int note = 11 + 12 * (ctx_wr.midi_octave + 1);
             if (note > 127) {
                 ctx_wr.numeric_prefix = 0;
-                ctx_wr.num_chars_in_sequence = 0;
                 goto cmd_done;
             }
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_l: {
             call_carmack("cmd_midi_l");
             atomic_fetch_xor(&atomics->loop, 1);
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_minus: {
             call_carmack("cmd_midi_minus");
             ctx_wr.midi_octave = -1;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_esc: {
             call_carmack("cmd_midi_esc");
             ctx_wr.mode = MODE_NORMAL;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_0: {
             call_carmack("cmd_midi_0");
             ctx_wr.midi_octave = 0;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_1: {
             call_carmack("cmd_midi_1");
             ctx_wr.midi_octave = 1;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_2: {
             call_carmack("cmd_midi_2");
             ctx_wr.midi_octave = 2;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_3: {
             call_carmack("cmd_midi_3");
             ctx_wr.midi_octave = 3;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_4: {
             call_carmack("cmd_midi_4");
             ctx_wr.midi_octave = 4;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_5: {
             call_carmack("cmd_midi_5");
             ctx_wr.midi_octave = 5;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_6: {
             call_carmack("cmd_midi_6");
             ctx_wr.midi_octave = 6;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_7: {
             call_carmack("cmd_midi_7");
             ctx_wr.midi_octave = 7;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_8: {
             call_carmack("cmd_midi_8");
             ctx_wr.midi_octave = 8;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_midi_9: {
             call_carmack("cmd_midi_9");
             ctx_wr.midi_octave = 9;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
             //-----------------------------------------------------------------
@@ -8284,14 +7987,12 @@ cmd_timeout_done:
             call_carmack("cmd_command_esc");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_command_w: {
             call_carmack("cmd_command_w");
             ctx_wr.mode = MODE_NORMAL;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_command_space: {
@@ -8340,7 +8041,6 @@ cmd_timeout_done:
             ctx_capture->state = CAPTURE_WAITING;
             ctx_capture->capture = 0;
             ctx_wr.numeric_prefix = 0;
-            ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;
         }
         cmd_void:

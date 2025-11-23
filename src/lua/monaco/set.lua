@@ -69,6 +69,7 @@ ctx_lua = {
     WR_WAYLAND_MAX_OP_CODES             = 20,
     WR_UNDO_NODES_MAX                   = 10000,
     WR_TIMESTAMP_LENGTH_MAX             = 33,
+    WR_CAPTURE_THRESHOLD                = 0.0001,
     WR_REPEAT_DELAY_US                  = 150000, -- 150000
     WR_REPEAT_RATE_US                   = 40000,  -- 40000
     WR_CURSOR_BLINK_DURATION_US         = 700000, -- 700000
@@ -120,6 +121,8 @@ pool_a = {
 }
 
 pool_wr = {
+    -- char input
+    { name = "char_input",                          type = "char",                count = ctx_lua.A_PATH_LIMIT * 2 },
     -- play context
     { name = "ctx_play",                            type = "war_play_context",    count = 1 },
     -- capture context
@@ -2143,6 +2146,10 @@ keymap = {
             {
                 cmd = "cmd_midi_Q",
                 mode = "midi",
+            },
+            {
+                cmd = "cmd_wav_Q",
+                mode = "wav",
             },
         },
     },

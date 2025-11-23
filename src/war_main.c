@@ -325,10 +325,15 @@ void* war_window_render(void* args) {
         sizeof(char) * atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX));
     char* prompt = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
+    uint32_t prompt_size = 0;
     char* tmp_str = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
     char* layers_active = war_pool_alloc(
         pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_LAYER_COUNT));
+    char* char_input = war_pool_alloc(
+        pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_PATH_LIMIT) * 2);
+    uint32_t char_input_write_index = 0;
+    uint32_t char_input_capacity = atomic_load(&ctx_lua->A_PATH_LIMIT) * 2;
     chdir(atomic_load(&ctx_lua->CWD));
     //-------------------------------------------------------------------------
     // NOTE LAYER MAPPINGS
@@ -874,6 +879,11 @@ void* war_window_render(void* args) {
     ctx_capture->capture = 0;
     ctx_capture->capture_wait = 1;
     ctx_capture->capture_delay = 0;
+    ctx_capture->state = CAPTURE_WAITING;
+    ctx_capture->threshold = atomic_load(&ctx_lua->WR_CAPTURE_THRESHOLD);
+    ctx_capture->prompt = 1;
+    ctx_capture->prompt_step = 0; // 0 = fname, 1 = note, 2 = layer
+    ctx_capture->monitor = 0;
     //-------------------------------------------------------------------------
     // PLAY CONTEXT
     //-------------------------------------------------------------------------
@@ -895,7 +905,7 @@ wr: {
     }
     ctx_wr.now = war_get_monotonic_time_us();
     //-------------------------------------------------------------------------
-    // PLAY
+    // PLAY WRITER
     //-------------------------------------------------------------------------
     if (ctx_wr.now - ctx_play->last_frame_time >= ctx_play->rate_us) {
         ctx_play->last_frame_time += ctx_play->rate_us;
@@ -936,15 +946,15 @@ wr: {
     }
 skip_play:
     //-------------------------------------------------------------------------
-    // CAPTURE
+    // CAPTURE READER
     //-------------------------------------------------------------------------
     if (ctx_wr.now - ctx_capture->last_frame_time >= ctx_capture->rate_us) {
         ctx_capture->last_frame_time += ctx_capture->rate_us;
         if (!ctx_capture->capture) {
             pc_capture->i_from_a = pc_capture->i_to_a;
+            ctx_capture->state = CAPTURE_WAITING;
             goto skip_capture;
         }
-        call_carmack("capturing");
         if (ctx_wr.now - ctx_capture->last_read_time >= 1000000) {
             atomic_store(&atomics->capture_reader_rate,
                          (double)ctx_capture->read_count);
@@ -962,6 +972,38 @@ skip_play:
         } else {
             available_bytes = pc_capture->size + write_pos - read_pos;
         }
+        if (ctx_capture->capture_wait &&
+            ctx_capture->state == CAPTURE_WAITING) {
+            float max_amplitude = 0.0f;
+            uint64_t read_idx = read_pos;
+            uint64_t samples_to_check = available_bytes / sizeof(float);
+            for (uint64_t i = 0; i < samples_to_check; i++) {
+                float sample = ((float*)pc_capture->to_a)[read_idx / 4];
+                float amplitude = fabsf(sample);
+                if (amplitude > max_amplitude) { max_amplitude = amplitude; }
+                read_idx = (read_idx + 4) & (pc_capture->size - 1);
+            }
+            if (max_amplitude > ctx_capture->threshold) {
+                ctx_capture->state = CAPTURE_CAPTURING;
+                call_carmack("Sound detected - starting recording");
+            }
+        } else if (!ctx_capture->capture_wait &&
+                   ctx_capture->state == CAPTURE_WAITING) {
+        } else if (ctx_capture->state == CAPTURE_PROMPT) {
+            switch (ctx_capture->prompt_step) {
+            case 0: {
+                prompt_size = 6;
+                memcpy(prompt, "NAME: ", prompt_size);
+                break;
+            }
+            case 1: {
+                break;
+            }
+            case 2: {
+                break;
+            }
+            }
+        }
         if (available_bytes > 0) {
             uint64_t space_left =
                 capture_wav->memfd_capacity - capture_wav->memfd_size;
@@ -971,23 +1013,23 @@ skip_play:
                 uint64_t read_idx = read_pos;
                 uint64_t samples_to_copy = bytes_to_copy / sizeof(float);
                 float* wav_samples =
-                    (float*)(capture_wav->wav + 44 +
-                             (capture_wav->memfd_size - 44)); // Skip WAV header
-
+                    (float*)(capture_wav->wav + capture_wav->memfd_size);
                 for (uint64_t i = 0; i < samples_to_copy; i++) {
                     wav_samples[i] = ((float*)pc_capture->to_a)[read_idx / 4];
                     read_idx = (read_idx + 4) & (pc_capture->size - 1);
                 }
                 pc_capture->i_from_a = read_idx;
-                capture_wav->memfd_size += bytes_to_copy;
-                war_riff_header* riff_header =
-                    (war_riff_header*)capture_wav->wav;
-                riff_header->chunk_size = capture_wav->memfd_size - 8;
-                war_data_chunk* data_chunk =
-                    (war_data_chunk*)(capture_wav->wav +
-                                      sizeof(war_riff_header) +
-                                      sizeof(war_fmt_chunk));
-                data_chunk->subchunk2_size = capture_wav->memfd_size - 44;
+                if (ctx_capture->state == CAPTURE_CAPTURING) {
+                    capture_wav->memfd_size += bytes_to_copy;
+                    war_riff_header* riff_header =
+                        (war_riff_header*)capture_wav->wav;
+                    riff_header->chunk_size = capture_wav->memfd_size - 8;
+                    war_data_chunk* data_chunk =
+                        (war_data_chunk*)(capture_wav->wav +
+                                          sizeof(war_riff_header) +
+                                          sizeof(war_fmt_chunk));
+                    data_chunk->subchunk2_size = capture_wav->memfd_size - 44;
+                }
             }
         }
     }
@@ -1045,71 +1087,31 @@ skip_capture:
                 if (elapsed >= repeat_rate_us) {
                     key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) +
                                       m] = ctx_wr.now;
-                    if (ctx_wr.mode == MODE_COMMAND) {
-                        switch (k) {
-                        case KEYSYM_BACKSPACE: {
-                            if (ctx_wr.num_chars_in_sequence == 0) {
-                                ctx_wr.mode = MODE_NORMAL;
-                                memset(
-                                    ctx_wr.input_sequence,
-                                    0,
-                                    atomic_load(
-                                        &ctx_lua
-                                             ->WR_INPUT_SEQUENCE_LENGTH_MAX));
-                                break;
-                            }
-                            ctx_wr.num_chars_in_sequence--;
-                            ctx_wr.cursor_pos_x_command_mode--;
-                            break;
-                        }
-                        case KEYSYM_TAB: {
-                            char keysym_char = war_keysym_to_char(k, m);
-                            if (ctx_wr.num_chars_in_sequence <
-                                atomic_load(
-                                    &ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
-                                for (uint32_t i = 0; i < 4; i++) {
-                                    ctx_wr.input_sequence
-                                        [ctx_wr.num_chars_in_sequence] =
-                                        keysym_char;
-                                    ctx_wr.num_chars_in_sequence++;
-                                    ctx_wr.cursor_pos_x_command_mode++;
-                                }
-                            }
-                            break;
-                        }
-                        default: {
-                            char keysym_char = war_keysym_to_char(k, m);
-                            if (ctx_wr.num_chars_in_sequence <
-                                atomic_load(
-                                    &ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
-                                ctx_wr.input_sequence
-                                    [ctx_wr.num_chars_in_sequence] =
-                                    keysym_char;
-                                ctx_wr.num_chars_in_sequence++;
-                                ctx_wr.cursor_pos_x_command_mode++;
-                            }
-                            break;
-                        }
-                        }
-                    } else {
-                        uint16_t next_state_index =
-                            fsm[current_state_index].next_state
-                                [k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
-                        if (next_state_index != 0) {
-                            current_state_index = next_state_index;
-                            fsm_state_last_event_us = ctx_wr.now;
-                            if (fsm[current_state_index]
-                                    .is_terminal[ctx_wr.mode] &&
-                                !fsm[current_state_index]
-                                     .is_prefix[ctx_wr.mode] &&
-                                fsm[current_state_index]
-                                    .handle_repeat[ctx_wr.mode]) {
-                                uint16_t temp = current_state_index;
-                                current_state_index = 0;
-                                goto_cmd_repeat_done = true;
-                                if (fsm[temp].command[ctx_wr.mode]) {
-                                    goto* fsm[temp].command[ctx_wr.mode];
-                                }
+                    uint16_t next_state_index =
+                        fsm[current_state_index].next_state
+                            [k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
+                    //---------------------------------------------------------
+                    // READ INPUT CHARS REPEATS
+                    //---------------------------------------------------------
+                    char keysym_char = war_keysym_to_char(k, m);
+                    call_carmack("%c", keysym_char);
+                    char_input[char_input_write_index++] = keysym_char;
+                    if (char_input_write_index >= char_input_capacity) {
+                        char_input_write_index = 0;
+                        memset(char_input, 0, char_input_capacity);
+                    }
+                    if (next_state_index != 0) {
+                        current_state_index = next_state_index;
+                        fsm_state_last_event_us = ctx_wr.now;
+                        if (fsm[current_state_index].is_terminal[ctx_wr.mode] &&
+                            !fsm[current_state_index].is_prefix[ctx_wr.mode] &&
+                            fsm[current_state_index]
+                                .handle_repeat[ctx_wr.mode]) {
+                            uint16_t temp = current_state_index;
+                            current_state_index = 0;
+                            goto_cmd_repeat_done = true;
+                            if (fsm[temp].command[ctx_wr.mode]) {
+                                goto* fsm[temp].command[ctx_wr.mode];
                             }
                         }
                     }
@@ -2219,8 +2221,13 @@ cmd_timeout_done:
             ctx_wr.text_status_bar_middle_index = ctx_wr.viewport_cols / 2;
             ctx_wr.text_status_bar_end_index = (ctx_wr.viewport_cols * 3) / 4;
             war_get_top_text(&ctx_wr, ctx_lua, tmp_str, prompt);
-            war_get_middle_text(
-                &ctx_wr, &views, atomics, ctx_lua, tmp_str, prompt);
+            war_get_middle_text(&ctx_wr,
+                                &views,
+                                atomics,
+                                ctx_lua,
+                                tmp_str,
+                                prompt,
+                                prompt_size);
             war_get_bottom_text(&ctx_wr, ctx_lua, tmp_str, prompt);
             for (float col = 0; col < ctx_wr.viewport_cols; col++) {
                 if (ctx_wr.text_top_status_bar[(int)col] != 0) {
@@ -3631,6 +3638,8 @@ cmd_timeout_done:
                                 cmd_ptr = &&cmd_normal_gd;
                             } else if (strcmp(cmd_name, "cmd_wav_esc") == 0) {
                                 cmd_ptr = &&cmd_wav_esc;
+                            } else if (strcmp(cmd_name, "cmd_wav_Q") == 0) {
+                                cmd_ptr = &&cmd_wav_Q;
                             } else if (strcmp(cmd_name, "cmd_normal_gm") == 0) {
                                 cmd_ptr = &&cmd_normal_gm;
                             } else if (strcmp(cmd_name, "cmd_normal_s") == 0) {
@@ -4178,7 +4187,16 @@ cmd_timeout_done:
                 }
                 goto cmd_done;
             }
+            //-----------------------------------------------------------------
+            // READ INPUT CHARS
+            //-----------------------------------------------------------------
             char keysym_char = war_keysym_to_char(keysym, mod);
+            call_carmack("%c", keysym_char);
+            char_input[char_input_write_index++] = keysym_char;
+            if (char_input_write_index >= char_input_capacity) {
+                char_input_write_index = 0;
+                memset(char_input, 0, char_input_capacity);
+            }
             if (ctx_wr.num_chars_in_sequence <
                 atomic_load(&ctx_lua->WR_INPUT_SEQUENCE_LENGTH_MAX)) {
                 ctx_wr.input_sequence[ctx_wr.num_chars_in_sequence] =
@@ -4553,7 +4571,6 @@ cmd_timeout_done:
         cmd_normal_i: {
             call_carmack("cmd_normal_i");
             uint64_t layer = atomic_load(&atomics->layer);
-            call_carmack("layer stored: %lu", layer);
             note_layers[(int)ctx_wr.cursor_pos_y] = layer;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
@@ -6713,7 +6730,7 @@ cmd_timeout_done:
         }
         cmd_normal_Q: {
             call_carmack("cmd_normal_Q");
-            ctx_capture->capture = !ctx_capture->capture;
+            ctx_capture->capture = 1;
             ctx_wr.mode = MODE_WAV;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
@@ -8238,12 +8255,24 @@ cmd_timeout_done:
         //--------------------------------------------------------------------
         cmd_wav_Q: {
             call_carmack("cmd_wav_Q");
+            ctx_capture->capture = !ctx_capture->capture;
+            if (ctx_capture->capture) { goto cmd_done; }
+            if (ctx_capture->prompt) {
+                ctx_capture->capture = 1;
+                call_carmack("hi");
+                ctx_capture->prompt_step = 0;
+                ctx_capture->state = CAPTURE_PROMPT;
+                memset(char_input, 0, char_input_capacity);
+                char_input_write_index = 0;
+                goto cmd_done;
+            }
             if (ftruncate(capture_wav->fd, capture_wav->memfd_size) == -1) {
                 call_carmack("save_file: fd ftruncate failed: %s",
                              capture_wav->fname);
                 goto cmd_done;
             }
             off_t offset = 0;
+            call_carmack("saving file");
             ssize_t result = sendfile(capture_wav->fd,
                                       capture_wav->memfd,
                                       &offset,
@@ -8260,6 +8289,8 @@ cmd_timeout_done:
         cmd_wav_esc: {
             call_carmack("cmd_wav_esc");
             ctx_wr.mode = MODE_NORMAL;
+            ctx_capture->state = CAPTURE_WAITING;
+            ctx_capture->capture = 0;
             ctx_wr.numeric_prefix = 0;
             ctx_wr.num_chars_in_sequence = 0;
             goto cmd_done;

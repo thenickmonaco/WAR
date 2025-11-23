@@ -149,6 +149,7 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_FLOAT(DEFAULT_ALPHA_SCALE);
     LOAD_FLOAT(DEFAULT_CURSOR_ALPHA_SCALE);
     LOAD_FLOAT(DEFAULT_PLAYBACK_BAR_THICKNESS);
+    LOAD_FLOAT(WR_CAPTURE_THRESHOLD);
     LOAD_FLOAT(DEFAULT_TEXT_FEATHER);
     LOAD_FLOAT(DEFAULT_TEXT_THICKNESS);
     LOAD_FLOAT(WINDOWED_TEXT_FEATHER);
@@ -519,7 +520,8 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
                                        war_atomics* atomics,
                                        war_lua_context* ctx_lua,
                                        char* tmp_str,
-                                       char* prompt) {
+                                       char* prompt,
+                                       uint32_t prompt_size) {
     memset(ctx_wr->text_middle_status_bar,
            0,
            atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
@@ -578,6 +580,11 @@ static inline void war_get_middle_text(war_window_render_context* ctx_wr,
                "-- VISUAL --",
                sizeof("-- VISUAL --"));
         break;
+    case MODE_WAV: {
+        memcpy(ctx_wr->text_middle_status_bar, prompt, prompt_size);
+        call_carmack("why");
+        break;
+    }
     case MODE_VIEWS:
         if (views->warpoon_mode == MODE_VISUAL_LINE) {
             memcpy(ctx_wr->text_middle_status_bar,
@@ -1049,6 +1056,8 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return KEYSYM_RIGHTBRACKET;
     case XKB_KEY_colon:
         return KEYSYM_SEMICOLON;
+    case XKB_KEY_underscore:
+        return KEYSYM_UNDERSCORE;
     case 65056:
         return KEYSYM_TAB;
     case XKB_KEY_A:
@@ -1128,13 +1137,6 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
     }
 }
 
-static inline void
-war_get_frame_duration_us(war_window_render_context* ctx_wr) {
-    const double microsecond_conversion = 1000000;
-    ctx_wr->frame_duration_us =
-        (uint64_t)round((1.0 / (double)ctx_wr->FPS) * microsecond_conversion);
-}
-
 static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
     char lowercase = ks;
     int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
@@ -1155,6 +1157,10 @@ static inline char war_keysym_to_char(xkb_keysym_t ks, uint8_t mod) {
         return ',';
     case KEYSYM_MINUS:
         return '-';
+    case KEYSYM_UNDERSCORE:
+        return '_';
+    case KEYSYM_RETURN:
+        return '\n';
     }
 
     return 0; // non-printable / special keys

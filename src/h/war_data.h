@@ -67,6 +67,7 @@ enum war_keysyms {
     KEYSYM_BACKSPACE = 270,
     KEYSYM_APOSTROPHE = 271,
     KEYSYM_COMMA = 272,
+    KEYSYM_UNDERSCORE = 273,
     KEYSYM_DEFAULT = 511,
     MAX_KEYSYM = 512,
     MAX_MOD = 16,
@@ -358,6 +359,7 @@ typedef struct war_lua_context {
     _Atomic double A_TARGET_SAMPLES_FACTOR;
     _Atomic int A_CHANNEL_COUNT;
     _Atomic int A_NOTE_COUNT;
+    _Atomic float WR_CAPTURE_THRESHOLD;
     _Atomic int A_LAYER_COUNT;
     _Atomic int A_LAYERS_IN_RAM;
     _Atomic double A_BPM;
@@ -796,6 +798,12 @@ typedef struct war_play_context {
     uint8_t play;
 } war_play_context;
 
+enum capture_state {
+    CAPTURE_WAITING = 0,
+    CAPTURE_CAPTURING = 1,
+    CAPTURE_PROMPT = 2,
+};
+
 typedef struct war_capture_context {
     // rate
     uint64_t last_frame_time;
@@ -805,7 +813,12 @@ typedef struct war_capture_context {
     // misc
     uint8_t capture;
     uint8_t capture_wait;
+    uint8_t prompt;
     uint32_t capture_delay;
+    uint8_t state;
+    float threshold;
+    uint8_t prompt_step;
+    uint8_t monitor;
 } war_capture_context;
 
 typedef struct war_glyph_info {

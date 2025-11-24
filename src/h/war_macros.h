@@ -146,16 +146,18 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_FLOAT(A_DEFAULT_RELEASE)
     LOAD_FLOAT(A_DEFAULT_GAIN)
     LOAD_FLOAT(VK_FONT_PIXEL_HEIGHT)
-    LOAD_FLOAT(DEFAULT_ALPHA_SCALE);
-    LOAD_FLOAT(DEFAULT_CURSOR_ALPHA_SCALE);
-    LOAD_FLOAT(DEFAULT_PLAYBACK_BAR_THICKNESS);
-    LOAD_FLOAT(WR_CAPTURE_THRESHOLD);
-    LOAD_FLOAT(DEFAULT_TEXT_FEATHER);
-    LOAD_FLOAT(DEFAULT_TEXT_THICKNESS);
-    LOAD_FLOAT(WINDOWED_TEXT_FEATHER);
-    LOAD_FLOAT(WINDOWED_TEXT_THICKNESS);
-    LOAD_FLOAT(DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE);
-    LOAD_FLOAT(DEFAULT_WINDOWED_ALPHA_SCALE);
+    LOAD_FLOAT(DEFAULT_BOLD_TEXT_THICKNESS)
+    LOAD_FLOAT(DEFAULT_BOLD_TEXT_FEATHER)
+    LOAD_FLOAT(DEFAULT_ALPHA_SCALE)
+    LOAD_FLOAT(DEFAULT_CURSOR_ALPHA_SCALE)
+    LOAD_FLOAT(DEFAULT_PLAYBACK_BAR_THICKNESS)
+    LOAD_FLOAT(WR_CAPTURE_THRESHOLD)
+    LOAD_FLOAT(DEFAULT_TEXT_FEATHER)
+    LOAD_FLOAT(DEFAULT_TEXT_THICKNESS)
+    LOAD_FLOAT(WINDOWED_TEXT_FEATHER)
+    LOAD_FLOAT(WINDOWED_TEXT_THICKNESS)
+    LOAD_FLOAT(DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE)
+    LOAD_FLOAT(DEFAULT_WINDOWED_ALPHA_SCALE)
     LOAD_FLOAT(WR_COLOR_STEP)
 
 #undef LOAD_FLOAT
@@ -391,6 +393,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_map_wav);
             else if (strcmp(type, "war_wav") == 0)
                 type_size = sizeof(war_wav);
+            else if (strcmp(type, "war_env") == 0)
+                type_size = sizeof(war_env);
             else if (strcmp(type, "war_color_context") == 0)
                 type_size = sizeof(war_color_context);
             else if (strcmp(type, "war_undo_tree") == 0)
@@ -441,9 +445,9 @@ static inline void* war_pool_alloc(war_pool* pool, size_t size) {
 
 static inline void war_layer_flux(war_window_render_context* ctx_wr,
                                   war_atomics* atomics,
-                                  uint64_t* note_layers,
+                                  war_play_context* ctx_play,
                                   war_color_context* ctx_color) {
-    uint64_t layer = note_layers[(int)ctx_wr->cursor_pos_y];
+    uint64_t layer = ctx_play->note_layers[(int)ctx_wr->cursor_pos_y];
     atomic_store(&atomics->layer, layer);
     ctx_wr->layers_active_count = __builtin_popcountll(layer);
     switch (ctx_wr->layers_active_count) {
@@ -1006,6 +1010,31 @@ static inline int war_keysym_to_int(xkb_keysym_t ks, uint8_t mod) {
     }
 
     return 0; // non-printable / special keys
+}
+
+static inline void war_command_reset(war_command_context* ctx_command,
+                                     war_status_context* ctx_status) {
+    memset(ctx_status->middle, 0, ctx_status->capacity);
+    ctx_status->middle_size = 0;
+    memset(ctx_command->text, 0, ctx_command->capacity);
+    ctx_command->text_size = 0;
+    ctx_command->text_write_index = 0;
+    memset(ctx_command->input, 0, ctx_command->capacity);
+    ctx_command->input_write_index = 0;
+    ctx_command->input_read_index = 0;
+    memset(ctx_command->prompt, 0, ctx_command->capacity);
+    ctx_command->prompt_size = 0;
+}
+
+static inline void war_command_status(war_command_context* ctx_command,
+                                      war_status_context* ctx_status) {
+    snprintf(ctx_status->middle,
+             ctx_command->prompt_size + 2 + ctx_command->text_size,
+             "%s:%s",
+             ctx_command->prompt,
+             ctx_command->text);
+    ctx_status->middle_size =
+        ctx_command->prompt_size + 2 + ctx_command->text_size;
 }
 
 static inline int war_num_digits(uint32_t n) {

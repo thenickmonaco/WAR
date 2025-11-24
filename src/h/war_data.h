@@ -428,6 +428,8 @@ typedef struct war_lua_context {
     _Atomic float DEFAULT_PLAYBACK_BAR_THICKNESS;
     _Atomic float DEFAULT_TEXT_FEATHER;
     _Atomic float DEFAULT_TEXT_THICKNESS;
+    _Atomic float DEFAULT_BOLD_TEXT_FEATHER;
+    _Atomic float DEFAULT_BOLD_TEXT_THICKNESS;
     _Atomic float WINDOWED_TEXT_FEATHER;
     _Atomic float WINDOWED_TEXT_THICKNESS;
     _Atomic float DEFAULT_WINDOWED_ALPHA_SCALE;
@@ -775,16 +777,20 @@ typedef struct war_window_render_context {
     uint32_t num_chars_in_prompt;
     uint32_t cursor_pos_x_command_mode;
     uint8_t layer_flux;
+    uint32_t default_viewport_cols;
+    uint32_t default_viewport_rows;
 } war_window_render_context;
 
 typedef struct war_command_context {
     uint8_t command;
-    uint8_t prompt;
     int* input;
     uint32_t input_write_index;
     uint32_t input_read_index;
     char* text;
     uint32_t text_write_index;
+    uint32_t text_size;
+    char* prompt;
+    uint32_t prompt_size;
     uint32_t capacity;
 } war_command_context;
 
@@ -806,6 +812,7 @@ typedef struct war_play_context {
     uint64_t rate_us;
     // misc
     uint8_t play;
+    uint64_t* note_layers;
 } war_play_context;
 
 enum capture_state {
@@ -1008,5 +1015,22 @@ typedef struct war_drm_context {
     uint32_t crtc_id;
     drmModeModeInfo mode;
 } war_drm_context;
+
+typedef struct war_env {
+    war_window_render_context* ctx_wr;
+    war_atomics* atomics;
+    war_color_context* ctx_color;
+    war_lua_context* ctx_lua;
+    war_views* views;
+    war_play_context* ctx_play;
+    war_capture_context* ctx_capture;
+    war_command_context* ctx_command;
+    war_status_context* ctx_status;
+    war_undo_tree* undo_tree;
+    war_note_quads* note_quads;
+    war_pool* pool_wr;
+    war_vulkan_context* ctx_vk;
+    war_wav* capture_wav;
+} war_env;
 
 #endif // WAR_DATA_H

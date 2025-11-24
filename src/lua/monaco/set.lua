@@ -100,6 +100,8 @@ ctx_lua = {
     DEFAULT_TEXT_THICKNESS              = 0.2,
     WINDOWED_TEXT_FEATHER               = 0.0,
     WINDOWED_TEXT_THICKNESS             = 0.2,
+    DEFAULT_BOLD_TEXT_FEATHER           = 0.0,
+    DEFAULT_BOLD_TEXT_THICKNESS         = 0.2,
     DEFAULT_WINDOWED_ALPHA_SCALE        = 0.02,
     DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE = 0.02,
     CWD                                 = "/home/monaco/Projects/WAR/proto",
@@ -121,10 +123,13 @@ pool_a = {
 }
 
 pool_wr = {
+    -- env
+    { name = "env",                                 type = "war_env",             count = 1 },
     -- command context
     { name = "ctx_command",                         type = "war_command_context", count = 1 },
     { name = "ctx_command.input",                   type = "int",                 count = ctx_lua.A_PATH_LIMIT },
     { name = "ctx_command.text",                    type = "char",                count = ctx_lua.A_PATH_LIMIT },
+    { name = "ctx_command.prompt",                  type = "char",                count = ctx_lua.A_PATH_LIMIT },
     -- status context
     { name = "ctx_status",                          type = "war_status_context",  count = 1 },
     { name = "ctx_status.top",                      type = "char",                count = ctx_lua.A_PATH_LIMIT },
@@ -134,6 +139,7 @@ pool_wr = {
     { name = "char_input",                          type = "char",                count = ctx_lua.A_PATH_LIMIT * 2 },
     -- play context
     { name = "ctx_play",                            type = "war_play_context",    count = 1 },
+    { name = "ctx_play.note_layers",                type = "uint64_t",            count = ctx_lua.A_NOTE_COUNT },
     -- capture context
     { name = "ctx_capture",                         type = "war_capture_context", count = 1 },
     -- capture_wav
@@ -160,7 +166,6 @@ pool_wr = {
     { name = "ctx_color",                           type = "war_color_context",   count = 1 },
     -- layres
     { name = "layers_active",                       type = "char",                count = ctx_lua.A_LAYER_COUNT },
-    { name = "note_layers",                         type = "uint64_t",            count = ctx_lua.A_NOTE_COUNT },
     -- Colors
     { name = "colors",                              type = "uint32_t",            count = ctx_lua.A_LAYER_COUNT },
     -- views

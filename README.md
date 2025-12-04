@@ -1,6 +1,6 @@
 ## WAR
 
-coming soon
+coming soon\
 make music with vim motions
 
 ## LICENSE

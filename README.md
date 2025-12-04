@@ -1,9 +1,6 @@
-# WAR
+## WAR
 
-![WAR](/assets/images/WAR-over-rose-circle-white.jpg)
-
-## COMING SOON
-
+coming soon
 make music with vim motions
 
 ## LICENSE

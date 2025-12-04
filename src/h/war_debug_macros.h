@@ -2,16 +2,16 @@
 //
 // WAR - make music with vim motions
 // Copyright (C) 2025 Monaco
-// 
+//
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
 // version 3, with the following modification: attribution to the original
 // author is waived.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-// 
+//
 // For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 //
 //-----------------------------------------------------------------------------
@@ -78,7 +78,7 @@
             YEAR_CHAR3,                                                        \
             YEAR_CHAR4)
 
-#define CALL_CARMACK(fmt, ...)                                                 \
+#define CALL_TERRY_DAVIS(fmt, ...)                                             \
     do {                                                                       \
         fprintf(stderr, "# " fmt, ##__VA_ARGS__);                              \
         if ((fmt)[sizeof(fmt) - 2] == '\n')                                    \
@@ -109,18 +109,18 @@
     } while (0)
 
 #define end(fmt, ...) header("END " fmt, ##__VA_ARGS__)
-#define END(fmt, ...) CALL_CARMACK("END " fmt, ##__VA_ARGS__)
+#define END(fmt, ...) CALL_TERRY_DAVIS("END " fmt, ##__VA_ARGS__)
 
-#define call_carmack(fmt, ...) fprintf(stderr, "- " fmt "\n", ##__VA_ARGS__)
+#define call_terry_davis(fmt, ...) fprintf(stderr, "- " fmt "\n", ##__VA_ARGS__)
 
 #else // DEBUG not defined
 
-#define CALL_CARMACK(fmt, ...) ((void)0)
+#define CALL_TERRY_DAVIS(fmt, ...) ((void)0)
 #define header(fmt, ...) ((void)0)
 #define end(fmt, ...) ((void)0)
 #define END(fmt, ...) ((void)0)
 #define sub_header(fmt, ...) ((void)0)
-#define call_carmack(fmt, ...) ((void)0)
+#define call_terry_davis(fmt, ...) ((void)0)
 #define PRINT_DATE_NUMERIC() ((void)0)
 #define dump_bytes(label, arr, len) ((void)0)
 

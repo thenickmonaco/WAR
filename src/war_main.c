@@ -26,6 +26,7 @@
 
 #include "h/war_data.h"
 #include "h/war_debug_macros.h"
+#include "h/war_functions.h"
 #include "h/war_macros.h"
 #include "h/war_main.h"
 
@@ -58,12 +59,18 @@
 #include <unistd.h>
 
 int main() {
-    CALL_CARMACK("war");
+    CALL_TERRY_DAVIS("war");
     //-------------------------------------------------------------------------
-    // LUA CONTEXT
+    // LUA
     //-------------------------------------------------------------------------
     war_lua_context ctx_lua;
-    war_load_lua_config(&ctx_lua, "src/lua/monaco/set.lua");
+    ctx_lua.L = luaL_newstate();
+    if (!ctx_lua.L) {
+        call_terry_davis("failed to create Lua state");
+        return -1;
+    }
+    luaL_openlibs(ctx_lua.L);
+    war_load_lua_config(&ctx_lua, "src/lua/war.lua");
     //-------------------------------------------------------------------------
     // PC CONTROL
     //-------------------------------------------------------------------------
@@ -205,12 +212,12 @@ void* war_window_render(void* args) {
     war_lua_context* ctx_lua = args_ptrs[3];
     war_producer_consumer* pc_play = args_ptrs[4];
     war_producer_consumer* pc_capture = args_ptrs[5];
-    call_carmack("ctx_lua WR_STATES: %i", atomic_load(&ctx_lua->WR_STATES));
+    call_terry_davis("ctx_lua WR_STATES: %i", atomic_load(&ctx_lua->WR_STATES));
     pool_wr->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     pool_wr->pool_size =
-        war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/monaco/set.lua");
+        war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/war.lua");
     pool_wr->pool_size += pool_wr->pool_alignment * 2000;
-    call_carmack("pool_wr hack size: %zu", pool_wr->pool_size);
+    call_terry_davis("pool_wr hack size: %zu", pool_wr->pool_size);
     pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
     int pool_result = posix_memalign(
         &pool_wr->pool, pool_wr->pool_alignment, pool_wr->pool_size);
@@ -237,8 +244,11 @@ void* war_window_render(void* args) {
     const uint32_t darker_light_gray_hex = 0xFF36383C; // gutter / line numbers
     const uint32_t dark_gray_hex = 0xFF282828;
     // rainbow
-    uint32_t* colors = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->A_LAYER_COUNT));
+    war_color_context* ctx_color =
+        war_pool_alloc(pool_wr, sizeof(war_color_context));
+    ctx_color->colors_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
+    ctx_color->colors =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * ctx_color->colors_count);
     const uint32_t red_hex = 0xFF0000DE;
     const uint32_t orange_hex = 0xFF0080FF;
     const uint32_t yellow_hex = 0xFF00FFFF;
@@ -252,20 +262,17 @@ void* war_window_render(void* args) {
     const uint32_t black_hex = 0xFF000000;
     const uint32_t full_white_hex = 0xFFFFFFFF;
     const uint32_t super_light_gray_hex = 0xFFD0D0D0;
-    colors[0] = red_hex;
-    colors[1] = orange_hex;
-    colors[2] = yellow_hex;
-    colors[3] = green_hex;
-    colors[4] = cyan_hex;
-    colors[5] = blue_hex;
-    colors[6] = magenta_hex;
-    colors[7] = purple_hex;
-    colors[8] = gray_hex;
-    war_color_context* ctx_color =
-        war_pool_alloc(pool_wr, sizeof(war_color_context));
+    ctx_color->colors[0] = red_hex;
+    ctx_color->colors[1] = orange_hex;
+    ctx_color->colors[2] = yellow_hex;
+    ctx_color->colors[3] = green_hex;
+    ctx_color->colors[4] = cyan_hex;
+    ctx_color->colors[5] = blue_hex;
+    ctx_color->colors[6] = magenta_hex;
+    ctx_color->colors[7] = purple_hex;
+    ctx_color->colors[8] = gray_hex;
     ctx_color->full_white_hex = full_white_hex;
     ctx_color->white_hex = white_hex;
-    ctx_color->colors = colors;
     //-------------------------------------------------------------------------
     // DEFAULTS
     //-------------------------------------------------------------------------
@@ -321,15 +328,8 @@ void* war_window_render(void* args) {
     undo_tree->next_seq_num = 1;
     undo_tree->next_branch_id = 1;
     //-------------------------------------------------------------------------
-    // STRING ARRAYS
+    // CWD
     //-------------------------------------------------------------------------
-    char* prompt = war_pool_alloc(
-        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    uint32_t prompt_size = 0;
-    char* tmp_str = war_pool_alloc(
-        pool_wr, sizeof(char) * atomic_load(&ctx_lua->WR_STATUS_BAR_COLS_MAX));
-    char* layers_active = war_pool_alloc(
-        pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_LAYER_COUNT));
     chdir(atomic_load(&ctx_lua->CWD));
     //-------------------------------------------------------------------------
     // STATUS CONTEXT
@@ -347,6 +347,9 @@ void* war_window_render(void* args) {
     ctx_status->bottom =
         war_pool_alloc(pool_wr, sizeof(char) * ctx_status->capacity);
     ctx_status->bottom_size = 0;
+    ctx_status->layers_active_size = atomic_load(&ctx_lua->A_LAYER_COUNT);
+    ctx_status->layers_active =
+        war_pool_alloc(pool_wr, sizeof(char) * ctx_status->layers_active_size);
     //-------------------------------------------------------------------------
     // COMMAND CONTEXT
     //-------------------------------------------------------------------------
@@ -372,7 +375,6 @@ void* war_window_render(void* args) {
         .prompt = 0,
         .default_viewport_cols = default_viewport_cols,
         .default_viewport_rows = default_viewport_rows,
-        .layers_active = layers_active,
         .layer_flux = 0,
         .layers_active_count = 0,
         .skip_release = 0,
@@ -385,7 +387,7 @@ void* war_window_render(void* args) {
         .end_window_render = false,
         .FPS = atomic_load(&ctx_lua->WR_FPS),
         .now = 0,
-        .mode = MODE_NORMAL,
+        .mode = 0,
         .hud_state = HUD_PIANO,
         .cursor_blink_state = 0,
         .cursor_blink_duration_us =
@@ -498,33 +500,33 @@ void* war_window_render(void* args) {
     uint32_t max_gridlines_per_split = max_viewport_cols + max_viewport_rows;
     war_views views_stack;
     {
+        views_stack.views_saved_max = atomic_load(&ctx_lua->WR_VIEWS_SAVED);
+        views_stack.text_size = atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS);
         uint32_t* views_col = war_pool_alloc(
-            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+            pool_wr, sizeof(uint32_t) * views_stack.views_saved_max);
         uint32_t* views_row = war_pool_alloc(
-            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+            pool_wr, sizeof(uint32_t) * views_stack.views_saved_max);
         uint32_t* views_left_col = war_pool_alloc(
-            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+            pool_wr, sizeof(uint32_t) * views_stack.views_saved_max);
         uint32_t* views_right_col = war_pool_alloc(
-            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+            pool_wr, sizeof(uint32_t) * views_stack.views_saved_max);
         uint32_t* views_bottom_row = war_pool_alloc(
-            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+            pool_wr, sizeof(uint32_t) * views_stack.views_saved_max);
         uint32_t* views_top_row = war_pool_alloc(
-            pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
+            pool_wr, sizeof(uint32_t) * views_stack.views_saved_max);
         char** warpoon_text = war_pool_alloc(
-            pool_wr, sizeof(char*) * atomic_load(&ctx_lua->WR_VIEWS_SAVED));
-        for (uint32_t i = 0; i < atomic_load(&ctx_lua->WR_VIEWS_SAVED); i++) {
-            warpoon_text[i] = war_pool_alloc(
-                pool_wr,
-                sizeof(char) * atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS));
+            pool_wr, sizeof(char*) * views_stack.views_saved_max);
+        for (uint32_t i = 0; i < views_stack.views_saved_max; i++) {
+            warpoon_text[i] =
+                war_pool_alloc(pool_wr, sizeof(char) * views_stack.text_size);
         }
         uint32_t warpoon_viewport_cols = 25;
         uint32_t warpoon_viewport_rows = 8;
         uint32_t warpoon_hud_cols = 2;
         uint32_t warpoon_hud_rows = 0;
-        uint32_t warpoon_max_col =
-            atomic_load(&ctx_lua->WR_WARPOON_TEXT_COLS) - 1 - warpoon_hud_cols;
+        uint32_t warpoon_max_col = views_stack.text_size - 1 - warpoon_hud_cols;
         uint32_t warpoon_max_row =
-            atomic_load(&ctx_lua->WR_VIEWS_SAVED) - 1 - warpoon_hud_rows;
+            views_stack.views_saved_max - 1 - warpoon_hud_rows;
         views_stack = (war_views){
             .col = views_col,
             .row = views_row,
@@ -534,7 +536,7 @@ void* war_window_render(void* args) {
             .top_row = views_top_row,
             .views_count = 0,
             .warpoon_text = warpoon_text,
-            .warpoon_mode = MODE_NORMAL,
+            .warpoon_mode = 0,
             .warpoon_max_col = warpoon_max_col,
             .warpoon_max_row = warpoon_max_row,
             .warpoon_viewport_cols = warpoon_viewport_cols,
@@ -559,64 +561,77 @@ void* war_window_render(void* args) {
     }
     war_views* views = &views_stack;
     //-------------------------------------------------------------------------
-    // REPEATS TIMEOUTS
+    // FSM CONTEXT + REPEATS + TIMEOUTS
     //-------------------------------------------------------------------------
-    const uint64_t repeat_delay_us = 150000;
-    const uint64_t repeat_rate_us = 40000;
-    uint32_t repeat_keysym = 0;
-    uint8_t repeat_mod = 0;
-    bool repeating = false;
-    bool goto_cmd_repeat_done = false;
-    const uint64_t timeout_duration_us = 500000;
-    uint16_t timeout_state_index = 0;
-    uint64_t timeout_start_us = 0;
-    bool timeout = false;
-    bool goto_cmd_timeout_done = false;
-    //-------------------------------------------------------------------------
-    // FSM KEYS MODS
-    //-------------------------------------------------------------------------
-    war_fsm_state* fsm = war_pool_alloc(
-        pool_wr, sizeof(war_fsm_state) * atomic_load(&ctx_lua->WR_STATES));
-    for (int i = 0; i < atomic_load(&ctx_lua->WR_STATES); i++) {
-        fsm[i].is_terminal = war_pool_alloc(
-            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].is_prefix = war_pool_alloc(
-            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_release = war_pool_alloc(
-            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_repeat = war_pool_alloc(
-            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].handle_timeout = war_pool_alloc(
-            pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].command = war_pool_alloc(
-            pool_wr, sizeof(void*) * atomic_load(&ctx_lua->WR_MODE_COUNT));
-        fsm[i].next_state = war_pool_alloc(
-            pool_wr,
-            sizeof(uint16_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
-                atomic_load(&ctx_lua->WR_MOD_COUNT));
-    }
-    uint16_t current_state_index = 0;
-    bool* key_down =
+    // Watch for overflow
+    war_fsm_context* ctx_fsm = war_pool_alloc(pool_wr, sizeof(war_fsm_context));
+    // Set counts
+    ctx_fsm->keysym_count = atomic_load(&ctx_lua->WR_KEYSYM_COUNT);
+    ctx_fsm->mod_count = atomic_load(&ctx_lua->WR_MOD_COUNT);
+    ctx_fsm->state_count = atomic_load(&ctx_lua->WR_STATES);
+    ctx_fsm->mode_count = atomic_load(&ctx_lua->WR_MODE_COUNT);
+    ctx_fsm->name_limit = atomic_load(&ctx_lua->WR_FN_NAME_LIMIT);
+    // FSM data allocations (per state per mode)
+    ctx_fsm->next_state =
         war_pool_alloc(pool_wr,
-                       sizeof(bool) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
-                           atomic_load(&ctx_lua->WR_MOD_COUNT));
-    uint64_t* key_last_event_us = war_pool_alloc(
-        pool_wr,
-        sizeof(uint64_t) * atomic_load(&ctx_lua->WR_KEYSYM_COUNT) *
-            atomic_load(&ctx_lua->WR_MOD_COUNT));
-    uint64_t fsm_state_last_event_us = 0;
-    uint32_t mod_shift;
-    uint32_t mod_ctrl;
-    uint32_t mod_alt;
-    uint32_t mod_logo;
-    uint32_t mod_caps;
-    uint32_t mod_num;
-    uint32_t mod_fn;
-    struct xkb_context* xkb_context;
-    struct xkb_state* xkb_state;
-    //-------------------------------------------------------------------------
+                       sizeof(uint64_t) * ctx_fsm->state_count *
+                           ctx_fsm->keysym_count * ctx_fsm->mod_count);
+    ctx_fsm->is_terminal = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * ctx_fsm->state_count * ctx_fsm->mode_count);
+    ctx_fsm->is_prefix = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * ctx_fsm->state_count * ctx_fsm->mode_count);
+    ctx_fsm->handle_release = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * ctx_fsm->state_count * ctx_fsm->mode_count);
+    ctx_fsm->handle_repeat = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * ctx_fsm->state_count * ctx_fsm->mode_count);
+    ctx_fsm->handle_timeout = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * ctx_fsm->state_count * ctx_fsm->mode_count);
+    ctx_fsm->function =
+        war_pool_alloc(pool_wr,
+                       sizeof(war_function_union) * ctx_fsm->state_count *
+                           ctx_fsm->mode_count);
+    ctx_fsm->type = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * ctx_fsm->state_count * ctx_fsm->mode_count);
+    ctx_fsm->name =
+        war_pool_alloc(pool_wr,
+                       sizeof(char) * ctx_fsm->state_count *
+                           ctx_fsm->mode_count * ctx_fsm->name_limit);
+    // Runtime state allocations
+    ctx_fsm->key_down = war_pool_alloc(
+        pool_wr, sizeof(uint8_t) * ctx_fsm->keysym_count * ctx_fsm->mod_count);
+    ctx_fsm->key_last_event_us = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * ctx_fsm->keysym_count * ctx_fsm->mod_count);
+    // repeats
+    ctx_fsm->repeat_delay_us = 150000;
+    ctx_fsm->repeat_rate_us = 40000;
+    ctx_fsm->repeat_keysym = 0;
+    ctx_fsm->repeat_mod = 0;
+    ctx_fsm->repeating = 0;
+    ctx_fsm->goto_cmd_repeat_done = 0;
+    // timeouts
+    ctx_fsm->timeout_duration_us = 500000;
+    ctx_fsm->timeout_state_index = 0;
+    ctx_fsm->timeout_start_us = 0;
+    ctx_fsm->timeout = 0;
+    ctx_fsm->goto_cmd_timeout_done = 0;
+    // Initialize runtime values
+    ctx_fsm->state_last_event_us = 0;
+    ctx_fsm->current_state = 0;
+    ctx_fsm->current_mode = 0;
+    // Initialize modifiers
+    ctx_fsm->mod_shift = 0;
+    ctx_fsm->mod_ctrl = 0;
+    ctx_fsm->mod_alt = 0;
+    ctx_fsm->mod_logo = 0;
+    ctx_fsm->mod_caps = 0;
+    ctx_fsm->mod_num = 0;
+    ctx_fsm->mod_fn = 0;
+    // XKB initialization (separate from pool allocation)
+    ctx_fsm->xkb_context = NULL;
+    ctx_fsm->xkb_state = NULL;
+    //-----------------------------------------------------------------------------
     // WAYLAND
-    //-------------------------------------------------------------------------
+    //-----------------------------------------------------------------------------
     uint32_t zwp_linux_dmabuf_v1_id = 0;
     uint32_t zwp_linux_buffer_params_v1_id = 0;
     uint32_t zwp_linux_dmabuf_feedback_v1_id = 0;
@@ -665,88 +680,90 @@ void* war_window_render(void* args) {
     war_write_le16(get_registry + 6, 12);
     war_write_le32(get_registry + 8, wl_registry_id);
     ssize_t written = write(fd, get_registry, 12);
-    call_carmack("written size: %lu", written);
+    call_terry_davis("written size: %lu", written);
     dump_bytes("written", get_registry, 12);
     assert(written == 12);
     new_id = wl_registry_id + 1;
-    uint8_t* msg_buffer = war_pool_alloc(
-        pool_wr,
-        sizeof(uint8_t) * atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE));
+    uint32_t msg_buffer_alloc_size =
+        atomic_load(&ctx_lua->WR_WAYLAND_MSG_BUFFER_SIZE);
+    uint8_t* msg_buffer =
+        war_pool_alloc(pool_wr, sizeof(uint8_t) * msg_buffer_alloc_size);
     size_t msg_buffer_size = 0;
     struct pollfd pfd = {
         .fd = fd,
         .events = POLLIN,
     };
+    uint32_t max_wayland_objects =
+        atomic_load(&ctx_lua->WR_WAYLAND_MAX_OBJECTS);
+    uint32_t max_wayland_opcodes =
+        atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES);
     void** obj_op = war_pool_alloc(
-        pool_wr,
-        sizeof(void*) * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OBJECTS) *
-            atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES));
-    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 0] =
-        &&wl_display_error;
-    obj_op[wl_display_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) + 1] =
-        &&wl_display_delete_id;
-    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
-           0] = &&wl_registry_global;
-    obj_op[wl_registry_id * atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES) +
-           1] = &&wl_registry_global_remove;
+        pool_wr, sizeof(void*) * max_wayland_objects * max_wayland_opcodes);
+    obj_op[wl_display_id * max_wayland_opcodes + 0] = &&wl_display_error;
+    obj_op[wl_display_id * max_wayland_opcodes + 1] = &&wl_display_delete_id;
+    obj_op[wl_registry_id * max_wayland_opcodes + 0] = &&wl_registry_global;
+    obj_op[wl_registry_id * max_wayland_opcodes + 1] =
+        &&wl_registry_global_remove;
     //-------------------------------------------------------------------------
     // NOTE QUADS
     //-------------------------------------------------------------------------
     war_note_quads* note_quads =
         war_pool_alloc(pool_wr, sizeof(war_note_quads));
-    note_quads->alive = war_pool_alloc(
-        pool_wr, sizeof(uint8_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->id = war_pool_alloc(
-        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->pos_x = war_pool_alloc(
-        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->pos_y = war_pool_alloc(
-        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->layer = war_pool_alloc(
-        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->size_x = war_pool_alloc(
-        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->navigation_x = war_pool_alloc(
-        pool_wr, sizeof(double) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->navigation_x_numerator = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->navigation_x_denominator = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->size_x_numerator = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->size_x_denominator = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->color = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->outline_color = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->gain = war_pool_alloc(
-        pool_wr, sizeof(float) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->voice = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->hidden = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
-    note_quads->mute = war_pool_alloc(
-        pool_wr, sizeof(uint32_t) * atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX));
+    note_quads->note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
+    note_quads->alive =
+        war_pool_alloc(pool_wr, sizeof(uint8_t) * note_quads->note_quads_max);
+    note_quads->id =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * note_quads->note_quads_max);
+    note_quads->pos_x =
+        war_pool_alloc(pool_wr, sizeof(double) * note_quads->note_quads_max);
+    note_quads->pos_y =
+        war_pool_alloc(pool_wr, sizeof(double) * note_quads->note_quads_max);
+    note_quads->layer =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * note_quads->note_quads_max);
+    note_quads->size_x =
+        war_pool_alloc(pool_wr, sizeof(double) * note_quads->note_quads_max);
+    note_quads->navigation_x =
+        war_pool_alloc(pool_wr, sizeof(double) * note_quads->note_quads_max);
+    note_quads->navigation_x_numerator =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->navigation_x_denominator =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->size_x_numerator =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->size_x_denominator =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->color =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->outline_color =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->gain =
+        war_pool_alloc(pool_wr, sizeof(float) * note_quads->note_quads_max);
+    note_quads->voice =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->hidden =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
+    note_quads->mute =
+        war_pool_alloc(pool_wr, sizeof(uint32_t) * note_quads->note_quads_max);
     note_quads->count = 0;
-    war_quad_vertex* quad_vertices = war_pool_alloc(
-        pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    uint32_t quads_max = atomic_load(&ctx_lua->WR_QUADS_MAX);
+    uint32_t text_quads_max = atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX);
+    war_quad_vertex* quad_vertices =
+        war_pool_alloc(pool_wr, sizeof(war_quad_vertex) * quads_max);
     uint32_t quad_vertices_count = 0;
-    uint16_t* quad_indices = war_pool_alloc(
-        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    uint16_t* quad_indices =
+        war_pool_alloc(pool_wr, sizeof(uint16_t) * quads_max);
     uint32_t quad_indices_count = 0;
-    war_quad_vertex* transparent_quad_vertices = war_pool_alloc(
-        pool_wr, sizeof(war_quad_vertex) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    war_quad_vertex* transparent_quad_vertices =
+        war_pool_alloc(pool_wr, sizeof(war_quad_vertex) * quads_max);
     uint32_t transparent_quad_vertices_count = 0;
-    uint16_t* transparent_quad_indices = war_pool_alloc(
-        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_QUADS_MAX));
+    uint16_t* transparent_quad_indices =
+        war_pool_alloc(pool_wr, sizeof(uint16_t) * quads_max);
     uint32_t transparent_quad_indices_count = 0;
-    war_text_vertex* text_vertices = war_pool_alloc(
-        pool_wr,
-        sizeof(war_text_vertex) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
+    war_text_vertex* text_vertices =
+        war_pool_alloc(pool_wr, sizeof(war_text_vertex) * text_quads_max);
     uint32_t text_vertices_count = 0;
-    uint16_t* text_indices = war_pool_alloc(
-        pool_wr, sizeof(uint16_t) * atomic_load(&ctx_lua->WR_TEXT_QUADS_MAX));
+    uint16_t* text_indices =
+        war_pool_alloc(pool_wr, sizeof(uint16_t) * text_quads_max);
     uint32_t text_indices_count = 0;
     //-------------------------------------------------------------------------
     // RENDERING FPS
@@ -763,33 +780,35 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     uint32_t header;
     uint32_t size;
+    uint32_t control_cmd_count = atomic_load(&ctx_lua->CMD_COUNT);
     uint8_t* control_payload =
         war_pool_alloc(pool_wr, sizeof(uint8_t) * pc_control->size);
     uint8_t* tmp_control_payload =
         war_pool_alloc(pool_wr, sizeof(uint8_t) * pc_control->size);
-    void** pc_control_cmd = war_pool_alloc(
-        pool_wr, sizeof(void*) * atomic_load(&ctx_lua->CMD_COUNT));
+    void** pc_control_cmd =
+        war_pool_alloc(pool_wr, sizeof(void*) * control_cmd_count);
     pc_control_cmd[0] = &&end_wr;
     //-------------------------------------------------------------------------
     // CAPTURE WAV
     //-------------------------------------------------------------------------
     war_wav* capture_wav = war_pool_alloc(pool_wr, sizeof(war_wav));
     capture_wav->memfd_size = 44;
+    capture_wav->name_limit = atomic_load(&ctx_lua->A_PATH_LIMIT);
     uint64_t init_capacity = 44 + sizeof(float) *
                                       atomic_load(&ctx_lua->A_SAMPLE_RATE) *
                                       atomic_load(&ctx_lua->A_SAMPLE_DURATION) *
                                       atomic_load(&ctx_lua->A_CHANNEL_COUNT);
     capture_wav->memfd_capacity = init_capacity;
-    capture_wav->fname = war_pool_alloc(
-        pool_wr, sizeof(char) * atomic_load(&ctx_lua->A_PATH_LIMIT));
+    capture_wav->fname =
+        war_pool_alloc(pool_wr, sizeof(char) * capture_wav->name_limit);
     capture_wav->fname_size = sizeof("capture.wav") - 1;
     memcpy(capture_wav->fname, "capture.wav", capture_wav->fname_size);
     capture_wav->memfd = memfd_create(capture_wav->fname, MFD_CLOEXEC);
     if (capture_wav->memfd < 0) {
-        call_carmack("memfd failed to open: %s", capture_wav->fname);
+        call_terry_davis("memfd failed to open: %s", capture_wav->fname);
     }
     if (ftruncate(capture_wav->memfd, capture_wav->memfd_capacity) == -1) {
-        call_carmack("memfd ftruncate failed: %s", capture_wav->fname);
+        call_terry_davis("memfd ftruncate failed: %s", capture_wav->fname);
     }
     capture_wav->wav = mmap(NULL,
                             capture_wav->memfd_capacity,
@@ -798,7 +817,7 @@ void* war_window_render(void* args) {
                             capture_wav->memfd,
                             0);
     if (capture_wav->wav == MAP_FAILED) {
-        call_carmack("mmap failed: %s", capture_wav->fname);
+        call_terry_davis("mmap failed: %s", capture_wav->fname);
     }
     war_riff_header init_riff_header = (war_riff_header){
         .chunk_id = "RIFF",
@@ -828,29 +847,29 @@ void* war_window_render(void* args) {
     capture_wav->fd =
         open(capture_wav->fname, O_TRUNC | O_CREAT | O_RDWR, 0644);
     if (capture_wav->fd < 0) {
-        call_carmack("fd failed to open: %s", capture_wav->fname);
+        call_terry_davis("fd failed to open: %s", capture_wav->fname);
     }
     capture_wav->fd_size = 0;
     //-------------------------------------------------------------------------
     // CACHE WAV
     //-------------------------------------------------------------------------
     war_cache_wav* cache_wav = war_pool_alloc(pool_wr, sizeof(war_cache_wav));
-    cache_wav->id = war_pool_alloc(
-        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache_wav->timestamp = war_pool_alloc(
-        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache_wav->wav = war_pool_alloc(
-        pool_wr, sizeof(uint8_t*) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache_wav->memfd = war_pool_alloc(
-        pool_wr, sizeof(int) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache_wav->memfd_size = war_pool_alloc(
-        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache_wav->memfd_capacity = war_pool_alloc(
-        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache_wav->fd = war_pool_alloc(
-        pool_wr, sizeof(int) * atomic_load(&ctx_lua->A_CACHE_SIZE));
-    cache_wav->fd_size = war_pool_alloc(
-        pool_wr, sizeof(uint64_t) * atomic_load(&ctx_lua->A_CACHE_SIZE));
+    cache_wav->capacity = atomic_load(&ctx_lua->A_CACHE_SIZE);
+    cache_wav->id =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
+    cache_wav->timestamp =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
+    cache_wav->wav =
+        war_pool_alloc(pool_wr, sizeof(uint8_t*) * cache_wav->capacity);
+    cache_wav->memfd =
+        war_pool_alloc(pool_wr, sizeof(int) * cache_wav->capacity);
+    cache_wav->memfd_size =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
+    cache_wav->memfd_capacity =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
+    cache_wav->fd = war_pool_alloc(pool_wr, sizeof(int) * cache_wav->capacity);
+    cache_wav->fd_size =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
     cache_wav->count = 0;
     cache_wav->next_id = 1;
     cache_wav->next_timestamp = 1;
@@ -858,36 +877,30 @@ void* war_window_render(void* args) {
     // MAP WAV
     //-------------------------------------------------------------------------
     war_map_wav* map_wav = war_pool_alloc(pool_wr, sizeof(war_map_wav));
-    map_wav->id =
-        war_pool_alloc(pool_wr,
-                       sizeof(uint64_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->A_LAYER_COUNT));
+    map_wav->note_count = atomic_load(&ctx_lua->A_NOTE_COUNT);
+    map_wav->layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
+    map_wav->name_limit = atomic_load(&ctx_lua->A_PATH_LIMIT);
+    map_wav->id = war_pool_alloc(
+        pool_wr, sizeof(uint64_t) * map_wav->note_count * map_wav->layer_count);
     map_wav->fname =
         war_pool_alloc(pool_wr,
-                       sizeof(char) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->A_LAYER_COUNT) *
-                           atomic_load(&ctx_lua->A_PATH_LIMIT));
-    map_wav->fname_size =
-        war_pool_alloc(pool_wr,
-                       sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->A_LAYER_COUNT));
-    map_wav->note =
-        war_pool_alloc(pool_wr,
-                       sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->A_LAYER_COUNT));
-    map_wav->layer =
-        war_pool_alloc(pool_wr,
-                       sizeof(uint32_t) * atomic_load(&ctx_lua->A_NOTE_COUNT) *
-                           atomic_load(&ctx_lua->A_LAYER_COUNT));
+                       sizeof(char) * map_wav->note_count *
+                           map_wav->layer_count * map_wav->name_limit);
+    map_wav->fname_size = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * map_wav->note_count * map_wav->layer_count);
+    map_wav->note = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * map_wav->note_count * map_wav->layer_count);
+    map_wav->layer = war_pool_alloc(
+        pool_wr, sizeof(uint32_t) * map_wav->note_count * map_wav->layer_count);
     //-------------------------------------------------------------------------
     // CAPTURE CONTEXT
     //-------------------------------------------------------------------------
     war_capture_context* ctx_capture =
         war_pool_alloc(pool_wr, sizeof(war_capture_context));
+    ctx_capture->fps = atomic_load(&ctx_lua->WR_CAPTURE_CALLBACK_FPS);
     // rate
-    ctx_capture->rate_us = (uint64_t)round(
-        (1.0 / (double)atomic_load(&ctx_lua->WR_CAPTURE_CALLBACK_FPS)) *
-        microsecond_conversion);
+    ctx_capture->rate_us = (uint64_t)round((1.0 / (double)ctx_capture->fps) *
+                                           microsecond_conversion);
     ctx_capture->last_frame_time = war_get_monotonic_time_us();
     ctx_capture->last_read_time = 0;
     ctx_capture->read_count = 0;
@@ -905,10 +918,10 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     war_play_context* ctx_play =
         war_pool_alloc(pool_wr, sizeof(war_capture_context));
+    ctx_play->fps = atomic_load(&ctx_lua->WR_PLAY_CALLBACK_FPS);
     // rate
-    ctx_play->rate_us = (uint64_t)round(
-        (1.0 / (double)atomic_load(&ctx_lua->WR_PLAY_CALLBACK_FPS)) *
-        microsecond_conversion);
+    ctx_play->rate_us =
+        (uint64_t)round((1.0 / (double)ctx_play->fps) * microsecond_conversion);
     ctx_play->last_frame_time = war_get_monotonic_time_us();
     ctx_play->last_write_time = 0;
     ctx_play->write_count = 0;
@@ -994,7 +1007,7 @@ skip_play:
         if (ctx_wr->now - ctx_capture->last_read_time >= 1000000) {
             atomic_store(&atomics->capture_reader_rate,
                          (double)ctx_capture->read_count);
-            // call_carmack("capture_reader_rate: %.2f Hz",
+            // call_terry_davis("capture_reader_rate: %.2f Hz",
             //              atomic_load(&atomics->capture_reader_rate));
             ctx_capture->read_count = 0;
             ctx_capture->last_read_time = ctx_wr->now;
@@ -1021,15 +1034,13 @@ skip_play:
             }
             if (max_amplitude > ctx_capture->threshold) {
                 ctx_capture->state = CAPTURE_CAPTURING;
-                call_carmack("Sound detected - starting recording");
+                call_terry_davis("Sound detected - starting recording");
             }
         } else if (!ctx_capture->capture_wait &&
                    ctx_capture->state == CAPTURE_WAITING) {
         } else if (ctx_capture->state == CAPTURE_PROMPT) {
             switch (ctx_capture->prompt_step) {
             case 0: {
-                prompt_size = 6;
-                memcpy(prompt, "NAME: ", prompt_size);
                 break;
             }
             case 1: {
@@ -1150,9 +1161,9 @@ skip_command:
     if (ctx_wr->cursor_blink_state &&
         ctx_wr->now - ctx_wr->cursor_blink_previous_us >=
             ctx_wr->cursor_blink_duration_us &&
-        (ctx_wr->mode == MODE_NORMAL ||
-         (ctx_wr->mode == MODE_VIEWS &&
-          views->warpoon_mode != MODE_VISUAL_LINE))) {
+        (ctx_fsm->current_mode == ctx_fsm->MODE_NORMAL ||
+         (ctx_fsm->current_mode == ctx_fsm->MODE_VIEWS &&
+          views->warpoon_mode != ctx_fsm->MODE_VISUAL_LINE))) {
         ctx_wr->cursor_blink_duration_us =
             (ctx_wr->cursor_blink_state == CURSOR_BLINK) ?
                 atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US) :
@@ -1166,24 +1177,26 @@ skip_command:
     //---------------------------------------------------------------------
     // KEY REPEATS
     //---------------------------------------------------------------------
-    if (repeat_keysym) {
-        uint32_t k = repeat_keysym;
-        uint8_t m = repeat_mod;
-        if (key_down[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m]) {
+    if (ctx_fsm->repeat_keysym) {
+        uint32_t k = ctx_fsm->repeat_keysym;
+        uint8_t m = ctx_fsm->repeat_mod;
+        if (ctx_fsm->key_down[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m]) {
             uint64_t elapsed =
-                ctx_wr->now -
-                key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
-            if (!repeating) {
+                ctx_wr->now - ctx_fsm->key_last_event_us
+                                  [k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
+            if (!ctx_fsm->repeating) {
                 // still waiting for initial delay
-                if (elapsed >= repeat_delay_us) {
-                    repeating = true;
-                    key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                      m] = ctx_wr->now; // reset timer
+                if (elapsed >= ctx_fsm->repeat_delay_us) {
+                    ctx_fsm->repeating = true;
+                    ctx_fsm->key_last_event_us[k * atomic_load(
+                                                       &ctx_lua->WR_MOD_COUNT) +
+                                               m] = ctx_wr->now; // reset timer
                 }
             } else {
-                if (elapsed >= repeat_rate_us) {
-                    key_last_event_us[k * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                      m] = ctx_wr->now;
+                if (elapsed >= ctx_fsm->repeat_rate_us) {
+                    ctx_fsm->key_last_event_us[k * atomic_load(
+                                                       &ctx_lua->WR_MOD_COUNT) +
+                                               m] = ctx_wr->now;
                     //---------------------------------------------------------
                     // COMMAND INPUT REPEATS
                     //---------------------------------------------------------
@@ -1199,48 +1212,74 @@ skip_command:
                         goto cmd_repeat_done; // Skip FSM processing
                     }
                     uint16_t next_state_index =
-                        fsm[current_state_index].next_state
-                            [k * atomic_load(&ctx_lua->WR_MOD_COUNT) + m];
+                        ctx_fsm->next_state[FSM_3D_INDEX(
+                            ctx_fsm->current_state, k, m)];
                     if (next_state_index != 0) {
-                        current_state_index = next_state_index;
-                        fsm_state_last_event_us = ctx_wr->now;
-                        if (fsm[current_state_index]
-                                .is_terminal[ctx_wr->mode] &&
-                            !fsm[current_state_index].is_prefix[ctx_wr->mode] &&
-                            fsm[current_state_index]
-                                .handle_repeat[ctx_wr->mode]) {
-                            uint16_t temp = current_state_index;
-                            current_state_index = 0;
-                            goto_cmd_repeat_done = true;
-                            if (fsm[temp].command[ctx_wr->mode]) {
-                                goto* fsm[temp].command[ctx_wr->mode];
+                        ctx_fsm->current_state = next_state_index;
+                        ctx_fsm->state_last_event_us = ctx_wr->now;
+                        if (ctx_fsm->is_terminal[FSM_2D_MODE(
+                                ctx_fsm->current_state,
+                                ctx_fsm->current_mode)] &&
+                            !ctx_fsm->is_prefix[FSM_2D_MODE(
+                                ctx_fsm->current_state,
+                                ctx_fsm->current_mode)] &&
+                            ctx_fsm->handle_repeat[FSM_2D_MODE(
+                                ctx_fsm->current_state,
+                                ctx_fsm->current_mode)]) {
+                            uint16_t temp = ctx_fsm->current_state;
+                            ctx_fsm->current_state = 0;
+                            ctx_fsm->goto_cmd_repeat_done = true;
+                            if (ctx_fsm->type[FSM_2D_MODE(
+                                    temp, ctx_fsm->current_mode)] ==
+                                FUNCTION_NONE) {
+                                goto cmd_repeat_done;
                             }
+                            if (ctx_fsm->type[FSM_2D_MODE(
+                                    temp, ctx_fsm->current_mode)] ==
+                                FUNCTION_C) {
+                                ctx_fsm
+                                    ->function[FSM_2D_MODE(
+                                        temp, ctx_fsm->current_mode)]
+                                    .c(env);
+                                goto cmd_done;
+                            }
+                            // handle lua logic
+                            goto cmd_done;
                         }
                     }
                 }
             }
         }
     } else {
-        repeat_keysym = 0;
-        repeat_mod = 0;
-        repeating = false;
+        ctx_fsm->repeat_keysym = 0;
+        ctx_fsm->repeat_mod = 0;
+        ctx_fsm->repeating = false;
     }
 cmd_repeat_done:
     //--------------------------------------------------------------------
     // KEY TIMEOUTS
     //--------------------------------------------------------------------
-    if (timeout && ctx_wr->now >= timeout_start_us + timeout_duration_us) {
-        uint16_t temp = timeout_state_index;
-        timeout = false;
-        timeout_state_index = 0;
-        timeout_start_us = 0;
-        goto_cmd_timeout_done = true;
+    if (ctx_fsm->timeout && ctx_wr->now >= ctx_fsm->timeout_start_us +
+                                               ctx_fsm->timeout_duration_us) {
+        uint16_t temp = ctx_fsm->timeout_state_index;
+        ctx_fsm->timeout = false;
+        ctx_fsm->timeout_state_index = 0;
+        ctx_fsm->timeout_start_us = 0;
+        ctx_fsm->goto_cmd_timeout_done = true;
         // clear current
-        current_state_index = 0;
-        fsm_state_last_event_us = ctx_wr->now;
-        if (fsm[temp].command[ctx_wr->mode]) {
-            goto* fsm[temp].command[ctx_wr->mode];
+        ctx_fsm->current_state = 0;
+        ctx_fsm->state_last_event_us = ctx_wr->now;
+        if (ctx_fsm->type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
+            FUNCTION_NONE) {
+            goto cmd_timeout_done;
         }
+        if (ctx_fsm->type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
+            FUNCTION_C) {
+            ctx_fsm->function[FSM_2D_MODE(temp, ctx_fsm->current_mode)].c(env);
+            goto cmd_done;
+        }
+        // handle lua logic
+        goto cmd_done;
     }
 cmd_timeout_done:
     //---------------------------------------------------------------------
@@ -1248,9 +1287,9 @@ cmd_timeout_done:
     //---------------------------------------------------------------------
     int ret = poll(&pfd, 1, 0);
     assert(ret >= 0);
-    // if (ret == 0) { call_carmack("timeout"); }
+    // if (ret == 0) { call_terry_davis("timeout"); }
     if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-        call_carmack("wayland socket error or hangup: %s", strerror(errno));
+        call_terry_davis("wayland socket error or hangup: %s", strerror(errno));
         goto end_wr;
     }
     if (pfd.revents & POLLIN) {
@@ -1280,7 +1319,7 @@ cmd_timeout_done:
                 opcode >=
                     (uint16_t)atomic_load(&ctx_lua->WR_WAYLAND_MAX_OP_CODES)) {
                 // COMMENT CONCERN: INVALID OBJECT/OP 27 TIMES!
-                // call_carmack(
+                // call_terry_davis(
                 //    "invalid object/op: id=%u, op=%u", object_id,
                 //    opcode);
                 goto wayland_done;
@@ -1292,8 +1331,8 @@ cmd_timeout_done:
             goto wayland_default;
         wl_registry_global:
             dump_bytes("global event", msg_buffer + msg_buffer_offset, size);
-            call_carmack("iname: %s",
-                         (const char*)msg_buffer + msg_buffer_offset + 16);
+            call_terry_davis("iname: %s",
+                             (const char*)msg_buffer + msg_buffer_offset + 16);
 
             const char* iname = (const char*)msg_buffer + msg_buffer_offset +
                                 16; // COMMENT OPTIMIZE: perfect hash
@@ -1497,7 +1536,7 @@ cmd_timeout_done:
                 war_write_le16(create_surface + 6, 12);
                 war_write_le32(create_surface + 8, new_id);
                 dump_bytes("create_surface request", create_surface, 12);
-                call_carmack("bound: wl_surface");
+                call_terry_davis("bound: wl_surface");
                 ssize_t create_surface_written = write(fd, create_surface, 12);
                 assert(create_surface_written == 12);
                 wl_surface_id = new_id;
@@ -1522,7 +1561,7 @@ cmd_timeout_done:
                 war_write_le16(create_region + 6, 12);
                 war_write_le32(create_region + 8, new_id);
                 dump_bytes("create_region request", create_region, 12);
-                call_carmack("bound: wl_region");
+                call_terry_davis("bound: wl_region");
                 ssize_t create_region_written = write(fd, create_region, 12);
                 assert(create_region_written == 12);
                 wl_region_id = new_id;
@@ -1554,7 +1593,7 @@ cmd_timeout_done:
                 dump_bytes("zwp_linux_dmabuf_v1::get_surface_feedback request",
                            get_surface_feedback,
                            16);
-                call_carmack("bound: xdg_surface");
+                call_terry_davis("bound: xdg_surface");
                 ssize_t get_surface_feedback_written =
                     write(fd, get_surface_feedback, 16);
                 assert(get_surface_feedback_written == 16);
@@ -1591,7 +1630,7 @@ cmd_timeout_done:
                 war_write_le32(get_xdg_surface + 8, new_id);
                 war_write_le32(get_xdg_surface + 12, wl_surface_id);
                 dump_bytes("get_xdg_surface request", get_xdg_surface, 16);
-                call_carmack("bound: xdg_surface");
+                call_terry_davis("bound: xdg_surface");
                 ssize_t get_xdg_surface_written =
                     write(fd, get_xdg_surface, 16);
                 assert(get_xdg_surface_written == 16);
@@ -1606,7 +1645,7 @@ cmd_timeout_done:
                 war_write_le16(get_toplevel + 6, 12);
                 war_write_le32(get_toplevel + 8, new_id);
                 dump_bytes("get_xdg_toplevel request", get_toplevel, 12);
-                call_carmack("bound: xdg_toplevel");
+                call_terry_davis("bound: xdg_toplevel");
                 ssize_t get_toplevel_written = write(fd, get_toplevel, 12);
                 assert(get_toplevel_written == 12);
                 xdg_toplevel_id = new_id;
@@ -1636,7 +1675,7 @@ cmd_timeout_done:
                 dump_bytes("get_toplevel_decoration request",
                            get_toplevel_decoration,
                            16);
-                call_carmack("bound: zxdg_toplevel_decoration_v1");
+                call_terry_davis("bound: zxdg_toplevel_decoration_v1");
                 ssize_t get_toplevel_decoration_written =
                     write(fd, get_toplevel_decoration, 16);
                 assert(get_toplevel_decoration_written == 16);
@@ -1770,10 +1809,8 @@ cmd_timeout_done:
                 }
                 cursor_color = cursor_color_transparent;
             }
-            switch (ctx_wr->mode) {
-            case MODE_NORMAL: {
-                if (ctx_wr->cursor_blinking) { break; }
-                if (ctx_command->command) { break; }
+            if (ctx_fsm->current_mode == ctx_fsm->MODE_NORMAL &&
+                !ctx_command->command && !ctx_wr->cursor_blinking) {
                 war_make_transparent_quad(
                     transparent_quad_vertices,
                     transparent_quad_indices,
@@ -1790,9 +1827,7 @@ cmd_timeout_done:
                     0,
                     (float[2]){0.0f, 0.0f},
                     QUAD_GRID);
-                break;
-            }
-            case MODE_VIEWS: {
+            } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VIEWS) {
                 // draw views
                 uint32_t offset_col = ctx_wr->left_col +
                                       ((ctx_wr->viewport_cols +
@@ -1839,7 +1874,7 @@ cmd_timeout_done:
                 if (!ctx_wr->cursor_blinking && !ctx_command->command) {
                     uint32_t cursor_span_x = 1;
                     uint32_t cursor_pos_x = views->warpoon_col;
-                    if (views->warpoon_mode == MODE_VISUAL_LINE) {
+                    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
                         cursor_span_x = views->warpoon_viewport_cols -
                                         views->warpoon_hud_cols;
                         cursor_pos_x = 0;
@@ -1930,7 +1965,6 @@ cmd_timeout_done:
                     }
                 }
                 break;
-            }
             }
             if (ctx_command->command) {
                 war_make_transparent_quad(
@@ -2611,7 +2645,7 @@ cmd_timeout_done:
                 // dump_bytes("wp_viewporter::get_viewport request",
                 //            get_viewport,
                 //            16);
-                call_carmack("bound: wp_viewport");
+                call_terry_davis("bound: wp_viewport");
                 ssize_t get_viewport_written = write(fd, get_viewport, 16);
                 assert(get_viewport_written == 16);
                 wp_viewport_id = new_id;
@@ -2675,7 +2709,7 @@ cmd_timeout_done:
                 uint32_t state = *(uint32_t*)(states_ptr + i * 4);
                 if (state == 2) { // XDG_TOPLEVEL_STATE_FULLSCREEN
                     ctx_wr->fullscreen = true;
-                    // call_carmack("true fullscreen");
+                    // call_terry_davis("true fullscreen");
                     break;
                 }
             }
@@ -2790,7 +2824,7 @@ cmd_timeout_done:
             war_write_le32(create_params + 8, new_id);
             dump_bytes(
                 "zwp_linux_dmabuf_v1_create_params request", create_params, 12);
-            call_carmack("bound: zwp_linux_buffer_params_v1");
+            call_terry_davis("bound: zwp_linux_buffer_params_v1");
             ssize_t create_params_written = write(fd, create_params, 12);
             assert(create_params_written == 12);
             zwp_linux_buffer_params_v1_id = new_id;
@@ -2858,7 +2892,7 @@ cmd_timeout_done:
             dump_bytes("zwp_linux_buffer_params_v1::create_immed request",
                        create_immed,
                        28);
-            call_carmack("bound: wl_buffer");
+            call_terry_davis("bound: wl_buffer");
             ssize_t create_immed_written = write(fd, create_immed, 28);
             assert(create_immed_written == 28);
             wl_buffer_id = new_id;
@@ -3091,7 +3125,7 @@ cmd_timeout_done:
             uint32_t capabilities =
                 war_read_le32(msg_buffer + msg_buffer_offset + 8);
             if (capabilities & wl_seat_keyboard) {
-                call_carmack("keyboard detected");
+                call_terry_davis("keyboard detected");
                 assert(size == 12);
                 uint8_t get_keyboard[12];
                 war_write_le32(get_keyboard, wl_seat_id);
@@ -3099,8 +3133,9 @@ cmd_timeout_done:
                 war_write_le16(get_keyboard + 6, 12);
                 war_write_le32(get_keyboard + 8, new_id);
                 dump_bytes("get_keyboard request", get_keyboard, 12);
-                call_carmack("bound: wl_keyboard",
-                             (const char*)msg_buffer + msg_buffer_offset + 12);
+                call_terry_davis("bound: wl_keyboard",
+                                 (const char*)msg_buffer + msg_buffer_offset +
+                                     12);
                 ssize_t get_keyboard_written = write(fd, get_keyboard, 12);
                 assert(get_keyboard_written == 12);
                 wl_keyboard_id = new_id;
@@ -3125,7 +3160,7 @@ cmd_timeout_done:
                 new_id++;
             }
             if (capabilities & wl_seat_pointer) {
-                call_carmack("pointer detected");
+                call_terry_davis("pointer detected");
                 assert(size == 12);
                 uint8_t get_pointer[12];
                 war_write_le32(get_pointer, wl_seat_id);
@@ -3133,7 +3168,7 @@ cmd_timeout_done:
                 war_write_le16(get_pointer + 6, 12);
                 war_write_le32(get_pointer + 8, new_id);
                 dump_bytes("get_pointer request", get_pointer, 12);
-                call_carmack("bound: wl_pointer");
+                call_terry_davis("bound: wl_pointer");
                 ssize_t get_pointer_written = write(fd, get_pointer, 12);
                 assert(get_pointer_written == 12);
                 wl_pointer_id = new_id;
@@ -3173,7 +3208,7 @@ cmd_timeout_done:
                 new_id++;
             }
             if (capabilities & wl_seat_touch) {
-                call_carmack("touch detected");
+                call_terry_davis("touch detected");
                 assert(size == 12);
                 uint8_t get_touch[12];
                 war_write_le32(get_touch, wl_seat_id);
@@ -3181,7 +3216,7 @@ cmd_timeout_done:
                 war_write_le16(get_touch + 6, 12);
                 war_write_le32(get_touch + 8, new_id);
                 dump_bytes("get_touch request", get_touch, 12);
-                call_carmack("bound: wl_touch");
+                call_terry_davis("bound: wl_touch");
                 ssize_t get_touch_written = write(fd, get_touch, 12);
                 assert(get_touch_written == 12);
                 wl_touch_id = new_id;
@@ -3212,998 +3247,61 @@ cmd_timeout_done:
         wl_seat_name:
             dump_bytes(
                 "wl_seat_name event", msg_buffer + msg_buffer_offset, size);
-            call_carmack("seat: %s",
-                         (const char*)msg_buffer + msg_buffer_offset + 12);
+            call_terry_davis("seat: %s",
+                             (const char*)msg_buffer + msg_buffer_offset + 12);
             goto wayland_done;
         wl_keyboard_keymap: {
             dump_bytes("wl_keyboard_keymap event", msg_buffer, size);
             assert(size == 16);
-            int keymap_fd = -1;
+            ctx_fsm->keymap_fd = -1;
             for (struct cmsghdr* poll_cmsg = CMSG_FIRSTHDR(&poll_msg_hdr);
                  poll_cmsg != NULL;
                  poll_cmsg = CMSG_NXTHDR(&poll_msg_hdr, poll_cmsg)) {
                 if (poll_cmsg->cmsg_level == SOL_SOCKET &&
                     poll_cmsg->cmsg_type == SCM_RIGHTS) {
-                    keymap_fd = *(int*)CMSG_DATA(poll_cmsg);
+                    ctx_fsm->keymap_fd = *(int*)CMSG_DATA(poll_cmsg);
                     break;
                 }
             }
-            assert(keymap_fd >= 0);
-            uint32_t keymap_format =
+            assert(ctx_fsm->keymap_fd >= 0);
+            ctx_fsm->keymap_format =
                 war_read_le32(msg_buffer + msg_buffer_offset + 8);
-            assert(keymap_format == XKB_KEYMAP_FORMAT_TEXT_V1);
-            uint32_t keymap_size =
+            assert(ctx_fsm->keymap_format == XKB_KEYMAP_FORMAT_TEXT_V1);
+            ctx_fsm->keymap_size =
                 war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4);
-            assert(keymap_size > 0);
-            xkb_context = xkb_context_new(0);
-            assert(xkb_context);
-            char* keymap_map =
-                mmap(NULL, keymap_size, PROT_READ, MAP_PRIVATE, keymap_fd, 0);
-            assert(keymap_map != MAP_FAILED);
-            struct xkb_keymap* xkb_keymap = xkb_keymap_new_from_string(
-                xkb_context, keymap_map, XKB_KEYMAP_FORMAT_TEXT_V1, 0);
-            assert(xkb_keymap);
-            xkb_state = xkb_state_new(xkb_keymap);
-            assert(xkb_state);
-            mod_shift =
-                xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_SHIFT);
-            mod_ctrl = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_CTRL);
-            mod_alt = xkb_keymap_mod_get_index(xkb_keymap, XKB_MOD_NAME_ALT);
-            mod_logo = xkb_keymap_mod_get_index(
-                xkb_keymap, XKB_MOD_NAME_LOGO); // Super/Meta
-            mod_caps = xkb_keymap_mod_get_index(
-                xkb_keymap, XKB_MOD_NAME_CAPS); // Super/Meta
-            mod_num = xkb_keymap_mod_get_index(xkb_keymap,
-                                               XKB_MOD_NAME_NUM); // Super/Meta
-            //// default to void command if unset
-            // for (size_t s = 0; s < SEQUENCE_COUNT; s++) {
-            //     for (size_t m = 0; m <
-            //     atomic_load(&ctx_lua->WR_MODE_COUNT); m++) {
-            //         if (key_labels[s][m].command == NULL) {
-            //             key_labels[s][m].command = &&cmd_void;
-            //         }
-            //     }
-            // }
-            {
-                size_t state_counter = 1; // root = 0
-
-                lua_State* L = luaL_newstate();
-                luaL_openlibs(L);
-
-                if (luaL_dofile(L,
-                                "/home/monaco/Projects/WAR/src/lua/monaco/"
-                                "set.lua") != LUA_OK) {
-                    call_carmack("Lua error: %s", lua_tostring(L, -1));
-                    lua_close(L);
-                    return 0;
-                }
-
-                lua_getglobal(L, "war_flattened");
-                if (!lua_istable(L, -1)) {
-                    lua_pop(L, 1);
-                    call_carmack("war_flattened not found or not a table");
-                } else {
-                    size_t n_sequences = lua_objlen(L, -1);
-
-                    for (size_t seq_idx = 1; seq_idx <= n_sequences;
-                         seq_idx++) {
-                        lua_rawgeti(L, -1, seq_idx); // flattened[seq_idx]
-
-                        // --- get keys table ---
-                        lua_getfield(L, -1, "keys");
-                        size_t n_keys = lua_objlen(L, -1);
-
-                        size_t parent = 0; // start at root
-
-                        for (size_t key_idx = 1; key_idx <= n_keys; key_idx++) {
-                            lua_rawgeti(L, -1, key_idx);
-                            const char* key = lua_tostring(L, -1);
-
-                            uint32_t keysym = 0;
-                            uint32_t mod = 0;
-
-                            // --- inline key parser (Neovim-style) ---
-                            if (key[0] == '<') {
-                                const char* inner = key + 1;
-                                size_t len = strlen(inner);
-                                if (inner[len - 1] == '>') len--;
-
-                                char buf[32];
-                                if (len >= sizeof(buf)) len = sizeof(buf) - 1;
-                                memcpy(buf, inner, len);
-                                buf[len] = '\0';
-
-                                call_carmack("Parsing special key: <%s>", buf);
-
-                                // --- parse modifiers first ---
-                                while (true) {
-                                    if (strncmp(buf, "C-", 2) == 0) {
-                                        mod |= MOD_CTRL;
-                                        memmove(
-                                            buf, buf + 2, strlen(buf + 2) + 1);
-                                        call_carmack("Detected Ctrl modifier, "
-                                                     "remaining: %s",
-                                                     buf);
-                                    } else if (strncmp(buf, "A-", 2) == 0 ||
-                                               strncmp(buf, "M-", 2) == 0) {
-                                        mod |= MOD_ALT;
-                                        memmove(
-                                            buf, buf + 2, strlen(buf + 2) + 1);
-                                        call_carmack("Detected Alt modifier, "
-                                                     "remaining: %s",
-                                                     buf);
-                                    } else if (strncmp(buf, "S-", 2) == 0) {
-                                        mod |= MOD_SHIFT;
-                                        memmove(
-                                            buf, buf + 2, strlen(buf + 2) + 1);
-                                        call_carmack("Detected Shift modifier, "
-                                                     "remaining: %s",
-                                                     buf);
-                                    } else {
-                                        break;
-                                    }
-                                }
-
-                                // --- Neovim-style special keys ---
-                                if (strcmp(buf, "CR") == 0)
-                                    keysym = KEYSYM_RETURN;
-                                else if (strcmp(buf, "Space") == 0)
-                                    keysym = KEYSYM_SPACE;
-                                else if (strcmp(buf, "-") == 0)
-                                    keysym = KEYSYM_MINUS;
-                                else if (strcmp(buf, "=") == 0)
-                                    keysym = KEYSYM_EQUAL;
-                                else if (strcmp(buf, "Tab") == 0)
-                                    keysym = KEYSYM_TAB;
-                                else if (strcmp(buf, "Esc") == 0)
-                                    keysym = KEYSYM_ESCAPE;
-                                else if (strcmp(buf, "BS") == 0 ||
-                                         strcmp(buf, "Backspace") == 0)
-                                    keysym = XKB_KEY_BackSpace;
-                                else if (strcmp(buf, "Del") == 0)
-                                    keysym = XKB_KEY_Delete;
-                                else if (strcmp(buf, "Up") == 0)
-                                    keysym = KEYSYM_UP;
-                                else if (strcmp(buf, "Down") == 0)
-                                    keysym = KEYSYM_DOWN;
-                                else if (strcmp(buf, "Left") == 0)
-                                    keysym = KEYSYM_LEFT;
-                                else if (strcmp(buf, "Right") == 0)
-                                    keysym = KEYSYM_RIGHT;
-                                else if (strlen(buf) == 1) {
-                                    char c = buf[0];
-                                    if (c >= 'A' && c <= 'Z') {
-                                        keysym = (uint32_t)(c + ('a' - 'A'));
-                                        mod |= MOD_SHIFT;
-                                        call_carmack(
-                                            "Detected uppercase letter: "
-                                            "%c "
-                                            "-> keysym %u + Shift",
-                                            c,
-                                            keysym);
-                                    } else {
-                                        keysym = (uint32_t)c;
-                                        call_carmack(
-                                            "Detected literal character: "
-                                            "%c -> keysym %u",
-                                            c,
-                                            keysym);
-                                    }
-                                } else {
-                                    call_carmack("Unknown key name: <%s>", buf);
-                                    keysym = 0;
-                                }
-
-                            } else {
-                                // Handle single printable keys including
-                                // shifted symbols
-                                char c = key[0];
-
-                                if (c >= 'A' && c <= 'Z') {
-                                    keysym = (uint32_t)(c + ('a' - 'A'));
-                                    mod |= MOD_SHIFT;
-                                    call_carmack("Uppercase literal key: %c -> "
-                                                 "keysym %u + Shift",
-                                                 c,
-                                                 keysym);
-                                } else if (c == ':') {
-                                    keysym = KEYSYM_SEMICOLON;
-                                    mod |= MOD_SHIFT;
-                                    call_carmack(
-                                        "Colon ':' -> KEYSYM_SEMICOLON");
-                                } else if (c == '[') {
-                                    keysym = KEYSYM_LEFTBRACKET;
-                                } else if (c == ']') {
-                                    keysym = KEYSYM_RIGHTBRACKET;
-                                } else {
-                                    struct {
-                                        char sym;
-                                        char base;
-                                    } shift_map[] = {{'$', '4'},
-                                                     {'%', '5'},
-                                                     {'^', '6'},
-                                                     {'&', '7'},
-                                                     {'*', '8'},
-                                                     {'(', '9'},
-                                                     {')', '0'},
-                                                     {'_', '-'},
-                                                     {'+', '='},
-                                                     {'{', '['},
-                                                     {'}', ']'},
-                                                     {'"', '\''},
-                                                     {'<', ','},
-                                                     {'>', '.'},
-                                                     {'?', '/'},
-                                                     {'|', '\\'}};
-
-                                    int found = 0;
-                                    for (size_t i = 0;
-                                         i < sizeof(shift_map) /
-                                                 sizeof(shift_map[0]);
-                                         i++) {
-                                        if (c == shift_map[i].sym) {
-                                            keysym =
-                                                (uint32_t)shift_map[i].base;
-                                            mod |= MOD_SHIFT;
-                                            found = 1;
-                                            call_carmack(
-                                                "Shifted symbol: %c -> "
-                                                "base %c + Shift",
-                                                c,
-                                                shift_map[i].base);
-                                            break;
-                                        }
-                                    }
-                                    if (!found) {
-                                        keysym = (uint32_t)c;
-                                        call_carmack("Literal key: %c -> "
-                                                     "keysym %u",
-                                                     c,
-                                                     keysym);
-                                    }
-                                }
-                            }
-
-                            // --- FSM transition logic ---
-                            uint16_t next =
-                                fsm[parent].next_state
-                                    [keysym *
-                                         atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                     mod];
-
-                            // After FSM transition
-                            call_carmack("FSM: parent=%u keysym=%u mod=%u "
-                                         "-> next=%u",
-                                         parent,
-                                         keysym,
-                                         mod,
-                                         next);
-
-                            if (next == 0) {
-                                next = state_counter++;
-                                fsm[parent].next_state
-                                    [keysym *
-                                         atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                     mod] = next;
-
-                                for (size_t m = 0;
-                                     m < atomic_load(&ctx_lua->WR_MODE_COUNT);
-                                     m++) {
-                                    fsm[next].is_terminal[m] = false;
-                                    fsm[next].is_prefix[m] = false;
-                                    fsm[next].command[m] = NULL;
-                                    fsm[next].handle_release[m] = 0;
-                                    fsm[next].handle_timeout[m] = 0;
-                                    fsm[next].handle_repeat[m] = 0;
-                                }
-                                memset(
-                                    fsm[next].next_state,
-                                    0,
-                                    sizeof(uint16_t) *
-                                        atomic_load(&ctx_lua->WR_MOD_COUNT) *
-                                        atomic_load(&ctx_lua->WR_KEYSYM_COUNT));
-                            }
-
-                            parent = next;
-                            lua_pop(L, 1); // pop key string
-                        }
-                        lua_pop(L, 1); // pop keys table
-
-                        // --- get commands table ---
-                        lua_getfield(L, -1, "commands");
-                        size_t n_cmds = lua_objlen(L, -1);
-
-                        for (size_t c = 1; c <= n_cmds; c++) {
-                            lua_rawgeti(L, -1, c);
-
-                            lua_getfield(L, -1, "cmd");
-                            const char* cmd_name = lua_tostring(L, -1);
-                            lua_pop(L, 1);
-
-                            lua_getfield(L, -1, "mode");
-                            const char* mode_name = lua_tostring(L, -1);
-                            lua_pop(L, 1);
-
-                            int mode_idx = -1;
-                            if (strcmp(mode_name, "normal") == 0)
-                                mode_idx = MODE_NORMAL;
-                            else if (strcmp(mode_name, "views") == 0)
-                                mode_idx = MODE_VIEWS;
-                            else if (strcmp(mode_name, "visual_line") == 0)
-                                mode_idx = MODE_VISUAL_LINE;
-                            else if (strcmp(mode_name, "capture") == 0)
-                                mode_idx = MODE_CAPTURE;
-                            else if (strcmp(mode_name, "midi") == 0)
-                                mode_idx = MODE_MIDI;
-                            else if (strcmp(mode_name, "command") == 0)
-                                mode_idx = MODE_COMMAND;
-                            else if (strcmp(mode_name, "visual_block") == 0)
-                                mode_idx = MODE_VISUAL_BLOCK;
-                            else if (strcmp(mode_name, "insert") == 0)
-                                mode_idx = MODE_INSERT;
-                            else if (strcmp(mode_name, "o") == 0)
-                                mode_idx = MODE_O;
-                            else if (strcmp(mode_name, "visual") == 0)
-                                mode_idx = MODE_VISUAL;
-                            else if (strcmp(mode_name, "wav") == 0)
-                                mode_idx = MODE_WAV;
-                            else {
-                                call_carmack("Unknown mode: %s", mode_name);
-                                lua_pop(L, 1);
-                                continue;
-                            }
-                            fsm[parent].is_terminal[mode_idx] = true;
-
-                            void* cmd_ptr = NULL;
-                            if (strcmp(cmd_name, "cmd_normal_k") == 0) {
-                                cmd_ptr = &&cmd_normal_k;
-                            } else if (strcmp(cmd_name, "cmd_views_k") == 0) {
-                                cmd_ptr = &&cmd_views_k;
-                            } else if (strcmp(cmd_name, "cmd_record_k") == 0) {
-                                cmd_ptr = &&cmd_record_k;
-                            } else if (strcmp(cmd_name, "cmd_normal_j") == 0) {
-                                cmd_ptr = &&cmd_normal_j;
-                            } else if (strcmp(cmd_name, "cmd_normal_i") == 0) {
-                                cmd_ptr = &&cmd_normal_i;
-                            } else if (strcmp(cmd_name, "cmd_normal_L") == 0) {
-                                cmd_ptr = &&cmd_normal_L;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_tab") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_tab;
-                            } else if (strcmp(cmd_name, "cmd_views_j") == 0) {
-                                cmd_ptr = &&cmd_views_j;
-                            } else if (strcmp(cmd_name, "cmd_record_j") == 0) {
-                                cmd_ptr = &&cmd_record_j;
-                            } else if (strcmp(cmd_name, "cmd_normal_h") == 0) {
-                                cmd_ptr = &&cmd_normal_h;
-                            } else if (strcmp(cmd_name, "cmd_views_h") == 0) {
-                                cmd_ptr = &&cmd_views_h;
-                            } else if (strcmp(cmd_name, "cmd_normal_l") == 0) {
-                                cmd_ptr = &&cmd_normal_l;
-                            } else if (strcmp(cmd_name, "cmd_views_l") == 0) {
-                                cmd_ptr = &&cmd_views_l;
-                            } else if (strcmp(cmd_name, "cmd_midi_l") == 0) {
-                                cmd_ptr = &&cmd_midi_l;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_k") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_k;
-                            } else if (strcmp(cmd_name, "cmd_views_alt_k") ==
-                                       0) {
-                                cmd_ptr = &&cmd_views_alt_k;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_j") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_j;
-                            } else if (strcmp(cmd_name, "cmd_views_alt_j") ==
-                                       0) {
-                                cmd_ptr = &&cmd_views_alt_j;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_h") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_h;
-                            } else if (strcmp(cmd_name, "cmd_views_alt_h") ==
-                                       0) {
-                                cmd_ptr = &&cmd_views_alt_h;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_l") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_l;
-                            } else if (strcmp(cmd_name, "cmd_views_alt_l") ==
-                                       0) {
-                                cmd_ptr = &&cmd_views_alt_l;
-                            } else if (strcmp(cmd_name, "cmd_normal_0") == 0) {
-                                cmd_ptr = &&cmd_normal_0;
-                            } else if (strcmp(cmd_name, "cmd_record_0") == 0) {
-                                cmd_ptr = &&cmd_record_0;
-                            } else if (strcmp(cmd_name, "cmd_normal_$") == 0) {
-                                cmd_ptr = &&cmd_normal_$;
-                            } else if (strcmp(cmd_name, "cmd_normal_G") == 0) {
-                                cmd_ptr = &&cmd_normal_G;
-                            } else if (strcmp(cmd_name, "cmd_normal_gg") == 0) {
-                                cmd_ptr = &&cmd_normal_gg;
-                            } else if (strcmp(cmd_name, "cmd_normal_1") == 0) {
-                                cmd_ptr = &&cmd_normal_1;
-                            } else if (strcmp(cmd_name, "cmd_record_1") == 0) {
-                                cmd_ptr = &&cmd_record_1;
-                            } else if (strcmp(cmd_name, "cmd_midi_1") == 0) {
-                                cmd_ptr = &&cmd_midi_1;
-                            } else if (strcmp(cmd_name, "cmd_normal_2") == 0) {
-                                cmd_ptr = &&cmd_normal_2;
-                            } else if (strcmp(cmd_name, "cmd_record_2") == 0) {
-                                cmd_ptr = &&cmd_record_2;
-                            } else if (strcmp(cmd_name, "cmd_midi_2") == 0) {
-                                cmd_ptr = &&cmd_midi_2;
-                            } else if (strcmp(cmd_name, "cmd_normal_3") == 0) {
-                                cmd_ptr = &&cmd_normal_3;
-                            } else if (strcmp(cmd_name, "cmd_record_3") == 0) {
-                                cmd_ptr = &&cmd_record_3;
-                            } else if (strcmp(cmd_name, "cmd_midi_3") == 0) {
-                                cmd_ptr = &&cmd_midi_3;
-                            } else if (strcmp(cmd_name, "cmd_normal_4") == 0) {
-                                cmd_ptr = &&cmd_normal_4;
-                            } else if (strcmp(cmd_name, "cmd_record_4") == 0) {
-                                cmd_ptr = &&cmd_record_4;
-                            } else if (strcmp(cmd_name, "cmd_midi_4") == 0) {
-                                cmd_ptr = &&cmd_midi_4;
-                            } else if (strcmp(cmd_name, "cmd_normal_5") == 0) {
-                                cmd_ptr = &&cmd_normal_5;
-                            } else if (strcmp(cmd_name, "cmd_record_5") == 0) {
-                                cmd_ptr = &&cmd_record_5;
-                            } else if (strcmp(cmd_name, "cmd_midi_5") == 0) {
-                                cmd_ptr = &&cmd_midi_5;
-                            } else if (strcmp(cmd_name, "cmd_normal_6") == 0) {
-                                cmd_ptr = &&cmd_normal_6;
-                            } else if (strcmp(cmd_name, "cmd_record_6") == 0) {
-                                cmd_ptr = &&cmd_record_6;
-                            } else if (strcmp(cmd_name, "cmd_midi_6") == 0) {
-                                cmd_ptr = &&cmd_midi_6;
-                            } else if (strcmp(cmd_name, "cmd_normal_7") == 0) {
-                                cmd_ptr = &&cmd_normal_7;
-                            } else if (strcmp(cmd_name, "cmd_record_7") == 0) {
-                                cmd_ptr = &&cmd_record_7;
-                            } else if (strcmp(cmd_name, "cmd_midi_7") == 0) {
-                                cmd_ptr = &&cmd_midi_7;
-                            } else if (strcmp(cmd_name, "cmd_normal_8") == 0) {
-                                cmd_ptr = &&cmd_normal_8;
-                            } else if (strcmp(cmd_name, "cmd_record_8") == 0) {
-                                cmd_ptr = &&cmd_record_8;
-                            } else if (strcmp(cmd_name, "cmd_midi_8") == 0) {
-                                cmd_ptr = &&cmd_midi_8;
-                            } else if (strcmp(cmd_name, "cmd_normal_9") == 0) {
-                                cmd_ptr = &&cmd_normal_9;
-                            } else if (strcmp(cmd_name, "cmd_record_9") == 0) {
-                                cmd_ptr = &&cmd_record_9;
-                            } else if (strcmp(cmd_name, "cmd_midi_9") == 0) {
-                                cmd_ptr = &&cmd_midi_9;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_ctrl_equal") == 0) {
-                                cmd_ptr = &&cmd_normal_ctrl_equal;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_ctrl_minus") == 0) {
-                                cmd_ptr = &&cmd_normal_ctrl_minus;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_ctrl_alt_equal") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_ctrl_alt_equal;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_ctrl_alt_minus") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_ctrl_alt_minus;
-                            } else if (strcmp(cmd_name, "cmd_normal_ctrl_0") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_ctrl_0;
-                            } else if (strcmp(cmd_name, "cmd_normal_esc") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_esc;
-                            } else if (strcmp(cmd_name, "cmd_views_esc") == 0) {
-                                cmd_ptr = &&cmd_views_esc;
-                            } else if (strcmp(cmd_name, "cmd_record_esc") ==
-                                       0) {
-                                cmd_ptr = &&cmd_record_esc;
-                            } else if (strcmp(cmd_name, "cmd_midi_esc") == 0) {
-                                cmd_ptr = &&cmd_midi_esc;
-                            } else if (strcmp(cmd_name, "cmd_command_esc") ==
-                                       0) {
-                                cmd_ptr = &&cmd_command_esc;
-                            } else if (strcmp(cmd_name, "cmd_normal_f") == 0) {
-                                cmd_ptr = &&cmd_normal_f;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_f") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_f;
-                            } else if (strcmp(cmd_name, "cmd_normal_t") == 0) {
-                                cmd_ptr = &&cmd_normal_t;
-                            } else if (strcmp(cmd_name, "cmd_record_t") == 0) {
-                                cmd_ptr = &&cmd_record_t;
-                            } else if (strcmp(cmd_name, "cmd_midi_t") == 0) {
-                                cmd_ptr = &&cmd_midi_t;
-                            } else if (strcmp(cmd_name, "cmd_normal_x") == 0) {
-                                cmd_ptr = &&cmd_normal_x;
-                            } else if (strcmp(cmd_name, "cmd_midi_x") == 0) {
-                                cmd_ptr = &&cmd_midi_x;
-                            } else if (strcmp(cmd_name, "cmd_normal_T") == 0) {
-                                cmd_ptr = &&cmd_normal_T;
-                            } else if (strcmp(cmd_name, "cmd_midi_T") == 0) {
-                                cmd_ptr = &&cmd_midi_T;
-                            } else if (strcmp(cmd_name, "cmd_normal_F") == 0) {
-                                cmd_ptr = &&cmd_normal_F;
-                            } else if (strcmp(cmd_name, "cmd_normal_gb") == 0) {
-                                cmd_ptr = &&cmd_normal_gb;
-                            } else if (strcmp(cmd_name, "cmd_normal_gt") == 0) {
-                                cmd_ptr = &&cmd_normal_gt;
-                            } else if (strcmp(cmd_name, "cmd_normal_gd") == 0) {
-                                cmd_ptr = &&cmd_normal_gd;
-                            } else if (strcmp(cmd_name, "cmd_wav_esc") == 0) {
-                                cmd_ptr = &&cmd_wav_esc;
-                            } else if (strcmp(cmd_name, "cmd_wav_Q") == 0) {
-                                cmd_ptr = &&cmd_wav_Q;
-                            } else if (strcmp(cmd_name, "cmd_normal_gm") == 0) {
-                                cmd_ptr = &&cmd_normal_gm;
-                            } else if (strcmp(cmd_name, "cmd_normal_s") == 0) {
-                                cmd_ptr = &&cmd_normal_s;
-                            } else if (strcmp(cmd_name, "cmd_normal_z") == 0) {
-                                cmd_ptr = &&cmd_normal_z;
-                            } else if (strcmp(cmd_name, "cmd_views_z") == 0) {
-                                cmd_ptr = &&cmd_views_z;
-                            } else if (strcmp(cmd_name, "cmd_normal_return") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_return;
-                            } else if (strcmp(cmd_name, "cmd_normal_r") == 0) {
-                                cmd_ptr = &&cmd_normal_r;
-                            } else if (strcmp(cmd_name, "cmd_views_return") ==
-                                       0) {
-                                cmd_ptr = &&cmd_views_return;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacediv") == 0) {
-                                cmd_ptr = &&cmd_normal_spacediv;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacedov") == 0) {
-                                cmd_ptr = &&cmd_normal_spacedov;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacediw") == 0) {
-                                cmd_ptr = &&cmd_normal_spacediw;
-                            } else if (strcmp(cmd_name, "cmd_normal_spaceda") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_spaceda;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacehov") == 0) {
-                                cmd_ptr = &&cmd_normal_spacehov;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacehiv") == 0) {
-                                cmd_ptr = &&cmd_normal_spacehiv;
-                            } else if (strcmp(cmd_name, "cmd_normal_spaceha") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_spaceha;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacesov") == 0) {
-                                cmd_ptr = &&cmd_normal_spacesov;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacesiv") == 0) {
-                                cmd_ptr = &&cmd_normal_spacesiv;
-                            } else if (strcmp(cmd_name, "cmd_normal_spacesa") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_spacesa;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacemov") == 0) {
-                                cmd_ptr = &&cmd_normal_spacemov;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacemiv") == 0) {
-                                cmd_ptr = &&cmd_normal_spacemiv;
-                            } else if (strcmp(cmd_name, "cmd_normal_spacema") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_spacema;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spaceumov") == 0) {
-                                cmd_ptr = &&cmd_normal_spaceumov;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spaceumiv") == 0) {
-                                cmd_ptr = &&cmd_normal_spaceumiv;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spaceuma") == 0) {
-                                cmd_ptr = &&cmd_normal_spaceuma;
-                            } else if (strcmp(cmd_name, "cmd_normal_spacea") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_spacea;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_g") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_g;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_t") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_t;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_n") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_n;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_s") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_s;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_m") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_m;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_y") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_y;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_z") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_z;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_q") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_q;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_e") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_e;
-                            } else if (strcmp(cmd_name, "cmd_normal_a") == 0) {
-                                cmd_ptr = &&cmd_normal_a;
-                            } else if (strcmp(cmd_name, "cmd_normal_space1") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space1;
-                            } else if (strcmp(cmd_name, "cmd_normal_space2") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space2;
-                            } else if (strcmp(cmd_name, "cmd_normal_space3") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space3;
-                            } else if (strcmp(cmd_name, "cmd_normal_space4") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space4;
-                            } else if (strcmp(cmd_name, "cmd_normal_space5") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space5;
-                            } else if (strcmp(cmd_name, "cmd_normal_space6") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space6;
-                            } else if (strcmp(cmd_name, "cmd_normal_space7") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space7;
-                            } else if (strcmp(cmd_name, "cmd_normal_space8") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space8;
-                            } else if (strcmp(cmd_name, "cmd_normal_space9") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space9;
-                            } else if (strcmp(cmd_name, "cmd_normal_space0") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_space0;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_1") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_1;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_2") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_2;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_3") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_3;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_4") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_4;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_5") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_5;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_6") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_6;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_7") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_7;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_8") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_8;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_9") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_9;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_0") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_0;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_1") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_1;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_2") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_2;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_3") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_3;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_4") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_4;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_5") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_5;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_6") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_6;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_7") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_7;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_8") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_8;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_9") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_9;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_alt_shift_0") == 0) {
-                                cmd_ptr = &&cmd_normal_alt_shift_0;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_1") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_1;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_2") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_2;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_3") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_3;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_4") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_4;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_5") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_5;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_6") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_6;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_7") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_7;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_8") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_8;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_9") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_9;
-                            } else if (strcmp(cmd_name, "cmd_midi_alt_0") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_alt_0;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_1") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_1;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_2") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_2;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_3") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_3;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_4") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_4;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_5") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_5;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_6") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_6;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_7") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_7;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_8") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_8;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_9") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_9;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_alt_shift_0") == 0) {
-                                cmd_ptr = &&cmd_midi_alt_shift_0;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacedspacea") == 0) {
-                                cmd_ptr = &&cmd_normal_spacedspacea;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_K") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_K;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_J") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_J;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_H") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_H;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_L") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_L;
-                            } else if (strcmp(cmd_name, "cmd_normal_d") == 0) {
-                                cmd_ptr = &&cmd_normal_d;
-                            } else if (strcmp(cmd_name, "cmd_views_d") == 0) {
-                                cmd_ptr = &&cmd_views_d;
-                            } else if (strcmp(cmd_name, "cmd_normal_m") == 0) {
-                                cmd_ptr = &&cmd_normal_m;
-                            } else if (strcmp(cmd_name, "cmd_midi_m") == 0) {
-                                cmd_ptr = &&cmd_midi_m;
-                            } else if (strcmp(cmd_name, "cmd_normal_X") == 0) {
-                                cmd_ptr = &&cmd_normal_X;
-                            } else if (strcmp(cmd_name, "cmd_normal_w") == 0) {
-                                cmd_ptr = &&cmd_normal_w;
-                            } else if (strcmp(cmd_name, "cmd_record_w") == 0) {
-                                cmd_ptr = &&cmd_record_w;
-                            } else if (strcmp(cmd_name, "cmd_midi_w") == 0) {
-                                cmd_ptr = &&cmd_midi_w;
-                            } else if (strcmp(cmd_name, "cmd_normal_W") == 0) {
-                                cmd_ptr = &&cmd_normal_W;
-                            } else if (strcmp(cmd_name, "cmd_normal_e") == 0) {
-                                cmd_ptr = &&cmd_normal_e;
-                            } else if (strcmp(cmd_name, "cmd_record_e") == 0) {
-                                cmd_ptr = &&cmd_record_e;
-                            } else if (strcmp(cmd_name, "cmd_midi_e") == 0) {
-                                cmd_ptr = &&cmd_midi_e;
-                            } else if (strcmp(cmd_name, "cmd_normal_E") == 0) {
-                                cmd_ptr = &&cmd_normal_E;
-                            } else if (strcmp(cmd_name, "cmd_normal_b") == 0) {
-                                cmd_ptr = &&cmd_normal_b;
-                            } else if (strcmp(cmd_name, "cmd_midi_b") == 0) {
-                                cmd_ptr = &&cmd_midi_b;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_u") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_u;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_d") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_d;
-                            } else if (strcmp(cmd_name, "cmd_normal_A") == 0) {
-                                cmd_ptr = &&cmd_normal_A;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_a") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_a;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_esc") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_esc;
-                            } else if (strcmp(cmd_name, "cmd_normal_alt_A") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_alt_A;
-                            } else if (strcmp(cmd_name, "cmd_normal_ctrl_a") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_ctrl_a;
-                            } else if (strcmp(cmd_name, "cmd_normal_tab") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_tab;
-                            } else if (strcmp(cmd_name, "cmd_record_tab") ==
-                                       0) {
-                                cmd_ptr = &&cmd_record_tab;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacehiw") == 0) {
-                                cmd_ptr = &&cmd_normal_spacehiw;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spacesiw") == 0) {
-                                cmd_ptr = &&cmd_normal_spacesiw;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_spaceumiw") == 0) {
-                                cmd_ptr = &&cmd_normal_spaceumiw;
-                            } else if (strcmp(cmd_name, "cmd_normal_ga") == 0) {
-                                cmd_ptr = &&cmd_normal_ga;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_normal_shift_tab") == 0) {
-                                cmd_ptr = &&cmd_normal_shift_tab;
-                            } else if (strcmp(cmd_name, "cmd_normal_V") == 0) {
-                                cmd_ptr = &&cmd_normal_V;
-                            } else if (strcmp(cmd_name, "cmd_views_V") == 0) {
-                                cmd_ptr = &&cmd_views_V;
-                            } else if (strcmp(cmd_name, "cmd_normal_K") == 0) {
-                                cmd_ptr = &&cmd_normal_K;
-                            } else if (strcmp(cmd_name, "cmd_views_K") == 0) {
-                                cmd_ptr = &&cmd_views_K;
-                            } else if (strcmp(cmd_name, "cmd_record_K") == 0) {
-                                cmd_ptr = &&cmd_record_K;
-                            } else if (strcmp(cmd_name, "cmd_midi_K") == 0) {
-                                cmd_ptr = &&cmd_midi_K;
-                            } else if (strcmp(cmd_name, "cmd_normal_J") == 0) {
-                                cmd_ptr = &&cmd_normal_J;
-                            } else if (strcmp(cmd_name, "cmd_views_J") == 0) {
-                                cmd_ptr = &&cmd_views_J;
-                            } else if (strcmp(cmd_name, "cmd_record_J") == 0) {
-                                cmd_ptr = &&cmd_record_J;
-                            } else if (strcmp(cmd_name, "cmd_midi_J") == 0) {
-                                cmd_ptr = &&cmd_midi_J;
-                            } else if (strcmp(cmd_name, "cmd_normal_spacem") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_spacem;
-                            } else if (strcmp(cmd_name, "cmd_normal_B") == 0) {
-                                cmd_ptr = &&cmd_normal_B;
-                            } else if (strcmp(cmd_name, "cmd_normal_q") == 0) {
-                                cmd_ptr = &&cmd_normal_q;
-                            } else if (strcmp(cmd_name, "cmd_record_q") == 0) {
-                                cmd_ptr = &&cmd_record_q;
-                            } else if (strcmp(cmd_name, "cmd_midi_q") == 0) {
-                                cmd_ptr = &&cmd_midi_q;
-                            } else if (strcmp(cmd_name, "cmd_normal_Q") == 0) {
-                                cmd_ptr = &&cmd_normal_Q;
-                            } else if (strcmp(cmd_name, "cmd_record_Q") == 0) {
-                                cmd_ptr = &&cmd_record_Q;
-                            } else if (strcmp(cmd_name, "cmd_midi_Q") == 0) {
-                                cmd_ptr = &&cmd_midi_Q;
-                            } else if (strcmp(cmd_name, "cmd_normal_u") == 0) {
-                                cmd_ptr = &&cmd_normal_u;
-                            } else if (strcmp(cmd_name, "cmd_normal_ctrl_r") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_ctrl_r;
-                            } else if (strcmp(cmd_name, "cmd_record_r") == 0) {
-                                cmd_ptr = &&cmd_record_r;
-                            } else if (strcmp(cmd_name, "cmd_midi_r") == 0) {
-                                cmd_ptr = &&cmd_midi_r;
-                            } else if (strcmp(cmd_name, "cmd_record_y") == 0) {
-                                cmd_ptr = &&cmd_record_y;
-                            } else if (strcmp(cmd_name, "cmd_midi_y") == 0) {
-                                cmd_ptr = &&cmd_midi_y;
-                            } else if (strcmp(cmd_name, "cmd_record_u") == 0) {
-                                cmd_ptr = &&cmd_record_u;
-                            } else if (strcmp(cmd_name, "cmd_midi_u") == 0) {
-                                cmd_ptr = &&cmd_midi_u;
-                            } else if (strcmp(cmd_name, "cmd_record_i") == 0) {
-                                cmd_ptr = &&cmd_record_i;
-                            } else if (strcmp(cmd_name, "cmd_midi_i") == 0) {
-                                cmd_ptr = &&cmd_midi_i;
-                            } else if (strcmp(cmd_name, "cmd_record_o") == 0) {
-                                cmd_ptr = &&cmd_record_o;
-                            } else if (strcmp(cmd_name, "cmd_midi_o") == 0) {
-                                cmd_ptr = &&cmd_midi_o;
-                            } else if (strcmp(cmd_name, "cmd_record_p") == 0) {
-                                cmd_ptr = &&cmd_record_p;
-                            } else if (strcmp(cmd_name, "cmd_midi_p") == 0) {
-                                cmd_ptr = &&cmd_midi_p;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_record_leftbracket") == 0) {
-                                cmd_ptr = &&cmd_record_leftbracket;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_leftbracket") == 0) {
-                                cmd_ptr = &&cmd_midi_leftbracket;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_record_rightbracket") == 0) {
-                                cmd_ptr = &&cmd_record_rightbracket;
-                            } else if (strcmp(cmd_name,
-                                              "cmd_midi_rightbracket") == 0) {
-                                cmd_ptr = &&cmd_midi_rightbracket;
-                            } else if (strcmp(cmd_name, "cmd_record_minus") ==
-                                       0) {
-                                cmd_ptr = &&cmd_record_minus;
-                            } else if (strcmp(cmd_name, "cmd_midi_minus") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_minus;
-                            } else if (strcmp(cmd_name, "cmd_void") == 0) {
-                                cmd_ptr = &&cmd_void;
-                            } else if (strcmp(cmd_name, "cmd_midi_c") == 0) {
-                                cmd_ptr = &&cmd_midi_c;
-                            } else if (strcmp(cmd_name, "cmd_record_space") ==
-                                       0) {
-                                cmd_ptr = &&cmd_record_space;
-                            } else if (strcmp(cmd_name, "cmd_midi_space") ==
-                                       0) {
-                                cmd_ptr = &&cmd_midi_space;
-                            } else if (strcmp(cmd_name, "cmd_command_w") == 0) {
-                                cmd_ptr = &&cmd_command_w;
-                            } else if (strcmp(cmd_name, "cmd_normal_colon") ==
-                                       0) {
-                                cmd_ptr = &&cmd_normal_colon;
-                            } else if (strcmp(cmd_name, "cmd_normal_S") == 0) {
-                                cmd_ptr = &&cmd_normal_S;
-                            } else {
-                                call_carmack("unknown command: %s", cmd_name);
-                            }
-                            fsm[parent].command[mode_idx] = cmd_ptr;
-
-                            lua_getfield(L, -1, "handle_release");
-                            if (lua_isnumber(L, -1))
-                                fsm[parent].handle_release[mode_idx] =
-                                    (uint8_t)lua_tointeger(L, -1);
-                            lua_pop(L, 1);
-
-                            lua_getfield(L, -1, "handle_timeout");
-                            if (lua_isnumber(L, -1))
-                                fsm[parent].handle_timeout[mode_idx] =
-                                    (uint8_t)lua_tointeger(L, -1);
-                            lua_pop(L, 1);
-
-                            lua_getfield(L, -1, "handle_repeat");
-                            if (lua_isnumber(L, -1))
-                                fsm[parent].handle_repeat[mode_idx] =
-                                    (uint8_t)lua_tointeger(L, -1);
-                            lua_pop(L, 1);
-
-                            lua_pop(L, 1); // pop command table
-                        }
-                        lua_pop(L, 1); // pop commands table
-                        lua_pop(L, 1); // pop sequence table
-                    }
-                    lua_pop(L, 1); // pop war_flattened
-                }
-
-                assert(state_counter < atomic_load(&ctx_lua->WR_STATES));
-
-                lua_close(L);
-            }
-            munmap(keymap_map, keymap_size);
-            close(keymap_fd);
-            xkb_keymap_unref(xkb_keymap);
-            xkb_keymap = NULL;
+            assert(ctx_fsm->keymap_size > 0);
+            //-----------------------------------------------------------------
+            // FSM INIT
+            //-----------------------------------------------------------------
+            ctx_fsm->xkb_context = xkb_context_new(0);
+            assert(ctx_fsm->xkb_context);
+            ctx_fsm->keymap_map = mmap(NULL,
+                                       ctx_fsm->keymap_size,
+                                       PROT_READ,
+                                       MAP_PRIVATE,
+                                       ctx_fsm->keymap_fd,
+                                       0);
+            assert(ctx_fsm->keymap_map != MAP_FAILED);
+            ctx_fsm->xkb_keymap =
+                xkb_keymap_new_from_string(ctx_fsm->xkb_context,
+                                           ctx_fsm->keymap_map,
+                                           XKB_KEYMAP_FORMAT_TEXT_V1,
+                                           0);
+            assert(ctx_fsm->xkb_keymap);
+            ctx_fsm->xkb_state = xkb_state_new(ctx_fsm->xkb_keymap);
+            assert(ctx_fsm->xkb_state);
+            ctx_fsm->mod_shift = xkb_keymap_mod_get_index(ctx_fsm->xkb_keymap,
+                                                          XKB_MOD_NAME_SHIFT);
+            ctx_fsm->mod_ctrl = xkb_keymap_mod_get_index(ctx_fsm->xkb_keymap,
+                                                         XKB_MOD_NAME_CTRL);
+            ctx_fsm->mod_alt =
+                xkb_keymap_mod_get_index(ctx_fsm->xkb_keymap, XKB_MOD_NAME_ALT);
+            ctx_fsm->mod_logo = xkb_keymap_mod_get_index(ctx_fsm->xkb_keymap,
+                                                         XKB_MOD_NAME_LOGO);
+            ctx_fsm->mod_caps = xkb_keymap_mod_get_index(ctx_fsm->xkb_keymap,
+                                                         XKB_MOD_NAME_CAPS);
+            ctx_fsm->mod_num =
+                xkb_keymap_mod_get_index(ctx_fsm->xkb_keymap, XKB_MOD_NAME_NUM);
             goto wayland_done;
         }
         wl_keyboard_enter:
@@ -4226,67 +3324,73 @@ cmd_timeout_done:
             uint32_t keycode =
                 war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4) +
                 8; // + 8 cuz wayland
-            xkb_keysym_t keysym = xkb_state_key_get_one_sym(xkb_state, keycode);
+            xkb_keysym_t keysym =
+                xkb_state_key_get_one_sym(ctx_fsm->xkb_state, keycode);
             // TODO: Normalize the other things like '<' (regarding
             // MOD_SHIFT and XKB)
             keysym = war_normalize_keysym(keysym); // normalize to lowercase and
                                                    // prevent out of bounds
-            xkb_mod_mask_t mods =
-                xkb_state_serialize_mods(xkb_state, XKB_STATE_MODS_DEPRESSED);
+            xkb_mod_mask_t mods = xkb_state_serialize_mods(
+                ctx_fsm->xkb_state, XKB_STATE_MODS_DEPRESSED);
             uint8_t mod = 0;
-            if (mods & (1 << mod_shift)) mod |= MOD_SHIFT;
-            if (mods & (1 << mod_ctrl)) mod |= MOD_CTRL;
-            if (mods & (1 << mod_alt)) mod |= MOD_ALT;
-            if (mods & (1 << mod_logo)) mod |= MOD_LOGO;
-            if (mods & (1 << mod_caps)) mod |= MOD_CAPS;
-            if (mods & (1 << mod_num)) mod |= MOD_NUM;
+            if (mods & (1 << ctx_fsm->mod_shift)) mod |= MOD_SHIFT;
+            if (mods & (1 << ctx_fsm->mod_ctrl)) mod |= MOD_CTRL;
+            if (mods & (1 << ctx_fsm->mod_alt)) mod |= MOD_ALT;
+            if (mods & (1 << ctx_fsm->mod_logo)) mod |= MOD_LOGO;
+            if (mods & (1 << ctx_fsm->mod_caps)) mod |= MOD_CAPS;
+            if (mods & (1 << ctx_fsm->mod_num)) mod |= MOD_NUM;
             if (keysym == KEYSYM_DEFAULT) {
                 // repeats
-                key_down[repeat_keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                         repeat_mod] = false;
-                repeat_keysym = 0;
-                repeat_mod = 0;
-                repeating = false;
+                ctx_fsm->key_down[FSM_3D_INDEX(ctx_fsm->current_state,
+                                               ctx_fsm->repeat_keysym,
+                                               ctx_fsm->repeat_mod)] = false;
+                ctx_fsm->repeat_keysym = 0;
+                ctx_fsm->repeat_mod = 0;
+                ctx_fsm->repeating = false;
                 goto cmd_done;
             }
             // if (mods & (1 << mod_fn)) mod |= MOD_FN;
             bool pressed = (wl_key_state == 1);
             // In wl_keyboard_key, after your command mode input writing:
             if (!pressed) {
-                key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] =
-                    false;
-                key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                  mod] = 0;
+                ctx_fsm->key_down[FSM_3D_INDEX(
+                    ctx_fsm->current_state, keysym, mod)] = false;
+                ctx_fsm->key_last_event_us[FSM_3D_INDEX(
+                    ctx_fsm->current_state, keysym, mod)] = 0;
                 // repeats
-                if (repeat_keysym == keysym &&
-                    fsm[current_state_index].handle_repeat[ctx_wr->mode] &&
+                if (ctx_fsm->repeat_keysym == keysym &&
+                    ctx_fsm->handle_repeat[FSM_2D_MODE(
+                        ctx_fsm->current_state, ctx_fsm->current_mode)] &&
                     !ctx_command->command) {
-                    repeat_keysym = 0;
-                    repeat_mod = 0;
-                    repeating = false;
+                    ctx_fsm->repeat_keysym = 0;
+                    ctx_fsm->repeat_mod = 0;
+                    ctx_fsm->repeating = false;
                     // timeouts
-                    timeout = false;
-                    timeout_state_index = 0;
-                    timeout_start_us = 0;
+                    ctx_fsm->timeout = false;
+                    ctx_fsm->timeout_state_index = 0;
+                    ctx_fsm->timeout_start_us = 0;
                 }
                 if (ctx_wr->skip_release) {
                     ctx_wr->skip_release = 0;
                     goto cmd_done;
                 }
-                uint16_t idx =
-                    fsm[current_state_index].next_state
-                        [keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
-                if (fsm[idx].handle_release[ctx_wr->mode] &&
-                    !ctx_wr->midi_toggle && fsm[idx].command[ctx_wr->mode]) {
-                    goto* fsm[idx].command[ctx_wr->mode];
-                }
+                uint16_t idx = ctx_fsm->next_state[FSM_3D_INDEX(
+                    ctx_fsm->current_state, keysym, mod)];
+                // if (ctx_fsm->handle_release[FSM_2D_MODE(idx,
+                // ctx_fsm->current_mode)]
+                // &&
+                //     !ctx_wr->midi_toggle &&
+                //     ctx_fsm->command[ctx_fsm->current_mode]) {
+                //     fsm[idx].command[ctx_fsm->current_mode](env);
+                // }
                 goto cmd_done;
             }
-            if (!key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod]) {
-                key_down[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod] =
-                    true;
-                key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                  mod] = ctx_wr->now;
+            if (!ctx_fsm->key_down[FSM_3D_INDEX(
+                    ctx_fsm->current_state, keysym, mod)]) {
+                ctx_fsm->key_down[FSM_3D_INDEX(
+                    ctx_fsm->current_state, keysym, mod)] = 1;
+                ctx_fsm->key_last_event_us[FSM_3D_INDEX(
+                    ctx_fsm->current_state, keysym, mod)] = ctx_wr->now;
             }
             //-----------------------------------------------------------------
             // COMMAND INPUT
@@ -4300,94 +3404,99 @@ cmd_timeout_done:
                     ctx_command->input_write_index++;
                 }
                 // SET UP REPEATS FOR COMMAND MODE
-                repeat_keysym = keysym;
-                repeat_mod = mod;
-                repeating = false;
-                key_last_event_us[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                  mod] = ctx_wr->now;
+                ctx_fsm->repeat_keysym = keysym;
+                ctx_fsm->repeat_mod = mod;
+                ctx_fsm->repeating = 0;
+                ctx_fsm->key_last_event_us[FSM_3D_INDEX(
+                    ctx_fsm->current_state, keysym, mod)] = ctx_wr->now;
                 goto cmd_done;
             }
-            uint16_t next_state_index =
-                fsm[current_state_index]
-                    .next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                mod];
-            if (timeout &&
-                fsm[timeout_state_index]
-                    .next_state[keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) +
-                                mod]) {
-                next_state_index =
-                    fsm[timeout_state_index].next_state
-                        [keysym * atomic_load(&ctx_lua->WR_MOD_COUNT) + mod];
+            uint16_t next_state_index = ctx_fsm->next_state[FSM_3D_INDEX(
+                ctx_fsm->current_state, keysym, mod)];
+            if (ctx_fsm->timeout &&
+                ctx_fsm->next_state[FSM_3D_INDEX(
+                    ctx_fsm->timeout_state_index, keysym, mod)]) {
+                next_state_index = ctx_fsm->next_state[FSM_3D_INDEX(
+                    ctx_fsm->timeout_state_index, keysym, mod)];
             }
             if (next_state_index == 0) {
-                current_state_index = 0;
+                ctx_fsm->current_state = 0;
                 // timeouts
-                timeout = false;
-                timeout_state_index = 0;
-                timeout_start_us = 0;
+                ctx_fsm->timeout = 0;
+                ctx_fsm->timeout_state_index = 0;
+                ctx_fsm->timeout_start_us = 0;
                 goto cmd_done;
             }
-            current_state_index = next_state_index;
-            fsm_state_last_event_us = ctx_wr->now;
-            if (fsm[current_state_index].is_terminal[ctx_wr->mode] &&
-                !fsm[current_state_index].is_prefix[ctx_wr->mode]) {
-                uint16_t temp = current_state_index;
-                current_state_index = 0;
+            ctx_fsm->current_state = next_state_index;
+            ctx_fsm->state_last_event_us = ctx_wr->now;
+            if (ctx_fsm->is_terminal[FSM_2D_MODE(ctx_fsm->current_state,
+                                                 ctx_fsm->current_mode)] &&
+                !ctx_fsm->is_prefix[FSM_2D_MODE(ctx_fsm->current_state,
+                                                ctx_fsm->current_mode)]) {
+                uint16_t temp = ctx_fsm->current_state;
+                ctx_fsm->current_state = 0;
                 // repeats
-                if ((ctx_wr->mode != MODE_MIDI ||
-                     (ctx_wr->mode == MODE_MIDI && ctx_wr->midi_toggle)) &&
-                    fsm[temp].handle_repeat[ctx_wr->mode]) {
-                    repeat_keysym = keysym;
-                    repeat_mod = mod;
-                    repeating = false;
+                if ((ctx_fsm->current_mode != ctx_fsm->MODE_MIDI ||
+                     (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI &&
+                      ctx_wr->midi_toggle)) &&
+                    ctx_fsm->handle_repeat[FSM_2D_MODE(
+                        temp, ctx_fsm->current_mode)]) {
+                    ctx_fsm->repeat_keysym = keysym;
+                    ctx_fsm->repeat_mod = mod;
+                    ctx_fsm->repeating = 0;
                 }
                 // timeouts
                 if (keysym != KEYSYM_ESCAPE && mod != 0) {
-                    timeout_state_index = 0;
+                    ctx_fsm->timeout_state_index = 0;
                 }
-                timeout_start_us = 0;
-                timeout = false;
-                if (fsm[temp].command[ctx_wr->mode]) {
-                    goto* fsm[temp].command[ctx_wr->mode];
-                }
-            } else if (fsm[current_state_index].is_terminal[ctx_wr->mode] &&
-                       fsm[current_state_index].is_prefix[ctx_wr->mode]) {
-                if (fsm[current_state_index].handle_timeout[ctx_wr->mode]) {
+                ctx_fsm->timeout_start_us = 0;
+                ctx_fsm->timeout = 0;
+                // if (ctx_fsm[temp].command[ctx_fsm->current_mode]) {
+                //     fsm[temp].command[ctx_fsm->current_mode](env);
+                // }
+            } else if (ctx_fsm->is_terminal[FSM_2D_MODE(
+                           ctx_fsm->current_state, ctx_fsm->current_mode)] &&
+                       ctx_fsm->is_prefix[FSM_2D_MODE(ctx_fsm->current_state,
+                                                      ctx_fsm->current_mode)]) {
+                if (ctx_fsm->handle_timeout[FSM_2D_MODE(
+                        ctx_fsm->current_state, ctx_fsm->current_mode)]) {
                     // repeats
-                    repeat_keysym = 0;
-                    repeat_mod = 0;
-                    repeating = false;
+                    ctx_fsm->repeat_keysym = 0;
+                    ctx_fsm->repeat_mod = 0;
+                    ctx_fsm->repeating = 0;
                     // timeouts
-                    timeout_state_index = current_state_index;
-                    timeout_start_us = ctx_wr->now;
-                    timeout = true;
-                    current_state_index = 0;
+                    ctx_fsm->timeout_state_index = ctx_fsm->current_state;
+                    ctx_fsm->timeout_start_us = ctx_wr->now;
+                    ctx_fsm->timeout = 1;
+                    ctx_fsm->current_state = 0;
                     goto cmd_done;
                 }
-                uint16_t temp = current_state_index;
-                current_state_index = 0;
+                uint16_t temp = ctx_fsm->current_state;
+                ctx_fsm->current_state = 0;
                 // repeats
-                if ((ctx_wr->mode != MODE_MIDI ||
-                     (ctx_wr->mode == MODE_MIDI && ctx_wr->midi_toggle)) &&
-                    fsm[current_state_index].handle_timeout[ctx_wr->mode]) {
-                    repeat_keysym = keysym;
-                    repeat_mod = mod;
-                    repeating = false;
+                if ((ctx_fsm->current_mode != ctx_fsm->MODE_MIDI ||
+                     (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI &&
+                      ctx_wr->midi_toggle)) &&
+                    ctx_fsm->handle_timeout[FSM_2D_MODE(
+                        ctx_fsm->current_state, ctx_fsm->current_mode)]) {
+                    ctx_fsm->repeat_keysym = keysym;
+                    ctx_fsm->repeat_mod = mod;
+                    ctx_fsm->repeating = 0;
                 }
                 // timeouts
                 if (keysym != KEYSYM_ESCAPE && mod != 0) {
-                    timeout_state_index = 0;
+                    ctx_fsm->timeout_state_index = 0;
                 }
-                timeout_start_us = 0;
-                timeout = false;
-                if (fsm[temp].command[ctx_wr->mode]) {
-                    goto* fsm[temp].command[ctx_wr->mode];
-                }
+                ctx_fsm->timeout_start_us = 0;
+                ctx_fsm->timeout = false;
+                // if (ctx_fsm[temp].command[ctx_fsm->current_mode]) {
+                //     fsm[temp].command[ctx_fsm->current_mode](env);
+                // }
             }
             goto cmd_done;
         }
         cmd_normal_k:
-            call_carmack("cmd_normal_k");
+            call_terry_davis("cmd_normal_k");
             uint32_t increment = ctx_wr->row_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -4432,7 +3541,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_j:
-            call_carmack("cmd_normal_j");
+            call_terry_davis("cmd_normal_j");
             increment = ctx_wr->row_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -4480,7 +3589,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_l: {
-            call_carmack("cmd_normal_l");
+            call_terry_davis("cmd_normal_l");
             double initial = ctx_wr->cursor_pos_x;
             double increment =
                 (double)ctx_wr->col_increment * ctx_wr->cursor_navigation_x;
@@ -4509,7 +3618,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_h: {
-            call_carmack("cmd_normal_h");
+            call_terry_davis("cmd_normal_h");
             double initial = ctx_wr->cursor_pos_x;
             double increment =
                 (double)ctx_wr->col_increment * ctx_wr->cursor_navigation_x;
@@ -4538,13 +3647,13 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_gd: {
-            call_carmack("cmd_normal_gd");
-            ctx_wr->mode = MODE_WAV;
+            call_terry_davis("cmd_normal_gd");
+            ctx_fsm->current_mode = ctx_fsm->MODE_WAV;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_K: {
-            call_carmack("cmd_normal_K");
+            call_terry_davis("cmd_normal_K");
             float gain =
                 atomic_load(&atomics->play_gain) + ctx_wr->gain_increment;
             gain = fminf(gain, 1.0f);
@@ -4553,7 +3662,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_J: {
-            call_carmack("cmd_normal_J");
+            call_terry_davis("cmd_normal_J");
             float gain =
                 atomic_load(&atomics->play_gain) - ctx_wr->gain_increment;
             gain = fmaxf(gain, 0.0f);
@@ -4562,7 +3671,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_k:
-            call_carmack("cmd_normal_alt_k");
+            call_terry_davis("cmd_normal_alt_k");
             increment = ctx_wr->row_leap_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -4591,7 +3700,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_j:
-            call_carmack("cmd_normal_alt_j");
+            call_terry_davis("cmd_normal_alt_j");
             increment = ctx_wr->row_leap_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -4620,7 +3729,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_h: {
-            call_carmack("cmd_normal_h");
+            call_terry_davis("cmd_normal_h");
             double initial = ctx_wr->cursor_pos_x;
             double increment = (double)ctx_wr->col_leap_increment *
                                ctx_wr->cursor_navigation_x;
@@ -4649,7 +3758,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_l: {
-            call_carmack("cmd_normal_l");
+            call_terry_davis("cmd_normal_l");
             double initial = ctx_wr->cursor_pos_x;
             double increment = (double)ctx_wr->col_leap_increment *
                                ctx_wr->cursor_navigation_x;
@@ -4678,27 +3787,27 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_i: {
-            call_carmack("cmd_normal_i");
+            call_terry_davis("cmd_normal_i");
             uint64_t layer = atomic_load(&atomics->layer);
             ctx_play->note_layers[(int)ctx_wr->cursor_pos_y] = layer;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_L: {
-            call_carmack("cmd_normal_L");
+            call_terry_davis("cmd_normal_L");
             war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_alt_tab: {
-            call_carmack("cmd_normal_alt_tab");
+            call_terry_davis("cmd_normal_alt_tab");
             ctx_wr->layer_flux = !ctx_wr->layer_flux;
             war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_alt_K:
-            call_carmack("cmd_normal_alt_shift_k");
+            call_terry_davis("cmd_normal_alt_shift_k");
             increment =
                 ctx_wr->viewport_rows - ctx_wr->num_rows_for_status_bars;
             if (ctx_wr->numeric_prefix) {
@@ -4728,7 +3837,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_J:
-            call_carmack("cmd_normal_alt_shift_j");
+            call_terry_davis("cmd_normal_alt_shift_j");
             increment =
                 ctx_wr->viewport_rows - ctx_wr->num_rows_for_status_bars;
             if (ctx_wr->numeric_prefix) {
@@ -4758,7 +3867,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_L:
-            call_carmack("cmd_normal_alt_shift_l");
+            call_terry_davis("cmd_normal_alt_shift_l");
             increment =
                 ctx_wr->viewport_cols - ctx_wr->num_cols_for_line_numbers;
             if (ctx_wr->numeric_prefix) {
@@ -4785,7 +3894,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_H:
-            call_carmack("cmd_normal_alt_shift_h");
+            call_terry_davis("cmd_normal_alt_shift_h");
             increment =
                 ctx_wr->viewport_cols - ctx_wr->num_cols_for_line_numbers;
             if (ctx_wr->numeric_prefix) {
@@ -4812,7 +3921,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_0:
-            call_carmack("cmd_normal_0");
+            call_terry_davis("cmd_normal_0");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->numeric_prefix = ctx_wr->numeric_prefix * 10;
                 goto cmd_done;
@@ -4822,12 +3931,12 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_V: {
-            call_carmack("cmd_normal_V");
+            call_terry_davis("cmd_normal_V");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_ga: {
-            call_carmack("cmd_normal_$");
+            call_terry_davis("cmd_normal_$");
             uint32_t col = ((float)atomic_load(&atomics->play_clock) /
                             atomic_load(&ctx_lua->A_SAMPLE_RATE)) /
                            ((60.0f / atomic_load(&ctx_lua->A_BPM)) /
@@ -4859,7 +3968,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_$:
-            call_carmack("cmd_normal_$");
+            call_terry_davis("cmd_normal_$");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->cursor_pos_x = war_clamp_uint32(
                     ctx_wr->numeric_prefix, ctx_wr->min_col, ctx_wr->max_col);
@@ -4892,7 +4001,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_G:
-            call_carmack("cmd_normal_G");
+            call_terry_davis("cmd_normal_G");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->cursor_pos_y = war_clamp_uint32(
                     ctx_wr->numeric_prefix, ctx_wr->min_row, ctx_wr->max_row);
@@ -4929,7 +4038,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_gg:
-            call_carmack("cmd_normal_gg");
+            call_terry_davis("cmd_normal_gg");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->cursor_pos_y = war_clamp_uint32(
                     ctx_wr->numeric_prefix, ctx_wr->min_row, ctx_wr->max_row);
@@ -4966,74 +4075,74 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_1:
-            call_carmack("cmd_normal_1");
+            call_terry_davis("cmd_normal_1");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 1, UINT32_MAX);
             goto cmd_done;
         cmd_normal_2:
-            call_carmack("cmd_normal_2");
+            call_terry_davis("cmd_normal_2");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 2, UINT32_MAX);
             goto cmd_done;
         cmd_normal_3:
-            call_carmack("cmd_normal_3");
+            call_terry_davis("cmd_normal_3");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 3, UINT32_MAX);
             goto cmd_done;
         cmd_normal_4:
-            call_carmack("cmd_normal_4");
+            call_terry_davis("cmd_normal_4");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 4, UINT32_MAX);
             goto cmd_done;
         cmd_normal_5:
-            call_carmack("cmd_normal_5");
+            call_terry_davis("cmd_normal_5");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 5, UINT32_MAX);
             goto cmd_done;
         cmd_normal_6:
-            call_carmack("cmd_normal_6");
+            call_terry_davis("cmd_normal_6");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 6, UINT32_MAX);
             goto cmd_done;
         cmd_normal_7:
-            call_carmack("cmd_normal_7");
+            call_terry_davis("cmd_normal_7");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 7, UINT32_MAX);
             goto cmd_done;
         cmd_normal_8:
-            call_carmack("cmd_normal_8");
+            call_terry_davis("cmd_normal_8");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 8, UINT32_MAX);
             goto cmd_done;
         cmd_normal_9:
-            call_carmack("cmd_normal_9");
+            call_terry_davis("cmd_normal_9");
             ctx_wr->numeric_prefix = war_clamp_multiply_uint32(
                 ctx_wr->numeric_prefix, 10, UINT32_MAX);
             ctx_wr->numeric_prefix =
                 war_clamp_add_uint32(ctx_wr->numeric_prefix, 9, UINT32_MAX);
             goto cmd_done;
         cmd_normal_r:
-            call_carmack("cmd_normal_r");
+            call_terry_davis("cmd_normal_r");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_ctrl_equal: {
-            call_carmack("cmd_normal_ctrl_equal");
+            call_terry_davis("cmd_normal_ctrl_equal");
             ctx_wr->zoom_scale += ctx_wr->zoom_increment;
             if (ctx_wr->zoom_scale > 5.0f) { ctx_wr->zoom_scale = 5.0f; }
             float viewport_cols_f = ctx_wr->physical_width /
@@ -5054,7 +4163,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_ctrl_minus: {
-            call_carmack("cmd_normal_ctrl_minus");
+            call_terry_davis("cmd_normal_ctrl_minus");
             ctx_wr->zoom_scale -= ctx_wr->zoom_increment;
             if (ctx_wr->zoom_scale <= 0.1f) { ctx_wr->zoom_scale = 0.1f; }
             float viewport_cols_f = ctx_wr->physical_width /
@@ -5075,7 +4184,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_ctrl_alt_equal:
-            call_carmack("cmd_normal_ctrl_alt_equal");
+            call_terry_davis("cmd_normal_ctrl_alt_equal");
             // ctx_wr->zoom_scale +=
             // ctx_wr->zoom_leap_increment; if
             // (ctx_wr->zoom_scale > 5.0f) {
@@ -5087,7 +4196,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_ctrl_alt_minus:
-            call_carmack("cmd_normal_ctrl_alt_minus");
+            call_terry_davis("cmd_normal_ctrl_alt_minus");
             // ctx_wr->zoom_scale -=
             // ctx_wr->zoom_leap_increment; if
             // (ctx_wr->zoom_scale < 0.1f) {
@@ -5099,7 +4208,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_ctrl_0: {
-            call_carmack("cmd_normal_ctrl_0");
+            call_terry_davis("cmd_normal_ctrl_0");
             ctx_wr->zoom_scale = 1.0f;
             ctx_wr->viewport_cols =
                 (uint32_t)(physical_width / ctx_vk->cell_width);
@@ -5115,24 +4224,26 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_esc: {
-            call_carmack("cmd_normal_esc");
-            if (timeout_state_index) {
-                if (fsm[timeout_state_index].command[ctx_wr->mode]) {
-                    goto* fsm[timeout_state_index].command[ctx_wr->mode];
-                    timeout_state_index = 0;
-                }
+            call_terry_davis("cmd_normal_esc");
+            if (ctx_fsm->timeout_state_index) {
+                // if (fsm[timeout_state_index].command[ctx_fsm->current_mode])
+                // {
+                //     fsm[timeout_state_index].command[ctx_fsm->current_mode](
+                //         env);
+                //     timeout_state_index = 0;
+                // }
                 goto cmd_done;
             }
-            ctx_wr->mode = MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_S: {
-            call_carmack("cmd_normal_S");
+            call_terry_davis("cmd_normal_S");
             goto cmd_done;
         }
         cmd_normal_s: {
-            call_carmack("cmd_normal_s");
+            call_terry_davis("cmd_normal_s");
             ctx_wr->cursor_width_sub_cells = 1;
             ctx_wr->cursor_width_whole_number = 1;
             ctx_wr->cursor_width_sub_col = 1;
@@ -5146,7 +4257,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_f:
-            call_carmack("cmd_normal_f");
+            call_terry_davis("cmd_normal_f");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->cursor_width_whole_number = ctx_wr->numeric_prefix;
                 ctx_wr->cursor_size_x =
@@ -5161,7 +4272,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_t:
-            call_carmack("cmd_normal_t");
+            call_terry_davis("cmd_normal_t");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->cursor_width_sub_cells = ctx_wr->numeric_prefix;
                 ctx_wr->cursor_size_x =
@@ -5176,7 +4287,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_T:
-            call_carmack("cmd_normal_T");
+            call_terry_davis("cmd_normal_T");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->navigation_sub_cells_col = ctx_wr->numeric_prefix;
                 ctx_wr->cursor_navigation_x =
@@ -5192,7 +4303,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_F:
-            call_carmack("cmd_normal_F");
+            call_terry_davis("cmd_normal_F");
             if (ctx_wr->numeric_prefix) {
                 ctx_wr->navigation_whole_number_col = ctx_wr->numeric_prefix;
                 ctx_wr->cursor_navigation_x =
@@ -5208,11 +4319,11 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_f: {
-            call_carmack("cmd_normal_alt_f");
+            call_terry_davis("cmd_normal_alt_f");
             goto cmd_done;
         }
         cmd_normal_gb:
-            call_carmack("cmd_normal_gb");
+            call_terry_davis("cmd_normal_gb");
             ctx_wr->cursor_pos_y = ctx_wr->min_row;
             uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
             uint32_t distance = viewport_height / 2;
@@ -5240,7 +4351,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_gt:
-            call_carmack("cmd_normal_gt");
+            call_terry_davis("cmd_normal_gt");
             ctx_wr->cursor_pos_y = ctx_wr->max_row;
             viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
             distance = viewport_height / 2;
@@ -5268,7 +4379,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_gm:
-            call_carmack("cmd_normal_gm");
+            call_terry_davis("cmd_normal_gm");
             ctx_wr->cursor_pos_y = 60;
             viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
             distance = viewport_height / 2;
@@ -5298,7 +4409,7 @@ cmd_timeout_done:
         cmd_normal_return:
         cmd_normal_z: {
             // TODO: spillover swapfile
-            call_carmack("cmd_normal_z");
+            call_terry_davis("cmd_normal_z");
             uint64_t id = atomic_fetch_add(&atomics->note_next_id, 1);
             war_note_quad note_quad = {
                 .alive = 1,
@@ -5394,7 +4505,7 @@ cmd_timeout_done:
                         }
                     }
                     if (write_idx >= note_quads_max) {
-                        call_carmack("TODO: implement spillover swapfile");
+                        call_terry_davis("TODO: implement spillover swapfile");
                         ctx_wr->numeric_prefix = 0;
                         goto cmd_done;
                     };
@@ -5582,17 +4693,17 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_x:
-            call_carmack("cmd_normal_x");
+            call_terry_davis("cmd_normal_x");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_X: {
-            call_carmack("cmd_normal_X");
+            call_terry_davis("cmd_normal_X");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_d: {
             // TODO: spillover swapfile
-            call_carmack("cmd_normal_d");
+            call_terry_davis("cmd_normal_d");
             if (note_quads->count == 0) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -5830,95 +4941,95 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_spacediv: {
-            call_carmack("cmd_normal_spacediv");
+            call_terry_davis("cmd_normal_spacediv");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_spacedov:
-            call_carmack("cmd_normal_spacedov");
+            call_terry_davis("cmd_normal_spacedov");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacediw: {
-            call_carmack("cmd_normal_spacediw");
+            call_terry_davis("cmd_normal_spacediw");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_spaceda:
-            call_carmack("cmd_normal_spaceda");
+            call_terry_davis("cmd_normal_spaceda");
             note_quads->count = 0;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacehov:
-            call_carmack("cmd_normal_spacehov");
+            call_terry_davis("cmd_normal_spacehov");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacehiv:
-            call_carmack("cmd_normal_spacehiv");
+            call_terry_davis("cmd_normal_spacehiv");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacehiw:
-            call_carmack("cmd_normal_spacehiw");
+            call_terry_davis("cmd_normal_spacehiw");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spaceha:
-            call_carmack("cmd_normal_spaceha");
+            call_terry_davis("cmd_normal_spaceha");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacesov:
-            call_carmack("cmd_normal_spacesov");
+            call_terry_davis("cmd_normal_spacesov");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacesiv:
-            call_carmack("cmd_normal_spacesiv");
+            call_terry_davis("cmd_normal_spacesiv");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacesiw:
-            call_carmack("cmd_normal_spacesiw");
+            call_terry_davis("cmd_normal_spacesiw");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacesa:
-            call_carmack("cmd_normal_spacesa");
+            call_terry_davis("cmd_normal_spacesa");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacem:
-            call_carmack("cmd_normal_spacem");
+            call_terry_davis("cmd_normal_spacem");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacemov:
-            call_carmack("cmd_normal_spacemov");
+            call_terry_davis("cmd_normal_spacemov");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacemiv:
-            call_carmack("cmd_normal_spacemiv");
+            call_terry_davis("cmd_normal_spacemiv");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacema:
-            call_carmack("cmd_normal_spacema");
+            call_terry_davis("cmd_normal_spacema");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_m:
-            call_carmack("cmd_normal_m");
-            ctx_wr->mode = MODE_MIDI;
+            call_terry_davis("cmd_normal_m");
+            ctx_fsm->current_mode = ctx_fsm->MODE_MIDI;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spaceumov:
-            call_carmack("cmd_normal_spaceumov");
+            call_terry_davis("cmd_normal_spaceumov");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spaceumiv:
-            call_carmack("cmd_normal_spaceumiv");
+            call_terry_davis("cmd_normal_spaceumiv");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spaceumiw:
-            call_carmack("cmd_normal_spaceumiw");
+            call_terry_davis("cmd_normal_spaceumiw");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spaceuma:
-            call_carmack("cmd_normal_spaceuma");
+            call_terry_davis("cmd_normal_spaceuma");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacea:
-            call_carmack("cmd_normal_spacea");
+            call_terry_davis("cmd_normal_spacea");
             if (views->views_count <
                 (uint32_t)atomic_load(&ctx_lua->WR_VIEWS_SAVED)) {
                 views->col[views->views_count] = ctx_wr->cursor_pos_x;
@@ -5932,11 +5043,11 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_spacedspacea:
-            call_carmack("cmd_normal_spacedspacea");
+            call_terry_davis("cmd_normal_spacedspacea");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_g:
-            call_carmack("cmd_normal_alt_g");
+            call_terry_davis("cmd_normal_alt_g");
             if (views->views_count > 0) {
                 uint32_t i_views = 0;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -5952,7 +5063,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_t:
-            call_carmack("cmd_normal_alt_t");
+            call_terry_davis("cmd_normal_alt_t");
             if (views->views_count > 1) {
                 uint32_t i_views = 1;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -5968,7 +5079,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_n:
-            call_carmack("cmd_normal_alt_n");
+            call_terry_davis("cmd_normal_alt_n");
             if (views->views_count > 2) {
                 uint32_t i_views = 2;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -5984,7 +5095,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_s:
-            call_carmack("cmd_normal_alt_s");
+            call_terry_davis("cmd_normal_alt_s");
             if (views->views_count > 3) {
                 uint32_t i_views = 3;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -6000,7 +5111,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_m:
-            call_carmack("cmd_normal_alt_m");
+            call_terry_davis("cmd_normal_alt_m");
             if (views->views_count > 4) {
                 uint32_t i_views = 4;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -6016,7 +5127,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_y:
-            call_carmack("cmd_normal_alt_y");
+            call_terry_davis("cmd_normal_alt_y");
             if (views->views_count > 5) {
                 uint32_t i_views = 5;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -6032,7 +5143,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_z:
-            call_carmack("cmd_normal_alt_z");
+            call_terry_davis("cmd_normal_alt_z");
             if (views->views_count > 6) {
                 uint32_t i_views = 6;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -6048,7 +5159,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_q:
-            call_carmack("cmd_normal_alt_q");
+            call_terry_davis("cmd_normal_alt_q");
             if (views->views_count > 7) {
                 uint32_t i_views = 7;
                 ctx_wr->cursor_pos_x = views->col[i_views];
@@ -6064,90 +5175,92 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_e:
-            call_carmack("cmd_normal_alt_e");
-            ctx_wr->mode =
-                (ctx_wr->mode != MODE_VIEWS) ? MODE_VIEWS : MODE_NORMAL;
+            call_terry_davis("cmd_normal_alt_e");
+            ctx_fsm->current_mode =
+                (ctx_fsm->current_mode != ctx_fsm->MODE_VIEWS) ?
+                    ctx_fsm->MODE_VIEWS :
+                    ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         //-----------------------------------------------------------------
         // PLAYBACK COMMANDS
         //-----------------------------------------------------------------
         cmd_normal_a: {
-            call_carmack("cmd_normal_a");
+            call_terry_davis("cmd_normal_a");
             ctx_play->play = !ctx_play->play;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_alt_a: {
-            call_carmack("cmd_normal_alt_a");
+            call_terry_davis("cmd_normal_alt_a");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_alt_A: {
-            call_carmack("cmd_normal_alt_A");
+            call_terry_davis("cmd_normal_alt_A");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_A: {
-            call_carmack("cmd_normal_A");
+            call_terry_davis("cmd_normal_A");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_alt_esc: {
-            call_carmack("cmd_normal_alt_esc");
+            call_terry_davis("cmd_normal_alt_esc");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_ctrl_a: {
-            call_carmack("cmd_normal_ctrl_a");
+            call_terry_davis("cmd_normal_ctrl_a");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_space1:
-            call_carmack("cmd_normal_space1");
+            call_terry_davis("cmd_normal_space1");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space2:
-            call_carmack("cmd_normal_space2");
+            call_terry_davis("cmd_normal_space2");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space3:
-            call_carmack("cmd_normal_space3");
+            call_terry_davis("cmd_normal_space3");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space4:
-            call_carmack("cmd_normal_space4");
+            call_terry_davis("cmd_normal_space4");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space5:
-            call_carmack("cmd_normal_space5");
+            call_terry_davis("cmd_normal_space5");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space6:
-            call_carmack("cmd_normal_space6");
+            call_terry_davis("cmd_normal_space6");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space7:
-            call_carmack("cmd_normal_space7");
+            call_terry_davis("cmd_normal_space7");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space8:
-            call_carmack("cmd_normal_space8");
+            call_terry_davis("cmd_normal_space8");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space9:
-            call_carmack("cmd_normal_space9");
+            call_terry_davis("cmd_normal_space9");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_space0:
-            call_carmack("cmd_normal_space0");
+            call_terry_davis("cmd_normal_space0");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_alt_1: {
-            call_carmack("cmd_normal_alt_1");
+            call_terry_davis("cmd_normal_alt_1");
             int idx = 0;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6156,10 +5269,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_2: {
-            call_carmack("cmd_normal_alt_2");
+            call_terry_davis("cmd_normal_alt_2");
             int idx = 1;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6168,10 +5281,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_3: {
-            call_carmack("cmd_normal_alt_3");
+            call_terry_davis("cmd_normal_alt_3");
             int idx = 2;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6180,10 +5293,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_4: {
-            call_carmack("cmd_normal_alt_4");
+            call_terry_davis("cmd_normal_alt_4");
             int idx = 3;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6192,10 +5305,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_5: {
-            call_carmack("cmd_normal_alt_5");
+            call_terry_davis("cmd_normal_alt_5");
             int idx = 4;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6204,10 +5317,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_6: {
-            call_carmack("cmd_normal_alt_6");
+            call_terry_davis("cmd_normal_alt_6");
             int idx = 5;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6216,10 +5329,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_7: {
-            call_carmack("cmd_normal_alt_7");
+            call_terry_davis("cmd_normal_alt_7");
             int idx = 6;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6228,10 +5341,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_8: {
-            call_carmack("cmd_normal_alt_8");
+            call_terry_davis("cmd_normal_alt_8");
             int idx = 7;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6240,10 +5353,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_9: {
-            call_carmack("cmd_normal_alt_9");
+            call_terry_davis("cmd_normal_alt_9");
             int idx = 8;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -6252,7 +5365,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_0: {
-            call_carmack("cmd_normal_alt_0");
+            call_terry_davis("cmd_normal_alt_0");
             int layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
             ctx_wr->color_cursor = full_white_hex;
             ctx_wr->color_cursor_transparent = white_hex;
@@ -6266,7 +5379,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_1: {
-            call_carmack("cmd_normal_alt_shift_1");
+            call_terry_davis("cmd_normal_alt_shift_1");
             int idx = 0;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6280,8 +5393,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6303,7 +5416,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_2: {
-            call_carmack("cmd_normal_alt_shift_2");
+            call_terry_davis("cmd_normal_alt_shift_2");
             int idx = 1;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6317,8 +5430,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6340,7 +5453,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_3: {
-            call_carmack("cmd_normal_alt_shift_3");
+            call_terry_davis("cmd_normal_alt_shift_3");
             int idx = 2;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6354,8 +5467,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6377,7 +5490,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_4: {
-            call_carmack("cmd_normal_alt_shift_4");
+            call_terry_davis("cmd_normal_alt_shift_4");
             int idx = 3;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6390,8 +5503,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6413,7 +5526,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_5: {
-            call_carmack("cmd_normal_alt_shift_5");
+            call_terry_davis("cmd_normal_alt_shift_5");
             int idx = 4;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6426,8 +5539,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6449,7 +5562,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_6: {
-            call_carmack("cmd_normal_alt_shift_6");
+            call_terry_davis("cmd_normal_alt_shift_6");
             int idx = 5;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6462,8 +5575,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6485,7 +5598,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_7: {
-            call_carmack("cmd_normal_alt_shift_7");
+            call_terry_davis("cmd_normal_alt_shift_7");
             int idx = 6;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6498,8 +5611,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6521,7 +5634,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_8: {
-            call_carmack("cmd_normal_alt_shift_8");
+            call_terry_davis("cmd_normal_alt_shift_8");
             int idx = 7;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6534,8 +5647,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6557,7 +5670,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_9: {
-            call_carmack("cmd_normal_alt_shift_9");
+            call_terry_davis("cmd_normal_alt_shift_9");
             int idx = 8;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -6570,8 +5683,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -6593,51 +5706,51 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_alt_shift_0: {
-            call_carmack("cmd_normal_alt_shift_0");
+            call_terry_davis("cmd_normal_alt_shift_0");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_w: {
-            call_carmack("cmd_normal_w");
+            call_terry_davis("cmd_normal_w");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_W:
-            call_carmack("cmd_normal_W");
+            call_terry_davis("cmd_normal_W");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_normal_e: {
-            call_carmack("cmd_normal_e");
+            call_terry_davis("cmd_normal_e");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_E: {
-            call_carmack("cmd_normal_E");
+            call_terry_davis("cmd_normal_E");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_b: {
-            call_carmack("cmd_normal_b");
+            call_terry_davis("cmd_normal_b");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_B: {
-            call_carmack("cmd_normal_B");
+            call_terry_davis("cmd_normal_B");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_alt_u: {
-            call_carmack("cmd_normal_alt_u");
+            call_terry_davis("cmd_normal_alt_u");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_alt_d: {
-            call_carmack("cmd_normal_alt_d");
+            call_terry_davis("cmd_normal_alt_d");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_tab: {
-            call_carmack("cmd_normal_tab");
+            call_terry_davis("cmd_normal_tab");
             switch (ctx_wr->cursor_blink_state) {
             case CURSOR_BLINK:
                 ctx_wr->cursor_blink_state = CURSOR_BLINK_BPM;
@@ -6661,7 +5774,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_shift_tab: {
-            call_carmack("cmd_normal_shift_tab");
+            call_terry_davis("cmd_normal_shift_tab");
             switch (ctx_wr->hud_state) {
             case HUD_PIANO:
                 ctx_wr->hud_state = HUD_PIANO_AND_LINE_NUMBERS;
@@ -6686,32 +5799,32 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_q: {
-            call_carmack("cmd_normal_q");
+            call_terry_davis("cmd_normal_q");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_Q: {
-            call_carmack("cmd_normal_Q");
+            call_terry_davis("cmd_normal_Q");
             ctx_capture->capture = 1;
-            ctx_wr->mode = MODE_WAV;
+            ctx_fsm->current_mode = ctx_fsm->MODE_WAV;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_space: {
-            call_carmack("cmd_normal_space");
-            ctx_wr->mode = MODE_CAPTURE;
+            call_terry_davis("cmd_normal_space");
+            ctx_fsm->current_mode = ctx_fsm->MODE_CAPTURE;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_colon: {
-            call_carmack("cmd_normal_colon");
+            call_terry_davis("cmd_normal_colon");
             ctx_command->command = 1;
             war_command_reset(ctx_command, ctx_status);
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_normal_u: {
-            call_carmack("cmd_normal_u");
+            call_terry_davis("cmd_normal_u");
             assert(undo_tree != NULL);
             if (undo_tree->current) {
                 war_undo_node* node = undo_tree->current;
@@ -6742,7 +5855,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_normal_ctrl_r: {
-            call_carmack("cmd_normal_ctrl_r");
+            call_terry_davis("cmd_normal_ctrl_r");
             assert(undo_tree != NULL);
             war_undo_node* next_node = NULL;
             if (!undo_tree->current) {
@@ -6783,13 +5896,13 @@ cmd_timeout_done:
         // RECORD COMMANDS
         //------------------------------------------------------------------
         cmd_record_tab: {
-            call_carmack("cmd_record_tab");
+            call_terry_davis("cmd_record_tab");
             atomic_fetch_xor(&atomics->capture_monitor, 1);
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_K: {
-            call_carmack("cmd_record_K");
+            call_terry_davis("cmd_record_K");
             float gain =
                 atomic_load(&atomics->play_gain) + ctx_wr->gain_increment;
             gain = fminf(gain, 1.0f);
@@ -6798,7 +5911,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_record_J: {
-            call_carmack("cmd_record_J");
+            call_terry_davis("cmd_record_J");
             float gain =
                 atomic_load(&atomics->play_gain) - ctx_wr->gain_increment;
             gain = fmaxf(gain, 0.0f);
@@ -6807,7 +5920,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_record_k: {
-            call_carmack("cmd_record_k");
+            call_terry_davis("cmd_record_k");
             float gain =
                 atomic_load(&atomics->capture_gain) + ctx_wr->gain_increment;
             gain = fminf(gain, 1.0f);
@@ -6816,7 +5929,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_record_j: {
-            call_carmack("cmd_record_j");
+            call_terry_davis("cmd_record_j");
             float gain =
                 atomic_load(&atomics->capture_gain) - ctx_wr->gain_increment;
             gain = fmaxf(gain, 0.0f);
@@ -6825,75 +5938,75 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_record_Q: {
-            call_carmack("cmd_record_Q");
+            call_terry_davis("cmd_record_Q");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_space: {
-            call_carmack("cmd_record_space");
+            call_terry_davis("cmd_record_space");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_q: {
-            call_carmack("cmd_record_q");
+            call_terry_davis("cmd_record_q");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_w: {
-            call_carmack("cmd_record_w");
+            call_terry_davis("cmd_record_w");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_e: {
-            call_carmack("cmd_record_e");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_e");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_r: {
-            call_carmack("cmd_record_r");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_r");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_t: {
-            call_carmack("cmd_record_t");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_t");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_y: {
-            call_carmack("cmd_record_y");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_y");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_u: {
-            call_carmack("cmd_record_u");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_u");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_i: {
-            call_carmack("cmd_record_i");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_i");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_o: {
-            call_carmack("cmd_record_o");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_o");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_p: {
-            call_carmack("cmd_record_p");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_p");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_leftbracket: {
-            call_carmack("cmd_record_leftbracket");
+            call_terry_davis("cmd_record_leftbracket");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6904,12 +6017,12 @@ cmd_timeout_done:
                 goto cmd_done;
             }
             atomic_store(&atomics->map_note, note);
-            ctx_wr->mode = MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_rightbracket: {
-            call_carmack("cmd_record_rightbracket");
+            call_terry_davis("cmd_record_rightbracket");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6920,12 +6033,12 @@ cmd_timeout_done:
                 goto cmd_done;
             }
             atomic_store(&atomics->map_note, note);
-            ctx_wr->mode = MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_minus:
-            call_carmack("cmd_record_minus");
+            call_terry_davis("cmd_record_minus");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6934,7 +6047,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_0:
-            call_carmack("cmd_record_0");
+            call_terry_davis("cmd_record_0");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6943,7 +6056,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_1:
-            call_carmack("cmd_record_1");
+            call_terry_davis("cmd_record_1");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6952,7 +6065,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_2:
-            call_carmack("cmd_record_2");
+            call_terry_davis("cmd_record_2");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6961,7 +6074,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_3:
-            call_carmack("cmd_record_3");
+            call_terry_davis("cmd_record_3");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6970,7 +6083,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_4:
-            call_carmack("cmd_record_4");
+            call_terry_davis("cmd_record_4");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6979,7 +6092,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_5:
-            call_carmack("cmd_record_5");
+            call_terry_davis("cmd_record_5");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6988,7 +6101,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_6:
-            call_carmack("cmd_record_6");
+            call_terry_davis("cmd_record_6");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -6997,7 +6110,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_7:
-            call_carmack("cmd_record_7");
+            call_terry_davis("cmd_record_7");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -7006,7 +6119,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_8:
-            call_carmack("cmd_record_8");
+            call_terry_davis("cmd_record_8");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -7015,7 +6128,7 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_9:
-            call_carmack("cmd_record_9");
+            call_terry_davis("cmd_record_9");
             if (atomic_load(&atomics->capture)) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
@@ -7024,8 +6137,8 @@ cmd_timeout_done:
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         cmd_record_esc:
-            call_carmack("cmd_record_esc");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_record_esc");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             atomic_store(&atomics->capture, 0);
             atomic_store(&atomics->map_note, -1);
             ctx_wr->numeric_prefix = 0;
@@ -7034,7 +6147,7 @@ cmd_timeout_done:
         // COMMANDS VIEWS
         //-----------------------------------------------------------------
         cmd_views_k: {
-            call_carmack("cmd_views_k");
+            call_terry_davis("cmd_views_k");
             uint32_t increment = ctx_wr->row_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -7066,7 +6179,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_j: {
-            call_carmack("cmd_views_j");
+            call_terry_davis("cmd_views_j");
             uint32_t increment = ctx_wr->row_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -7096,8 +6209,8 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_h: {
-            call_carmack("cmd_views_h");
-            if (views->warpoon_mode == MODE_VISUAL_LINE) {
+            call_terry_davis("cmd_views_h");
+            if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
             }
@@ -7130,8 +6243,8 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_l: {
-            call_carmack("cmd_views_l");
-            if (views->warpoon_mode == MODE_VISUAL_LINE) {
+            call_terry_davis("cmd_views_l");
+            if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
             }
@@ -7161,11 +6274,11 @@ cmd_timeout_done:
                 }
             }
             ctx_wr->numeric_prefix = 0;
-            call_carmack("warpoon col: %u", views->warpoon_col);
+            call_terry_davis("warpoon col: %u", views->warpoon_col);
             goto cmd_done;
         }
         cmd_views_alt_k: {
-            call_carmack("cmd_views_alt_k");
+            call_terry_davis("cmd_views_alt_k");
             uint32_t increment = ctx_wr->row_leap_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -7197,7 +6310,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_alt_j: {
-            call_carmack("cmd_views_alt_j");
+            call_terry_davis("cmd_views_alt_j");
             uint32_t increment = ctx_wr->row_leap_increment;
             if (ctx_wr->numeric_prefix) {
                 increment = war_clamp_multiply_uint32(
@@ -7227,8 +6340,8 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_alt_h: {
-            call_carmack("cmd_views_alt_h");
-            if (views->warpoon_mode == MODE_VISUAL_LINE) {
+            call_terry_davis("cmd_views_alt_h");
+            if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
             }
@@ -7261,8 +6374,8 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_alt_l: {
-            call_carmack("cmd_views_alt_l");
-            if (views->warpoon_mode == MODE_VISUAL_LINE) {
+            call_terry_davis("cmd_views_alt_l");
+            if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
             }
@@ -7295,7 +6408,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_K: {
-            call_carmack("cmd_views_K");
+            call_terry_davis("cmd_views_K");
             war_warpoon_shift_up(views);
             uint32_t increment = ctx_wr->row_increment;
             if (ctx_wr->numeric_prefix) {
@@ -7328,7 +6441,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_J: {
-            call_carmack("cmd_views_J");
+            call_terry_davis("cmd_views_J");
             war_warpoon_shift_down(views);
             uint32_t increment = ctx_wr->row_increment;
             if (ctx_wr->numeric_prefix) {
@@ -7360,7 +6473,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_d: {
-            call_carmack("cmd_views_d");
+            call_terry_davis("cmd_views_d");
             uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
             if (i_views >= views->views_count) {
                 ctx_wr->numeric_prefix = 0;
@@ -7371,34 +6484,34 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_V: {
-            call_carmack("cmd_views_V");
-            switch (views->warpoon_mode) {
-            case MODE_NORMAL:
-                views->warpoon_mode = MODE_VISUAL_LINE;
-                views->warpoon_visual_line_row = views->warpoon_row;
-                break;
-            case MODE_VISUAL_LINE:
-                views->warpoon_mode = MODE_NORMAL;
-                break;
-            }
+            call_terry_davis("cmd_views_V");
+            // switch (views->warpoon_mode) {
+            // case ctx_fsm->MODE_NORMAL:
+            //     views->warpoon_mode = ctx_fsm->ctx_fsm->MODE_VISUAL_LINE;
+            //     views->warpoon_visual_line_row = views->warpoon_row;
+            //     break;
+            // case ctx_fsm->ctx_fsm->MODE_VISUAL_LINE:
+            //     views->warpoon_mode = ctx_fsm->MODE_NORMAL;
+            //     break;
+            // }
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_views_esc: {
-            call_carmack("cmd_views_esc");
-            if (views->warpoon_mode == MODE_VISUAL_LINE) {
-                views->warpoon_mode = MODE_NORMAL;
+            call_terry_davis("cmd_views_esc");
+            if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
+                views->warpoon_mode = ctx_fsm->MODE_NORMAL;
                 // logic for undoing the selection
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
             }
-            ctx_wr->mode = MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_views_z: {
-            call_carmack("cmd_views_z");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_views_z");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
             if (i_views >= views->views_count) {
                 ctx_wr->numeric_prefix = 0;
@@ -7417,8 +6530,8 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_views_return: {
-            call_carmack("cmd_views_return");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_views_return");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
             if (i_views >= views->views_count) {
                 ctx_wr->numeric_prefix = 0;
@@ -7438,10 +6551,10 @@ cmd_timeout_done:
         }
         // midi
         cmd_midi_alt_1: {
-            call_carmack("cmd_normal_alt_1");
+            call_terry_davis("cmd_normal_alt_1");
             int idx = 0;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7450,10 +6563,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_2: {
-            call_carmack("cmd_normal_alt_2");
+            call_terry_davis("cmd_normal_alt_2");
             int idx = 1;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7462,10 +6575,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_3: {
-            call_carmack("cmd_normal_alt_3");
+            call_terry_davis("cmd_normal_alt_3");
             int idx = 2;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7474,10 +6587,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_4: {
-            call_carmack("cmd_normal_alt_4");
+            call_terry_davis("cmd_normal_alt_4");
             int idx = 3;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7486,10 +6599,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_5: {
-            call_carmack("cmd_normal_alt_5");
+            call_terry_davis("cmd_normal_alt_5");
             int idx = 4;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7498,10 +6611,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_6: {
-            call_carmack("cmd_normal_alt_6");
+            call_terry_davis("cmd_normal_alt_6");
             int idx = 5;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7510,10 +6623,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_7: {
-            call_carmack("cmd_normal_alt_7");
+            call_terry_davis("cmd_normal_alt_7");
             int idx = 6;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7522,10 +6635,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_8: {
-            call_carmack("cmd_normal_alt_8");
+            call_terry_davis("cmd_normal_alt_8");
             int idx = 7;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7534,10 +6647,10 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_9: {
-            call_carmack("cmd_normal_alt_9");
+            call_terry_davis("cmd_normal_alt_9");
             int idx = 8;
-            ctx_wr->color_cursor = colors[idx];
-            ctx_wr->color_cursor_transparent = colors[idx];
+            ctx_wr->color_cursor = ctx_color->colors[idx];
+            ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
             ctx_wr->color_note_outline_default = white_hex;
             atomic_store(&atomics->layer, (1ULL << idx));
             ctx_wr->layers_active_count = 1;
@@ -7546,7 +6659,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_0: {
-            call_carmack("cmd_normal_alt_0");
+            call_terry_davis("cmd_normal_alt_0");
             int layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
             ctx_wr->color_cursor = full_white_hex;
             ctx_wr->color_cursor_transparent = white_hex;
@@ -7560,7 +6673,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_1: {
-            call_carmack("cmd_normal_alt_shift_1");
+            call_terry_davis("cmd_normal_alt_shift_1");
             int idx = 0;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7574,8 +6687,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7597,7 +6710,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_2: {
-            call_carmack("cmd_normal_alt_shift_2");
+            call_terry_davis("cmd_normal_alt_shift_2");
             int idx = 1;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7611,8 +6724,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7634,7 +6747,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_3: {
-            call_carmack("cmd_normal_alt_shift_3");
+            call_terry_davis("cmd_normal_alt_shift_3");
             int idx = 2;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7648,8 +6761,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7671,7 +6784,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_4: {
-            call_carmack("cmd_normal_alt_shift_4");
+            call_terry_davis("cmd_normal_alt_shift_4");
             int idx = 3;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7684,8 +6797,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7707,7 +6820,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_5: {
-            call_carmack("cmd_normal_alt_shift_5");
+            call_terry_davis("cmd_normal_alt_shift_5");
             int idx = 4;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7720,8 +6833,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7743,7 +6856,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_6: {
-            call_carmack("cmd_normal_alt_shift_6");
+            call_terry_davis("cmd_normal_alt_shift_6");
             int idx = 5;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7756,8 +6869,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7779,7 +6892,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_7: {
-            call_carmack("cmd_normal_alt_shift_7");
+            call_terry_davis("cmd_normal_alt_shift_7");
             int idx = 6;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7792,8 +6905,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7815,7 +6928,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_8: {
-            call_carmack("cmd_normal_alt_shift_8");
+            call_terry_davis("cmd_normal_alt_shift_8");
             int idx = 7;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7828,8 +6941,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7851,7 +6964,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_9: {
-            call_carmack("cmd_normal_alt_shift_9");
+            call_terry_davis("cmd_normal_alt_shift_9");
             int idx = 8;
             atomic_fetch_xor(&atomics->layer, (1ULL << idx));
             uint64_t layer = atomic_load(&atomics->layer);
@@ -7864,8 +6977,8 @@ cmd_timeout_done:
             }
             case 1: {
                 int active = __builtin_ctzll(layer);
-                ctx_wr->color_cursor = colors[active];
-                ctx_wr->color_cursor_transparent = colors[active];
+                ctx_wr->color_cursor = ctx_color->colors[active];
+                ctx_wr->color_cursor_transparent = ctx_color->colors[active];
                 ctx_wr->color_note_outline_default = white_hex;
                 ctx_wr->layers_active[0] = (active + 1) + '0';
                 break;
@@ -7887,40 +7000,40 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_alt_shift_0: {
-            call_carmack("cmd_normal_alt_shift_0");
+            call_terry_davis("cmd_normal_alt_shift_0");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_m: {
-            call_carmack("cmd_midi_m");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_midi_m");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_T: {
-            call_carmack("cmd_midi_T");
+            call_terry_davis("cmd_midi_T");
             ctx_wr->midi_toggle ^= 1;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_b: {
-            call_carmack("cmd_midi_b");
+            call_terry_davis("cmd_midi_b");
             ctx_wr->midi_toggle ^= 1;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_x: {
-            call_carmack("cmd_midi_x");
+            call_terry_davis("cmd_midi_x");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_c: {
-            call_carmack("cmd_midi_c");
+            call_terry_davis("cmd_midi_c");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_K: {
-            call_carmack("cmd_midi_K");
+            call_terry_davis("cmd_midi_K");
             float gain =
                 atomic_load(&atomics->play_gain) + ctx_wr->gain_increment;
             gain = fminf(gain, 1.0f);
@@ -7929,7 +7042,7 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_J: {
-            call_carmack("cmd_midi_J");
+            call_terry_davis("cmd_midi_J");
             float gain =
                 atomic_load(&atomics->play_gain) - ctx_wr->gain_increment;
             gain = fmaxf(gain, 0.0f);
@@ -7938,72 +7051,72 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_Q: {
-            call_carmack("cmd_midi_Q");
+            call_terry_davis("cmd_midi_Q");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_space: {
-            call_carmack("cmd_midi_space");
+            call_terry_davis("cmd_midi_space");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_q: {
-            call_carmack("cmd_midi_q");
+            call_terry_davis("cmd_midi_q");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_w: {
-            call_carmack("cmd_midi_w");
+            call_terry_davis("cmd_midi_w");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_e: {
-            call_carmack("cmd_midi_e");
+            call_terry_davis("cmd_midi_e");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_r: {
-            call_carmack("cmd_midi_r");
+            call_terry_davis("cmd_midi_r");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_t: {
-            call_carmack("cmd_midi_t");
+            call_terry_davis("cmd_midi_t");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_y: {
-            call_carmack("cmd_midi_y");
+            call_terry_davis("cmd_midi_y");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_u: {
-            call_carmack("cmd_midi_u");
+            call_terry_davis("cmd_midi_u");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_i: {
-            call_carmack("cmd_midi_i");
+            call_terry_davis("cmd_midi_i");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_o: {
-            call_carmack("cmd_midi_o");
+            call_terry_davis("cmd_midi_o");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_p: {
-            call_carmack("cmd_midi_p");
+            call_terry_davis("cmd_midi_p");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_leftbracket: {
-            call_carmack("cmd_midi_leftbracket");
+            call_terry_davis("cmd_midi_leftbracket");
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_rightbracket: {
-            call_carmack("cmd_midi_rightbracket");
+            call_terry_davis("cmd_midi_rightbracket");
             int note = 11 + 12 * (ctx_wr->midi_octave + 1);
             if (note > 127) {
                 ctx_wr->numeric_prefix = 0;
@@ -8013,78 +7126,78 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_midi_l: {
-            call_carmack("cmd_midi_l");
+            call_terry_davis("cmd_midi_l");
             atomic_fetch_xor(&atomics->loop, 1);
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_minus: {
-            call_carmack("cmd_midi_minus");
+            call_terry_davis("cmd_midi_minus");
             ctx_wr->midi_octave = -1;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_esc: {
-            call_carmack("cmd_midi_esc");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_midi_esc");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             goto cmd_done;
         }
         cmd_midi_0: {
-            call_carmack("cmd_midi_0");
+            call_terry_davis("cmd_midi_0");
             ctx_wr->midi_octave = 0;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_1: {
-            call_carmack("cmd_midi_1");
+            call_terry_davis("cmd_midi_1");
             ctx_wr->midi_octave = 1;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_2: {
-            call_carmack("cmd_midi_2");
+            call_terry_davis("cmd_midi_2");
             ctx_wr->midi_octave = 2;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_3: {
-            call_carmack("cmd_midi_3");
+            call_terry_davis("cmd_midi_3");
             ctx_wr->midi_octave = 3;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_4: {
-            call_carmack("cmd_midi_4");
+            call_terry_davis("cmd_midi_4");
             ctx_wr->midi_octave = 4;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_5: {
-            call_carmack("cmd_midi_5");
+            call_terry_davis("cmd_midi_5");
             ctx_wr->midi_octave = 5;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_6: {
-            call_carmack("cmd_midi_6");
+            call_terry_davis("cmd_midi_6");
             ctx_wr->midi_octave = 6;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_7: {
-            call_carmack("cmd_midi_7");
+            call_terry_davis("cmd_midi_7");
             ctx_wr->midi_octave = 7;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_8: {
-            call_carmack("cmd_midi_8");
+            call_terry_davis("cmd_midi_8");
             ctx_wr->midi_octave = 8;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_midi_9: {
-            call_carmack("cmd_midi_9");
+            call_terry_davis("cmd_midi_9");
             ctx_wr->midi_octave = 9;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
@@ -8093,26 +7206,26 @@ cmd_timeout_done:
             // COMMAND MODE
             //-----------------------------------------------------------------
         cmd_command_esc: {
-            call_carmack("cmd_command_esc");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_command_esc");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_command_w: {
-            call_carmack("cmd_command_w");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_command_w");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_command_space: {
-            call_carmack("cmd_command_space");
+            call_terry_davis("cmd_command_space");
             goto cmd_done;
         }
         //--------------------------------------------------------------------
         // WAV COMMANDS
         //--------------------------------------------------------------------
         cmd_wav_Q: {
-            call_carmack("cmd_wav_Q");
+            call_terry_davis("cmd_wav_Q");
             ctx_capture->capture = !ctx_capture->capture;
             if (ctx_capture->capture) { goto cmd_done; }
             if (ctx_capture->prompt) {
@@ -8122,19 +7235,19 @@ cmd_timeout_done:
                 goto cmd_done;
             }
             if (ftruncate(capture_wav->fd, capture_wav->memfd_size) == -1) {
-                call_carmack("save_file: fd ftruncate failed: %s",
-                             capture_wav->fname);
+                call_terry_davis("save_file: fd ftruncate failed: %s",
+                                 capture_wav->fname);
                 goto cmd_done;
             }
             off_t offset = 0;
-            call_carmack("saving file");
+            call_terry_davis("saving file");
             ssize_t result = sendfile(capture_wav->fd,
                                       capture_wav->memfd,
                                       &offset,
                                       capture_wav->memfd_size);
             if (result == -1) {
-                call_carmack("save_file: sendfile failed: %s",
-                             capture_wav->fname);
+                call_terry_davis("save_file: sendfile failed: %s",
+                                 capture_wav->fname);
             }
             lseek(capture_wav->fd, 0, SEEK_SET);
             memset(capture_wav->wav + 44, 0, capture_wav->memfd_capacity - 44);
@@ -8142,8 +7255,8 @@ cmd_timeout_done:
             goto cmd_done;
         }
         cmd_wav_esc: {
-            call_carmack("cmd_wav_esc");
-            ctx_wr->mode = MODE_NORMAL;
+            call_terry_davis("cmd_wav_esc");
+            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
             ctx_capture->state = CAPTURE_WAITING;
             ctx_capture->capture = 0;
             ctx_wr->numeric_prefix = 0;
@@ -8155,12 +7268,12 @@ cmd_timeout_done:
             ctx_wr->cursor_blink_previous_us = ctx_wr->now;
             ctx_wr->cursor_blinking = false;
             ctx_wr->trinity = true;
-            if (goto_cmd_repeat_done) {
-                goto_cmd_repeat_done = false;
+            if (ctx_fsm->goto_cmd_repeat_done) {
+                ctx_fsm->goto_cmd_repeat_done = false;
                 goto cmd_repeat_done;
             }
-            if (goto_cmd_timeout_done) {
-                goto_cmd_timeout_done = false;
+            if (ctx_fsm->goto_cmd_timeout_done) {
+                ctx_fsm->goto_cmd_timeout_done = false;
                 goto cmd_timeout_done;
             }
             goto wayland_done;
@@ -8170,7 +7283,7 @@ cmd_timeout_done:
             //            msg_buffer + msg_buffer_offset,
             //            size);
             xkb_state_update_mask(
-                xkb_state,
+                ctx_fsm->xkb_state,
                 war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4),
                 war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4),
                 war_read_le32(msg_buffer + msg_buffer_offset + 8 + 4 + 4 + 4),
@@ -8374,8 +7487,8 @@ cmd_timeout_done:
 end_wr:
     close(ctx_vk->dmabuf_fd);
     ctx_vk->dmabuf_fd = -1;
-    xkb_state_unref(xkb_state);
-    xkb_context_unref(xkb_context);
+    xkb_state_unref(ctx_fsm->xkb_state);
+    xkb_context_unref(ctx_fsm->xkb_context);
     end("war_window_render");
     return 0;
 }
@@ -8439,7 +7552,7 @@ static void war_capture(void* userdata) {
     if (now - *capture_last_write_time >= 1000000) {
         atomic_store(&atomics->capture_writer_rate,
                      (double)*capture_write_count);
-        // call_carmack("capture_writer_rate: %.2f Hz",
+        // call_terry_davis("capture_writer_rate: %.2f Hz",
         //              atomic_load(&atomics->capture_writer_rate));
         *capture_write_count = 0;
         *capture_last_write_time = now;
@@ -8485,11 +7598,10 @@ void* war_audio(void* args) {
     war_producer_consumer* pc_play = args_ptrs[4];
     war_producer_consumer* pc_capture = args_ptrs[5];
     pool_a->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
-    pool_a->pool_size =
-        war_get_pool_a_size(pool_a, ctx_lua, "src/lua/monaco/set.lua");
+    pool_a->pool_size = war_get_pool_a_size(pool_a, ctx_lua, "src/lua/war.lua");
     pool_a->pool_size = ALIGN_UP(pool_a->pool_size, pool_a->pool_alignment);
     pool_a->pool_size += pool_a->pool_alignment * 10;
-    call_carmack("pool_a hack size: %zu", pool_a->pool_size);
+    call_terry_davis("pool_a hack size: %zu", pool_a->pool_size);
     int pool_result = posix_memalign(
         &pool_a->pool, pool_a->pool_alignment, pool_a->pool_size);
     memset(pool_a->pool, 0, pool_a->pool_size);
@@ -8498,7 +7610,7 @@ void* war_audio(void* args) {
     struct sched_param param = {
         .sched_priority = atomic_load(&ctx_lua->A_SCHED_FIFO_PRIORITY)};
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
-        call_carmack("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
+        call_terry_davis("AUDIO THREAD ERROR WITH SCHEDULING FIFO");
         perror("pthread_setschedparam");
     }
     //-------------------------------------------------------------------------
@@ -8558,7 +7670,7 @@ void* war_audio(void* args) {
                                                NULL,
                                                &ctx_pw->play_events,
                                                ctx_pw->play_data);
-    if (!ctx_pw->play_stream) { call_carmack("play_stream init issue"); }
+    if (!ctx_pw->play_stream) { call_terry_davis("play_stream init issue"); }
     int pw_stream_result = pw_stream_connect(ctx_pw->play_stream,
                                              PW_DIRECTION_OUTPUT,
                                              PW_ID_ANY,
@@ -8567,7 +7679,9 @@ void* war_audio(void* args) {
                                                  PW_STREAM_FLAG_RT_PROCESS,
                                              &ctx_pw->play_params,
                                              1);
-    if (pw_stream_result < 0) { call_carmack("play stream connection error"); }
+    if (pw_stream_result < 0) {
+        call_terry_davis("play stream connection error");
+    }
     ctx_pw->capture_info = (struct spa_audio_info_raw){
         .format = SPA_AUDIO_FORMAT_F32_LE,
         .rate = atomic_load(&ctx_lua->A_SAMPLE_RATE),
@@ -8591,7 +7705,9 @@ void* war_audio(void* args) {
                                                   NULL,
                                                   &ctx_pw->capture_events,
                                                   ctx_pw->capture_data);
-    if (!ctx_pw->capture_stream) { call_carmack("capture_stream init issue"); }
+    if (!ctx_pw->capture_stream) {
+        call_terry_davis("capture_stream init issue");
+    }
     pw_stream_result = pw_stream_connect(ctx_pw->capture_stream,
                                          PW_DIRECTION_INPUT,
                                          PW_ID_ANY,
@@ -8601,7 +7717,7 @@ void* war_audio(void* args) {
                                          &ctx_pw->capture_params,
                                          1);
     if (pw_stream_result < 0) {
-        call_carmack("capture stream connection error");
+        call_terry_davis("capture stream connection error");
     }
     while (pw_stream_get_state(ctx_pw->capture_stream, NULL) !=
            PW_STREAM_STATE_PAUSED) {

@@ -17,11 +17,65 @@
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
--- src/lua/monaco/set.lua
+-- src/lua/war.lua
 -------------------------------------------------------------------------------
 
----@class ctx_lua
 ---@diagnostic disable: lowercase-global
+
+local ffi = require("ffi")
+ffi.cdef [[
+typedef struct war_window_render_context war_window_render_context;
+typedef struct war_atomics war_atomics;
+typedef struct war_color_context war_color_context;
+typedef struct war_lua_context war_lua_context;
+typedef struct war_views war_views;
+typedef struct war_play_context war_play_context;
+typedef struct war_capture_context war_capture_context;
+typedef struct war_command_context war_command_context;
+typedef struct war_status_context war_status_context;
+typedef struct war_undo_tree war_undo_tree;
+typedef struct war_note_quads war_note_quads;
+typedef struct war_pool war_pool;
+typedef struct war_vulkan_context war_vulkan_context;
+typedef struct war_wav war_wav;
+typedef struct war_fsm_context war_fsm_context;
+typedef struct war_env {
+    war_window_render_context* ctx_wr;
+    war_atomics* atomics;
+    war_color_context* ctx_color;
+    war_lua_context* ctx_lua;
+    war_views* views;
+    war_play_context* ctx_play;
+    war_capture_context* ctx_capture;
+    war_command_context* ctx_command;
+    war_status_context* ctx_status;
+    war_undo_tree* undo_tree;
+    war_note_quads* note_quads;
+    war_pool* pool_wr;
+    war_vulkan_context* ctx_vk;
+    war_wav* capture_wav;
+    war_fsm_context* ctx_fsm;
+} war_env;
+]]
+war = {}
+function war.get_env(env)
+    if env == nil then
+        return nil
+    end
+    war.env = ffi.cast("war_env*", env)
+    return war.env
+end
+
+war.keymap = {}
+function war.keymap.set(modes, keys, command, flags)
+    local keymap_flags = {
+        handle_release = 0,
+        handle_repeat = 1,
+        handle_timeout = 1,
+    }
+end
+
+---@class ctx_lua
 ---@type ctx_lua
 ctx_lua = {
     -- audio
@@ -105,6 +159,7 @@ ctx_lua = {
     DEFAULT_WINDOWED_ALPHA_SCALE        = 0.02,
     DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE = 0.02,
     CWD                                 = "/home/monaco/Projects/WAR/proto",
+    WR_FN_NAME_LIMIT                    = 4096,
 }
 
 pool_a = {
@@ -177,15 +232,18 @@ pool_wr = {
     { name = "views.top_row",                       type = "uint32_t",            count = ctx_lua.WR_VIEWS_SAVED },
     { name = "views.warpoon_text",                  type = "char*",               count = ctx_lua.WR_VIEWS_SAVED },
     { name = "views.warpoon_text_rows",             type = "char",                count = ctx_lua.WR_VIEWS_SAVED * ctx_lua.WR_WARPOON_TEXT_COLS },
-    -- FSM
+    -- FSM CONTEXT
     { name = "fsm",                                 type = "war_fsm_state",       count = ctx_lua.WR_STATES },
+    { name = "fsm.next_state",                      type = "uint16_t",            count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
     { name = "fsm.is_terminal",                     type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
     { name = "fsm.is_prefix",                       type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
     { name = "fsm.handle_release",                  type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
     { name = "fsm.handle_repeat",                   type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
     { name = "fsm.handle_timeout",                  type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.command",                         type = "void*",               count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
-    { name = "fsm.next_state",                      type = "uint16_t",            count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "fsm.command",                         type = "void (*)(war_env*)",  count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.function",                        type = "war_function_union",  count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.type",                            type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
+    { name = "fsm.name",                            type = "char",                count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT * ctx_lua.A_PATH_LIMIT },
     -- quads vertices
     { name = "quad_vertices",                       type = "war_quad_vertex",     count = ctx_lua.WR_QUADS_MAX },
     { name = "quad_indices",                        type = "uint16_t",            count = ctx_lua.WR_QUADS_MAX },
@@ -304,11 +362,11 @@ keymap = {
         },
         commands = {
             {
-                cmd = "cmd_normal_k",
+                cmd = "war_roll_cursor_up",
                 mode = "normal",
             },
             {
-                cmd = "cmd_views_k",
+                cmd = "war_views_cursor_up",
                 mode = "views",
             },
             {

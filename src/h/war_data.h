@@ -25,6 +25,9 @@
 
 #include "pipewire/stream.h"
 #include <ft2build.h>
+#include <luajit-2.1/lauxlib.h>
+#include <luajit-2.1/lua.h>
+#include <luajit-2.1/lualib.h>
 #include <spa-0.2/spa/param/audio/raw.h>
 #include <spa-0.2/spa/pod/builder.h>
 #include <stdatomic.h>
@@ -123,20 +126,6 @@ enum war_hud {
     HUD_PIANO = 0,
     HUD_LINE_NUMBERS = 1,
     HUD_PIANO_AND_LINE_NUMBERS = 2,
-};
-
-enum war_modes {
-    MODE_NORMAL = 0,
-    MODE_VIEWS = 1,
-    MODE_VISUAL_LINE = 2,
-    MODE_CAPTURE = 3,
-    MODE_MIDI = 4,
-    MODE_COMMAND = 5,
-    MODE_VISUAL_BLOCK = 6,
-    MODE_INSERT = 7,
-    MODE_O = 8,
-    MODE_VISUAL = 9,
-    MODE_WAV = 10,
 };
 
 enum war_fsm {
@@ -245,6 +234,7 @@ typedef struct war_note_quads {
     uint32_t* hidden;
     uint32_t* mute;
     uint32_t count;
+    uint32_t note_quads_max;
 } war_note_quads;
 
 typedef struct war_note_quad {
@@ -353,6 +343,18 @@ typedef struct war_undo_tree {
 } war_undo_tree;
 
 typedef struct war_lua_context {
+    // modes
+    _Atomic int MODE_NORMAL;
+    _Atomic int MODE_VIEWS;
+    _Atomic int MODE_VISUAL_LINE;
+    _Atomic int MODE_CAPTURE;
+    _Atomic int MODE_MIDI;
+    _Atomic int MODE_COMMAND;
+    _Atomic int MODE_VISUAL_BLOCK;
+    _Atomic int MODE_INSERT;
+    _Atomic int MODE_O;
+    _Atomic int MODE_VISUAL;
+    _Atomic int MODE_WAV;
     // audio
     _Atomic int A_SAMPLE_RATE;
     _Atomic double A_SAMPLE_DURATION;
@@ -401,6 +403,7 @@ typedef struct war_lua_context {
     _Atomic int WR_WAYLAND_MSG_BUFFER_SIZE;
     _Atomic int WR_WAYLAND_MAX_OBJECTS;
     _Atomic int WR_WAYLAND_MAX_OP_CODES;
+    _Atomic int WR_FN_NAME_LIMIT;
     _Atomic int WR_UNDO_NODES_MAX;
     _Atomic int WR_UNDO_NODES_CHILDREN_MAX;
     _Atomic int WR_TIMESTAMP_LENGTH_MAX;
@@ -435,17 +438,9 @@ typedef struct war_lua_context {
     _Atomic float DEFAULT_WINDOWED_ALPHA_SCALE;
     _Atomic float DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE;
     _Atomic(char*) CWD;
+    // state
+    lua_State* L;
 } war_lua_context;
-
-typedef struct war_fsm_state {
-    uint8_t* is_terminal;
-    uint8_t* handle_release;
-    uint8_t* handle_timeout;
-    uint8_t* handle_repeat;
-    uint8_t* is_prefix;
-    void** command;
-    uint16_t* next_state;
-} war_fsm_state;
 
 typedef struct war_label {
     void* command;
@@ -498,6 +493,8 @@ typedef struct war_views {
     uint32_t warpoon_min_col;
     uint32_t warpoon_max_row;
     uint32_t warpoon_min_row;
+    uint32_t views_saved_max;
+    uint32_t text_size;
 } war_views;
 
 enum war_audio {
@@ -572,6 +569,9 @@ typedef struct war_map_wav {
     uint32_t* fname_size;
     uint32_t* note;
     uint32_t* layer;
+    uint32_t note_count;
+    uint32_t layer_count;
+    uint32_t name_limit;
 } war_map_wav;
 
 typedef struct war_cache_wav {
@@ -586,6 +586,7 @@ typedef struct war_cache_wav {
     uint32_t count;
     uint64_t next_id;
     uint64_t next_timestamp;
+    uint32_t capacity;
 } war_cache_wav;
 
 typedef struct war_wav {
@@ -597,6 +598,7 @@ typedef struct war_wav {
     uint64_t fd_size;
     char* fname;
     uint32_t fname_size;
+    uint32_t name_limit;
 } war_wav;
 
 typedef struct war_midi_context {
@@ -654,6 +656,7 @@ typedef struct war_color_context {
     uint32_t white_hex;
     uint32_t full_white_hex;
     uint32_t* colors;
+    uint32_t colors_count;
 } war_color_context;
 
 typedef struct war_window_render_context {
@@ -802,6 +805,8 @@ typedef struct war_status_context {
     char* bottom;
     uint32_t bottom_size;
     uint32_t capacity;
+    char* layers_active;
+    uint32_t layers_active_size;
 } war_status_context;
 
 typedef struct war_play_context {
@@ -813,6 +818,7 @@ typedef struct war_play_context {
     // misc
     uint8_t play;
     uint64_t* note_layers;
+    uint32_t fps;
 } war_play_context;
 
 enum capture_state {
@@ -836,6 +842,7 @@ typedef struct war_capture_context {
     float threshold;
     uint8_t prompt_step;
     uint8_t monitor;
+    double fps;
 } war_capture_context;
 
 typedef struct war_glyph_info {
@@ -1016,7 +1023,86 @@ typedef struct war_drm_context {
     drmModeModeInfo mode;
 } war_drm_context;
 
-typedef struct war_env {
+enum fsm_enum {
+    FUNCTION_NONE = 0,
+    FUNCTION_C = 1,
+    FUNCTION_LUA = 2,
+};
+
+typedef struct war_env war_env;
+
+typedef union war_function_union {
+    void (*c)(war_env* env);
+    int lua;
+} war_function_union;
+
+typedef struct war_fsm_context {
+    // FSM data
+    war_function_union* function;
+    uint8_t* type;
+    char* name;
+    uint8_t* is_terminal;
+    uint8_t* handle_release;
+    uint8_t* handle_timeout;
+    uint8_t* handle_repeat;
+    uint8_t* is_prefix;
+    uint64_t* next_state;
+    // Runtime state
+    uint8_t* key_down;
+    uint64_t state_last_event_us;
+    uint64_t* key_last_event_us;
+    uint64_t current_state;
+    uint32_t current_mode;
+    // Modifiers
+    uint32_t mod_shift;
+    uint32_t mod_ctrl;
+    uint32_t mod_alt;
+    uint32_t mod_logo;
+    uint32_t mod_caps;
+    uint32_t mod_num;
+    uint32_t mod_fn;
+    // XKB
+    struct xkb_context* xkb_context;
+    struct xkb_state* xkb_state;
+    struct xkb_keymap* xkb_keymap;
+    uint32_t keymap_format;
+    uint32_t keymap_size;
+    int keymap_fd;
+    char* keymap_map;
+    // counts
+    uint32_t keysym_count;
+    uint32_t mod_count;
+    uint32_t state_count;
+    uint32_t mode_count;
+    uint32_t name_limit;
+    // modes
+    int MODE_NORMAL;
+    int MODE_VIEWS;
+    int MODE_VISUAL_LINE;
+    int MODE_CAPTURE;
+    int MODE_MIDI;
+    int MODE_COMMAND;
+    int MODE_VISUAL_BLOCK;
+    int MODE_INSERT;
+    int MODE_O;
+    int MODE_VISUAL;
+    int MODE_WAV;
+    // repeats
+    uint64_t repeat_delay_us;
+    uint64_t repeat_rate_us;
+    uint32_t repeat_keysym;
+    uint8_t repeat_mod;
+    uint8_t repeating;
+    uint8_t goto_cmd_repeat_done;
+    // timeouts
+    uint64_t timeout_duration_us;
+    uint16_t timeout_state_index;
+    uint64_t timeout_start_us;
+    uint8_t timeout;
+    uint8_t goto_cmd_timeout_done;
+} war_fsm_context;
+
+struct war_env {
     war_window_render_context* ctx_wr;
     war_atomics* atomics;
     war_color_context* ctx_color;
@@ -1031,6 +1117,7 @@ typedef struct war_env {
     war_pool* pool_wr;
     war_vulkan_context* ctx_vk;
     war_wav* capture_wav;
-} war_env;
+    war_fsm_context* ctx_fsm;
+};
 
 #endif // WAR_DATA_H

@@ -2,10 +2,6 @@
 
 ![WAR](/assets/images/WAR-over-rose-circle-white.jpg)
 
-## DEMO
-
-[![Watch the video](https://img.youtube.com/vi/b7Bf17YH_uQ/0.jpg)](https://youtu.be/b7Bf17YH_uQ)
-
 ## COMING SOON
 
 make music with vim motions

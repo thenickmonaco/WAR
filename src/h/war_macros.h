@@ -52,31 +52,40 @@
 
 #define STR(x) #x
 
+#define FSM_3D_INDEX(state, keysym, mod)                                       \
+    ((state) * (ctx_fsm->keysym_count * ctx_fsm->mod_count) +                  \
+     (keysym) * ctx_fsm->mod_count + (mod))
+// For: next_state, key_down, key_last_event_us
+
+#define FSM_2D_MODE(state, mode) ((state) * ctx_fsm->mode_count + (mode))
+// For: is_terminal, is_prefix, handle_release, handle_repeat, handle_timeout,
+// function, type
+
+#define FSM_3D_NAME(state, mode)                                               \
+    ((state) * (ctx_fsm->mode_count * ctx_fsm->name_limit) +                   \
+     (mode) * ctx_fsm->name_limit)
+// For: name (when accessing the start of a name string)
+
 static inline int war_load_lua_config(war_lua_context* ctx_lua,
                                       const char* lua_file) {
-    lua_State* L = luaL_newstate();
-    luaL_openlibs(L);
-
-    if (luaL_dofile(L, lua_file) != LUA_OK) {
-        fprintf(stderr, "Lua error: %s\n", lua_tostring(L, -1));
-        lua_close(L);
+    if (luaL_dofile(ctx_lua->L, lua_file) != LUA_OK) {
+        fprintf(stderr, "Lua error: %s\n", lua_tostring(ctx_lua->L, -1));
         return -1;
     }
 
-    lua_getglobal(L, "ctx_lua");
-    if (!lua_istable(L, -1)) {
+    lua_getglobal(ctx_lua->L, "ctx_lua");
+    if (!lua_istable(ctx_lua->L, -1)) {
         fprintf(stderr, "ctx_lua not a table\n");
-        lua_close(L);
         return -1;
     }
 
 #define LOAD_INT(field)                                                        \
-    lua_getfield(L, -1, #field);                                               \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
-        ctx_lua->field = (int)lua_tointeger(L, -1);                            \
-        call_carmack("ctx_lua: %s = %d", #field, ctx_lua->field);              \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_type(ctx_lua->L, -1) == LUA_TNUMBER) {                             \
+        ctx_lua->field = (int)lua_tointeger(ctx_lua->L, -1);                   \
+        call_terry_davis("ctx_lua: %s = %d", #field, ctx_lua->field);          \
     }                                                                          \
-    lua_pop(L, 1);
+    lua_pop(ctx_lua->L, 1);
 
     // audio
     LOAD_INT(A_SAMPLE_RATE)
@@ -101,6 +110,7 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_INT(WR_STATES)
     LOAD_INT(WR_SEQUENCE_COUNT)
     LOAD_INT(WR_SEQUENCE_LENGTH_MAX)
+    LOAD_INT(WR_FN_NAME_LIMIT)
     LOAD_INT(WR_MODE_COUNT)
     LOAD_INT(WR_KEYSYM_COUNT)
     LOAD_INT(WR_CALLBACK_SIZE)
@@ -134,12 +144,12 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
 #undef LOAD_INT
 
 #define LOAD_FLOAT(field)                                                      \
-    lua_getfield(L, -1, #field);                                               \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
-        ctx_lua->field = (float)lua_tonumber(L, -1);                           \
-        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);              \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_type(ctx_lua->L, -1) == LUA_TNUMBER) {                             \
+        ctx_lua->field = (float)lua_tonumber(ctx_lua->L, -1);                  \
+        call_terry_davis("ctx_lua: %s = %f", #field, ctx_lua->field);          \
     }                                                                          \
-    lua_pop(L, 1);
+    lua_pop(ctx_lua->L, 1);
 
     LOAD_FLOAT(A_DEFAULT_ATTACK)
     LOAD_FLOAT(A_DEFAULT_SUSTAIN)
@@ -163,12 +173,12 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
 #undef LOAD_FLOAT
 
 #define LOAD_DOUBLE(field)                                                     \
-    lua_getfield(L, -1, #field);                                               \
-    if (lua_type(L, -1) == LUA_TNUMBER) {                                      \
-        ctx_lua->field = (double)lua_tonumber(L, -1);                          \
-        call_carmack("ctx_lua: %s = %f", #field, ctx_lua->field);              \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_type(ctx_lua->L, -1) == LUA_TNUMBER) {                             \
+        ctx_lua->field = (double)lua_tonumber(ctx_lua->L, -1);                 \
+        call_terry_davis("ctx_lua: %s = %f", #field, ctx_lua->field);          \
     }                                                                          \
-    lua_pop(L, 1);
+    lua_pop(ctx_lua->L, 1);
 
     LOAD_DOUBLE(A_DEFAULT_COLUMNS_PER_BEAT)
     LOAD_DOUBLE(A_TARGET_SAMPLES_FACTOR)
@@ -181,56 +191,44 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
 #undef LOAD_DOUBLE
 
 #define LOAD_STRING(field)                                                     \
-    lua_getfield(L, -1, #field);                                               \
-    if (lua_isstring(L, -1)) {                                                 \
-        char* str = strdup(lua_tostring(L, -1));                               \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_isstring(ctx_lua->L, -1)) {                                        \
+        char* str = strdup(lua_tostring(ctx_lua->L, -1));                      \
         if (str) {                                                             \
             atomic_store(&ctx_lua->field, str);                                \
-            call_carmack(                                                      \
+            call_terry_davis(                                                  \
                 "ctx_lua: %s = %s", #field, atomic_load(&ctx_lua->field));     \
         }                                                                      \
     }                                                                          \
-    lua_pop(L, 1);
+    lua_pop(ctx_lua->L, 1);
 
     LOAD_STRING(CWD)
 
 #undef LOAD_STRING
-
-    lua_close(L);
     return 0;
 }
 
 static inline size_t war_get_pool_a_size(war_pool* pool,
                                          war_lua_context* ctx_lua,
                                          const char* lua_file) {
-    lua_State* L = luaL_newstate();
-    luaL_openlibs(L);
-
-    if (luaL_dofile(L, lua_file) != LUA_OK) {
-        fprintf(stderr, "Lua error: %s\n", lua_tostring(L, -1));
-        lua_close(L);
-        return 0;
-    }
-
-    lua_getglobal(L, "pool_a");
-    if (!lua_istable(L, -1)) {
+    lua_getglobal(ctx_lua->L, "pool_a");
+    if (!lua_istable(ctx_lua->L, -1)) {
         fprintf(stderr, "pool_a not a table\n");
-        lua_close(L);
         return 0;
     }
 
     size_t total_size = 0;
 
-    lua_pushnil(L);
-    while (lua_next(L, -2) != 0) { // iterate pool_a entries
-        if (lua_istable(L, -1)) {
-            lua_getfield(L, -1, "type");
-            const char* type = lua_tostring(L, -1);
-            lua_pop(L, 1);
+    lua_pushnil(ctx_lua->L);
+    while (lua_next(ctx_lua->L, -2) != 0) { // iterate pool_a entries
+        if (lua_istable(ctx_lua->L, -1)) {
+            lua_getfield(ctx_lua->L, -1, "type");
+            const char* type = lua_tostring(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
 
-            lua_getfield(L, -1, "count");
-            size_t count = (size_t)lua_tointeger(L, -1);
-            lua_pop(L, 1);
+            lua_getfield(ctx_lua->L, -1, "count");
+            size_t count = (size_t)lua_tointeger(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
 
             size_t type_size = 0;
 
@@ -291,49 +289,37 @@ static inline size_t war_get_pool_a_size(war_pool* pool,
 
             total_size += type_size * count;
         }
-        lua_pop(L, 1); // pop value
+        lua_pop(ctx_lua->L, 1); // pop value
     }
 
     // align total_size to pool alignment
     size_t alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     total_size = (total_size + alignment - 1) & ~(alignment - 1);
-
-    lua_close(L);
-    call_carmack("pool_a size: %zu", total_size);
+    call_terry_davis("pool_a size: %zu", total_size);
     return total_size;
 }
 
 static inline size_t war_get_pool_wr_size(war_pool* pool,
                                           war_lua_context* ctx_lua,
                                           const char* lua_file) {
-    lua_State* L = luaL_newstate();
-    luaL_openlibs(L);
-
-    if (luaL_dofile(L, lua_file) != LUA_OK) {
-        fprintf(stderr, "Lua error: %s\n", lua_tostring(L, -1));
-        lua_close(L);
-        return 0;
-    }
-
-    lua_getglobal(L, "pool_wr");
-    if (!lua_istable(L, -1)) {
+    lua_getglobal(ctx_lua->L, "pool_wr");
+    if (!lua_istable(ctx_lua->L, -1)) {
         fprintf(stderr, "pool_wr not a table\n");
-        lua_close(L);
         return 0;
     }
 
     size_t total_size = 0;
 
-    lua_pushnil(L);
-    while (lua_next(L, -2) != 0) { // iterate pool_wr entries
-        if (lua_istable(L, -1)) {
-            lua_getfield(L, -1, "type");
-            const char* type = lua_tostring(L, -1);
-            lua_pop(L, 1);
+    lua_pushnil(ctx_lua->L);
+    while (lua_next(ctx_lua->L, -2) != 0) { // iterate pool_wr entries
+        if (lua_istable(ctx_lua->L, -1)) {
+            lua_getfield(ctx_lua->L, -1, "type");
+            const char* type = lua_tostring(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
 
-            lua_getfield(L, -1, "count");
-            size_t count = (size_t)lua_tointeger(L, -1);
-            lua_pop(L, 1);
+            lua_getfield(ctx_lua->L, -1, "count");
+            size_t count = (size_t)lua_tointeger(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
 
             size_t type_size = 0;
 
@@ -369,12 +355,14 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_undo_node);
 
             /* --- WR-specific structs --- */
-            else if (strcmp(type, "war_fsm_state") == 0)
-                type_size = sizeof(war_fsm_state);
+            else if (strcmp(type, "war_fsm_context") == 0)
+                type_size = sizeof(war_fsm_context);
             else if (strcmp(type, "war_quad_vertex") == 0)
                 type_size = sizeof(war_quad_vertex);
             else if (strcmp(type, "war_note_quads") == 0)
                 type_size = sizeof(war_note_quads);
+            else if (strcmp(type, "void (*)(war_env*)") == 0)
+                type_size = sizeof(void (*)(war_env*));
             else if (strcmp(type, "war_text_vertex") == 0)
                 type_size = sizeof(war_text_vertex);
             else if (strcmp(type, "war_status_context") == 0)
@@ -420,22 +408,20 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
 
             total_size += type_size * count;
         }
-        lua_pop(L, 1); // pop value
+        lua_pop(ctx_lua->L, 1); // pop value
     }
 
     // align total_size to pool alignment
     size_t alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     total_size = (total_size + alignment - 1) & ~(alignment - 1);
-
-    lua_close(L);
-    call_carmack("pool_wr size: %zu", total_size);
+    call_terry_davis("pool_wr size: %zu", total_size);
     return total_size;
 }
 
 static inline void* war_pool_alloc(war_pool* pool, size_t size) {
     size = ALIGN_UP(size, pool->pool_alignment);
     if (pool->pool_ptr + size > (uint8_t*)pool->pool + pool->pool_size) {
-        call_carmack("war_pool_alloc not big enough! %zu bytes", size);
+        call_terry_davis("war_pool_alloc not big enough! %zu bytes", size);
         abort();
     }
     void* ptr = pool->pool_ptr;
@@ -490,11 +476,11 @@ static inline void war_get_warpoon_text(war_views* views) {
                  views->col[i],
                  views->bottom_row[i],
                  views->left_col[i]);
-        call_carmack("i_views: %u", i);
-        call_carmack("views row: %u", views->row[i]);
-        call_carmack("views col: %u", views->col[i]);
-        call_carmack("views bottom_row: %u", views->bottom_row[i]);
-        call_carmack("views left_col: %u", views->left_col[i]);
+        call_terry_davis("i_views: %u", i);
+        call_terry_davis("views row: %u", views->row[i]);
+        call_terry_davis("views col: %u", views->col[i]);
+        call_terry_davis("views bottom_row: %u", views->bottom_row[i]);
+        call_terry_davis("views left_col: %u", views->left_col[i]);
     }
 }
 

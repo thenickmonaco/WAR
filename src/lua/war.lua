@@ -22,41 +22,11 @@
 
 ---@diagnostic disable: lowercase-global
 
-local ffi = require("ffi")
-ffi.cdef [[
-typedef struct war_window_render_context war_window_render_context;
-typedef struct war_atomics war_atomics;
-typedef struct war_color_context war_color_context;
-typedef struct war_lua_context war_lua_context;
-typedef struct war_views war_views;
-typedef struct war_play_context war_play_context;
-typedef struct war_capture_context war_capture_context;
-typedef struct war_command_context war_command_context;
-typedef struct war_status_context war_status_context;
-typedef struct war_undo_tree war_undo_tree;
-typedef struct war_note_quads war_note_quads;
-typedef struct war_pool war_pool;
-typedef struct war_vulkan_context war_vulkan_context;
-typedef struct war_wav war_wav;
-typedef struct war_fsm_context war_fsm_context;
-typedef struct war_env {
-    war_window_render_context* ctx_wr;
-    war_atomics* atomics;
-    war_color_context* ctx_color;
-    war_lua_context* ctx_lua;
-    war_views* views;
-    war_play_context* ctx_play;
-    war_capture_context* ctx_capture;
-    war_command_context* ctx_command;
-    war_status_context* ctx_status;
-    war_undo_tree* undo_tree;
-    war_note_quads* note_quads;
-    war_pool* pool_wr;
-    war_vulkan_context* ctx_vk;
-    war_wav* capture_wav;
-    war_fsm_context* ctx_fsm;
-} war_env;
-]]
+--local ffi = require("ffi")
+--
+--ffi.cdef([[
+--]])
+
 war = {}
 function war.get_env(env)
     if env == nil then

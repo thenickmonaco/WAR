@@ -343,18 +343,6 @@ typedef struct war_undo_tree {
 } war_undo_tree;
 
 typedef struct war_lua_context {
-    // modes
-    _Atomic int MODE_NORMAL;
-    _Atomic int MODE_VIEWS;
-    _Atomic int MODE_VISUAL_LINE;
-    _Atomic int MODE_CAPTURE;
-    _Atomic int MODE_MIDI;
-    _Atomic int MODE_COMMAND;
-    _Atomic int MODE_VISUAL_BLOCK;
-    _Atomic int MODE_INSERT;
-    _Atomic int MODE_O;
-    _Atomic int MODE_VISUAL;
-    _Atomic int MODE_WAV;
     // audio
     _Atomic int A_SAMPLE_RATE;
     _Atomic double A_SAMPLE_DURATION;
@@ -1023,12 +1011,6 @@ typedef struct war_drm_context {
     drmModeModeInfo mode;
 } war_drm_context;
 
-enum fsm_enum {
-    FUNCTION_NONE = 0,
-    FUNCTION_C = 1,
-    FUNCTION_LUA = 2,
-};
-
 typedef struct war_env war_env;
 
 typedef union war_function_union {
@@ -1076,7 +1058,7 @@ typedef struct war_fsm_context {
     uint32_t mode_count;
     uint32_t name_limit;
     // modes
-    int MODE_NORMAL;
+    int MODE_ROLL;
     int MODE_VIEWS;
     int MODE_VISUAL_LINE;
     int MODE_CAPTURE;
@@ -1087,6 +1069,10 @@ typedef struct war_fsm_context {
     int MODE_O;
     int MODE_VISUAL;
     int MODE_WAV;
+    // cmd type
+    int FUNCTION_NONE;
+    int FUNCTION_C;
+    int FUNCTION_LUA;
     // repeats
     uint64_t repeat_delay_us;
     uint64_t repeat_rate_us;

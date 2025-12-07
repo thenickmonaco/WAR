@@ -23,7 +23,7 @@
 #include "h/war_vulkan.h"
 #include "h/war_data.h"
 #include "h/war_debug_macros.h"
-#include "h/war_macros.h"
+#include "h/war_functions.h"
 
 #include <assert.h>
 #include <dirent.h>

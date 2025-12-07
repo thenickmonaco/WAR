@@ -25,7 +25,6 @@
 
 #include "h/war_data.h"
 #include "h/war_debug_macros.h"
-#include "h/war_macros.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -39,3804 +38,1506 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/sendfile.h>
 #include <time.h>
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
 
-static inline void war_roll_cursor_up(war_env* env) {
-    call_terry_davis("war_roll_cursor_up");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    uint32_t increment = ctx_wr->row_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_row);
+// COMMENT OPTIMIZE: Duff's Device + SIMD (intrinsics)
+
+#define ALIGN32(p) (uint8_t*)(((uintptr_t)(p) + 31) & ~((uintptr_t)31))
+
+#define ALIGN_UP(x, align) (((x) + ((align) - 1)) & ~((align) - 1))
+
+#define obj_op_index(obj, op) ((obj) * max_opcodes + (op))
+
+#define STR(x) #x
+
+#define FSM_3D_INDEX(state, keysym, mod)                                       \
+    ((state) * (ctx_fsm->keysym_count * ctx_fsm->mod_count) +                  \
+     (keysym) * ctx_fsm->mod_count + (mod))
+// For: next_state, key_down, key_last_event_us
+
+#define FSM_2D_MODE(state, mode) ((state) * ctx_fsm->mode_count + (mode))
+// For: is_terminal, is_prefix, handle_release, handle_repeat, handle_timeout,
+// function, type
+
+#define FSM_3D_NAME(state, mode)                                               \
+    ((state) * (ctx_fsm->mode_count * ctx_fsm->name_limit) +                   \
+     (mode) * ctx_fsm->name_limit)
+// For: name (when accessing the start of a name string)
+
+static inline int war_load_lua_config(war_lua_context* ctx_lua,
+                                      const char* lua_file) {
+    if (luaL_dofile(ctx_lua->L, lua_file) != LUA_OK) {
+        call_terry_davis("Lua error: %s", lua_tostring(ctx_lua->L, -1));
+        return -1;
     }
-    uint32_t scaled_whole = (increment * ctx_wr->navigation_whole_number_row) /
-                            ctx_wr->navigation_sub_cells_row;
-    uint32_t scaled_frac = (increment * ctx_wr->navigation_whole_number_row) %
-                           ctx_wr->navigation_sub_cells_row;
-    ctx_wr->cursor_pos_y = war_clamp_add_uint32(
-        ctx_wr->cursor_pos_y, scaled_whole, ctx_wr->max_row);
-    ctx_wr->sub_row =
-        war_clamp_add_uint32(ctx_wr->sub_row, scaled_frac, ctx_wr->max_row);
-    ctx_wr->cursor_pos_y =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_y,
-                             ctx_wr->sub_row / ctx_wr->navigation_sub_cells_row,
-                             ctx_wr->max_row);
-    ctx_wr->sub_row =
-        war_clamp_uint32(ctx_wr->sub_row % ctx_wr->navigation_sub_cells_row,
-                         ctx_wr->min_row,
-                         ctx_wr->max_row);
-    if (ctx_wr->cursor_pos_y > ctx_wr->top_row - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        ctx_wr->bottom_row = war_clamp_add_uint32(
-            ctx_wr->bottom_row, increment, ctx_wr->max_row);
-        ctx_wr->top_row =
-            war_clamp_add_uint32(ctx_wr->top_row, increment, ctx_wr->max_row);
-        uint32_t new_viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                ctx_wr->bottom_row, diff, ctx_wr->min_row);
-        }
+
+    lua_getglobal(ctx_lua->L, "ctx_lua");
+    if (!lua_istable(ctx_lua->L, -1)) {
+        call_terry_davis("ctx_lua not a table");
+        return -1;
     }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
+
+#define LOAD_INT(field)                                                        \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_type(ctx_lua->L, -1) == LUA_TNUMBER) {                             \
+        ctx_lua->field = (int)lua_tointeger(ctx_lua->L, -1);                   \
+        call_terry_davis("ctx_lua: %s = %d", #field, ctx_lua->field);          \
+    }                                                                          \
+    lua_pop(ctx_lua->L, 1);
+
+    // audio
+    LOAD_INT(A_SAMPLE_RATE)
+    LOAD_INT(A_CHANNEL_COUNT)
+    LOAD_INT(A_NOTE_COUNT)
+    LOAD_INT(A_LAYER_COUNT)
+    LOAD_INT(A_LAYERS_IN_RAM)
+    LOAD_INT(A_PLAY_DATA_SIZE)
+    LOAD_INT(A_CAPTURE_DATA_SIZE)
+    LOAD_INT(A_BASE_FREQUENCY)
+    LOAD_INT(A_BASE_NOTE)
+    LOAD_INT(A_BYTES_NEEDED)
+    LOAD_INT(A_EDO)
+    LOAD_INT(A_NOTES_MAX)
+    LOAD_INT(A_CACHE_SIZE)
+    LOAD_INT(A_PATH_LIMIT)
+    LOAD_INT(A_WARMUP_FRAMES_FACTOR)
+    LOAD_INT(A_SCHED_FIFO_PRIORITY)
+    // window render
+    LOAD_INT(WR_VIEWS_SAVED)
+    LOAD_INT(WR_WARPOON_TEXT_COLS)
+    LOAD_INT(WR_STATES)
+    LOAD_INT(WR_SEQUENCE_COUNT)
+    LOAD_INT(WR_SEQUENCE_LENGTH_MAX)
+    LOAD_INT(WR_FN_NAME_LIMIT)
+    LOAD_INT(WR_MODE_COUNT)
+    LOAD_INT(WR_KEYSYM_COUNT)
+    LOAD_INT(WR_CALLBACK_SIZE)
+    LOAD_INT(WR_MOD_COUNT)
+    LOAD_INT(WR_NOTE_QUADS_MAX)
+    LOAD_INT(WR_STATUS_BAR_COLS_MAX)
+    LOAD_INT(WR_TEXT_QUADS_MAX)
+    LOAD_INT(WR_QUADS_MAX)
+    LOAD_INT(WR_WAYLAND_MSG_BUFFER_SIZE)
+    LOAD_INT(WR_WAYLAND_MAX_OBJECTS)
+    LOAD_INT(WR_WAYLAND_MAX_OP_CODES)
+    LOAD_INT(WR_UNDO_NODES_MAX)
+    LOAD_INT(WR_TIMESTAMP_LENGTH_MAX)
+    LOAD_INT(WR_CURSOR_BLINK_DURATION_US)
+    LOAD_INT(WR_REPEAT_DELAY_US)
+    LOAD_INT(WR_REPEAT_RATE_US)
+    LOAD_INT(WR_UNDO_NOTES_BATCH_MAX)
+    LOAD_INT(WR_INPUT_SEQUENCE_LENGTH_MAX)
+    LOAD_INT(VK_ATLAS_HEIGHT)
+    LOAD_INT(VK_ATLAS_WIDTH)
+    // pool
+    LOAD_INT(POOL_ALIGNMENT)
+    // cmd
+    LOAD_INT(CMD_COUNT)
+    // pc
+    LOAD_INT(PC_CONTROL_BUFFER_SIZE)
+    LOAD_INT(PC_PLAY_BUFFER_SIZE)
+    LOAD_INT(PC_CAPTURE_BUFFER_SIZE)
+    LOAD_INT(A_BUILDER_DATA_SIZE)
+
+#undef LOAD_INT
+
+#define LOAD_FLOAT(field)                                                      \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_type(ctx_lua->L, -1) == LUA_TNUMBER) {                             \
+        ctx_lua->field = (float)lua_tonumber(ctx_lua->L, -1);                  \
+        call_terry_davis("ctx_lua: %s = %f", #field, ctx_lua->field);          \
+    }                                                                          \
+    lua_pop(ctx_lua->L, 1);
+
+    LOAD_FLOAT(A_DEFAULT_ATTACK)
+    LOAD_FLOAT(A_DEFAULT_SUSTAIN)
+    LOAD_FLOAT(A_DEFAULT_RELEASE)
+    LOAD_FLOAT(A_DEFAULT_GAIN)
+    LOAD_FLOAT(VK_FONT_PIXEL_HEIGHT)
+    LOAD_FLOAT(DEFAULT_BOLD_TEXT_THICKNESS)
+    LOAD_FLOAT(DEFAULT_BOLD_TEXT_FEATHER)
+    LOAD_FLOAT(DEFAULT_ALPHA_SCALE)
+    LOAD_FLOAT(DEFAULT_CURSOR_ALPHA_SCALE)
+    LOAD_FLOAT(DEFAULT_PLAYBACK_BAR_THICKNESS)
+    LOAD_FLOAT(WR_CAPTURE_THRESHOLD)
+    LOAD_FLOAT(DEFAULT_TEXT_FEATHER)
+    LOAD_FLOAT(DEFAULT_TEXT_THICKNESS)
+    LOAD_FLOAT(WINDOWED_TEXT_FEATHER)
+    LOAD_FLOAT(WINDOWED_TEXT_THICKNESS)
+    LOAD_FLOAT(DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE)
+    LOAD_FLOAT(DEFAULT_WINDOWED_ALPHA_SCALE)
+    LOAD_FLOAT(WR_COLOR_STEP)
+
+#undef LOAD_FLOAT
+
+#define LOAD_DOUBLE(field)                                                     \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_type(ctx_lua->L, -1) == LUA_TNUMBER) {                             \
+        ctx_lua->field = (double)lua_tonumber(ctx_lua->L, -1);                 \
+        call_terry_davis("ctx_lua: %s = %f", #field, ctx_lua->field);          \
+    }                                                                          \
+    lua_pop(ctx_lua->L, 1);
+
+    LOAD_DOUBLE(A_DEFAULT_COLUMNS_PER_BEAT)
+    LOAD_DOUBLE(A_TARGET_SAMPLES_FACTOR)
+    LOAD_DOUBLE(A_BPM)
+    LOAD_DOUBLE(A_SAMPLE_DURATION)
+    LOAD_DOUBLE(WR_FPS)
+    LOAD_DOUBLE(WR_PLAY_CALLBACK_FPS)
+    LOAD_DOUBLE(WR_CAPTURE_CALLBACK_FPS)
+
+#undef LOAD_DOUBLE
+
+#define LOAD_STRING(field)                                                     \
+    lua_getfield(ctx_lua->L, -1, #field);                                      \
+    if (lua_isstring(ctx_lua->L, -1)) {                                        \
+        char* str = strdup(lua_tostring(ctx_lua->L, -1));                      \
+        if (str) {                                                             \
+            atomic_store(&ctx_lua->field, str);                                \
+            call_terry_davis(                                                  \
+                "ctx_lua: %s = %s", #field, atomic_load(&ctx_lua->field));     \
+        }                                                                      \
+    }                                                                          \
+    lua_pop(ctx_lua->L, 1);
+
+    LOAD_STRING(CWD)
+
+#undef LOAD_STRING
+    return 0;
 }
 
-static inline void war_roll_cursor_down(war_env* env) {
-    call_terry_davis("war_roll_cursor_down");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    uint32_t increment = ctx_wr->row_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_row);
+static inline size_t war_get_pool_a_size(war_pool* pool,
+                                         war_lua_context* ctx_lua,
+                                         const char* lua_file) {
+    lua_getglobal(ctx_lua->L, "pool_a");
+    if (!lua_istable(ctx_lua->L, -1)) {
+        call_terry_davis("pool_a not a table");
+        return 0;
     }
-    uint32_t scaled_whole = (increment * ctx_wr->navigation_whole_number_row) /
-                            ctx_wr->navigation_sub_cells_row;
-    uint32_t scaled_frac = (increment * ctx_wr->navigation_whole_number_row) %
-                           ctx_wr->navigation_sub_cells_row;
-    ctx_wr->cursor_pos_y = war_clamp_add_uint32(
-        ctx_wr->cursor_pos_y, scaled_whole, ctx_wr->max_row);
-    ctx_wr->sub_row =
-        war_clamp_add_uint32(ctx_wr->sub_row, scaled_frac, ctx_wr->max_row);
-    ctx_wr->cursor_pos_y =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_y,
-                             ctx_wr->sub_row / ctx_wr->navigation_sub_cells_row,
-                             ctx_wr->max_row);
-    ctx_wr->sub_row =
-        war_clamp_uint32(ctx_wr->sub_row % ctx_wr->navigation_sub_cells_row,
-                         ctx_wr->min_row,
-                         ctx_wr->max_row);
-    if (ctx_wr->cursor_pos_y > ctx_wr->top_row - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        ctx_wr->bottom_row = war_clamp_add_uint32(
-            ctx_wr->bottom_row, increment, ctx_wr->max_row);
-        ctx_wr->top_row =
-            war_clamp_add_uint32(ctx_wr->top_row, increment, ctx_wr->max_row);
-        uint32_t new_viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                ctx_wr->bottom_row, diff, ctx_wr->min_row);
-        }
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
 
-static inline void war_roll_cursor_left(war_env* env) {
-    call_terry_davis("war_roll_cursor_left");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    double initial = ctx_wr->cursor_pos_x;
-    double increment =
-        (double)ctx_wr->col_increment * ctx_wr->cursor_navigation_x;
-    if (ctx_wr->numeric_prefix) { increment *= ctx_wr->numeric_prefix; }
-    ctx_wr->cursor_pos_x = ctx_wr->cursor_pos_x - increment;
-    if (ctx_wr->cursor_pos_x < ctx_wr->min_col) {
-        ctx_wr->cursor_pos_x = ctx_wr->min_col;
-    }
-    double pan = initial - ctx_wr->cursor_pos_x;
-    if (ctx_wr->cursor_pos_x < ctx_wr->left_col + ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        ctx_wr->left_col =
-            war_clamp_subtract_uint32(ctx_wr->left_col, pan, ctx_wr->min_col);
-        ctx_wr->right_col =
-            war_clamp_subtract_uint32(ctx_wr->right_col, pan, ctx_wr->min_col);
-        uint32_t new_viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx_wr->right_col =
-                war_clamp_add_uint32(ctx_wr->right_col, diff, ctx_wr->max_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
+    size_t total_size = 0;
 
-static inline void war_roll_cursor_right(war_env* env) {
-    call_terry_davis("war_roll_cursor_right");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    double initial = ctx_wr->cursor_pos_x;
-    double increment =
-        (double)ctx_wr->col_increment * ctx_wr->cursor_navigation_x;
-    if (ctx_wr->numeric_prefix) { increment *= ctx_wr->numeric_prefix; }
-    ctx_wr->cursor_pos_x = ctx_wr->cursor_pos_x + increment;
-    if (ctx_wr->cursor_pos_x > ctx_wr->max_col) {
-        ctx_wr->cursor_pos_x = ctx_wr->max_col;
-    }
-    double pan = ctx_wr->cursor_pos_x - initial;
-    if (ctx_wr->cursor_pos_x > ctx_wr->right_col - ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        ctx_wr->left_col =
-            war_clamp_add_uint32(ctx_wr->left_col, pan, ctx_wr->max_col);
-        ctx_wr->right_col =
-            war_clamp_add_uint32(ctx_wr->right_col, pan, ctx_wr->max_col);
-        uint32_t new_viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx_wr->left_col = war_clamp_subtract_uint32(
-                ctx_wr->left_col, diff, ctx_wr->min_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
+    lua_pushnil(ctx_lua->L);
+    while (lua_next(ctx_lua->L, -2) != 0) { // iterate pool_a entries
+        if (lua_istable(ctx_lua->L, -1)) {
+            lua_getfield(ctx_lua->L, -1, "type");
+            const char* type = lua_tostring(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
 
-static inline void war_roll_cursor_goto_wav(war_env* env) {
-    call_terry_davis("war_roll_cursor_goto_wav");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_WAV;
-    ctx_wr->numeric_prefix = 0;
-}
+            lua_getfield(ctx_lua->L, -1, "count");
+            size_t count = (size_t)lua_tointeger(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
 
-static inline void war_roll_gain_up(war_env* env) {
-    call_terry_davis("war_roll_gain_up");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->play_gain) + ctx_wr->gain_increment;
-    gain = fminf(gain, 1.0f);
-    atomic_store(&atomics->play_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
+            size_t type_size = 0;
 
-static inline void war_roll_gain_down(war_env* env) {
-    call_terry_davis("war_roll_gain_down");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->play_gain) - ctx_wr->gain_increment;
-    gain = fmaxf(gain, 0.0f);
-    atomic_store(&atomics->play_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_up_leap(war_env* env) {
-    call_terry_davis("war_roll_cursor_up_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    uint32_t increment = ctx_wr->row_leap_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_row);
-    }
-    ctx_wr->cursor_pos_y =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_y, increment, ctx_wr->max_row);
-    if (ctx_wr->cursor_pos_y > ctx_wr->top_row - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        ctx_wr->bottom_row = war_clamp_add_uint32(
-            ctx_wr->bottom_row, increment, ctx_wr->max_row);
-        ctx_wr->top_row =
-            war_clamp_add_uint32(ctx_wr->top_row, increment, ctx_wr->max_row);
-        uint32_t new_viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                ctx_wr->bottom_row, diff, ctx_wr->min_row);
-        }
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_down_leap(war_env* env) {
-    call_terry_davis("war_roll_cursor_down_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    uint32_t increment = ctx_wr->row_leap_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_row);
-    }
-    ctx_wr->cursor_pos_y = war_clamp_subtract_uint32(
-        ctx_wr->cursor_pos_y, increment, ctx_wr->min_row);
-    if (ctx_wr->cursor_pos_y <
-        ctx_wr->bottom_row + ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        ctx_wr->bottom_row = war_clamp_subtract_uint32(
-            ctx_wr->bottom_row, increment, ctx_wr->min_row);
-        ctx_wr->top_row = war_clamp_subtract_uint32(
-            ctx_wr->top_row, increment, ctx_wr->min_row);
-        uint32_t new_viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx_wr->top_row =
-                war_clamp_add_uint32(ctx_wr->top_row, diff, ctx_wr->max_row);
-        }
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_right_leap(war_env* env) {
-    call_terry_davis("war_roll_cursor_right_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    double initial = ctx_wr->cursor_pos_x;
-    double increment =
-        (double)ctx_wr->col_leap_increment * ctx_wr->cursor_navigation_x;
-    if (ctx_wr->numeric_prefix) { increment *= ctx_wr->numeric_prefix; }
-    ctx_wr->cursor_pos_x = ctx_wr->cursor_pos_x + increment;
-    if (ctx_wr->cursor_pos_x > ctx_wr->max_col) {
-        ctx_wr->cursor_pos_x = ctx_wr->max_col;
-    }
-    double pan = ctx_wr->cursor_pos_x - initial;
-    if (ctx_wr->cursor_pos_x > ctx_wr->right_col - ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        ctx_wr->left_col =
-            war_clamp_add_uint32(ctx_wr->left_col, pan, ctx_wr->max_col);
-        ctx_wr->right_col =
-            war_clamp_add_uint32(ctx_wr->right_col, pan, ctx_wr->max_col);
-        uint32_t new_viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx_wr->left_col = war_clamp_subtract_uint32(
-                ctx_wr->left_col, diff, ctx_wr->min_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_left_leap(war_env* env) {
-    call_terry_davis("war_roll_cursor_left_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    double initial = ctx_wr->cursor_pos_x;
-    double increment =
-        (double)ctx_wr->col_leap_increment * ctx_wr->cursor_navigation_x;
-    if (ctx_wr->numeric_prefix) { increment *= ctx_wr->numeric_prefix; }
-    ctx_wr->cursor_pos_x = ctx_wr->cursor_pos_x - increment;
-    if (ctx_wr->cursor_pos_x < ctx_wr->min_col) {
-        ctx_wr->cursor_pos_x = ctx_wr->min_col;
-    }
-    double pan = initial - ctx_wr->cursor_pos_x;
-    if (ctx_wr->cursor_pos_x < ctx_wr->left_col + ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        ctx_wr->left_col =
-            war_clamp_subtract_uint32(ctx_wr->left_col, pan, ctx_wr->min_col);
-        ctx_wr->right_col =
-            war_clamp_subtract_uint32(ctx_wr->right_col, pan, ctx_wr->min_col);
-        uint32_t new_viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx_wr->right_col =
-                war_clamp_add_uint32(ctx_wr->right_col, diff, ctx_wr->max_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_map_layer_to_cursor_row(war_env* env) {
-    call_terry_davis("war_roll_map_layer_to_cursor_row");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_play_context* ctx_play = env->ctx_play;
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_play->note_layers[(int)ctx_wr->cursor_pos_y] = layer;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_get_layer_from_row(war_env* env) {
-    call_terry_davis("war_roll_get_layer_from_row");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_toggle_flux(war_env* env) {
-    call_terry_davis("war_roll_toggle_flux");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    ctx_wr->layer_flux = !ctx_wr->layer_flux;
-    war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_up_view(war_env* env) {
-    call_terry_davis("war_roll_cursor_up_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    uint32_t increment =
-        ctx_wr->viewport_rows - ctx_wr->num_rows_for_status_bars;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_row);
-    }
-    ctx_wr->cursor_pos_y =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_y, increment, ctx_wr->max_row);
-    if (ctx_wr->cursor_pos_y > ctx_wr->top_row - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        ctx_wr->bottom_row = war_clamp_add_uint32(
-            ctx_wr->bottom_row, increment, ctx_wr->max_row);
-        ctx_wr->top_row =
-            war_clamp_add_uint32(ctx_wr->top_row, increment, ctx_wr->max_row);
-        uint32_t new_viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                ctx_wr->bottom_row, diff, ctx_wr->min_row);
-        }
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_down_view(war_env* env) {
-    call_terry_davis("war_roll_cursor_down_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    uint32_t increment =
-        ctx_wr->viewport_rows - ctx_wr->num_rows_for_status_bars;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_row);
-    }
-    ctx_wr->cursor_pos_y = war_clamp_subtract_uint32(
-        ctx_wr->cursor_pos_y, increment, ctx_wr->min_row);
-    if (ctx_wr->cursor_pos_y <
-        ctx_wr->bottom_row + ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        ctx_wr->bottom_row = war_clamp_subtract_uint32(
-            ctx_wr->bottom_row, increment, ctx_wr->min_row);
-        ctx_wr->top_row = war_clamp_subtract_uint32(
-            ctx_wr->top_row, increment, ctx_wr->min_row);
-        uint32_t new_viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            ctx_wr->top_row =
-                war_clamp_add_uint32(ctx_wr->top_row, diff, ctx_wr->max_row);
-        }
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_left_view(war_env* env) {
-    call_terry_davis("war_roll_cursor_left_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    uint32_t increment =
-        ctx_wr->viewport_cols - ctx_wr->num_cols_for_line_numbers;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_col);
-    }
-    ctx_wr->cursor_pos_x = war_clamp_subtract_uint32(
-        ctx_wr->cursor_pos_x, increment, ctx_wr->min_col);
-    if (ctx_wr->cursor_pos_x < ctx_wr->left_col + ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        ctx_wr->left_col = war_clamp_subtract_uint32(
-            ctx_wr->left_col, increment, ctx_wr->min_col);
-        ctx_wr->right_col = war_clamp_subtract_uint32(
-            ctx_wr->right_col, increment, ctx_wr->min_col);
-        uint32_t new_viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx_wr->right_col =
-                war_clamp_add_uint32(ctx_wr->right_col, diff, ctx_wr->max_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_right_view(war_env* env) {
-    call_terry_davis("war_roll_cursor_right_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    uint32_t increment =
-        ctx_wr->viewport_cols - ctx_wr->num_cols_for_line_numbers;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, ctx_wr->max_col);
-    }
-    ctx_wr->cursor_pos_x =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_x, increment, ctx_wr->max_col);
-    if (ctx_wr->cursor_pos_x > ctx_wr->right_col - ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        ctx_wr->left_col =
-            war_clamp_add_uint32(ctx_wr->left_col, increment, ctx_wr->max_col);
-        ctx_wr->right_col =
-            war_clamp_add_uint32(ctx_wr->right_col, increment, ctx_wr->max_col);
-        uint32_t new_viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            ctx_wr->left_col = war_clamp_subtract_uint32(
-                ctx_wr->left_col, diff, ctx_wr->min_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_goto_left_bound(war_env* env) {
-    call_terry_davis("war_roll_cursor_goto_left_bound");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->numeric_prefix = ctx_wr->numeric_prefix * 10;
-        return;
-    }
-    ctx_wr->cursor_pos_x = ctx_wr->left_col;
-    ctx_wr->sub_col = 0;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_shift_v(war_env* env) {
-    call_terry_davis("war_roll_shift_v");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_goto_play_bar(war_env* env) {
-    call_terry_davis("war_roll_cursor_goto_play_bar");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_lua_context* ctx_lua = env->ctx_lua;
-    uint32_t col = ((float)atomic_load(&atomics->play_clock) /
-                    atomic_load(&ctx_lua->A_SAMPLE_RATE)) /
-                   ((60.0f / atomic_load(&ctx_lua->A_BPM)) /
-                    atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT));
-    ctx_wr->cursor_pos_x =
-        war_clamp_uint32(col, ctx_wr->min_col, ctx_wr->max_col);
-    ctx_wr->sub_col = 0;
-    uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-    uint32_t distance = viewport_width / 2;
-    ctx_wr->left_col = war_clamp_subtract_uint32(
-        ctx_wr->cursor_pos_x, distance, ctx_wr->min_col);
-    ctx_wr->right_col =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_x, distance, ctx_wr->max_col);
-    uint32_t new_viewport_width = war_clamp_subtract_uint32(
-        ctx_wr->right_col, ctx_wr->left_col, ctx_wr->min_col);
-    if (new_viewport_width < viewport_width) {
-        uint32_t diff = war_clamp_subtract_uint32(
-            viewport_width, new_viewport_width, ctx_wr->min_col);
-        uint32_t sum =
-            war_clamp_add_uint32(ctx_wr->right_col, diff, ctx_wr->max_col);
-        if (sum < ctx_wr->max_col) {
-            ctx_wr->right_col = sum;
-        } else {
-            ctx_wr->left_col = war_clamp_subtract_uint32(
-                ctx_wr->left_col, diff, ctx_wr->min_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void
-war_roll_cursor_goto_right_bound_or_prefix_horizontal(war_env* env) {
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    call_terry_davis("war_roll_cursor_goto_right_bound_or_prefix_horizontal");
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->cursor_pos_x = war_clamp_uint32(
-            ctx_wr->numeric_prefix, ctx_wr->min_col, ctx_wr->max_col);
-        ctx_wr->sub_col = 0;
-        uint32_t viewport_width = ctx_wr->right_col - ctx_wr->left_col;
-        uint32_t distance = viewport_width / 2;
-        ctx_wr->left_col = war_clamp_subtract_uint32(
-            ctx_wr->cursor_pos_x, distance, ctx_wr->min_col);
-        ctx_wr->right_col = war_clamp_add_uint32(
-            ctx_wr->cursor_pos_x, distance, ctx_wr->max_col);
-        uint32_t new_viewport_width = war_clamp_subtract_uint32(
-            ctx_wr->right_col, ctx_wr->left_col, ctx_wr->min_col);
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = war_clamp_subtract_uint32(
-                viewport_width, new_viewport_width, ctx_wr->min_col);
-            uint32_t sum =
-                war_clamp_add_uint32(ctx_wr->right_col, diff, ctx_wr->max_col);
-            if (sum < ctx_wr->max_col) {
-                ctx_wr->right_col = sum;
+            if (strcmp(type, "uint8_t") == 0)
+                type_size = sizeof(uint8_t);
+            else if (strcmp(type, "uint64_t") == 0)
+                type_size = sizeof(uint64_t);
+            else if (strcmp(type, "int16_t") == 0)
+                type_size = sizeof(int16_t);
+            else if (strcmp(type, "int16_t*") == 0)
+                type_size = sizeof(int16_t*);
+            else if (strcmp(type, "float") == 0)
+                type_size = sizeof(float);
+            else if (strcmp(type, "uint32_t") == 0)
+                type_size = sizeof(uint32_t);
+            else if (strcmp(type, "int32_t") == 0)
+                type_size = sizeof(int32_t);
+            else if (strcmp(type, "void*") == 0)
+                type_size = sizeof(void*);
+            else if (strcmp(type, "war_audio_context") == 0)
+                type_size = sizeof(war_audio_context);
+            else if (strcmp(type, "char*") == 0)
+                type_size = sizeof(char*);
+            else if (strcmp(type, "char") == 0)
+                type_size = sizeof(char);
+            else if (strcmp(type, "war_midi_context") == 0)
+                type_size = sizeof(war_midi_context);
+            else if (strcmp(type, "war_pipewire_context") == 0)
+                type_size = sizeof(war_pipewire_context);
+            else if (strcmp(type, "ssize_t") == 0)
+                type_size = sizeof(ssize_t);
+            else if (strcmp(type, "int16_t*") == 0)
+                type_size = sizeof(int16_t*);
+            else if (strcmp(type, "int16_t*") == 0)
+                type_size = sizeof(int16_t*);
+            else if (strcmp(type, "int16_t**") == 0)
+                type_size = sizeof(int16_t**);
+            else if (strcmp(type, "uint32_t") == 0)
+                type_size = sizeof(uint32_t);
+            else if (strcmp(type, "int") == 0)
+                type_size = sizeof(int);
+            else if (strcmp(type, "size_t") == 0)
+                type_size = sizeof(size_t);
+            else if (strcmp(type, "war_riff_header") == 0)
+                type_size = sizeof(war_riff_header);
+            else if (strcmp(type, "war_fmt_chunk") == 0)
+                type_size = sizeof(war_fmt_chunk);
+            else if (strcmp(type, "war_data_chunk") == 0)
+                type_size = sizeof(war_data_chunk);
+            else if (strcmp(type, "war_notes") == 0) {
+                type_size = sizeof(war_notes);
+            } else if (strcmp(type, "bool") == 0) {
+                type_size = sizeof(bool);
             } else {
-                ctx_wr->left_col = war_clamp_subtract_uint32(
-                    ctx_wr->left_col, diff, ctx_wr->min_col);
+                call_terry_davis("Unknown pool_a type: %s", type);
+                type_size = 0;
             }
+
+            total_size += type_size * count;
         }
-        ctx_wr->numeric_prefix = 0;
-        return;
+        lua_pop(ctx_lua->L, 1); // pop value
     }
-    ctx_wr->cursor_pos_x = ctx_wr->right_col;
-    ctx_wr->sub_col = 0;
-    ctx_wr->numeric_prefix = 0;
+
+    // align total_size to pool alignment
+    size_t alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
+    total_size = (total_size + alignment - 1) & ~(alignment - 1);
+    call_terry_davis("pool_a size: %zu", total_size);
+    return total_size;
 }
 
-static inline void
-war_roll_cursor_goto_bottom_bound_or_prefix_vertical(war_env* env) {
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    call_terry_davis("war_roll_cursor_goto_bottom_bound_or_prefix_vertical");
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->cursor_pos_y = war_clamp_uint32(
-            ctx_wr->numeric_prefix, ctx_wr->min_row, ctx_wr->max_row);
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        uint32_t distance = viewport_height / 2;
-        ctx_wr->bottom_row = war_clamp_subtract_uint32(
-            ctx_wr->cursor_pos_y, distance, ctx_wr->min_row);
-        ctx_wr->top_row = war_clamp_add_uint32(
-            ctx_wr->cursor_pos_y, distance, ctx_wr->max_row);
-        uint32_t new_viewport_height =
-            war_clamp_subtract_uint32(ctx_wr->top_row, ctx_wr->bottom_row, 0);
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = war_clamp_subtract_uint32(
-                viewport_height, new_viewport_height, 0);
-            uint32_t sum =
-                war_clamp_add_uint32(ctx_wr->top_row, diff, ctx_wr->max_row);
-            if (sum < ctx_wr->max_row) {
-                ctx_wr->top_row = sum;
-            } else {
-                ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                    ctx_wr->bottom_row, diff, ctx_wr->min_row);
+static inline size_t war_get_pool_wr_size(war_pool* pool,
+                                          war_lua_context* ctx_lua,
+                                          const char* lua_file) {
+    lua_getglobal(ctx_lua->L, "pool_wr");
+    if (!lua_istable(ctx_lua->L, -1)) {
+        call_terry_davis("pool_wr not a table");
+        return 0;
+    }
+
+    size_t total_size = 0;
+
+    lua_pushnil(ctx_lua->L);
+    while (lua_next(ctx_lua->L, -2) != 0) { // iterate pool_wr entries
+        if (lua_istable(ctx_lua->L, -1)) {
+            lua_getfield(ctx_lua->L, -1, "type");
+            const char* type = lua_tostring(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
+
+            lua_getfield(ctx_lua->L, -1, "count");
+            size_t count = (size_t)lua_tointeger(ctx_lua->L, -1);
+            lua_pop(ctx_lua->L, 1);
+
+            size_t type_size = 0;
+
+            if (strcmp(type, "uint8_t") == 0)
+                type_size = sizeof(uint8_t);
+            else if (strcmp(type, "uint16_t") == 0)
+                type_size = sizeof(uint16_t);
+            else if (strcmp(type, "uint32_t") == 0)
+                type_size = sizeof(uint32_t);
+            else if (strcmp(type, "uint64_t") == 0)
+                type_size = sizeof(uint64_t);
+            else if (strcmp(type, "int16_t") == 0)
+                type_size = sizeof(int16_t);
+            else if (strcmp(type, "int32_t") == 0)
+                type_size = sizeof(int32_t);
+            else if (strcmp(type, "int") == 0)
+                type_size = sizeof(int);
+            else if (strcmp(type, "float") == 0)
+                type_size = sizeof(float);
+            else if (strcmp(type, "double") == 0)
+                type_size = sizeof(double);
+            else if (strcmp(type, "void*") == 0)
+                type_size = sizeof(void*);
+            else if (strcmp(type, "char") == 0)
+                type_size = sizeof(char);
+            else if (strcmp(type, "char*") == 0)
+                type_size = sizeof(char*);
+            else if (strcmp(type, "bool") == 0)
+                type_size = sizeof(bool);
+            else if (strcmp(type, "war_undo_node*") == 0)
+                type_size = sizeof(war_undo_node*);
+            else if (strcmp(type, "war_undo_node") == 0)
+                type_size = sizeof(war_undo_node);
+
+            /* --- WR-specific structs --- */
+            else if (strcmp(type, "war_fsm_context") == 0)
+                type_size = sizeof(war_fsm_context);
+            else if (strcmp(type, "war_quad_vertex") == 0)
+                type_size = sizeof(war_quad_vertex);
+            else if (strcmp(type, "war_note_quads") == 0)
+                type_size = sizeof(war_note_quads);
+            else if (strcmp(type, "void (*)(war_env*)") == 0)
+                type_size = sizeof(void (*)(war_env*));
+            else if (strcmp(type, "war_text_vertex") == 0)
+                type_size = sizeof(war_text_vertex);
+            else if (strcmp(type, "war_status_context") == 0)
+                type_size = sizeof(war_status_context);
+            else if (strcmp(type, "war_capture_context") == 0)
+                type_size = sizeof(war_capture_context);
+            else if (strcmp(type, "war_command_context") == 0)
+                type_size = sizeof(war_command_context);
+            else if (strcmp(type, "war_play_context") == 0)
+                type_size = sizeof(war_play_context);
+            else if (strcmp(type, "war_audio_context") == 0)
+                type_size = sizeof(war_audio_context);
+            else if (strcmp(type, "war_cache_wav") == 0)
+                type_size = sizeof(war_cache_wav);
+            else if (strcmp(type, "war_map_wav") == 0)
+                type_size = sizeof(war_map_wav);
+            else if (strcmp(type, "war_wav") == 0)
+                type_size = sizeof(war_wav);
+            else if (strcmp(type, "war_env") == 0)
+                type_size = sizeof(war_env);
+            else if (strcmp(type, "war_color_context") == 0)
+                type_size = sizeof(war_color_context);
+            else if (strcmp(type, "war_undo_tree") == 0)
+                type_size = sizeof(war_undo_tree);
+            else if (strcmp(type, "war_payload_union") == 0)
+                type_size = sizeof(war_payload_union);
+
+            /* --- Pointer variants (optional but useful if you define them in
+             * Lua) --- */
+            else if (strcmp(type, "uint8_t*") == 0)
+                type_size = sizeof(uint8_t*);
+            else if (strcmp(type, "uint16_t*") == 0)
+                type_size = sizeof(uint16_t*);
+            else if (strcmp(type, "uint32_t*") == 0)
+                type_size = sizeof(uint32_t*);
+            else if (strcmp(type, "void**") == 0)
+                type_size = sizeof(void**);
+
+            else {
+                call_terry_davis("Unknown pool_wr type: %s", type);
+                type_size = 0;
             }
+
+            total_size += type_size * count;
         }
-        if (ctx_wr->layer_flux) {
-            war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
+        lua_pop(ctx_lua->L, 1); // pop value
+    }
+
+    // align total_size to pool alignment
+    size_t alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
+    total_size = (total_size + alignment - 1) & ~(alignment - 1);
+    call_terry_davis("pool_wr size: %zu", total_size);
+    return total_size;
+}
+
+static inline void* war_pool_alloc(war_pool* pool, size_t size) {
+    size = ALIGN_UP(size, pool->pool_alignment);
+    if (pool->pool_ptr + size > (uint8_t*)pool->pool + pool->pool_size) {
+        call_terry_davis("war_pool_alloc not big enough! %zu bytes", size);
+        abort();
+    }
+    void* ptr = pool->pool_ptr;
+    pool->pool_ptr += size;
+    return ptr;
+}
+
+static inline void war_layer_flux(war_window_render_context* ctx_wr,
+                                  war_atomics* atomics,
+                                  war_play_context* ctx_play,
+                                  war_color_context* ctx_color) {
+    uint64_t layer = ctx_play->note_layers[(int)ctx_wr->cursor_pos_y];
+    atomic_store(&atomics->layer, layer);
+    ctx_wr->layers_active_count = __builtin_popcountll(layer);
+    switch (ctx_wr->layers_active_count) {
+    case 0: {
+        ctx_wr->color_cursor = ctx_color->white_hex;
+        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
+        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
+        break;
+    }
+    case 1: {
+        int active = __builtin_ctzll(layer);
+        ctx_wr->color_cursor = ctx_color->colors[active];
+        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
+        ctx_wr->color_note_outline_default = ctx_color->white_hex;
+        ctx_wr->layers_active[0] = (active + 1) + '0';
+        break;
+    }
+    default: {
+        int count = 0;
+        while (layer) {
+            int active = __builtin_ctzll(layer);
+            ctx_wr->layers_active[count++] = (active + 1) + '0';
+            layer &= layer - 1;
         }
-        ctx_wr->numeric_prefix = 0;
-        return;
+        ctx_wr->color_cursor = ctx_color->full_white_hex;
+        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
+        ctx_wr->color_note_outline_default = ctx_color->white_hex;
+        break;
     }
-    ctx_wr->cursor_pos_y = ctx_wr->bottom_row;
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
     }
-    ctx_wr->numeric_prefix = 0;
 }
 
-static inline void
-war_roll_cursor_goto_top_bound_or_prefix_vertical(war_env* env) {
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    call_terry_davis("war_roll_cursor_goto_top_bound_or_prefix_vertical");
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->cursor_pos_y = war_clamp_uint32(
-            ctx_wr->numeric_prefix, ctx_wr->min_row, ctx_wr->max_row);
-        uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-        uint32_t distance = viewport_height / 2;
-        ctx_wr->bottom_row = war_clamp_subtract_uint32(
-            ctx_wr->cursor_pos_y, distance, ctx_wr->min_row);
-        ctx_wr->top_row = war_clamp_add_uint32(
-            ctx_wr->cursor_pos_y, distance, ctx_wr->max_row);
-        uint32_t new_viewport_height = war_clamp_subtract_uint32(
-            ctx_wr->top_row, ctx_wr->bottom_row, ctx_wr->min_row);
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = war_clamp_subtract_uint32(
-                viewport_height, new_viewport_height, ctx_wr->min_row);
-            uint32_t sum =
-                war_clamp_add_uint32(ctx_wr->top_row, diff, ctx_wr->max_row);
-            if (sum < ctx_wr->max_row) {
-                ctx_wr->top_row = sum;
-            } else {
-                ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                    ctx_wr->bottom_row, diff, ctx_wr->min_row);
-            }
-        }
-        if (ctx_wr->layer_flux) {
-            war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-        }
-        ctx_wr->numeric_prefix = 0;
-        return;
+static inline void war_get_warpoon_text(war_views* views) {
+    for (uint32_t i = 0; i < views->views_count; i++) {
+        strncpy(views->warpoon_text[i], "", MAX_WARPOON_TEXT_COLS);
+        snprintf(views->warpoon_text[i],
+                 MAX_WARPOON_TEXT_COLS,
+                 "%d,%d [%d,%d]",
+                 views->row[i],
+                 views->col[i],
+                 views->bottom_row[i],
+                 views->left_col[i]);
+        call_terry_davis("i_views: %u", i);
+        call_terry_davis("views row: %u", views->row[i]);
+        call_terry_davis("views col: %u", views->col[i]);
+        call_terry_davis("views bottom_row: %u", views->bottom_row[i]);
+        call_terry_davis("views left_col: %u", views->left_col[i]);
     }
-    ctx_wr->cursor_pos_y = ctx_wr->top_row;
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
+}
+
+static inline void war_warpoon_delete_at_i(war_views* views,
+                                           uint32_t i_delete) {
+    if (i_delete >= views->views_count) return;
+    uint32_t last = views->views_count - 1;
+    // Shift all SoA arrays to the left to fill the gap
+    for (uint32_t j = i_delete; j < last; j++) {
+        views->col[j] = views->col[j + 1];
+        views->row[j] = views->row[j + 1];
+        views->left_col[j] = views->left_col[j + 1];
+        views->right_col[j] = views->right_col[j + 1];
+        views->bottom_row[j] = views->bottom_row[j + 1];
+        views->top_row[j] = views->top_row[j + 1];
     }
-    ctx_wr->numeric_prefix = 0;
+    views->views_count--;
 }
 
-static inline void war_roll_1(war_env* env) {
-    call_terry_davis("war_roll_1");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 1, UINT32_MAX);
+static inline void war_warpoon_shift_up(war_views* views) {
+    if (views->warpoon_row + 1 > views->warpoon_max_row) { return; }
+
+    uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
+    if ((int)i_views - 1 < 0 || i_views > views->views_count - 1) { return; }
+
+    uint32_t tmp_col = views->col[i_views - 1];
+    uint32_t tmp_row = views->row[i_views - 1];
+    uint32_t tmp_left_col = views->left_col[i_views - 1];
+    uint32_t tmp_bottom_row = views->bottom_row[i_views - 1];
+    uint32_t tmp_right_col = views->right_col[i_views - 1];
+    uint32_t tmp_top_row = views->top_row[i_views - 1];
+    views->col[i_views - 1] = views->col[i_views];
+    views->row[i_views - 1] = views->row[i_views];
+    views->left_col[i_views - 1] = views->left_col[i_views];
+    views->bottom_row[i_views - 1] = views->bottom_row[i_views];
+    views->right_col[i_views - 1] = views->right_col[i_views];
+    views->top_row[i_views - 1] = views->top_row[i_views];
+    views->col[i_views] = tmp_col;
+    views->row[i_views] = tmp_row;
+    views->left_col[i_views] = tmp_left_col;
+    views->bottom_row[i_views] = tmp_bottom_row;
+    views->right_col[i_views] = tmp_right_col;
+    views->top_row[i_views] = tmp_top_row;
 }
 
-static inline void war_roll_2(war_env* env) {
-    call_terry_davis("war_roll_2");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 2, UINT32_MAX);
+static inline void war_warpoon_shift_down(war_views* views) {
+    if (views->warpoon_row == 0)
+        return; // already at bottom in your indexing logic
+
+    uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
+    if (i_views + 1 >= views->views_count) return;
+
+    uint32_t tmp_col = views->col[i_views + 1];
+    uint32_t tmp_row = views->row[i_views + 1];
+    uint32_t tmp_left_col = views->left_col[i_views + 1];
+    uint32_t tmp_bottom_row = views->bottom_row[i_views + 1];
+    uint32_t tmp_right_col = views->right_col[i_views + 1];
+    uint32_t tmp_top_row = views->top_row[i_views + 1];
+
+    views->col[i_views + 1] = views->col[i_views];
+    views->row[i_views + 1] = views->row[i_views];
+    views->left_col[i_views + 1] = views->left_col[i_views];
+    views->bottom_row[i_views + 1] = views->bottom_row[i_views];
+    views->right_col[i_views + 1] = views->right_col[i_views];
+    views->top_row[i_views + 1] = views->top_row[i_views];
+
+    views->col[i_views] = tmp_col;
+    views->row[i_views] = tmp_row;
+    views->left_col[i_views] = tmp_left_col;
+    views->bottom_row[i_views] = tmp_bottom_row;
+    views->right_col[i_views] = tmp_right_col;
+    views->top_row[i_views] = tmp_top_row;
 }
 
-static inline void war_roll_3(war_env* env) {
-    call_terry_davis("war_roll_3");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 3, UINT32_MAX);
-}
-
-static inline void war_roll_4(war_env* env) {
-    call_terry_davis("war_roll_4");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 4, UINT32_MAX);
-}
-
-static inline void war_roll_5(war_env* env) {
-    call_terry_davis("war_roll_5");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 5, UINT32_MAX);
-}
-
-static inline void war_roll_6(war_env* env) {
-    call_terry_davis("war_roll_6");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 6, UINT32_MAX);
-}
-
-static inline void war_roll_7(war_env* env) {
-    call_terry_davis("war_roll_7");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 7, UINT32_MAX);
-}
-
-static inline void war_roll_8(war_env* env) {
-    call_terry_davis("war_roll_8");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 8, UINT32_MAX);
-}
-
-static inline void war_roll_9(war_env* env) {
-    call_terry_davis("war_roll_9");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix =
-        war_clamp_multiply_uint32(ctx_wr->numeric_prefix, 10, UINT32_MAX);
-    ctx_wr->numeric_prefix =
-        war_clamp_add_uint32(ctx_wr->numeric_prefix, 9, UINT32_MAX);
-}
-
-static inline void war_roll_r(war_env* env) {
-    call_terry_davis("war_roll_r");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_zoom_in(war_env* env) {
-    call_terry_davis("war_roll_zoom_in");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->zoom_scale += ctx_wr->zoom_increment;
-    if (ctx_wr->zoom_scale > 5.0f) { ctx_wr->zoom_scale = 5.0f; }
-    float viewport_cols_f =
-        ctx_wr->physical_width / (ctx_wr->cell_width * ctx_wr->zoom_scale);
-    float viewport_rows_f =
-        ctx_wr->physical_height / (ctx_wr->cell_height * ctx_wr->zoom_scale);
-    int viewport_cols = fmax(5, (int)round(viewport_cols_f));
-    int viewport_rows = fmax(5, (int)round(viewport_rows_f));
-    ctx_wr->viewport_cols = viewport_cols;
-    ctx_wr->viewport_rows = viewport_rows;
-    ctx_wr->right_col = fmin(ctx_wr->max_col,
-                             ctx_wr->left_col + viewport_cols - 1 -
-                                 ctx_wr->num_cols_for_line_numbers);
-    ctx_wr->top_row = fmin(ctx_wr->max_row,
-                           ctx_wr->bottom_row + viewport_rows - 1 -
-                               ctx_wr->num_rows_for_status_bars);
-    ctx_wr->numeric_prefix = 0;
-    return;
-}
-
-static inline void war_roll_zoom_out(war_env* env) {
-    call_terry_davis("war_roll_zoom_out");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->zoom_scale -= ctx_wr->zoom_increment;
-    if (ctx_wr->zoom_scale <= 0.1f) { ctx_wr->zoom_scale = 0.1f; }
-    float viewport_cols_f =
-        ctx_wr->physical_width / (ctx_wr->cell_width * ctx_wr->zoom_scale);
-    float viewport_rows_f =
-        ctx_wr->physical_height / (ctx_wr->cell_height * ctx_wr->zoom_scale);
-    int viewport_cols = fmax(5, (int)round(viewport_cols_f));
-    int viewport_rows = fmax(5, (int)round(viewport_rows_f));
-    ctx_wr->viewport_cols = viewport_cols;
-    ctx_wr->viewport_rows = viewport_rows;
-    ctx_wr->right_col = fmin(ctx_wr->max_col,
-                             ctx_wr->left_col + viewport_cols - 1 -
-                                 ctx_wr->num_cols_for_line_numbers);
-    ctx_wr->top_row = fmin(ctx_wr->max_row,
-                           ctx_wr->bottom_row + viewport_rows - 1 -
-                               ctx_wr->num_rows_for_status_bars);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_zoom_in_leap(war_env* env) {
-    call_terry_davis("war_roll_zoom_in_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    // ctx_wr.zoom_scale +=
-    // ctx_wr.zoom_leap_increment; if
-    // (ctx_wr.zoom_scale > 5.0f) {
-    // ctx_wr.zoom_scale = 5.0f; }
-    // ctx_wr.panning_x = ctx_wr.anchor_ndc_x
-    // - ctx_wr.anchor_x * ctx_wr.zoom_scale;
-    // ctx_wr.panning_y = ctx_wr.anchor_ndc_y
-    // - ctx_wr.anchor_y * ctx_wr.zoom_scale;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_zoom_out_leap(war_env* env) {
-    call_terry_davis("war_roll_zoom_out_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    // ctx_wr.zoom_scale -=
-    // ctx_wr.zoom_leap_increment; if
-    // (ctx_wr.zoom_scale < 0.1f) {
-    // ctx_wr.zoom_scale = 0.1f; }
-    // ctx_wr.panning_x = ctx_wr.anchor_ndc_x
-    // - ctx_wr.anchor_x * ctx_wr.zoom_scale;
-    // ctx_wr.panning_y = ctx_wr.anchor_ndc_y
-    // - ctx_wr.anchor_y * ctx_wr.zoom_scale;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_zoom_reset(war_env* env) {
-    call_terry_davis("war_roll_zoom_reset");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_vulkan_context* ctx_vk = env->ctx_vk;
-    ctx_wr->zoom_scale = 1.0f;
-    ctx_wr->viewport_cols =
-        (uint32_t)(ctx_wr->physical_width / ctx_vk->cell_width);
-    ctx_wr->viewport_rows =
-        (uint32_t)(ctx_wr->physical_height / ctx_vk->cell_height);
-    ctx_wr->right_col = fmin(ctx_wr->max_col,
-                             ctx_wr->left_col + ctx_wr->default_viewport_cols -
-                                 1 - ctx_wr->num_cols_for_line_numbers);
-    ctx_wr->top_row = fmin(ctx_wr->max_row,
-                           ctx_wr->bottom_row + ctx_wr->default_viewport_rows -
-                               1 - ctx_wr->num_rows_for_status_bars);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_esc(war_env* env) {
-    call_terry_davis("war_roll_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    // if (timeout_state_index) {
-    //     if (fsm[timeout_state_index].command[ctx_wr.mode]) {
-    //         goto* fsm[timeout_state_index].command[ctx_wr.mode];
-    //         timeout_state_index = 0;
-    //     }
-    //     return;
-    // }
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-    return;
-}
-
-static inline void war_roll_shift_s(war_env* env) {
-    call_terry_davis("war_roll_shift_s");
-}
-
-static inline void war_roll_reset_cursor(war_env* env) {
-    call_terry_davis("war_roll_reset_cursor");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->cursor_width_sub_cells = 1;
-    ctx_wr->cursor_width_whole_number = 1;
-    ctx_wr->cursor_width_sub_col = 1;
-    ctx_wr->navigation_whole_number_col = 1;
-    ctx_wr->navigation_sub_cells_col = 1;
-    ctx_wr->cursor_size_x = 1.0;
-    ctx_wr->cursor_navigation_x = 1.0;
-    uint32_t whole_pos_x = llround(ctx_wr->cursor_pos_x);
-    ctx_wr->cursor_pos_x = whole_pos_x;
-    ctx_wr->numeric_prefix = 0;
-    return;
-}
-
-static inline void war_roll_cursor_fat(war_env* env) {
-    call_terry_davis("war_roll_cursor_fat");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->cursor_width_whole_number = ctx_wr->numeric_prefix;
-        ctx_wr->cursor_size_x = (double)ctx_wr->cursor_width_whole_number /
-                                ctx_wr->cursor_width_sub_cells;
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_wr->cursor_width_whole_number = 1;
-    ctx_wr->cursor_size_x = (double)ctx_wr->cursor_width_whole_number /
-                            ctx_wr->cursor_width_sub_cells;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_thin(war_env* env) {
-    call_terry_davis("war_roll_cursor_thin");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->cursor_width_sub_cells = ctx_wr->numeric_prefix;
-        ctx_wr->cursor_size_x = (double)ctx_wr->cursor_width_whole_number /
-                                ctx_wr->cursor_width_sub_cells;
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_wr->cursor_width_sub_cells = 1;
-    ctx_wr->cursor_size_x = (double)ctx_wr->cursor_width_whole_number /
-                            ctx_wr->cursor_width_sub_cells;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_move_thin(war_env* env) {
-    call_terry_davis("war_roll_cursor_move_thin");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->navigation_sub_cells_col = ctx_wr->numeric_prefix;
-        ctx_wr->cursor_navigation_x =
-            (double)ctx_wr->navigation_whole_number_col /
-            ctx_wr->navigation_sub_cells_col;
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_wr->navigation_sub_cells_col = 1;
-    ctx_wr->cursor_navigation_x = (double)ctx_wr->navigation_whole_number_col /
-                                  ctx_wr->navigation_sub_cells_col;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_move_fat(war_env* env) {
-    call_terry_davis("war_roll_cursor_move_fat");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    if (ctx_wr->numeric_prefix) {
-        ctx_wr->navigation_whole_number_col = ctx_wr->numeric_prefix;
-        ctx_wr->cursor_navigation_x =
-            (double)ctx_wr->navigation_whole_number_col /
-            ctx_wr->navigation_sub_cells_col;
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_wr->navigation_whole_number_col = 1;
-    ctx_wr->cursor_navigation_x = (double)ctx_wr->navigation_whole_number_col /
-                                  ctx_wr->navigation_sub_cells_col;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_f(war_env* env) {
-    call_terry_davis("war_roll_alt_f");
-}
-
-static inline void war_roll_cursor_goto_bottom(war_env* env) {
-    call_terry_davis("war_window_render_context");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    ctx_wr->cursor_pos_y = ctx_wr->min_row;
-    uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-    uint32_t distance = viewport_height / 2;
-    ctx_wr->bottom_row = war_clamp_subtract_uint32(
-        ctx_wr->cursor_pos_y, distance, ctx_wr->min_row);
-    ctx_wr->top_row =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_y, distance, ctx_wr->max_row);
-    uint32_t new_viewport_height = war_clamp_subtract_uint32(
-        ctx_wr->top_row, ctx_wr->bottom_row, ctx_wr->min_row);
-    if (new_viewport_height < viewport_height) {
-        uint32_t diff = war_clamp_subtract_uint32(
-            viewport_height, new_viewport_height, ctx_wr->min_row);
-        uint32_t sum =
-            war_clamp_add_uint32(ctx_wr->top_row, diff, ctx_wr->max_row);
-        if (sum < ctx_wr->max_row) {
-            ctx_wr->top_row = sum;
+// --------------------------
+// Writer: WR -> Audio (to_a)
+static inline uint8_t war_pc_to_a(war_producer_consumer* pc,
+                               uint32_t header,
+                               uint32_t payload_size,
+                               const void* payload) {
+    uint32_t total_size = 8 + payload_size; // header(4) + size(4) + payload
+    uint32_t write_index = pc->i_to_a;
+    uint32_t read_index = pc->i_from_wr;
+    // free bytes calculation (circular buffer)
+    uint32_t free_bytes =
+        (pc->size + read_index - write_index - 1) & (pc->size - 1);
+    if (free_bytes < total_size) return 0;
+    // --- write header (4) + size (4) allowing split ---
+    uint32_t cont_bytes = pc->size - write_index;
+    if (cont_bytes >= 8) {
+        // contiguous place for header+size
+        *(uint32_t*)(pc->to_a + write_index) = header;
+        *(uint32_t*)(pc->to_a + write_index + 4) = payload_size;
+    } else {
+        // split header+size across end -> wrap
+        if (cont_bytes >= 4) {
+            *(uint32_t*)(pc->to_a + write_index) = header;
+            *(uint32_t*)pc->to_a = payload_size;
         } else {
-            ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                ctx_wr->bottom_row, diff, ctx_wr->min_row);
+            *(uint16_t*)(pc->to_a + write_index) = (uint16_t)header;
+            *(uint16_t*)(pc->to_a + write_index + 2) = (uint16_t)(header >> 16);
+            *(uint32_t*)pc->to_a = payload_size;
         }
     }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_goto_top(war_env* env) {
-    call_terry_davis("war_roll_cursor_goto_top");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    ctx_wr->cursor_pos_y = ctx_wr->max_row;
-    uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-    uint32_t distance = viewport_height / 2;
-    ctx_wr->bottom_row = war_clamp_subtract_uint32(
-        ctx_wr->cursor_pos_y, distance, ctx_wr->min_row);
-    ctx_wr->top_row =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_y, distance, ctx_wr->max_row);
-    uint32_t new_viewport_height = war_clamp_subtract_uint32(
-        ctx_wr->top_row, ctx_wr->bottom_row, ctx_wr->min_row);
-    if (new_viewport_height < viewport_height) {
-        uint32_t diff = war_clamp_subtract_uint32(
-            viewport_height, new_viewport_height, ctx_wr->min_row);
-        uint32_t sum =
-            war_clamp_add_uint32(ctx_wr->top_row, diff, ctx_wr->max_row);
-        if (sum < ctx_wr->max_row) {
-            ctx_wr->top_row = sum;
+    // --- write payload (may be zero length) allowing split ---
+    if (payload_size) {
+        uint32_t payload_write_pos = (write_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_write_pos;
+        if (first_chunk >= payload_size) {
+            memcpy(pc->to_a + payload_write_pos, payload, payload_size);
         } else {
-            ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                ctx_wr->bottom_row, diff, ctx_wr->min_row);
+            // wrap
+            memcpy(pc->to_a + payload_write_pos, payload, first_chunk);
+            memcpy(pc->to_a,
+                   (const uint8_t*)payload + first_chunk,
+                   payload_size - first_chunk);
         }
     }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
+    // commit write index
+    pc->i_to_a = (write_index + total_size) & (pc->size - 1);
+    return 1;
 }
 
-static inline void war_roll_cursor_goto_middle(war_env* env) {
-    call_terry_davis("war_window_render_context");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_play_context* ctx_play = env->ctx_play;
-    ctx_wr->cursor_pos_y = 60;
-    uint32_t viewport_height = ctx_wr->top_row - ctx_wr->bottom_row;
-    uint32_t distance = viewport_height / 2;
-    ctx_wr->bottom_row = war_clamp_subtract_uint32(
-        ctx_wr->cursor_pos_y, distance, ctx_wr->min_row);
-    ctx_wr->top_row =
-        war_clamp_add_uint32(ctx_wr->cursor_pos_y, distance, ctx_wr->max_row);
-    uint32_t new_viewport_height = war_clamp_subtract_uint32(
-        ctx_wr->top_row, ctx_wr->bottom_row, ctx_wr->min_row);
-    if (new_viewport_height < viewport_height) {
-        uint32_t diff = war_clamp_subtract_uint32(
-            viewport_height, new_viewport_height, ctx_wr->min_row);
-        uint32_t sum =
-            war_clamp_add_uint32(ctx_wr->top_row, diff, ctx_wr->max_row);
-        if (sum < ctx_wr->max_row) {
-            ctx_wr->top_row = sum;
+// --------------------------
+// Reader: Audio <- WR (from_wr)
+static inline uint8_t war_pc_from_wr(war_producer_consumer* pc,
+                                  uint32_t* out_header,
+                                  uint32_t* out_size,
+                                  void* out_payload) {
+    uint32_t write_index = pc->i_to_a;
+    uint32_t read_index = pc->i_from_wr;
+    uint32_t used_bytes =
+        (pc->size + write_index - read_index) & (pc->size - 1);
+    if (used_bytes < 8) return 0; // need at least header+size
+    // read header+size (handle split)
+    uint32_t cont_bytes = pc->size - read_index;
+    if (cont_bytes >= 8) {
+        *out_header = *(uint32_t*)(pc->to_a + read_index);
+        *out_size = *(uint32_t*)(pc->to_a + read_index + 4);
+    } else {
+        if (cont_bytes >= 4) {
+            *out_header = *(uint32_t*)(pc->to_a + read_index);
+            *out_size = *(uint32_t*)pc->to_a;
         } else {
-            ctx_wr->bottom_row = war_clamp_subtract_uint32(
-                ctx_wr->bottom_row, diff, ctx_wr->min_row);
+            uint16_t low = *(uint16_t*)(pc->to_a + read_index);
+            uint16_t high = *(uint16_t*)(pc->to_a + read_index + 2);
+            *out_header = (uint32_t)high << 16 | low;
+            *out_size = *(uint32_t*)pc->to_a;
         }
     }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
+    uint32_t total_size = 8 + *out_size;
+    if (used_bytes < total_size) return 0; // not all payload present yet
+    // read payload (if any)
+    if (*out_size) {
+        uint32_t payload_start = (read_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_start;
+        if (first_chunk >= *out_size) {
+            memcpy(out_payload, pc->to_a + payload_start, *out_size);
+        } else {
+            memcpy(out_payload, pc->to_a + payload_start, first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk,
+                   pc->to_a,
+                   *out_size - first_chunk);
+        }
     }
-    ctx_wr->numeric_prefix = 0;
+    // commit read index
+    pc->i_from_wr = (read_index + total_size) & (pc->size - 1);
+    return 1;
 }
 
-static inline void war_roll_note_draw(war_env* env) {
-    call_terry_davis("war_roll_note_draw");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_lua_context* ctx_lua = env->ctx_lua;
-    war_undo_tree* undo_tree = env->undo_tree;
-    war_note_quads* note_quads = env->note_quads;
-    war_pool* pool_wr = env->pool_wr;
-    uint64_t id = atomic_fetch_add(&atomics->note_next_id, 1);
-    war_note_quad note_quad = {
-        .alive = 1,
-        .id = id,
-        .pos_x = ctx_wr->cursor_pos_x,
-        .pos_y = ctx_wr->cursor_pos_y,
-        .layer = atomic_load(&atomics->layer),
-        .size_x = ctx_wr->cursor_size_x,
-        .size_x_numerator = ctx_wr->cursor_width_whole_number,
-        .size_x_denominator = ctx_wr->cursor_width_sub_cells,
-        .navigation_x = ctx_wr->cursor_navigation_x,
-        .navigation_x_numerator = ctx_wr->navigation_whole_number_col,
-        .navigation_x_denominator = ctx_wr->navigation_sub_cells_col,
-        .color = ctx_wr->color_cursor,
-        .outline_color = ctx_wr->color_note_outline_default,
-        .gain = atomic_load(&ctx_lua->A_DEFAULT_GAIN),
-        .voice = 0,
+// --------------------------
+// Writer: Main -> WR (to_wr)
+static inline uint8_t war_pc_to_wr(war_producer_consumer* pc,
+                                uint32_t header,
+                                uint32_t payload_size,
+                                const void* payload) {
+    uint32_t total_size = 8 + payload_size;
+    uint32_t write_index = pc->i_to_wr;
+    uint32_t read_index = pc->i_from_a;
+    uint32_t free_bytes =
+        (pc->size + read_index - write_index - 1) & (pc->size - 1);
+    if (free_bytes < total_size) return 0;
+    // header+size
+    uint32_t cont_bytes = pc->size - write_index;
+    if (cont_bytes >= 8) {
+        *(uint32_t*)(pc->to_wr + write_index) = header;
+        *(uint32_t*)(pc->to_wr + write_index + 4) = payload_size;
+    } else {
+        if (cont_bytes >= 4) {
+            *(uint32_t*)(pc->to_wr + write_index) = header;
+            *(uint32_t*)pc->to_wr = payload_size;
+        } else {
+            *(uint16_t*)(pc->to_wr + write_index) = (uint16_t)header;
+            *(uint16_t*)(pc->to_wr + write_index + 2) =
+                (uint16_t)(header >> 16);
+            *(uint32_t*)pc->to_wr = payload_size;
+        }
+    }
+    // payload
+    if (payload_size) {
+        uint32_t payload_write_pos = (write_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_write_pos;
+        if (first_chunk >= payload_size) {
+            memcpy(pc->to_wr + payload_write_pos, payload, payload_size);
+        } else {
+            memcpy(pc->to_wr + payload_write_pos, payload, first_chunk);
+            memcpy(pc->to_wr,
+                   (const uint8_t*)payload + first_chunk,
+                   payload_size - first_chunk);
+        }
+    }
+    pc->i_to_wr = (write_index + total_size) & (pc->size - 1);
+    return 1;
+}
+
+// --------------------------
+// Reader: WR <- Main (from_a)
+static inline uint8_t war_pc_from_a(war_producer_consumer* pc,
+                                 uint32_t* out_header,
+                                 uint32_t* out_size,
+                                 void* out_payload) {
+    uint32_t write_index = pc->i_to_wr;
+    uint32_t read_index = pc->i_from_a;
+    uint32_t used_bytes =
+        (pc->size + write_index - read_index) & (pc->size - 1);
+    if (used_bytes < 8) return 0;
+    uint32_t cont_bytes = pc->size - read_index;
+    if (cont_bytes >= 8) {
+        *out_header = *(uint32_t*)(pc->to_wr + read_index);
+        *out_size = *(uint32_t*)(pc->to_wr + read_index + 4);
+    } else {
+        if (cont_bytes >= 4) {
+            *out_header = *(uint32_t*)(pc->to_wr + read_index);
+            *out_size = *(uint32_t*)pc->to_wr;
+        } else {
+            uint16_t low = *(uint16_t*)(pc->to_wr + read_index);
+            uint16_t high = *(uint16_t*)(pc->to_wr + read_index + 2);
+            *out_header = (uint32_t)high << 16 | low;
+            *out_size = *(uint32_t*)pc->to_wr;
+        }
+    }
+    uint32_t total_size = 8 + *out_size;
+    if (used_bytes < total_size) return 0;
+    if (*out_size) {
+        uint32_t payload_start = (read_index + 8) & (pc->size - 1);
+        uint32_t first_chunk = pc->size - payload_start;
+        if (first_chunk >= *out_size) {
+            memcpy(out_payload, pc->to_wr + payload_start, *out_size);
+        } else {
+            memcpy(out_payload, pc->to_wr + payload_start, first_chunk);
+            memcpy((uint8_t*)out_payload + first_chunk,
+                   pc->to_wr,
+                   *out_size - first_chunk);
+        }
+    }
+    pc->i_from_a = (read_index + total_size) & (pc->size - 1);
+    return 1;
+}
+
+static inline uint64_t war_get_monotonic_time_us(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
+
+static inline war_rgba_t war_unpack_abgr(uint32_t hex_color) {
+    war_rgba_t color;
+    color.r = ((hex_color >> 0) & 0xFF) / 255.0f;  // Red
+    color.g = ((hex_color >> 8) & 0xFF) / 255.0f;  // Green
+    color.b = ((hex_color >> 16) & 0xFF) / 255.0f; // Blue
+    color.a = ((hex_color >> 24) & 0xFF) / 255.0f; // Alpha
+    return color;
+}
+
+static inline int32_t war_to_fixed(float f) { return (int32_t)(f * 256.0f); }
+
+static inline uint32_t war_pad_to_scale(float value, uint32_t scale) {
+    uint32_t rounded = (uint32_t)(value + 0.5f);
+    return (rounded + scale - 1) / scale * scale;
+}
+
+static inline uint64_t war_read_le64(const uint8_t* p) {
+    return ((uint64_t)p[0]) | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
+           ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) |
+           ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) |
+           ((uint64_t)p[7] << 56);
+}
+
+static inline uint32_t war_read_le32(const uint8_t* p) {
+    return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
+static inline uint16_t war_read_le16(const uint8_t* p) {
+    return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8);
+}
+
+static inline void war_write_le64(uint8_t* p, uint64_t v) {
+    p[0] = (uint8_t)(v);
+    p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16);
+    p[3] = (uint8_t)(v >> 24);
+    p[4] = (uint8_t)(v >> 32);
+    p[5] = (uint8_t)(v >> 40);
+    p[6] = (uint8_t)(v >> 48);
+    p[7] = (uint8_t)(v >> 56);
+}
+
+static inline void war_write_le32(uint8_t* p, uint32_t v) {
+    p[0] = (uint8_t)(v);
+    p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16);
+    p[3] = (uint8_t)(v >> 24);
+}
+
+static inline void war_write_le16(uint8_t* p, uint16_t v) {
+    p[0] = (uint8_t)(v);
+    p[1] = (uint8_t)(v >> 8);
+}
+
+static inline uint32_t
+war_clamp_add_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+    uint64_t sum = (uint64_t)a + b;
+    uint64_t mask = -(sum > max_value);
+    return (uint32_t)((sum & ~mask) | ((uint64_t)max_value & mask));
+}
+
+static inline uint32_t
+war_clamp_subtract_uint32(uint32_t a, uint32_t b, uint32_t min_value) {
+    uint32_t diff = a - b;
+    uint32_t underflow_mask = -(a < b);
+    uint32_t below_min_mask = -(diff < min_value);
+    uint32_t clamped_diff =
+        (diff & ~below_min_mask) | (min_value & below_min_mask);
+    return (clamped_diff & ~underflow_mask) | (min_value & underflow_mask);
+}
+
+static inline uint32_t
+war_clamp_multiply_uint32(uint32_t a, uint32_t b, uint32_t max_value) {
+    uint64_t prod = (uint64_t)a * (uint64_t)b;
+    uint64_t mask = -(prod > max_value);
+    return (uint32_t)((prod & ~mask) | ((uint64_t)max_value & mask));
+}
+
+static inline uint32_t
+war_clamp_uint32(uint32_t a, uint32_t min_value, uint32_t max_value) {
+    a = a < min_value ? min_value : a;
+    a = a > max_value ? max_value : a;
+    return a;
+}
+
+static inline uint64_t war_align64(uint64_t value) {
+    return (value + 63) & ~63ULL;
+}
+
+static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
+    if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
+        (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) {
+        return (uint16_t)ks;
+    }
+    switch (ks) {
+    case XKB_KEY_Escape:
+        return KEYSYM_ESCAPE;
+    case XKB_KEY_apostrophe:
+        return KEYSYM_APOSTROPHE;
+    case XKB_KEY_BackSpace:
+        return KEYSYM_BACKSPACE;
+    case XKB_KEY_Left:
+        return KEYSYM_LEFT;
+    case XKB_KEY_Up:
+        return KEYSYM_UP;
+    case XKB_KEY_Right:
+        return KEYSYM_RIGHT;
+    case XKB_KEY_Down:
+        return KEYSYM_DOWN;
+    case XKB_KEY_Return:
+        return KEYSYM_RETURN;
+    case XKB_KEY_space:
+        return KEYSYM_SPACE;
+    case XKB_KEY_Tab:
+        return KEYSYM_TAB;
+    case XKB_KEY_minus:
+        return KEYSYM_MINUS;
+    case XKB_KEY_comma:
+        return KEYSYM_COMMA;
+    case XKB_KEY_equal:
+        return KEYSYM_EQUAL;
+    case XKB_KEY_plus:
+        return KEYSYM_PLUS;
+    case XKB_KEY_bracketleft:
+        return KEYSYM_LEFTBRACKET;
+    case XKB_KEY_bracketright:
+        return KEYSYM_RIGHTBRACKET;
+    case XKB_KEY_colon:
+        return KEYSYM_SEMICOLON;
+    case XKB_KEY_underscore:
+        return KEYSYM_UNDERSCORE;
+    case 65056:
+        return KEYSYM_TAB;
+    case XKB_KEY_A:
+        return XKB_KEY_a;
+    case XKB_KEY_B:
+        return XKB_KEY_b;
+    case XKB_KEY_C:
+        return XKB_KEY_c;
+    case XKB_KEY_D:
+        return XKB_KEY_d;
+    case XKB_KEY_E:
+        return XKB_KEY_e;
+    case XKB_KEY_F:
+        return XKB_KEY_f;
+    case XKB_KEY_G:
+        return XKB_KEY_g;
+    case XKB_KEY_H:
+        return XKB_KEY_h;
+    case XKB_KEY_I:
+        return XKB_KEY_i;
+    case XKB_KEY_J:
+        return XKB_KEY_j;
+    case XKB_KEY_K:
+        return XKB_KEY_k;
+    case XKB_KEY_L:
+        return XKB_KEY_l;
+    case XKB_KEY_M:
+        return XKB_KEY_m;
+    case XKB_KEY_N:
+        return XKB_KEY_n;
+    case XKB_KEY_O:
+        return XKB_KEY_o;
+    case XKB_KEY_P:
+        return XKB_KEY_p;
+    case XKB_KEY_Q:
+        return XKB_KEY_q;
+    case XKB_KEY_R:
+        return XKB_KEY_r;
+    case XKB_KEY_S:
+        return XKB_KEY_s;
+    case XKB_KEY_T:
+        return XKB_KEY_t;
+    case XKB_KEY_U:
+        return XKB_KEY_u;
+    case XKB_KEY_V:
+        return XKB_KEY_v;
+    case XKB_KEY_W:
+        return XKB_KEY_w;
+    case XKB_KEY_X:
+        return XKB_KEY_x;
+    case XKB_KEY_Y:
+        return XKB_KEY_y;
+    case XKB_KEY_Z:
+        return XKB_KEY_z;
+    case XKB_KEY_exclam:
+        return XKB_KEY_1;
+    case XKB_KEY_at:
+        return XKB_KEY_2;
+    case XKB_KEY_numbersign:
+        return XKB_KEY_3;
+    case XKB_KEY_dollar:
+        return XKB_KEY_4;
+    case XKB_KEY_percent:
+        return XKB_KEY_5;
+    case XKB_KEY_asciicircum:
+        return XKB_KEY_6;
+    case XKB_KEY_ampersand:
+        return XKB_KEY_7;
+    case XKB_KEY_asterisk:
+        return XKB_KEY_8;
+    case XKB_KEY_parenleft:
+        return XKB_KEY_9;
+    case XKB_KEY_parenright:
+        return XKB_KEY_0;
+    default:
+        return KEYSYM_DEFAULT; // fallback / unknown
+    }
+}
+
+static inline int war_keysym_to_int(xkb_keysym_t ks, uint8_t mod) {
+    int lowercase = ks;
+    int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
+    // Letters a-z or A-Z -> always lowercase
+    if (ks >= XKB_KEY_a && ks <= XKB_KEY_z)
+        return (int)ks - mod_shift_difference;
+    if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (int)(ks - XKB_KEY_A + 'a');
+
+    // Numbers 0-9
+    if (ks >= XKB_KEY_0 && ks <= XKB_KEY_9 && mod == 0) return (int)ks;
+
+    switch (ks) {
+    case KEYSYM_SPACE:
+        return ' ';
+    case KEYSYM_APOSTROPHE:
+        return '\'';
+    case KEYSYM_COMMA:
+        return ',';
+    case KEYSYM_MINUS:
+        return '-';
+    case KEYSYM_UNDERSCORE:
+        return '_';
+    case KEYSYM_RETURN:
+        return '\n';
+    case KEYSYM_ESCAPE:
+        return 27;
+    case KEYSYM_UP:
+        return 1;
+    case KEYSYM_DOWN:
+        return 2;
+    case KEYSYM_LEFT:
+        return 3;
+    case KEYSYM_RIGHT:
+        return 4;
+    case KEYSYM_BACKSPACE:
+        return 8;
+    }
+
+    return 0; // non-printable / special keys
+}
+
+static inline void war_command_reset(war_command_context* ctx_command,
+                                     war_status_context* ctx_status) {
+    memset(ctx_status->middle, 0, ctx_status->capacity);
+    ctx_status->middle_size = 0;
+    memset(ctx_command->text, 0, ctx_command->capacity);
+    ctx_command->text_size = 0;
+    ctx_command->text_write_index = 0;
+    memset(ctx_command->input, 0, ctx_command->capacity);
+    ctx_command->input_write_index = 0;
+    ctx_command->input_read_index = 0;
+    memset(ctx_command->prompt, 0, ctx_command->capacity);
+    ctx_command->prompt_size = 0;
+}
+
+static inline void war_command_status(war_command_context* ctx_command,
+                                      war_status_context* ctx_status) {
+    snprintf(ctx_status->middle,
+             ctx_command->prompt_size + 2 + ctx_command->text_size,
+             "%s:%s",
+             ctx_command->prompt,
+             ctx_command->text);
+    ctx_status->middle_size =
+        ctx_command->prompt_size + 2 + ctx_command->text_size;
+}
+
+static inline int war_num_digits(uint32_t n) {
+    int digits = 0;
+    do {
+        digits++;
+        n /= 10;
+    } while (n != 0);
+    return digits;
+}
+
+int war_compare_desc_uint32(const void* a, const void* b) {
+    uint32_t f_a = *(const uint32_t*)a;
+    uint32_t f_b = *(const uint32_t*)b;
+
+    if (f_b > f_a) return 1;
+    if (f_b < f_a) return -1;
+    return 0;
+}
+
+static inline void war_wl_surface_set_opaque_region(int fd,
+                                                    uint32_t wl_surface_id,
+                                                    uint32_t wl_region_id) {
+    uint8_t set_opaque_region[12];
+    war_write_le32(set_opaque_region, wl_surface_id);
+    war_write_le16(set_opaque_region + 4, 4);
+    war_write_le16(set_opaque_region + 6, 12);
+    war_write_le32(set_opaque_region + 8, wl_region_id);
+    // dump_bytes("wl_surface::set_opaque_region request", set_opaque_region,
+    // 12);
+    ssize_t set_opaque_region_written = write(fd, set_opaque_region, 12);
+    assert(set_opaque_region_written == 12);
+}
+
+static inline void war_make_text_quad(war_text_vertex* text_vertices,
+                                      uint16_t* text_indices,
+                                      uint32_t* text_vertices_count,
+                                      uint32_t* text_indices_count,
+                                      float bottom_left_pos[3],
+                                      float span[2],
+                                      uint32_t color,
+                                      war_glyph_info* glyph_info,
+                                      float thickness,
+                                      float feather,
+                                      uint32_t flags) {
+    text_vertices[*text_vertices_count] = (war_text_vertex){
+        .corner = {0, 0},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .uv = {glyph_info->uv_x0, glyph_info->uv_y1},
+        .glyph_size = {glyph_info->width, glyph_info->height},
+        .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
+        .ascent = glyph_info->ascent,
+        .descent = glyph_info->descent,
+        .thickness = thickness,
+        .feather = feather,
+        .color = color,
+        .flags = flags,
     };
-    double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
-    double bpm = atomic_load(&ctx_lua->A_BPM);
-    double frames_per_beat = sample_rate * 60.0 / bpm;
-    double columns_per_beat = atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
-    war_note note;
-    double start_beats = note_quad.pos_x / columns_per_beat;
-    note.note_start_frames = (uint64_t)(start_beats * frames_per_beat + 0.5);
-    double duration_beats = note_quad.size_x / columns_per_beat;
-    note.note_duration_frames =
-        (uint64_t)(duration_beats * frames_per_beat + 0.5);
-    note.note = note_quad.pos_y;
-    note.layer = note_quad.layer;
-    note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
-    note.note_sustain = atomic_load(&ctx_lua->A_DEFAULT_SUSTAIN);
-    note.note_release = atomic_load(&ctx_lua->A_DEFAULT_RELEASE);
-    note.note_gain = atomic_load(&ctx_lua->A_DEFAULT_GAIN);
-    note.note_phase_increment = 0;
-    note.alive = note_quad.alive;
-    note.id = note_quad.id;
-    uint32_t note_quads_max = atomic_load(&ctx_lua->WR_NOTE_QUADS_MAX);
-    uint32_t undo_notes_batch_max =
-        atomic_load(&ctx_lua->WR_UNDO_NOTES_BATCH_MAX);
-    if (ctx_wr->numeric_prefix) {
-        // add notes
-        if (ctx_wr->numeric_prefix >= undo_notes_batch_max) {
-            // swapfile logic (memmove probably)
-            ctx_wr->numeric_prefix = 0;
-        }
-        // --- Compaction if needed ---
-        if (note_quads->count + ctx_wr->numeric_prefix >= note_quads_max) {
-            uint32_t write_idx = 0;
-            for (uint32_t read_idx = 0; read_idx < note_quads->count;
-                 read_idx++) {
-                if (note_quads->alive[read_idx]) {
-                    if (write_idx != read_idx) {
-                        // Copy all fields
-                        note_quads->pos_x[write_idx] =
-                            note_quads->pos_x[read_idx];
-                        note_quads->pos_y[write_idx] =
-                            note_quads->pos_y[read_idx];
-                        note_quads->layer[write_idx] =
-                            note_quads->layer[read_idx];
-                        note_quads->size_x[write_idx] =
-                            note_quads->size_x[read_idx];
-                        note_quads->size_x_numerator[write_idx] =
-                            note_quads->size_x_numerator[read_idx];
-                        note_quads->size_x_denominator[write_idx] =
-                            note_quads->size_x_denominator[read_idx];
-                        note_quads->navigation_x[write_idx] =
-                            note_quads->navigation_x[read_idx];
-                        note_quads->navigation_x_numerator[write_idx] =
-                            note_quads->navigation_x_numerator[read_idx];
-                        note_quads->navigation_x_denominator[write_idx] =
-                            note_quads->navigation_x_denominator[read_idx];
-                        note_quads->color[write_idx] =
-                            note_quads->color[read_idx];
-                        note_quads->outline_color[write_idx] =
-                            note_quads->outline_color[read_idx];
-                        note_quads->gain[write_idx] =
-                            note_quads->gain[read_idx];
-                        note_quads->voice[write_idx] =
-                            note_quads->voice[read_idx];
-                        note_quads->alive[write_idx] =
-                            note_quads->alive[read_idx];
-                        note_quads->id[write_idx] = note_quads->id[read_idx];
-                    }
-                    write_idx++;
-                }
-            }
-            if (write_idx >= note_quads_max) {
-                call_terry_davis("TODO: implement spillover swapfile");
-                ctx_wr->numeric_prefix = 0;
-                return;
-            };
-            note_quads->count = write_idx;
-        }
-        war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-        node->id = undo_tree->next_id++;
-        node->seq_num = undo_tree->next_seq_num++;
-        node->command = CMD_ADD_NOTES_SAME;
-        node->payload.delete_notes_same.note = note;
-        node->payload.delete_notes_same.note_quad = note_quad;
-        node->payload.delete_notes_same.ids =
-            war_pool_alloc(pool_wr, sizeof(uint64_t) * ctx_wr->numeric_prefix);
-        node->payload.delete_notes_same.count = ctx_wr->numeric_prefix;
-        node->cursor_pos_x = ctx_wr->cursor_pos_x;
-        node->cursor_pos_y = ctx_wr->cursor_pos_y;
-        node->left_col = ctx_wr->left_col;
-        node->right_col = ctx_wr->right_col;
-        node->top_row = ctx_wr->top_row;
-        node->bottom_row = ctx_wr->bottom_row;
-        node->parent = NULL;
-        node->next = NULL;
-        node->prev = NULL;
-        node->alt_next = NULL;
-        node->alt_prev = NULL;
-        if (!undo_tree->root) {
-            node->branch_id = undo_tree->next_branch_id++;
-            undo_tree->root = node;
-            undo_tree->current = node;
-        } else if (!undo_tree->current) {
-            node->branch_id = undo_tree->next_branch_id++;
-            node->parent = NULL;
-            undo_tree->root = node;
-            undo_tree->current = node;
-        } else {
-            war_undo_node* cur = undo_tree->current;
-            if (cur->next) { cur->next = NULL; }
-            node->parent = cur;
-            node->branch_id = cur->branch_id;
-            cur->next = node;
-            node->prev = cur;
-            undo_tree->current = node;
-        }
-        // batch add
-        for (uint32_t i = 0; i < ctx_wr->numeric_prefix; i++) {
-            note_quads->pos_x[note_quads->count + i] = note_quad.pos_x;
-            note_quads->pos_y[note_quads->count + i] = note_quad.pos_y;
-            note_quads->layer[note_quads->count + i] = note_quad.layer;
-            note_quads->size_x[note_quads->count + i] = note_quad.size_x;
-            note_quads->size_x_numerator[note_quads->count + i] =
-                note_quad.size_x_numerator;
-            note_quads->size_x_denominator[note_quads->count + i] =
-                note_quad.size_x_denominator;
-            note_quads->navigation_x[note_quads->count + i] =
-                note_quad.navigation_x;
-            note_quads->navigation_x_numerator[note_quads->count + i] =
-                note_quad.navigation_x_numerator;
-            note_quads->navigation_x_denominator[note_quads->count + i] =
-                note_quad.navigation_x_denominator;
-            note_quads->color[note_quads->count + i] = note_quad.color;
-            note_quads->outline_color[note_quads->count + i] =
-                note_quad.outline_color;
-            note_quads->gain[note_quads->count + i] = note_quad.gain;
-            note_quads->voice[note_quads->count + i] = note_quad.voice;
-            note_quads->alive[note_quads->count + i] = note_quad.alive;
-            note_quads->id[note_quads->count + i] = id;
-            node->payload.delete_notes_same.ids[i] = id;
-            id = atomic_fetch_add(&atomics->note_next_id, 1);
-        }
-        note_quads->count += ctx_wr->numeric_prefix;
-        // note, count, ids
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    //-------------------------------------------------------------
-    // ADD SINGLE NOTE
-    //-------------------------------------------------------------
-    // --- Compaction if needed ---
-    if (note_quads->count + 1 >= note_quads_max) {
-        uint32_t write_idx = 0;
-        for (uint32_t read_idx = 0; read_idx < note_quads->count; read_idx++) {
-            if (note_quads->alive[read_idx]) {
-                if (write_idx != read_idx) {
-                    // Copy all fields
-                    note_quads->pos_x[write_idx] = note_quads->pos_x[read_idx];
-                    note_quads->pos_y[write_idx] = note_quads->pos_y[read_idx];
-                    note_quads->layer[write_idx] = note_quads->layer[read_idx];
-                    note_quads->size_x[write_idx] =
-                        note_quads->size_x[read_idx];
-                    note_quads->size_x_numerator[write_idx] =
-                        note_quads->size_x_numerator[read_idx];
-                    note_quads->size_x_denominator[write_idx] =
-                        note_quads->size_x_denominator[read_idx];
-                    note_quads->navigation_x[write_idx] =
-                        note_quads->navigation_x[read_idx];
-                    note_quads->navigation_x_numerator[write_idx] =
-                        note_quads->navigation_x_numerator[read_idx];
-                    note_quads->navigation_x_denominator[write_idx] =
-                        note_quads->navigation_x_denominator[read_idx];
-                    note_quads->color[write_idx] = note_quads->color[read_idx];
-                    note_quads->outline_color[write_idx] =
-                        note_quads->outline_color[read_idx];
-                    note_quads->gain[write_idx] = note_quads->gain[read_idx];
-                    note_quads->voice[write_idx] = note_quads->voice[read_idx];
-                    note_quads->alive[write_idx] = note_quads->alive[read_idx];
-                    note_quads->id[write_idx] = note_quads->id[read_idx];
-                }
-                write_idx++;
-            }
-        }
-        assert(write_idx < note_quads_max);
-        note_quads->count = write_idx;
-    }
-    note_quads->pos_x[note_quads->count] = note_quad.pos_x;
-    note_quads->pos_y[note_quads->count] = note_quad.pos_y;
-    note_quads->layer[note_quads->count] = note_quad.layer;
-    note_quads->size_x[note_quads->count] = note_quad.size_x;
-    note_quads->size_x_numerator[note_quads->count] =
-        note_quad.size_x_numerator;
-    note_quads->size_x_denominator[note_quads->count] =
-        note_quad.size_x_denominator;
-    note_quads->navigation_x[note_quads->count] = note_quad.navigation_x;
-    note_quads->navigation_x_numerator[note_quads->count] =
-        note_quad.navigation_x_numerator;
-    note_quads->navigation_x_denominator[note_quads->count] =
-        note_quad.navigation_x_denominator;
-    note_quads->color[note_quads->count] = note_quad.color;
-    note_quads->outline_color[note_quads->count] = note_quad.outline_color;
-    note_quads->gain[note_quads->count] = note_quad.gain;
-    note_quads->voice[note_quads->count] = note_quad.voice;
-    note_quads->alive[note_quads->count] = note_quad.alive;
-    note_quads->id[note_quads->count] = note_quad.id;
-    note_quads->count++;
-    war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-    node->id = undo_tree->next_id++;
-    node->seq_num = undo_tree->next_seq_num++;
-    node->command = CMD_ADD_NOTE;
-    node->payload.delete_note.note = note;
-    node->payload.delete_note.note_quad = note_quad;
-    node->cursor_pos_x = ctx_wr->cursor_pos_x;
-    node->cursor_pos_y = ctx_wr->cursor_pos_y;
-    node->left_col = ctx_wr->left_col;
-    node->right_col = ctx_wr->right_col;
-    node->top_row = ctx_wr->top_row;
-    node->bottom_row = ctx_wr->bottom_row;
-    node->parent = NULL;
-    node->next = NULL;
-    node->prev = NULL;
-    node->alt_next = NULL;
-    node->alt_prev = NULL;
-    if (!undo_tree->root) {
-        node->branch_id = undo_tree->next_branch_id++;
-        undo_tree->root = node;
-        undo_tree->current = node;
-    } else if (!undo_tree->current) {
-        node->branch_id = undo_tree->next_branch_id++;
-        node->parent = NULL;
-        undo_tree->root = node;
-        undo_tree->current = node;
-    } else {
-        war_undo_node* cur = undo_tree->current;
-        if (cur->next) { cur->next = NULL; }
-        node->parent = cur;
-        node->branch_id = cur->branch_id;
-        cur->next = node;
-        node->prev = cur;
-        undo_tree->current = node;
-    }
-    ctx_wr->numeric_prefix = 0;
-    return;
+    text_vertices[*text_vertices_count + 1] = (war_text_vertex){
+        .corner = {1, 0},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
+        .uv = {glyph_info->uv_x1, glyph_info->uv_y1},
+        .glyph_size = {glyph_info->width, glyph_info->height},
+        .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
+        .ascent = glyph_info->ascent,
+        .descent = glyph_info->descent,
+        .thickness = thickness,
+        .feather = feather,
+        .color = color,
+        .flags = flags,
+    };
+    text_vertices[*text_vertices_count + 2] = (war_text_vertex){
+        .corner = {1, 1},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .uv = {glyph_info->uv_x1, glyph_info->uv_y0},
+        .glyph_size = {glyph_info->width, glyph_info->height},
+        .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
+        .ascent = glyph_info->ascent,
+        .descent = glyph_info->descent,
+        .thickness = thickness,
+        .feather = feather,
+        .color = color,
+        .flags = flags,
+    };
+    text_vertices[*text_vertices_count + 3] = (war_text_vertex){
+        .corner = {0, 1},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .uv = {glyph_info->uv_x0, glyph_info->uv_y0},
+        .color = color,
+        .glyph_size = {glyph_info->width, glyph_info->height},
+        .glyph_bearing = {glyph_info->bearing_x, glyph_info->bearing_y},
+        .ascent = glyph_info->ascent,
+        .descent = glyph_info->descent,
+        .thickness = thickness,
+        .feather = feather,
+        .flags = flags,
+    };
+    text_indices[*text_indices_count] = *text_vertices_count;
+    text_indices[*text_indices_count + 1] = *text_vertices_count + 1;
+    text_indices[*text_indices_count + 2] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 3] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 4] = *text_vertices_count + 3;
+    text_indices[*text_indices_count + 5] = *text_vertices_count;
+    (*text_vertices_count) += 4;
+    (*text_indices_count) += 6;
 }
 
-static inline void war_roll_x(war_env* env) {
-    call_terry_davis("war_roll_x");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
+static inline void war_make_blank_text_quad(war_text_vertex* text_vertices,
+                                            uint16_t* text_indices,
+                                            uint32_t* text_vertices_count,
+                                            uint32_t* text_indices_count) {
+    text_vertices[*text_vertices_count] = (war_text_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+        .flags = 0,
+    };
+    text_vertices[*text_vertices_count + 1] = (war_text_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+        .flags = 0,
+    };
+    text_vertices[*text_vertices_count + 2] = (war_text_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+        .flags = 0,
+    };
+    text_vertices[*text_vertices_count + 3] = (war_text_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .uv = {0, 0},
+        .glyph_size = {0, 0},
+        .glyph_bearing = {0, 0},
+        .ascent = 0,
+        .descent = 0,
+        .thickness = 0,
+        .feather = 0,
+        .color = 0,
+        .flags = 0,
+    };
+    text_indices[*text_indices_count] = *text_vertices_count;
+    text_indices[*text_indices_count + 1] = *text_vertices_count + 1;
+    text_indices[*text_indices_count + 2] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 3] = *text_vertices_count + 2;
+    text_indices[*text_indices_count + 4] = *text_vertices_count + 3;
+    text_indices[*text_indices_count + 5] = *text_vertices_count;
+    (*text_vertices_count) += 4;
+    (*text_indices_count) += 6;
 }
 
-static inline void war_roll_shift_x(war_env* env) {
-    call_terry_davis("war_roll_shift_x");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
+static inline void war_make_quad(war_quad_vertex* quad_vertices,
+                                 uint16_t* quad_indices,
+                                 uint32_t* vertices_count,
+                                 uint32_t* indices_count,
+                                 float bottom_left_pos[3],
+                                 float span[2],
+                                 uint32_t color,
+                                 float outline_thickness,
+                                 uint32_t outline_color,
+                                 float line_thickness[2],
+                                 uint32_t flags) {
+    quad_vertices[*vertices_count] = (war_quad_vertex){
+        .corner = {0, 0},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    quad_vertices[*vertices_count + 1] = (war_quad_vertex){
+        .corner = {1, 0},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    quad_vertices[*vertices_count + 2] = (war_quad_vertex){
+        .corner = {1, 1},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    quad_vertices[*vertices_count + 3] = (war_quad_vertex){
+        .corner = {0, 1},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    quad_indices[*indices_count] = *vertices_count;
+    quad_indices[*indices_count + 1] = *vertices_count + 1;
+    quad_indices[*indices_count + 2] = *vertices_count + 2;
+    quad_indices[*indices_count + 3] = *vertices_count + 2;
+    quad_indices[*indices_count + 4] = *vertices_count + 3;
+    quad_indices[*indices_count + 5] = *vertices_count;
+    (*vertices_count) += 4;
+    (*indices_count) += 6;
 }
 
-static inline void war_roll_note_delete(war_env* env) {
-    // TODO: spillover swapfile
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_lua_context* ctx_lua = env->ctx_lua;
-    war_undo_tree* undo_tree = env->undo_tree;
-    war_note_quads* note_quads = env->note_quads;
-    war_pool* pool_wr = env->pool_wr;
-    call_terry_davis("war_roll_note_delete");
-    if (note_quads->count == 0) {
-        ctx_wr->numeric_prefix = 0;
-        return;
+static inline void
+war_make_transparent_quad(war_quad_vertex* transparent_quad_vertices,
+                          uint16_t* transparent_quad_indices,
+                          uint32_t* vertices_count,
+                          uint32_t* indices_count,
+                          float bottom_left_pos[3],
+                          float span[2],
+                          uint32_t color,
+                          float outline_thickness,
+                          uint32_t outline_color,
+                          float line_thickness[2],
+                          uint32_t flags) {
+    transparent_quad_vertices[*vertices_count] = (war_quad_vertex){
+        .corner = {0, 0},
+        .pos = {bottom_left_pos[0], bottom_left_pos[1], bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_vertices[*vertices_count + 1] = (war_quad_vertex){
+        .corner = {1, 0},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_vertices[*vertices_count + 2] = (war_quad_vertex){
+        .corner = {1, 1},
+        .pos = {bottom_left_pos[0] + span[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_vertices[*vertices_count + 3] = (war_quad_vertex){
+        .corner = {0, 1},
+        .pos = {bottom_left_pos[0],
+                bottom_left_pos[1] + span[1],
+                bottom_left_pos[2]},
+        .span = {span[0], span[1]},
+        .color = color,
+        .outline_thickness = outline_thickness,
+        .outline_color = outline_color,
+        .line_thickness = {line_thickness[0], line_thickness[1]},
+        .flags = flags,
+    };
+    transparent_quad_indices[*indices_count] = *vertices_count;
+    transparent_quad_indices[*indices_count + 1] = *vertices_count + 1;
+    transparent_quad_indices[*indices_count + 2] = *vertices_count + 2;
+    transparent_quad_indices[*indices_count + 3] = *vertices_count + 2;
+    transparent_quad_indices[*indices_count + 4] = *vertices_count + 3;
+    transparent_quad_indices[*indices_count + 5] = *vertices_count;
+    (*vertices_count) += 4;
+    (*indices_count) += 6;
+}
+
+static inline void war_make_blank_quad(war_quad_vertex* quad_vertices,
+                                       uint16_t* quad_indices,
+                                       uint32_t* vertices_count,
+                                       uint32_t* indices_count) {
+    quad_vertices[*vertices_count] = (war_quad_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .span = {0, 0},
+        .color = 0,
+        .outline_thickness = 0,
+        .outline_color = 0,
+        .line_thickness = {0, 0},
+        .flags = 0,
+    };
+    quad_vertices[*vertices_count + 1] = (war_quad_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .span = {0, 0},
+        .color = 0,
+        .outline_thickness = 0,
+        .outline_color = 0,
+        .line_thickness = {0, 0},
+        .flags = 0,
+    };
+    quad_vertices[*vertices_count + 2] = (war_quad_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .span = {0, 0},
+        .color = 0,
+        .outline_thickness = 0,
+        .outline_color = 0,
+        .line_thickness = {0, 0},
+        .flags = 0,
+    };
+    quad_vertices[*vertices_count + 3] = (war_quad_vertex){
+        .corner = {0, 0},
+        .pos = {0, 0, 0},
+        .span = {0, 0},
+        .color = 0,
+        .outline_thickness = 0,
+        .outline_color = 0,
+        .line_thickness = {0, 0},
+        .flags = 0,
+    };
+    quad_indices[*indices_count] = *vertices_count;
+    quad_indices[*indices_count + 1] = *vertices_count + 1;
+    quad_indices[*indices_count + 2] = *vertices_count + 2;
+    quad_indices[*indices_count + 3] = *vertices_count + 2;
+    quad_indices[*indices_count + 4] = *vertices_count + 3;
+    quad_indices[*indices_count + 5] = *vertices_count;
+    (*vertices_count) += 4;
+    (*indices_count) += 6;
+}
+
+static inline uint32_t war_gcd(uint32_t a, uint32_t b) {
+    while (b != 0) {
+        uint32_t t = b;
+        b = a % b;
+        a = t;
     }
-    uint64_t layer = atomic_load(&atomics->layer);
-    if (ctx_wr->numeric_prefix) {
-        // TODO: spillover swapfile
-        // TODO batch delete
-        uint32_t delete_count = 0;
-        uint32_t undo_notes_batch_max =
-            atomic_load(&ctx_lua->WR_UNDO_NOTES_BATCH_MAX);
-        war_undo_node* node;
-        for (int32_t i = note_quads->count - 1; i >= 0; i--) {
-            if (note_quads->alive[i] == 0 || note_quads->hidden[i] ||
-                note_quads->layer[i] != layer) {
-                continue;
-            }
-            double cursor_pos_x = ctx_wr->cursor_pos_x;
-            double cursor_pos_y = ctx_wr->cursor_pos_y;
-            double cursor_end_x = cursor_pos_x + ctx_wr->cursor_size_x;
-            double note_pos_x = note_quads->pos_x[i];
-            double note_pos_y = note_quads->pos_y[i];
-            double note_end_x = note_pos_x + note_quads->size_x[i];
-            if (cursor_pos_y != note_pos_y || cursor_pos_x >= note_end_x ||
-                cursor_end_x <= note_pos_x) {
-                continue;
-            }
-            if (delete_count == 0) {
-                node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-                node->id = undo_tree->next_id++;
-                node->seq_num = undo_tree->next_seq_num++;
-                node->command = CMD_DELETE_NOTES;
-                node->payload.add_notes.note = war_pool_alloc(
-                    pool_wr, sizeof(war_note) * undo_notes_batch_max);
-                node->payload.add_notes.note_quad = war_pool_alloc(
-                    pool_wr, sizeof(war_note_quad) * undo_notes_batch_max);
-                node->cursor_pos_x = ctx_wr->cursor_pos_x;
-                node->cursor_pos_y = ctx_wr->cursor_pos_y;
-                node->left_col = ctx_wr->left_col;
-                node->right_col = ctx_wr->right_col;
-                node->top_row = ctx_wr->top_row;
-                node->bottom_row = ctx_wr->bottom_row;
-                node->parent = NULL;
-                node->next = NULL;
-                node->prev = NULL;
-                node->alt_next = NULL;
-                node->alt_prev = NULL;
-                if (!undo_tree->root) {
-                    node->branch_id = undo_tree->next_branch_id++;
-                    undo_tree->root = node;
-                    undo_tree->current = node;
-                } else if (!undo_tree->current) {
-                    node->branch_id = undo_tree->next_branch_id++;
-                    node->parent = NULL;
-                    undo_tree->root = node;
-                    undo_tree->current = node;
+    return a;
+}
+
+static inline uint32_t war_lcm(uint32_t a, uint32_t b) {
+    return a / war_gcd(a, b) * b;
+}
+
+static inline float war_midi_to_frequency(float midi_note) {
+    return 440.0f * pow(2.0f, (midi_note - 69) / 12.0f);
+}
+
+static inline float war_sine_phase_increment(war_audio_context* ctx_a,
+                                             float frequency) {
+    return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
+}
+
+static inline uint8_t war_parse_token_to_keysym_mod(const char* token,
+                                          uint16_t* keysym_out,
+                                          uint8_t* mod_out) {
+    if (!token || !keysym_out || !mod_out) { return 0; }
+    *mod_out = 0;
+    const char* key_str = token;
+    char token_buf[64] = {0};
+    if (token[0] == '<') {
+        size_t len = strlen(token);
+        if (len > 1 && token[len - 1] == '>') {
+            size_t inner_len = len - 2;
+            if (inner_len >= sizeof(token_buf))
+                inner_len = sizeof(token_buf) - 1;
+            memcpy(token_buf, token + 1, inner_len);
+            token_buf[inner_len] = '\0';
+            char key_part[64] = {0};
+            char* saveptr = NULL;
+            char* part = strtok_r(token_buf, "-", &saveptr);
+            while (part) {
+                if (strcasecmp(part, "C") == 0 ||
+                    strcasecmp(part, "Ctrl") == 0 ||
+                    strcasecmp(part, "Control") == 0) {
+                    *mod_out |= MOD_CTRL;
+                } else if (strcasecmp(part, "S") == 0 ||
+                           strcasecmp(part, "Shift") == 0) {
+                    *mod_out |= MOD_SHIFT;
+                } else if (strcasecmp(part, "A") == 0 ||
+                           strcasecmp(part, "Alt") == 0 ||
+                           strcasecmp(part, "M") == 0 ||
+                           strcasecmp(part, "Meta") == 0) {
+                    *mod_out |= MOD_ALT;
+                } else if (strcasecmp(part, "D") == 0 ||
+                           strcasecmp(part, "Cmd") == 0 ||
+                           strcasecmp(part, "Super") == 0 ||
+                           strcasecmp(part, "Logo") == 0) {
+                    *mod_out |= MOD_LOGO;
                 } else {
-                    war_undo_node* cur = undo_tree->current;
-                    if (cur->next) { cur->next = NULL; }
-                    node->parent = cur;
-                    node->branch_id = cur->branch_id;
-                    cur->next = node;
-                    node->prev = cur;
-                    undo_tree->current = node;
+                    strncpy(key_part, part, sizeof(key_part) - 1);
+                    key_part[sizeof(key_part) - 1] = '\0';
                 }
+                part = strtok_r(NULL, "-", &saveptr);
             }
-            war_note_quad note_quad;
-            note_quad.alive = note_quads->alive[i];
-            note_quad.id = note_quads->id[i];
-            note_quad.pos_x = note_quads->pos_x[i];
-            note_quad.pos_y = note_quads->pos_y[i];
-            note_quad.layer = note_quads->layer[i];
-            note_quad.size_x = note_quads->size_x[i];
-            note_quad.navigation_x = note_quads->navigation_x[i];
-            note_quad.navigation_x_numerator =
-                note_quads->navigation_x_numerator[i];
-            note_quad.navigation_x_denominator =
-                note_quads->navigation_x_denominator[i];
-            note_quad.size_x_numerator = note_quads->size_x_numerator[i];
-            note_quad.size_x_denominator = note_quads->size_x_denominator[i];
-            note_quad.color = note_quads->color[i];
-            note_quad.outline_color = note_quads->outline_color[i];
-            note_quad.gain = note_quads->gain[i];
-            note_quad.voice = note_quads->voice[i];
-            note_quad.hidden = note_quads->hidden[i];
-            note_quad.mute = note_quads->mute[i];
-            double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
-            double bpm = atomic_load(&ctx_lua->A_BPM);
-            double frames_per_beat = sample_rate * 60.0 / bpm;
-            double columns_per_beat =
-                atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
-            war_note note;
-            double start_beats = note_quad.pos_x / columns_per_beat;
-            note.note_start_frames =
-                (uint64_t)(start_beats * frames_per_beat + 0.5);
-            double duration_beats = note_quad.size_x / columns_per_beat;
-            note.note_duration_frames =
-                (uint64_t)(duration_beats * frames_per_beat + 0.5);
-            note.note = note_quad.pos_y;
-            note.layer = note_quad.layer;
-            note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
-            note.note_sustain = atomic_load(&ctx_lua->A_DEFAULT_SUSTAIN);
-            note.note_release = atomic_load(&ctx_lua->A_DEFAULT_RELEASE);
-            note.note_gain = atomic_load(&ctx_lua->A_DEFAULT_GAIN);
-            note.note_phase_increment = 0;
-            note.id = note_quad.id;
-            note.alive = note_quad.alive;
-            node->payload.add_notes.note[delete_count] = note;
-            node->payload.add_notes.note_quad[delete_count] = note_quad;
-            note_quads->alive[i] = 0;
-            delete_count++;
-            if (delete_count >= undo_notes_batch_max) {
-                // spillover
-                ctx_wr->numeric_prefix = 0;
-                return;
-            }
-            if (delete_count >= ctx_wr->numeric_prefix) { break; }
+            if (key_part[0] != '\0') { key_str = key_part; }
         }
-        if (delete_count == 0) {
-            ctx_wr->numeric_prefix = 0;
-            return;
-        }
-        ctx_wr->numeric_prefix = 0;
-        return;
     }
-    int32_t delete_idx = -1; // overflow impossible
-    for (uint32_t i = 0; i < note_quads->count; i++) {
-        if (note_quads->alive[i] == 0 || note_quads->hidden[i] ||
-            note_quads->layer[i] != layer) {
-            continue;
-        }
-        double cursor_pos_x = ctx_wr->cursor_pos_x;
-        double cursor_pos_y = ctx_wr->cursor_pos_y;
-        double cursor_end_x = cursor_pos_x + ctx_wr->cursor_size_x;
-        double note_pos_x = note_quads->pos_x[i];
-        double note_pos_y = note_quads->pos_y[i];
-        double note_end_x = note_pos_x + note_quads->size_x[i];
-        if (cursor_pos_y != note_pos_y || cursor_pos_x >= note_end_x ||
-            cursor_end_x <= note_pos_x) {
-            continue;
-        }
-        delete_idx = i;
-    }
-    if (delete_idx == -1) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    war_note_quad note_quad;
-    note_quad.alive = note_quads->alive[delete_idx];
-    note_quad.id = note_quads->id[delete_idx];
-    note_quad.pos_x = note_quads->pos_x[delete_idx];
-    note_quad.pos_y = note_quads->pos_y[delete_idx];
-    note_quad.layer = note_quads->layer[delete_idx];
-    note_quad.size_x = note_quads->size_x[delete_idx];
-    note_quad.navigation_x = note_quads->navigation_x[delete_idx];
-    note_quad.navigation_x_numerator =
-        note_quads->navigation_x_numerator[delete_idx];
-    note_quad.navigation_x_denominator =
-        note_quads->navigation_x_denominator[delete_idx];
-    note_quad.size_x_numerator = note_quads->size_x_numerator[delete_idx];
-    note_quad.size_x_denominator = note_quads->size_x_denominator[delete_idx];
-    note_quad.color = note_quads->color[delete_idx];
-    note_quad.outline_color = note_quads->outline_color[delete_idx];
-    note_quad.gain = note_quads->gain[delete_idx];
-    note_quad.voice = note_quads->voice[delete_idx];
-    note_quad.hidden = note_quads->hidden[delete_idx];
-    note_quad.mute = note_quads->mute[delete_idx];
-    double sample_rate = atomic_load(&ctx_lua->A_SAMPLE_RATE);
-    double bpm = atomic_load(&ctx_lua->A_BPM);
-    double frames_per_beat = sample_rate * 60.0 / bpm;
-    double columns_per_beat = atomic_load(&ctx_lua->A_DEFAULT_COLUMNS_PER_BEAT);
-    war_note note;
-    double start_beats = note_quad.pos_x / columns_per_beat;
-    note.note_start_frames = (uint64_t)(start_beats * frames_per_beat + 0.5);
-    double duration_beats = note_quad.size_x / columns_per_beat;
-    note.note_duration_frames =
-        (uint64_t)(duration_beats * frames_per_beat + 0.5);
-    note.note = note_quad.pos_y;
-    note.layer = note_quad.layer;
-    note.note_attack = atomic_load(&ctx_lua->A_DEFAULT_ATTACK);
-    note.note_sustain = atomic_load(&ctx_lua->A_DEFAULT_SUSTAIN);
-    note.note_release = atomic_load(&ctx_lua->A_DEFAULT_RELEASE);
-    note.note_gain = atomic_load(&ctx_lua->A_DEFAULT_GAIN);
-    note.note_phase_increment = 0;
-    note.id = note_quad.id;
-    note.alive = note_quad.alive;
-    note_quads->alive[delete_idx] = 0;
-    war_undo_node* node = war_pool_alloc(pool_wr, sizeof(war_undo_node));
-    node->id = undo_tree->next_id++;
-    node->seq_num = undo_tree->next_seq_num++;
-    node->command = CMD_DELETE_NOTE;
-    node->payload.add_note.note = note;
-    node->payload.add_note.note_quad = note_quad;
-    node->cursor_pos_x = ctx_wr->cursor_pos_x;
-    node->cursor_pos_y = ctx_wr->cursor_pos_y;
-    node->left_col = ctx_wr->left_col;
-    node->right_col = ctx_wr->right_col;
-    node->top_row = ctx_wr->top_row;
-    node->bottom_row = ctx_wr->bottom_row;
-    node->parent = NULL;
-    node->next = NULL;
-    node->prev = NULL;
-    node->alt_next = NULL;
-    node->alt_prev = NULL;
-    if (!undo_tree->root) {
-        node->branch_id = undo_tree->next_branch_id++;
-        undo_tree->root = node;
-        undo_tree->current = node;
-    } else if (!undo_tree->current) {
-        node->branch_id = undo_tree->next_branch_id++;
-        node->parent = NULL;
-        undo_tree->root = node;
-        undo_tree->current = node;
+    xkb_keysym_t ks = XKB_KEY_NoSymbol;
+    if (strcasecmp(key_str, "CR") == 0 || strcasecmp(key_str, "Enter") == 0 ||
+        strcasecmp(key_str, "Return") == 0) {
+        ks = XKB_KEY_Return;
+    } else if (strcasecmp(key_str, "Esc") == 0 ||
+               strcasecmp(key_str, "Escape") == 0) {
+        ks = XKB_KEY_Escape;
+    } else if (strcasecmp(key_str, "Space") == 0) {
+        ks = XKB_KEY_space;
+    } else if (strcasecmp(key_str, "Tab") == 0) {
+        ks = XKB_KEY_Tab;
+    } else if (strcasecmp(key_str, "BS") == 0 ||
+               strcasecmp(key_str, "Backspace") == 0) {
+        ks = XKB_KEY_BackSpace;
+    } else if (strcasecmp(key_str, "Del") == 0 ||
+               strcasecmp(key_str, "Delete") == 0) {
+        ks = XKB_KEY_Delete;
+    } else if (strcasecmp(key_str, "Insert") == 0) {
+        ks = XKB_KEY_Insert;
+    } else if (strcasecmp(key_str, "Home") == 0) {
+        ks = XKB_KEY_Home;
+    } else if (strcasecmp(key_str, "End") == 0) {
+        ks = XKB_KEY_End;
+    } else if (strcasecmp(key_str, "PageUp") == 0) {
+        ks = XKB_KEY_Page_Up;
+    } else if (strcasecmp(key_str, "PageDown") == 0) {
+        ks = XKB_KEY_Page_Down;
+    } else if (strcasecmp(key_str, "Up") == 0) {
+        ks = XKB_KEY_Up;
+    } else if (strcasecmp(key_str, "Down") == 0) {
+        ks = XKB_KEY_Down;
+    } else if (strcasecmp(key_str, "Left") == 0) {
+        ks = XKB_KEY_Left;
+    } else if (strcasecmp(key_str, "Right") == 0) {
+        ks = XKB_KEY_Right;
+    } else if (strcasecmp(key_str, "lt") == 0) {
+        ks = XKB_KEY_less;
     } else {
-        war_undo_node* cur = undo_tree->current;
-        if (cur->next) { cur->next = NULL; }
-        node->parent = cur;
-        node->branch_id = cur->branch_id;
-        cur->next = node;
-        node->prev = cur;
-        undo_tree->current = node;
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_delete_in_view(war_env* env) {
-    call_terry_davis("war_roll_note_delete_in_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_delete_outside_view(war_env* env) {
-    call_terry_davis("war_roll_note_delete_outside_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_delete_in_word(war_env* env) {
-    call_terry_davis("war_roll_note_delete_in_word");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_delete_all(war_env* env) {
-    call_terry_davis("war_roll_note_delete_all");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_note_quads* note_quads = env->note_quads;
-    note_quads->count = 0;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_hide_outside_view(war_env* env) {
-    call_terry_davis("war_roll_note_hide_outside_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_hide_in_view(war_env* env) {
-    call_terry_davis("war_roll_note_hide_in_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_hide_in_word(war_env* env) {
-    call_terry_davis("war_roll_note_hide_in_word");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_hide_all(war_env* env) {
-    call_terry_davis("war_roll_note_hide_all");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_show_outside_view(war_env* env) {
-    call_terry_davis("war_roll_note_show_outside_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_show_in_view(war_env* env) {
-    call_terry_davis("war_roll_note_show_in_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_show_in_word(war_env* env) {
-    call_terry_davis("war_roll_note_show_in_word");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_show_all(war_env* env) {
-    call_terry_davis("war_roll_note_show_all");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_mute(war_env* env) {
-    call_terry_davis("war_roll_note_mute");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_mute_outside_view(war_env* env) {
-    call_terry_davis("war_roll_note_mute_outside_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_mute_in_view(war_env* env) {
-    call_terry_davis("war_roll_note_mute_in_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_mute_all(war_env* env) {
-    call_terry_davis("war_roll_note_mute_all");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_midi_mode(war_env* env) {
-    call_terry_davis("war_roll_midi_mode");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_MIDI;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_unmute_outside_view(war_env* env) {
-    call_terry_davis("war_roll_note_unmute_outside_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_unmute_in_view(war_env* env) {
-    call_terry_davis("war_roll_note_unmute_in_view");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_unmute_in_word(war_env* env) {
-    call_terry_davis("war_roll_note_unmute_in_word");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_note_unmute_all(war_env* env) {
-    call_terry_davis("war_roll_note_unmute_all");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_save(war_env* env) {
-    call_terry_davis("war_roll_views_save");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_lua_context* ctx_lua = env->ctx_lua;
-    war_views* views = env->views;
-    if (views->views_count < (uint32_t)atomic_load(&ctx_lua->WR_VIEWS_SAVED)) {
-        views->col[views->views_count] = ctx_wr->cursor_pos_x;
-        views->row[views->views_count] = ctx_wr->cursor_pos_y;
-        views->left_col[views->views_count] = ctx_wr->left_col;
-        views->bottom_row[views->views_count] = ctx_wr->bottom_row;
-        views->right_col[views->views_count] = ctx_wr->right_col;
-        views->top_row[views->views_count] = ctx_wr->top_row;
-        views->views_count++;
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacedspacea(war_env* env) {
-    call_terry_davis("war_roll_spacedspacea");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_1(war_env* env) {
-    call_terry_davis("war_roll_views_1");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 0) {
-        uint32_t i_views = 0;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_2(war_env* env) {
-    call_terry_davis("war_roll_views_2");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 1) {
-        uint32_t i_views = 1;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_3(war_env* env) {
-    call_terry_davis("war_roll_views_3");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 2) {
-        uint32_t i_views = 2;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_4(war_env* env) {
-    call_terry_davis("war_roll_views_4");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 3) {
-        uint32_t i_views = 3;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_5(war_env* env) {
-    call_terry_davis("war_roll_views_5");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 4) {
-        uint32_t i_views = 4;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_6(war_env* env) {
-    call_terry_davis("war_roll_views_6");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 5) {
-        uint32_t i_views = 5;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_7(war_env* env) {
-    call_terry_davis("war_roll_views_7");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 6) {
-        uint32_t i_views = 6;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_8(war_env* env) {
-    call_terry_davis("war_roll_views_8");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    if (views->views_count > 7) {
-        uint32_t i_views = 7;
-        ctx_wr->cursor_pos_x = views->col[i_views];
-        ctx_wr->cursor_pos_y = views->row[i_views];
-        ctx_wr->left_col = views->left_col[i_views];
-        ctx_wr->bottom_row = views->bottom_row[i_views];
-        ctx_wr->right_col = views->right_col[i_views];
-        ctx_wr->top_row = views->top_row[i_views];
-    }
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_views_mode(war_env* env) {
-    call_terry_davis("war_roll_views_mode");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = (ctx_fsm->current_mode != ctx_fsm->MODE_VIEWS) ?
-                                ctx_fsm->MODE_VIEWS :
-                                ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_play(war_env* env) {
-    call_terry_davis("war_roll_play");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_play_context* ctx_play = env->ctx_play;
-    ctx_play->play = !ctx_play->play;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_play_left_bound(war_env* env) {
-    call_terry_davis("war_roll_play_left_bound");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_play_cursor(war_env* env) {
-    call_terry_davis("war_roll_play_cursor");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_play_prefix(war_env* env) {
-    call_terry_davis("war_roll_play_prefix");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_esc(war_env* env) {
-    call_terry_davis("war_roll_alt_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_play_beginning(war_env* env) {
-    call_terry_davis("war_roll_play_beginning");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space1(war_env* env) {
-    call_terry_davis("war_roll_space1");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space2(war_env* env) {
-    call_terry_davis("war_roll_space2");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space3(war_env* env) {
-    call_terry_davis("war_roll_space3");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space4(war_env* env) {
-    call_terry_davis("war_roll_space4");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space5(war_env* env) {
-    call_terry_davis("war_roll_space5");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space6(war_env* env) {
-    call_terry_davis("war_roll_space6");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space7(war_env* env) {
-    call_terry_davis("war_roll_space7");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space8(war_env* env) {
-    call_terry_davis("war_roll_space8");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space9(war_env* env) {
-    call_terry_davis("war_roll_space9");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space0(war_env* env) {
-    call_terry_davis("war_roll_space0");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_1(war_env* env) {
-    call_terry_davis("war_roll_layer_1");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 0;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_2(war_env* env) {
-    call_terry_davis("war_roll_layer_2");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 1;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_3(war_env* env) {
-    call_terry_davis("war_roll_layer_3");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 2;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_4(war_env* env) {
-    call_terry_davis("war_roll_layer_4");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 3;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_5(war_env* env) {
-    call_terry_davis("war_roll_layer_5");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 4;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_6(war_env* env) {
-    call_terry_davis("war_roll_layer_6");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 5;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_7(war_env* env) {
-    call_terry_davis("war_roll_layer_7");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 6;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_8(war_env* env) {
-    call_terry_davis("war_roll_layer_8");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 7;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_9(war_env* env) {
-    call_terry_davis("war_roll_layer_9");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 8;
-    ctx_wr->color_cursor = ctx_color->colors[idx];
-    ctx_wr->color_cursor_transparent = ctx_color->colors[idx];
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << idx));
-    ctx_wr->layers_active_count = 1;
-    ctx_wr->layers_active[0] = (idx + 1) + '0';
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_1(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_1");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 0;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_2(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_2");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 1;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_3(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_3");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 2;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_4(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_4");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 3;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_5(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_5");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 4;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_6(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_6");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 5;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_7(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_7");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 6;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_8(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_8");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 7;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_layer_toggle_9(war_env* env) {
-    call_terry_davis("war_roll_layer_toggle_9");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    int idx = 8;
-    atomic_fetch_xor(&atomics->layer, (1ULL << idx));
-    uint64_t layer = atomic_load(&atomics->layer);
-    ctx_wr->layers_active_count = __builtin_popcountll(layer);
-    switch (ctx_wr->layers_active_count) {
-    case 0: {
-        ctx_wr->color_cursor = ctx_color->white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->full_white_hex;
-        break;
-    }
-    case 1: {
-        int active = __builtin_ctzll(layer);
-        ctx_wr->color_cursor = ctx_color->colors[active];
-        ctx_wr->color_cursor_transparent = ctx_color->colors[active];
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        ctx_wr->layers_active[0] = (active + 1) + '0';
-        break;
-    }
-    default: {
-        int count = 0;
-        while (layer) {
-            int active = __builtin_ctzll(layer);
-            ctx_wr->layers_active[count++] = (active + 1) + '0';
-            layer &= layer - 1;
-        }
-        ctx_wr->color_cursor = ctx_color->full_white_hex;
-        ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-        ctx_wr->color_note_outline_default = ctx_color->white_hex;
-        break;
-    }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_shift_0(war_env* env) {
-    call_terry_davis("war_roll_alt_shift_0");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_next_note(war_env* env) {
-    call_terry_davis("war_roll_cursor_next_note");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_next_note_end(war_env* env) {
-    call_terry_davis("war_roll_cursor_next_note_end");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_cursor_current_note_end(war_env* env) {
-    call_terry_davis("war_roll_cursor_current_note_end");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacediv(war_env* env) {
-    call_terry_davis("war_roll_spacediv");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacedov(war_env* env) {
-    call_terry_davis("war_roll_spacedov");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacediw(war_env* env) {
-    call_terry_davis("war_roll_spacediw");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spaceda(war_env* env) {
-    call_terry_davis("war_roll_spaceda");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_note_quads* note_quads = env->note_quads;
-    note_quads->count = 0;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacehov(war_env* env) {
-    call_terry_davis("war_roll_spacehov");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacehiv(war_env* env) {
-    call_terry_davis("war_roll_spacehiv");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacehiw(war_env* env) {
-    call_terry_davis("war_roll_spacehiw");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spaceha(war_env* env) {
-    call_terry_davis("war_roll_spaceha");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacesov(war_env* env) {
-    call_terry_davis("war_roll_spacesov");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacesiv(war_env* env) {
-    call_terry_davis("war_roll_spacesiv");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacesiw(war_env* env) {
-    call_terry_davis("war_roll_spacesiw");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacesa(war_env* env) {
-    call_terry_davis("war_roll_spacesa");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacem(war_env* env) {
-    call_terry_davis("war_roll_spacem");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacemov(war_env* env) {
-    call_terry_davis("war_roll_spacemov");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacemiv(war_env* env) {
-    call_terry_davis("war_roll_spacemiv");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spacema(war_env* env) {
-    call_terry_davis("war_roll_spacema");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spaceumov(war_env* env) {
-    call_terry_davis("war_roll_spaceumov");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spaceumiv(war_env* env) {
-    call_terry_davis("war_roll_spaceumiv");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spaceumiw(war_env* env) {
-    call_terry_davis("war_roll_spaceumiw");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_spaceuma(war_env* env) {
-    call_terry_davis("war_roll_spaceuma");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_a(war_env* env) {
-    call_terry_davis("war_roll_alt_a");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_A(war_env* env) {
-    call_terry_davis("war_roll_alt_A");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_A(war_env* env) {
-    call_terry_davis("war_roll_A");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_ctrl_a(war_env* env) {
-    call_terry_davis("war_roll_ctrl_a");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_0(war_env* env) {
-    call_terry_davis("war_roll_alt_0");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_lua_context* ctx_lua = env->ctx_lua;
-    int layer_count = atomic_load(&ctx_lua->A_LAYER_COUNT);
-    ctx_wr->color_cursor = ctx_color->full_white_hex;
-    ctx_wr->color_cursor_transparent = ctx_color->white_hex;
-    ctx_wr->color_note_outline_default = ctx_color->white_hex;
-    atomic_store(&atomics->layer, (1ULL << layer_count) - 1);
-    ctx_wr->layers_active_count = 9;
-    for (int i = 0; i < ctx_wr->layers_active_count; i++) {
-        ctx_wr->layers_active[i] = (i + 1) + '0';
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_w(war_env* env) {
-    call_terry_davis("war_roll_w");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_W(war_env* env) {
-    call_terry_davis("war_roll_W");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_e(war_env* env) {
-    call_terry_davis("war_roll_e");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_E(war_env* env) {
-    call_terry_davis("war_roll_E");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_b(war_env* env) {
-    call_terry_davis("war_roll_b");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_B(war_env* env) {
-    call_terry_davis("war_roll_B");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_u(war_env* env) {
-    call_terry_davis("war_roll_alt_u");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_alt_d(war_env* env) {
-    call_terry_davis("war_roll_alt_d");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_tab(war_env* env) {
-    call_terry_davis("war_roll_tab");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    switch (ctx_wr->cursor_blink_state) {
-    case CURSOR_BLINK:
-        ctx_wr->cursor_blink_state = CURSOR_BLINK_BPM;
-        ctx_wr->cursor_blinking = false;
-        ctx_wr->cursor_blink_previous_us = ctx_wr->now;
-        break;
-    case CURSOR_BLINK_BPM:
-        ctx_wr->cursor_blink_state = 0;
-        ctx_wr->cursor_blinking = false;
-        ctx_wr->cursor_blink_previous_us = ctx_wr->now;
-        break;
-    case 0:
-        ctx_wr->cursor_blink_state = CURSOR_BLINK;
-        ctx_wr->cursor_blinking = false;
-        ctx_wr->cursor_blink_previous_us = ctx_wr->now;
-        ctx_wr->cursor_blink_duration_us = DEFAULT_CURSOR_BLINK_DURATION;
-        break;
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_shift_tab(war_env* env) {
-    call_terry_davis("war_roll_shift_tab");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    switch (ctx_wr->hud_state) {
-    case HUD_PIANO:
-        ctx_wr->hud_state = HUD_PIANO_AND_LINE_NUMBERS;
-        ctx_wr->num_cols_for_line_numbers = 6;
-        ctx_wr->right_col -= 3;
-        ctx_wr->cursor_pos_x =
-            war_clamp_uint32(ctx_wr->cursor_pos_x, 0, ctx_wr->right_col);
-        break;
-    case HUD_PIANO_AND_LINE_NUMBERS:
-        ctx_wr->hud_state = HUD_LINE_NUMBERS;
-        ctx_wr->num_cols_for_line_numbers = 3;
-        ctx_wr->right_col += 3;
-        ctx_wr->cursor_pos_x =
-            war_clamp_uint32(ctx_wr->cursor_pos_x, 0, ctx_wr->right_col);
-        break;
-    case HUD_LINE_NUMBERS:
-        ctx_wr->hud_state = HUD_PIANO;
-        ctx_wr->num_cols_for_line_numbers = 3;
-        break;
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_q(war_env* env) {
-    call_terry_davis("war_roll_q");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_Q(war_env* env) {
-    call_terry_davis("war_roll_Q");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_capture_context* ctx_capture = env->ctx_capture;
-    ctx_capture->capture = 1;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_WAV;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space(war_env* env) {
-    call_terry_davis("war_roll_space");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_CAPTURE;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_colon(war_env* env) {
-    call_terry_davis("war_roll_colon");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_command_context* ctx_command = env->ctx_command;
-    war_status_context* ctx_status = env->ctx_status;
-    ctx_command->command = 1;
-    war_command_reset(ctx_command, ctx_status);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_u(war_env* env) {
-    call_terry_davis("war_roll_u");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_undo_tree* undo_tree = env->undo_tree;
-    assert(undo_tree != NULL);
-    if (undo_tree->current) {
-        war_undo_node* node = undo_tree->current;
-        assert(node != NULL);
-        switch (node->command) {
-        case CMD_ADD_NOTE: {
-            break;
-        }
-        case CMD_DELETE_NOTE: {
-            break;
-        }
-        case CMD_ADD_NOTES: {
-            break;
-        }
-        case CMD_DELETE_NOTES: {
-            break;
-        }
-        case CMD_ADD_NOTES_SAME: {
-            break;
-        }
-        case CMD_DELETE_NOTES_SAME: {
-            break;
-        }
-        }
-        undo_tree->current = node->prev ? node->prev : NULL;
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_ctrl_r(war_env* env) {
-    call_terry_davis("war_roll_ctrl_r");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_undo_tree* undo_tree = env->undo_tree;
-    assert(undo_tree != NULL);
-    war_undo_node* next_node = NULL;
-    if (!undo_tree->current) {
-        next_node = undo_tree->root;
-    } else if (undo_tree->current->next) {
-        next_node = undo_tree->current->next;
-    } else if (undo_tree->current->alt_next) {
-        next_node = undo_tree->current->alt_next;
-    }
-    if (next_node) {
-        assert(next_node != NULL);
-        switch (next_node->command) {
-        case CMD_ADD_NOTE: {
-            break;
-        }
-        case CMD_DELETE_NOTE: {
-            break;
-        }
-        case CMD_ADD_NOTES: {
-            break;
-        }
-        case CMD_DELETE_NOTES: {
-            break;
-        }
-        case CMD_ADD_NOTES_SAME: {
-            break;
-        }
-        case CMD_DELETE_NOTES_SAME: {
-            break;
-        }
-        }
-        undo_tree->current = next_node;
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-//-----------------------------------------------------------------------------
-// Record mode commands
-//-----------------------------------------------------------------------------
-
-static inline void war_record_tab(war_env* env) {
-    call_terry_davis("war_record_tab");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    atomic_fetch_xor(&atomics->capture_monitor, 1);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_K(war_env* env) {
-    call_terry_davis("war_record_K");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->play_gain) + ctx_wr->gain_increment;
-    gain = fminf(gain, 1.0f);
-    atomic_store(&atomics->play_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_J(war_env* env) {
-    call_terry_davis("war_record_J");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->play_gain) - ctx_wr->gain_increment;
-    gain = fmaxf(gain, 0.0f);
-    atomic_store(&atomics->play_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_k(war_env* env) {
-    call_terry_davis("war_record_k");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->capture_gain) + ctx_wr->gain_increment;
-    gain = fminf(gain, 1.0f);
-    atomic_store(&atomics->capture_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_j(war_env* env) {
-    call_terry_davis("war_record_j");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->capture_gain) - ctx_wr->gain_increment;
-    gain = fmaxf(gain, 0.0f);
-    atomic_store(&atomics->capture_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_Q(war_env* env) {
-    call_terry_davis("war_record_Q");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_space(war_env* env) {
-    call_terry_davis("war_record_space");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_q(war_env* env) {
-    call_terry_davis("war_record_q");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_w(war_env* env) {
-    call_terry_davis("war_record_w");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_e(war_env* env) {
-    call_terry_davis("war_record_e");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_r(war_env* env) {
-    call_terry_davis("war_record_r");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_t(war_env* env) {
-    call_terry_davis("war_record_t");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_y(war_env* env) {
-    call_terry_davis("war_record_y");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_u(war_env* env) {
-    call_terry_davis("war_record_u");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_i(war_env* env) {
-    call_terry_davis("war_record_i");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_o(war_env* env) {
-    call_terry_davis("war_record_o");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_p(war_env* env) {
-    call_terry_davis("war_record_p");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_leftbracket(war_env* env) {
-    call_terry_davis("war_record_leftbracket");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    float note = 10 + 12 * (ctx_wr->record_octave + 1);
-    if (note > 127) { return; }
-    atomic_store(&atomics->map_note, note);
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-}
-
-static inline void war_record_rightbracket(war_env* env) {
-    call_terry_davis("war_record_rightbracket");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    float note = 11 + 12 * (ctx_wr->record_octave + 1);
-    if (note > 127) { return; }
-    atomic_store(&atomics->map_note, note);
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-}
-
-static inline void war_record_minus(war_env* env) {
-    call_terry_davis("war_record_minus");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = -1;
-}
-
-static inline void war_record_0(war_env* env) {
-    call_terry_davis("war_record_0");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 0;
-}
-
-static inline void war_record_1(war_env* env) {
-    call_terry_davis("war_record_1");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 1;
-}
-
-static inline void war_record_2(war_env* env) {
-    call_terry_davis("war_record_2");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 2;
-}
-
-static inline void war_record_3(war_env* env) {
-    call_terry_davis("war_record_3");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 3;
-}
-
-static inline void war_record_4(war_env* env) {
-    call_terry_davis("war_record_4");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 4;
-}
-
-static inline void war_record_5(war_env* env) {
-    call_terry_davis("war_record_5");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 5;
-}
-
-static inline void war_record_6(war_env* env) {
-    call_terry_davis("war_record_6");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 6;
-}
-
-static inline void war_record_7(war_env* env) {
-    call_terry_davis("war_record_7");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 7;
-}
-
-static inline void war_record_8(war_env* env) {
-    call_terry_davis("war_record_8");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 8;
-}
-
-static inline void war_record_9(war_env* env) {
-    call_terry_davis("war_record_9");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    ctx_wr->numeric_prefix = 0;
-    if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 9;
-}
-
-static inline void war_record_esc(war_env* env) {
-    call_terry_davis("war_record_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    atomic_store(&atomics->capture, 0);
-    atomic_store(&atomics->map_note, -1);
-    ctx_wr->numeric_prefix = 0;
-}
-
-//-----------------------------------------------------------------------------
-// Views mode commands
-//-----------------------------------------------------------------------------
-
-static inline void war_views_cursor_up(war_env* env) {
-    call_terry_davis("war_views_cursor_up");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    uint32_t increment = ctx_wr->row_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_row);
-    }
-    views->warpoon_row = war_clamp_add_uint32(
-        views->warpoon_row, increment, views->warpoon_max_row);
-    if (views->warpoon_row >
-        views->warpoon_top_row - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        views->warpoon_bottom_row = war_clamp_add_uint32(
-            views->warpoon_bottom_row, increment, views->warpoon_max_row);
-        views->warpoon_top_row = war_clamp_add_uint32(
-            views->warpoon_top_row, increment, views->warpoon_max_row);
-        uint32_t new_viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            views->warpoon_bottom_row = war_clamp_subtract_uint32(
-                views->warpoon_bottom_row, diff, views->warpoon_min_row);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_cursor_down(war_env* env) {
-    call_terry_davis("war_views_cursor_down");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    uint32_t increment = ctx_wr->row_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_row);
-    }
-    views->warpoon_row = war_clamp_subtract_uint32(
-        views->warpoon_row, increment, views->warpoon_min_row);
-    if (views->warpoon_row <
-        views->warpoon_bottom_row + ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        views->warpoon_bottom_row = war_clamp_subtract_uint32(
-            views->warpoon_bottom_row, increment, views->warpoon_min_row);
-        views->warpoon_top_row = war_clamp_subtract_uint32(
-            views->warpoon_top_row, increment, views->warpoon_min_row);
-        uint32_t new_viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            views->warpoon_top_row = war_clamp_add_uint32(
-                views->warpoon_top_row, diff, views->warpoon_max_row);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_cursor_left(war_env* env) {
-    call_terry_davis("war_views_cursor_left");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    uint32_t increment = ctx_wr->col_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_col);
-    }
-    views->warpoon_col = war_clamp_subtract_uint32(
-        views->warpoon_col, increment, views->warpoon_min_col);
-    if (views->warpoon_col <
-        views->warpoon_left_col + ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        views->warpoon_left_col = war_clamp_subtract_uint32(
-            views->warpoon_left_col, increment, views->warpoon_min_col);
-        views->warpoon_right_col = war_clamp_subtract_uint32(
-            views->warpoon_right_col, increment, views->warpoon_min_col);
-        uint32_t new_viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            views->warpoon_right_col = war_clamp_add_uint32(
-                views->warpoon_right_col, diff, views->warpoon_max_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_cursor_right(war_env* env) {
-    call_terry_davis("war_views_cursor_right");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    uint32_t increment = ctx_wr->col_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_col);
-    }
-    views->warpoon_col = war_clamp_add_uint32(
-        views->warpoon_col, increment, views->warpoon_max_col);
-    if (views->warpoon_col >
-        views->warpoon_right_col - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        views->warpoon_left_col = war_clamp_add_uint32(
-            views->warpoon_left_col, increment, views->warpoon_max_col);
-        views->warpoon_right_col = war_clamp_add_uint32(
-            views->warpoon_right_col, increment, views->warpoon_max_col);
-        uint32_t new_viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            views->warpoon_left_col = war_clamp_subtract_uint32(
-                views->warpoon_left_col, diff, views->warpoon_min_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-    call_terry_davis("warpoon col: %u", views->warpoon_col);
-}
-
-static inline void war_views_cursor_up_leap(war_env* env) {
-    call_terry_davis("war_views_cursor_up_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    uint32_t increment = ctx_wr->row_leap_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_row);
-    }
-    views->warpoon_row = war_clamp_add_uint32(
-        views->warpoon_row, increment, views->warpoon_max_row);
-    if (views->warpoon_row >
-        views->warpoon_top_row - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        views->warpoon_bottom_row = war_clamp_add_uint32(
-            views->warpoon_bottom_row, increment, views->warpoon_max_row);
-        views->warpoon_top_row = war_clamp_add_uint32(
-            views->warpoon_top_row, increment, views->warpoon_max_row);
-        uint32_t new_viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            views->warpoon_bottom_row = war_clamp_subtract_uint32(
-                views->warpoon_bottom_row, diff, views->warpoon_min_row);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_cursor_down_leap(war_env* env) {
-    call_terry_davis("war_views_cursor_down_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    uint32_t increment = ctx_wr->row_leap_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_row);
-    }
-    views->warpoon_row = war_clamp_subtract_uint32(
-        views->warpoon_row, increment, views->warpoon_min_row);
-    if (views->warpoon_row <
-        views->warpoon_bottom_row + ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        views->warpoon_bottom_row = war_clamp_subtract_uint32(
-            views->warpoon_bottom_row, increment, views->warpoon_min_row);
-        views->warpoon_top_row = war_clamp_subtract_uint32(
-            views->warpoon_top_row, increment, views->warpoon_min_row);
-        uint32_t new_viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            views->warpoon_top_row = war_clamp_add_uint32(
-                views->warpoon_top_row, diff, views->warpoon_max_row);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_cursor_left_leap(war_env* env) {
-    call_terry_davis("war_views_cursor_left_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    uint32_t increment = ctx_wr->col_leap_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_col);
-    }
-    views->warpoon_col = war_clamp_subtract_uint32(
-        views->warpoon_col, increment, views->warpoon_min_col);
-    if (views->warpoon_col <
-        views->warpoon_left_col + ctx_wr->scroll_margin_cols) {
-        uint32_t viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        views->warpoon_left_col = war_clamp_subtract_uint32(
-            views->warpoon_left_col, increment, views->warpoon_min_col);
-        views->warpoon_right_col = war_clamp_subtract_uint32(
-            views->warpoon_right_col, increment, views->warpoon_min_col);
-        uint32_t new_viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            views->warpoon_right_col = war_clamp_add_uint32(
-                views->warpoon_right_col, diff, views->warpoon_max_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_cursor_right_leap(war_env* env) {
-    call_terry_davis("war_views_cursor_right_leap");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    uint32_t increment = ctx_wr->col_leap_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_col);
-    }
-    views->warpoon_col = war_clamp_add_uint32(
-        views->warpoon_col, increment, views->warpoon_max_col);
-    if (views->warpoon_col >
-        views->warpoon_right_col - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        views->warpoon_left_col = war_clamp_add_uint32(
-            views->warpoon_left_col, increment, views->warpoon_max_col);
-        views->warpoon_right_col = war_clamp_add_uint32(
-            views->warpoon_right_col, increment, views->warpoon_max_col);
-        uint32_t new_viewport_width =
-            views->warpoon_right_col - views->warpoon_left_col;
-        if (new_viewport_width < viewport_width) {
-            uint32_t diff = viewport_width - new_viewport_width;
-            views->warpoon_left_col = war_clamp_subtract_uint32(
-                views->warpoon_left_col, diff, views->warpoon_min_col);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_shift_up(war_env* env) {
-    call_terry_davis("war_views_shift_up");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    war_warpoon_shift_up(views);
-    uint32_t increment = ctx_wr->row_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_row);
-    }
-    views->warpoon_row = war_clamp_add_uint32(
-        views->warpoon_row, increment, views->warpoon_max_row);
-    if (views->warpoon_row >
-        views->warpoon_top_row - ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        views->warpoon_bottom_row = war_clamp_add_uint32(
-            views->warpoon_bottom_row, increment, views->warpoon_max_row);
-        views->warpoon_top_row = war_clamp_add_uint32(
-            views->warpoon_top_row, increment, views->warpoon_max_row);
-        uint32_t new_viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            views->warpoon_bottom_row = war_clamp_subtract_uint32(
-                views->warpoon_bottom_row, diff, views->warpoon_min_row);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_shift_down(war_env* env) {
-    call_terry_davis("war_views_shift_down");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    war_warpoon_shift_down(views);
-    uint32_t increment = ctx_wr->row_increment;
-    if (ctx_wr->numeric_prefix) {
-        increment = war_clamp_multiply_uint32(
-            increment, ctx_wr->numeric_prefix, views->warpoon_max_row);
-    }
-    views->warpoon_row = war_clamp_subtract_uint32(
-        views->warpoon_row, increment, views->warpoon_min_row);
-    if (views->warpoon_row <
-        views->warpoon_bottom_row + ctx_wr->scroll_margin_rows) {
-        uint32_t viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        views->warpoon_bottom_row = war_clamp_subtract_uint32(
-            views->warpoon_bottom_row, increment, views->warpoon_min_row);
-        views->warpoon_top_row = war_clamp_subtract_uint32(
-            views->warpoon_top_row, increment, views->warpoon_min_row);
-        uint32_t new_viewport_height =
-            views->warpoon_top_row - views->warpoon_bottom_row;
-        if (new_viewport_height < viewport_height) {
-            uint32_t diff = viewport_height - new_viewport_height;
-            views->warpoon_top_row = war_clamp_add_uint32(
-                views->warpoon_top_row, diff, views->warpoon_max_row);
-        }
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_delete(war_env* env) {
-    call_terry_davis("war_views_delete");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
-    if (i_views >= views->views_count) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    war_warpoon_delete_at_i(views, i_views);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_visual_line(war_env* env) {
-    call_terry_davis("war_views_visual_line");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_views* views = env->views;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    // switch (views->warpoon_mode) {
-    // case ctx_fsm->MODE_NORMAL:
-    //     views->warpoon_mode = ctx_fsm->MODE_VISUAL_LINE;
-    //     views->warpoon_visual_line_row = views->warpoon_row;
-    //     break;
-    // case ctx_fsm->MODE_VISUAL_LINE:
-    //     views->warpoon_mode = ctx_fsm->MODE_NORMAL;
-    //     break;
-    // }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_esc(war_env* env) {
-    call_terry_davis("war_views_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    war_views* views = env->views;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
-        views->warpoon_mode = ctx_fsm->MODE_NORMAL;
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_views_enter(war_env* env) {
-    call_terry_davis("war_views_enter");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_color_context* ctx_color = env->ctx_color;
-    war_views* views = env->views;
-    war_play_context* ctx_play = env->ctx_play;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
-    if (i_views >= views->views_count) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_wr->cursor_pos_x = views->col[i_views];
-    ctx_wr->cursor_pos_y = views->row[i_views];
-    ctx_wr->left_col = views->left_col[i_views];
-    ctx_wr->bottom_row = views->bottom_row[i_views];
-    ctx_wr->right_col = views->right_col[i_views];
-    ctx_wr->top_row = views->top_row[i_views];
-    if (ctx_wr->layer_flux) {
-        war_layer_flux(ctx_wr, atomics, ctx_play, ctx_color);
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_m(war_env* env) {
-    call_terry_davis("war_midi_m");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_T(war_env* env) {
-    call_terry_davis("war_midi_T");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_toggle ^= 1;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_b(war_env* env) {
-    call_terry_davis("war_midi_b");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_toggle ^= 1;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_x(war_env* env) {
-    call_terry_davis("war_midi_x");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_c(war_env* env) {
-    call_terry_davis("war_midi_c");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_K(war_env* env) {
-    call_terry_davis("war_midi_K");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->play_gain) + ctx_wr->gain_increment;
-    gain = fminf(gain, 1.0f);
-    atomic_store(&atomics->play_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_J(war_env* env) {
-    call_terry_davis("war_midi_J");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    float gain = atomic_load(&atomics->play_gain) - ctx_wr->gain_increment;
-    gain = fmaxf(gain, 0.0f);
-    atomic_store(&atomics->play_gain, gain);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_Q(war_env* env) {
-    call_terry_davis("war_midi_Q");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_space(war_env* env) {
-    call_terry_davis("war_midi_space");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_q(war_env* env) {
-    call_terry_davis("war_midi_q");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_w(war_env* env) {
-    call_terry_davis("war_midi_w");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_e(war_env* env) {
-    call_terry_davis("war_midi_e");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_r(war_env* env) {
-    call_terry_davis("war_midi_r");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_t(war_env* env) {
-    call_terry_davis("war_midi_t");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_y(war_env* env) {
-    call_terry_davis("war_midi_y");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_u(war_env* env) {
-    call_terry_davis("war_midi_u");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_i(war_env* env) {
-    call_terry_davis("war_midi_i");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_o(war_env* env) {
-    call_terry_davis("war_midi_o");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_p(war_env* env) {
-    call_terry_davis("war_midi_p");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_leftbracket(war_env* env) {
-    call_terry_davis("war_midi_leftbracket");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_rightbracket(war_env* env) {
-    call_terry_davis("war_midi_rightbracket");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    int note = 11 + 12 * (ctx_wr->midi_octave + 1);
-    if (note > 127) {
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_l(war_env* env) {
-    call_terry_davis("war_midi_l");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    atomic_fetch_xor(&atomics->loop, 1);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_minus(war_env* env) {
-    call_terry_davis("war_midi_minus");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = -1;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_esc(war_env* env) {
-    call_terry_davis("war_midi_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-}
-
-static inline void war_midi_0(war_env* env) {
-    call_terry_davis("war_midi_0");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 0;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_1(war_env* env) {
-    call_terry_davis("war_midi_1");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 1;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_2(war_env* env) {
-    call_terry_davis("war_midi_2");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 2;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_3(war_env* env) {
-    call_terry_davis("war_midi_3");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 3;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_4(war_env* env) {
-    call_terry_davis("war_midi_4");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 4;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_5(war_env* env) {
-    call_terry_davis("war_midi_5");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 5;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_6(war_env* env) {
-    call_terry_davis("war_midi_6");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 6;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_7(war_env* env) {
-    call_terry_davis("war_midi_7");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 7;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_8(war_env* env) {
-    call_terry_davis("war_midi_8");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 8;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_midi_9(war_env* env) {
-    call_terry_davis("war_midi_9");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    ctx_wr->midi_octave = 9;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_wav_Q(war_env* env) {
-    call_terry_davis("war_wav_Q");
-    war_capture_context* ctx_capture = env->ctx_capture;
-    war_wav* capture_wav = env->capture_wav;
-    ctx_capture->capture = !ctx_capture->capture;
-    if (ctx_capture->capture) { return; }
-    if (ctx_capture->prompt) {
-        ctx_capture->capture = 1;
-        ctx_capture->prompt_step = 0;
-        ctx_capture->state = CAPTURE_PROMPT;
-        return;
-    }
-    if (ftruncate(capture_wav->fd, capture_wav->memfd_size) == -1) {
-        call_terry_davis("save_file: fd ftruncate failed: %s",
-                         capture_wav->fname);
-        return;
-    }
-    off_t offset = 0;
-    call_terry_davis("saving file");
-    ssize_t result = sendfile(
-        capture_wav->fd, capture_wav->memfd, &offset, capture_wav->memfd_size);
-    if (result == -1) {
-        call_terry_davis("save_file: sendfile failed: %s", capture_wav->fname);
-    }
-    lseek(capture_wav->fd, 0, SEEK_SET);
-    memset(capture_wav->wav + 44, 0, capture_wav->memfd_capacity - 44);
-    capture_wav->memfd_size = 44;
-}
-
-static inline void war_wav_esc(war_env* env) {
-    call_terry_davis("war_wav_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_capture_context* ctx_capture = env->ctx_capture;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
-    ctx_capture->state = CAPTURE_WAITING;
-    ctx_capture->capture = 0;
-    ctx_wr->numeric_prefix = 0;
+        ks = xkb_keysym_from_name(key_str, XKB_KEYSYM_NO_FLAGS);
+    }
+    if (ks == XKB_KEY_NoSymbol) { return 0; }
+    *keysym_out = war_normalize_keysym(ks);
+    return 1;
+}
+
+static inline uint16_t war_find_prefix_state(char** prefixes,
+                                      uint16_t prefix_count,
+                                      const char* prefix) {
+    for (uint16_t i = 0; i < prefix_count; i++) {
+        if (strcmp(prefixes[i], prefix) == 0) { return i; }
+    }
+    return UINT16_MAX;
+}
+
+static inline uint16_t war_get_or_add_prefix_state(char** prefixes,
+                                            uint16_t* prefix_count,
+                                            uint16_t max_states,
+                                            const char* prefix,
+                                            war_pool* pool_wr) {
+    uint16_t existing = war_find_prefix_state(prefixes, *prefix_count, prefix);
+    if (existing != UINT16_MAX) { return existing; }
+    if (*prefix_count >= max_states) {
+        call_terry_davis("prefix_state overflow: %s", prefix);
+        return max_states - 1;
+    }
+    size_t len = strlen(prefix) + 1;
+    char* stored = war_pool_alloc(pool_wr, len);
+    memcpy(stored, prefix, len);
+    prefixes[*prefix_count] = stored;
+    (*prefix_count)++;
+    return *prefix_count - 1;
+}
+
+static inline void war_fsm_execute_command(war_env* env,
+                                           war_fsm_context* ctx_fsm,
+                                           uint16_t state_index) {
+    if (!ctx_fsm || state_index >= ctx_fsm->state_count) { return; }
+    size_t mode_idx =
+        (size_t)state_index * ctx_fsm->mode_count + ctx_fsm->current_mode;
+    if (ctx_fsm->type[mode_idx] != ctx_fsm->FUNCTION_C) { return; }
+    void (*fn)(war_env*) = ctx_fsm->function[mode_idx].c;
+    if (fn) { fn(env); }
 }
 
 #endif // WAR_FUNCTIONS_H

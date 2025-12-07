@@ -24,10 +24,11 @@
 #include "war_vulkan.c"
 #include "war_wayland.c"
 
+#include "../build/war_keymap_macros.h"
 #include "h/war_data.h"
 #include "h/war_debug_macros.h"
 #include "h/war_functions.h"
-#include "h/war_macros.h"
+#include "h/war_keymap_functions.h"
 #include "h/war_main.h"
 
 #include <errno.h>
@@ -52,6 +53,7 @@
 #include <spa-0.2/spa/utils/result.h>
 #include <spa-0.2/spa/utils/string.h>
 #include <stdint.h>
+#include <strings.h>
 #include <sys/mman.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
@@ -70,7 +72,7 @@ int main() {
         return -1;
     }
     luaL_openlibs(ctx_lua.L);
-    war_load_lua_config(&ctx_lua, "src/lua/war.lua");
+    war_load_lua_config(&ctx_lua, "src/lua/war_main.lua");
     //-------------------------------------------------------------------------
     // PC CONTROL
     //-------------------------------------------------------------------------
@@ -208,6 +210,7 @@ void* war_window_render(void* args) {
     void** args_ptrs = (void**)args;
     war_producer_consumer* pc_control = args_ptrs[0];
     war_atomics* atomics = args_ptrs[1];
+    while (!atomic_load(&atomics->start_war)) { usleep(1000); }
     war_pool* pool_wr = args_ptrs[2];
     war_lua_context* ctx_lua = args_ptrs[3];
     war_producer_consumer* pc_play = args_ptrs[4];
@@ -215,7 +218,7 @@ void* war_window_render(void* args) {
     call_terry_davis("ctx_lua WR_STATES: %i", atomic_load(&ctx_lua->WR_STATES));
     pool_wr->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
     pool_wr->pool_size =
-        war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/war.lua");
+        war_get_pool_wr_size(pool_wr, ctx_lua, "src/lua/war_main.lua");
     pool_wr->pool_size += pool_wr->pool_alignment * 2000;
     call_terry_davis("pool_wr hack size: %zu", pool_wr->pool_size);
     pool_wr->pool_size = ALIGN_UP(pool_wr->pool_size, pool_wr->pool_alignment);
@@ -617,6 +620,7 @@ void* war_window_render(void* args) {
     // Initialize runtime values
     ctx_fsm->state_last_event_us = 0;
     ctx_fsm->current_state = 0;
+    // modes
     ctx_fsm->current_mode = 0;
     // Initialize modifiers
     ctx_fsm->mod_shift = 0;
@@ -947,8 +951,9 @@ void* war_window_render(void* args) {
     env->pool_wr = pool_wr;
     env->ctx_vk = ctx_vk;
     env->capture_wav = capture_wav;
-    while (!atomic_load(&atomics->start_war)) { usleep(1000); }
+    env->ctx_fsm = ctx_fsm;
 wr: {
+
     if (war_pc_from_a(pc_control, &header, &size, control_payload)) {
         goto* pc_control_cmd[header];
     }
@@ -1081,6 +1086,9 @@ skip_play:
         }
     }
 skip_capture:
+    //-------------------------------------------------------------------------
+    // FPS
+    //-------------------------------------------------------------------------
     if (ctx_wr->now - last_frame_time >= ctx_wr->frame_duration_us) {
         last_frame_time += ctx_wr->frame_duration_us;
         if (ctx_wr->trinity) {
@@ -1161,7 +1169,7 @@ skip_command:
     if (ctx_wr->cursor_blink_state &&
         ctx_wr->now - ctx_wr->cursor_blink_previous_us >=
             ctx_wr->cursor_blink_duration_us &&
-        (ctx_fsm->current_mode == ctx_fsm->MODE_NORMAL ||
+        (ctx_fsm->current_mode == ctx_fsm->MODE_ROLL ||
          (ctx_fsm->current_mode == ctx_fsm->MODE_VIEWS &&
           views->warpoon_mode != ctx_fsm->MODE_VISUAL_LINE))) {
         ctx_wr->cursor_blink_duration_us =
@@ -1231,12 +1239,12 @@ skip_command:
                             ctx_fsm->goto_cmd_repeat_done = true;
                             if (ctx_fsm->type[FSM_2D_MODE(
                                     temp, ctx_fsm->current_mode)] ==
-                                FUNCTION_NONE) {
+                                ctx_fsm->FUNCTION_NONE) {
                                 goto cmd_repeat_done;
                             }
                             if (ctx_fsm->type[FSM_2D_MODE(
                                     temp, ctx_fsm->current_mode)] ==
-                                FUNCTION_C) {
+                                ctx_fsm->FUNCTION_C) {
                                 ctx_fsm
                                     ->function[FSM_2D_MODE(
                                         temp, ctx_fsm->current_mode)]
@@ -1270,11 +1278,11 @@ cmd_repeat_done:
         ctx_fsm->current_state = 0;
         ctx_fsm->state_last_event_us = ctx_wr->now;
         if (ctx_fsm->type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
-            FUNCTION_NONE) {
+            ctx_fsm->FUNCTION_NONE) {
             goto cmd_timeout_done;
         }
         if (ctx_fsm->type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
-            FUNCTION_C) {
+            ctx_fsm->FUNCTION_C) {
             ctx_fsm->function[FSM_2D_MODE(temp, ctx_fsm->current_mode)].c(env);
             goto cmd_done;
         }
@@ -1809,7 +1817,7 @@ cmd_timeout_done:
                 }
                 cursor_color = cursor_color_transparent;
             }
-            if (ctx_fsm->current_mode == ctx_fsm->MODE_NORMAL &&
+            if (ctx_fsm->current_mode == ctx_fsm->MODE_ROLL &&
                 !ctx_command->command && !ctx_wr->cursor_blinking) {
                 war_make_transparent_quad(
                     transparent_quad_vertices,
@@ -3302,6 +3310,212 @@ cmd_timeout_done:
                                                          XKB_MOD_NAME_CAPS);
             ctx_fsm->mod_num =
                 xkb_keymap_mod_get_index(ctx_fsm->xkb_keymap, XKB_MOD_NAME_NUM);
+            //-----------------------------------------------------------------
+            // LUA DEFAULT MODES
+            //-----------------------------------------------------------------
+            lua_getglobal(ctx_lua->L, "war");
+            if (!lua_istable(ctx_lua->L, -1)) {
+                call_terry_davis("war not a table");
+                lua_pop(ctx_lua->L, 1);
+            }
+            lua_getfield(ctx_lua->L, -1, "modes");
+            if (!lua_istable(ctx_lua->L, -1)) {
+                call_terry_davis("modes not a field");
+                lua_pop(ctx_lua->L, 2);
+            }
+            lua_pushnil(ctx_lua->L);
+            while (lua_next(ctx_lua->L, -2) != 0) {
+                const char* mode_name = lua_tostring(ctx_lua->L, -2);
+                int mode_value = (int)lua_tointeger(ctx_lua->L, -1);
+                if (strcmp(mode_name, "roll") == 0) {
+                    ctx_fsm->MODE_ROLL = mode_value;
+                } else if (strcmp(mode_name, "views") == 0) {
+                    ctx_fsm->MODE_VIEWS = mode_value;
+                } else if (strcmp(mode_name, "visual_line") == 0) {
+                    ctx_fsm->MODE_VISUAL_LINE = mode_value;
+                } else if (strcmp(mode_name, "capture") == 0) {
+                    ctx_fsm->MODE_CAPTURE = mode_value;
+                } else if (strcmp(mode_name, "midi") == 0) {
+                    ctx_fsm->MODE_MIDI = mode_value;
+                } else if (strcmp(mode_name, "command") == 0) {
+                    ctx_fsm->MODE_COMMAND = mode_value;
+                } else if (strcmp(mode_name, "visual_block") == 0) {
+                    ctx_fsm->MODE_VISUAL_BLOCK = mode_value;
+                } else if (strcmp(mode_name, "insert") == 0) {
+                    ctx_fsm->MODE_INSERT = mode_value;
+                } else if (strcmp(mode_name, "o") == 0) {
+                    ctx_fsm->MODE_O = mode_value;
+                } else if (strcmp(mode_name, "visual") == 0) {
+                    ctx_fsm->MODE_VISUAL = mode_value;
+                } else if (strcmp(mode_name, "wav") == 0) {
+                    ctx_fsm->MODE_WAV = mode_value;
+                }
+                call_terry_davis("mode: %s, value: %i", mode_name, mode_value);
+                lua_pop(ctx_lua->L, 1);
+            }
+            lua_pop(ctx_lua->L, 2);
+            //-----------------------------------------------------------------
+            // LUA DEFAULT FUNCTION TYPES
+            //-----------------------------------------------------------------
+            lua_getglobal(ctx_lua->L, "war");
+            if (!lua_istable(ctx_lua->L, -1)) {
+                call_terry_davis("war not a table");
+                lua_pop(ctx_lua->L, 1);
+            }
+            lua_getfield(ctx_lua->L, -1, "function_types");
+            if (!lua_istable(ctx_lua->L, -1)) {
+                call_terry_davis("function_types not a field");
+                lua_pop(ctx_lua->L, 2);
+            }
+            lua_pushnil(ctx_lua->L);
+            while (lua_next(ctx_lua->L, -2) != 0) {
+                const char* type_name = lua_tostring(ctx_lua->L, -2);
+                int type_value = (int)lua_tointeger(ctx_lua->L, -1);
+                if (strcmp(type_name, "none") == 0) {
+                    ctx_fsm->FUNCTION_NONE = type_value;
+                } else if (strcmp(type_name, "c") == 0) {
+                    ctx_fsm->FUNCTION_C = type_value;
+                } else if (strcmp(type_name, "lua") == 0) {
+                    ctx_fsm->FUNCTION_LUA = type_value;
+                }
+                call_terry_davis("type: %s, value: %i", type_name, type_value);
+                lua_pop(ctx_lua->L, 1);
+            }
+            lua_pop(ctx_lua->L, 2);
+            //-----------------------------------------------------------------
+            // LUA DEFAULT KEYMAP
+            //-----------------------------------------------------------------
+            lua_getglobal(ctx_lua->L, "war_flattened");
+            if (!lua_istable(ctx_lua->L, -1)) {
+                call_terry_davis("war_flattened not a table");
+                lua_pop(ctx_lua->L, 1);
+                goto wayland_done;
+            }
+
+            uint16_t max_states = ctx_fsm->state_count;
+            uint8_t state_has_children[max_states];
+            memset(state_has_children, 0, sizeof(state_has_children));
+            uint16_t next_state_counter = 1;
+            uint32_t sequence_count = 0;
+
+            lua_pushnil(ctx_lua->L);
+            while (lua_next(ctx_lua->L, -2) != 0) {
+                if (!lua_istable(ctx_lua->L, -1)) {
+                    lua_pop(ctx_lua->L, 1);
+                    continue;
+                }
+
+                lua_getfield(ctx_lua->L, -1, "keys");
+                int idx_keys = lua_gettop(ctx_lua->L);
+                lua_getfield(ctx_lua->L, -2, "commands");
+                int idx_commands = lua_gettop(ctx_lua->L);
+                if (!lua_istable(ctx_lua->L, idx_keys) ||
+                    !lua_istable(ctx_lua->L, idx_commands)) {
+                    lua_pop(ctx_lua->L, 2);
+                    lua_pop(ctx_lua->L, 1);
+                    continue;
+                }
+
+                uint16_t current_state = 0;
+                size_t keys_len = lua_objlen(ctx_lua->L, idx_keys);
+                for (size_t i = 1; i <= keys_len; i++) {
+                    lua_rawgeti(ctx_lua->L, idx_keys, (int)i);
+                    const char* token = lua_tostring(ctx_lua->L, -1);
+                    uint16_t keysym = 0;
+                    uint8_t mod = 0;
+                    if (token &&
+                        war_parse_token_to_keysym_mod(token, &keysym, &mod)) {
+                        size_t idx3d = FSM_3D_INDEX(current_state, keysym, mod);
+                        uint16_t next_state = ctx_fsm->next_state[idx3d];
+                        if (next_state == 0) {
+                            if (next_state_counter < max_states) {
+                                next_state = next_state_counter++;
+                            } else {
+                                next_state = max_states - 1;
+                                call_terry_davis("fsm state overflow");
+                            }
+                            ctx_fsm->next_state[idx3d] = next_state;
+                        }
+                        if (next_state != current_state) {
+                            state_has_children[current_state] = 1;
+                        }
+                        current_state = next_state;
+                    } else {
+                        call_terry_davis("invalid key token: %s",
+                                         token ? token : "(nil)");
+                    }
+                    lua_pop(ctx_lua->L, 1);
+                }
+
+                sequence_count++;
+                size_t commands_len = lua_objlen(ctx_lua->L, idx_commands);
+                for (size_t j = 1; j <= commands_len; j++) {
+                    lua_rawgeti(ctx_lua->L, idx_commands, (int)j);
+                    if (!lua_istable(ctx_lua->L, -1)) {
+                        lua_pop(ctx_lua->L, 1);
+                        continue;
+                    }
+
+                    lua_getfield(ctx_lua->L, -1, "cmd");
+                    const char* cmd_name = lua_tostring(ctx_lua->L, -1);
+                    lua_pop(ctx_lua->L, 1);
+
+                    lua_getfield(ctx_lua->L, -1, "mode");
+                    int mode = (int)lua_tointeger(ctx_lua->L, -1);
+                    lua_pop(ctx_lua->L, 1);
+
+                    lua_getfield(ctx_lua->L, -1, "type");
+                    int type = (int)lua_tointeger(ctx_lua->L, -1);
+                    lua_pop(ctx_lua->L, 1);
+
+                    lua_getfield(ctx_lua->L, -1, "handle_release");
+                    int handle_release = (int)lua_tointeger(ctx_lua->L, -1);
+                    lua_pop(ctx_lua->L, 1);
+
+                    lua_getfield(ctx_lua->L, -1, "handle_repeat");
+                    int handle_repeat = (int)lua_tointeger(ctx_lua->L, -1);
+                    lua_pop(ctx_lua->L, 1);
+
+                    lua_getfield(ctx_lua->L, -1, "handle_timeout");
+                    int handle_timeout = (int)lua_tointeger(ctx_lua->L, -1);
+                    lua_pop(ctx_lua->L, 1);
+
+                    if (cmd_name && mode < (int)ctx_fsm->mode_count) {
+                        size_t mode_idx = FSM_2D_MODE(current_state, mode);
+                        ctx_fsm->is_terminal[mode_idx] = 1;
+                        ctx_fsm->handle_release[mode_idx] = handle_release;
+                        ctx_fsm->handle_repeat[mode_idx] = handle_repeat;
+                        ctx_fsm->handle_timeout[mode_idx] = handle_timeout;
+                        ctx_fsm->type[mode_idx] = type;
+                        size_t name_offset = FSM_3D_NAME(current_state, mode);
+                        strncpy(ctx_fsm->name + name_offset,
+                                cmd_name,
+                                ctx_fsm->name_limit - 1);
+                        ctx_fsm->name[name_offset + ctx_fsm->name_limit - 1] =
+                            '\0';
+                        if (type == ctx_fsm->FUNCTION_C) {
+                            ctx_fsm->function[mode_idx].c =
+                                war_get_keymap_function(cmd_name);
+                        }
+                    }
+
+                    lua_pop(ctx_lua->L, 1);
+                }
+
+                lua_pop(ctx_lua->L, 2); // commands, keys
+                lua_pop(ctx_lua->L, 1); // entry table
+            }
+
+            lua_pop(ctx_lua->L, 1); // war_flattened table
+
+            for (uint16_t s = 0; s < next_state_counter; s++) {
+                if (!state_has_children[s]) { continue; }
+                for (uint32_t m = 0; m < ctx_fsm->mode_count; m++) {
+                    ctx_fsm->is_prefix[FSM_2D_MODE(s, m)] = 1;
+                }
+            }
+
+            atomic_store(&ctx_lua->WR_SEQUENCE_COUNT, sequence_count);
             goto wayland_done;
         }
         wl_keyboard_enter:
@@ -3351,7 +3565,6 @@ cmd_timeout_done:
             }
             // if (mods & (1 << mod_fn)) mod |= MOD_FN;
             bool pressed = (wl_key_state == 1);
-            // In wl_keyboard_key, after your command mode input writing:
             if (!pressed) {
                 ctx_fsm->key_down[FSM_3D_INDEX(
                     ctx_fsm->current_state, keysym, mod)] = false;
@@ -3376,13 +3589,10 @@ cmd_timeout_done:
                 }
                 uint16_t idx = ctx_fsm->next_state[FSM_3D_INDEX(
                     ctx_fsm->current_state, keysym, mod)];
-                // if (ctx_fsm->handle_release[FSM_2D_MODE(idx,
-                // ctx_fsm->current_mode)]
-                // &&
-                //     !ctx_wr->midi_toggle &&
-                //     ctx_fsm->command[ctx_fsm->current_mode]) {
-                //     fsm[idx].command[ctx_fsm->current_mode](env);
-                // }
+                if (idx && ctx_fsm->handle_release[FSM_2D_MODE(
+                               idx, ctx_fsm->current_mode)]) {
+                    war_fsm_execute_command(env, ctx_fsm, idx);
+                }
                 goto cmd_done;
             }
             if (!ctx_fsm->key_down[FSM_3D_INDEX(
@@ -3429,18 +3639,17 @@ cmd_timeout_done:
             }
             ctx_fsm->current_state = next_state_index;
             ctx_fsm->state_last_event_us = ctx_wr->now;
-            if (ctx_fsm->is_terminal[FSM_2D_MODE(ctx_fsm->current_state,
-                                                 ctx_fsm->current_mode)] &&
-                !ctx_fsm->is_prefix[FSM_2D_MODE(ctx_fsm->current_state,
-                                                ctx_fsm->current_mode)]) {
+            size_t mode_idx =
+                FSM_2D_MODE(ctx_fsm->current_state, ctx_fsm->current_mode);
+            if (ctx_fsm->is_terminal[mode_idx] &&
+                !ctx_fsm->is_prefix[mode_idx]) {
                 uint16_t temp = ctx_fsm->current_state;
                 ctx_fsm->current_state = 0;
                 // repeats
                 if ((ctx_fsm->current_mode != ctx_fsm->MODE_MIDI ||
                      (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI &&
                       ctx_wr->midi_toggle)) &&
-                    ctx_fsm->handle_repeat[FSM_2D_MODE(
-                        temp, ctx_fsm->current_mode)]) {
+                    ctx_fsm->handle_repeat[mode_idx]) {
                     ctx_fsm->repeat_keysym = keysym;
                     ctx_fsm->repeat_mod = mod;
                     ctx_fsm->repeating = 0;
@@ -3451,15 +3660,10 @@ cmd_timeout_done:
                 }
                 ctx_fsm->timeout_start_us = 0;
                 ctx_fsm->timeout = 0;
-                // if (ctx_fsm[temp].command[ctx_fsm->current_mode]) {
-                //     fsm[temp].command[ctx_fsm->current_mode](env);
-                // }
-            } else if (ctx_fsm->is_terminal[FSM_2D_MODE(
-                           ctx_fsm->current_state, ctx_fsm->current_mode)] &&
-                       ctx_fsm->is_prefix[FSM_2D_MODE(ctx_fsm->current_state,
-                                                      ctx_fsm->current_mode)]) {
-                if (ctx_fsm->handle_timeout[FSM_2D_MODE(
-                        ctx_fsm->current_state, ctx_fsm->current_mode)]) {
+                war_fsm_execute_command(env, ctx_fsm, temp);
+            } else if (ctx_fsm->is_terminal[mode_idx] &&
+                       ctx_fsm->is_prefix[mode_idx]) {
+                if (ctx_fsm->handle_timeout[mode_idx]) {
                     // repeats
                     ctx_fsm->repeat_keysym = 0;
                     ctx_fsm->repeat_mod = 0;
@@ -3477,8 +3681,7 @@ cmd_timeout_done:
                 if ((ctx_fsm->current_mode != ctx_fsm->MODE_MIDI ||
                      (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI &&
                       ctx_wr->midi_toggle)) &&
-                    ctx_fsm->handle_timeout[FSM_2D_MODE(
-                        ctx_fsm->current_state, ctx_fsm->current_mode)]) {
+                    ctx_fsm->handle_repeat[mode_idx]) {
                     ctx_fsm->repeat_keysym = keysym;
                     ctx_fsm->repeat_mod = mod;
                     ctx_fsm->repeating = 0;
@@ -3489,9 +3692,7 @@ cmd_timeout_done:
                 }
                 ctx_fsm->timeout_start_us = 0;
                 ctx_fsm->timeout = false;
-                // if (ctx_fsm[temp].command[ctx_fsm->current_mode]) {
-                //     fsm[temp].command[ctx_fsm->current_mode](env);
-                // }
+                war_fsm_execute_command(env, ctx_fsm, temp);
             }
             goto cmd_done;
         }
@@ -4234,7 +4435,7 @@ cmd_timeout_done:
                 // }
                 goto cmd_done;
             }
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
@@ -5179,7 +5380,7 @@ cmd_timeout_done:
             ctx_fsm->current_mode =
                 (ctx_fsm->current_mode != ctx_fsm->MODE_VIEWS) ?
                     ctx_fsm->MODE_VIEWS :
-                    ctx_fsm->MODE_NORMAL;
+                    ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         //-----------------------------------------------------------------
@@ -5959,49 +6160,49 @@ cmd_timeout_done:
         }
         cmd_record_e: {
             call_terry_davis("cmd_record_e");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_r: {
             call_terry_davis("cmd_record_r");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_t: {
             call_terry_davis("cmd_record_t");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_y: {
             call_terry_davis("cmd_record_y");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_u: {
             call_terry_davis("cmd_record_u");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_i: {
             call_terry_davis("cmd_record_i");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_o: {
             call_terry_davis("cmd_record_o");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_record_p: {
             call_terry_davis("cmd_record_p");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
@@ -6017,7 +6218,7 @@ cmd_timeout_done:
                 goto cmd_done;
             }
             atomic_store(&atomics->map_note, note);
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
@@ -6033,7 +6234,7 @@ cmd_timeout_done:
                 goto cmd_done;
             }
             atomic_store(&atomics->map_note, note);
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
@@ -6138,7 +6339,7 @@ cmd_timeout_done:
             goto cmd_done;
         cmd_record_esc:
             call_terry_davis("cmd_record_esc");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             atomic_store(&atomics->capture, 0);
             atomic_store(&atomics->map_note, -1);
             ctx_wr->numeric_prefix = 0;
@@ -6486,12 +6687,12 @@ cmd_timeout_done:
         cmd_views_V: {
             call_terry_davis("cmd_views_V");
             // switch (views->warpoon_mode) {
-            // case ctx_fsm->MODE_NORMAL:
+            // case ctx_fsm->MODE_ROLL:
             //     views->warpoon_mode = ctx_fsm->ctx_fsm->MODE_VISUAL_LINE;
             //     views->warpoon_visual_line_row = views->warpoon_row;
             //     break;
             // case ctx_fsm->ctx_fsm->MODE_VISUAL_LINE:
-            //     views->warpoon_mode = ctx_fsm->MODE_NORMAL;
+            //     views->warpoon_mode = ctx_fsm->MODE_ROLL;
             //     break;
             // }
             ctx_wr->numeric_prefix = 0;
@@ -6500,18 +6701,18 @@ cmd_timeout_done:
         cmd_views_esc: {
             call_terry_davis("cmd_views_esc");
             if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
-                views->warpoon_mode = ctx_fsm->MODE_NORMAL;
+                views->warpoon_mode = ctx_fsm->MODE_ROLL;
                 // logic for undoing the selection
                 ctx_wr->numeric_prefix = 0;
                 goto cmd_done;
             }
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_views_z: {
             call_terry_davis("cmd_views_z");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
             if (i_views >= views->views_count) {
                 ctx_wr->numeric_prefix = 0;
@@ -6531,7 +6732,7 @@ cmd_timeout_done:
         }
         cmd_views_return: {
             call_terry_davis("cmd_views_return");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             uint32_t i_views = views->warpoon_max_row - views->warpoon_row;
             if (i_views >= views->views_count) {
                 ctx_wr->numeric_prefix = 0;
@@ -7006,7 +7207,7 @@ cmd_timeout_done:
         }
         cmd_midi_m: {
             call_terry_davis("cmd_midi_m");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
@@ -7139,7 +7340,7 @@ cmd_timeout_done:
         }
         cmd_midi_esc: {
             call_terry_davis("cmd_midi_esc");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             goto cmd_done;
         }
         cmd_midi_0: {
@@ -7207,13 +7408,13 @@ cmd_timeout_done:
             //-----------------------------------------------------------------
         cmd_command_esc: {
             call_terry_davis("cmd_command_esc");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
         cmd_command_w: {
             call_terry_davis("cmd_command_w");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_wr->numeric_prefix = 0;
             goto cmd_done;
         }
@@ -7256,7 +7457,7 @@ cmd_timeout_done:
         }
         cmd_wav_esc: {
             call_terry_davis("cmd_wav_esc");
-            ctx_fsm->current_mode = ctx_fsm->MODE_NORMAL;
+            ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             ctx_capture->state = CAPTURE_WAITING;
             ctx_capture->capture = 0;
             ctx_wr->numeric_prefix = 0;
@@ -7598,7 +7799,8 @@ void* war_audio(void* args) {
     war_producer_consumer* pc_play = args_ptrs[4];
     war_producer_consumer* pc_capture = args_ptrs[5];
     pool_a->pool_alignment = atomic_load(&ctx_lua->POOL_ALIGNMENT);
-    pool_a->pool_size = war_get_pool_a_size(pool_a, ctx_lua, "src/lua/war.lua");
+    pool_a->pool_size =
+        war_get_pool_a_size(pool_a, ctx_lua, "src/lua/war_main.lua");
     pool_a->pool_size = ALIGN_UP(pool_a->pool_size, pool_a->pool_alignment);
     pool_a->pool_size += pool_a->pool_alignment * 10;
     call_terry_davis("pool_a hack size: %zu", pool_a->pool_size);

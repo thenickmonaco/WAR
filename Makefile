@@ -58,12 +58,26 @@ UNITY_C := $(SRC_DIR)/war_main.c
 UNITY_O := $(BUILD_DIR)/war_main.o
 DEP := $(UNITY_O:.o=.d)
 
-.PHONY: all clean gcc_check
+.PHONY: all clean gcc_check war_keymap_macros # libwar
 
-all: $(QUAD_VERT_SHADER_SPV) $(QUAD_FRAG_SHADER_SPV) $(TEXT_VERT_SHADER_SPV) $(TEXT_FRAG_SHADER_SPV) $(TARGET)
+# LIBWAR := $(BUILD_DIR)/libwar.so
+# FFI := $(BUILD_DIR)/fsm_ffi.lua
+
+KEYMAP_MACROS_H := $(BUILD_DIR)/war_keymap_macros.h
+GEN_KEYMAP_MACROS_H := $(SRC_DIR)/lua/war_get_keymap_macros.lua
+WAR_KEYMAP_FUNCTIONS_H := $(SRC_DIR)/h/war_keymap_functions.h
+
+all: $(KEYMAP_MACROS_H) $(QUAD_VERT_SHADER_SPV) $(QUAD_FRAG_SHADER_SPV) $(TEXT_VERT_SHADER_SPV) $(TEXT_FRAG_SHADER_SPV) $(TARGET)
+
+keymap_macros_h: $(KEYMAP_MACROS_H)
+
+# libwar: $(LIBWAR)
 
 $(SHADER_BUILD_DIR):
 	mkdir -p $(SHADER_BUILD_DIR)
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 $(QUAD_VERT_SHADER_SPV): $(QUAD_VERT_SHADER_SRC) | $(SHADER_BUILD_DIR)
 	$(Q)$(GLSLC) -V -S vert $< -o $@
@@ -77,15 +91,21 @@ $(TEXT_VERT_SHADER_SPV): $(TEXT_VERT_SHADER_SRC) | $(SHADER_BUILD_DIR)
 $(TEXT_FRAG_SHADER_SPV): $(TEXT_FRAG_SHADER_SRC) | $(SHADER_BUILD_DIR)
 	$(Q)$(GLSLC) -V -S frag $< -o $@
 
-$(UNITY_O): $(UNITY_C)
+$(UNITY_O): $(UNITY_C) $(KEYMAP_MACROS_H)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)$(CC) $(CFLAGS) -c $(UNITY_C) -o $@
 
-$(TARGET): $(UNITY_O) $(QUAD_VERT_SHADER_SPV) $(QUAD_FRAG_SHADER_SPV) $(TEXT_FRAG_SHADER_SPV) $(TEXT_VERT_SHADER_SPV)
+# $(LIBWAR) $(FFI): src/lua/get_libwar.lua src/h/war_data.h $(UNITY_C)
+#	$(Q)lua src/lua/get_libwar.lua
+
+$(KEYMAP_MACROS_H): $(GEN_KEYMAP_MACROS_H) $(WAR_KEYMAP_FUNCTIONS_H) | $(BUILD_DIR)
+	$(Q)lua $(GEN_KEYMAP_MACROS_H)
+
+$(TARGET): $(UNITY_O) $(QUAD_VERT_SHADER_SPV) $(QUAD_FRAG_SHADER_SPV) $(TEXT_VERT_SHADER_SPV) $(TEXT_FRAG_SHADER_SPV)
 	$(Q)$(CC) $(CFLAGS) -o $@ $(UNITY_O) $(LDFLAGS)
 
 clean:
-	$(Q)rm -rf $(BUILD_DIR) $(TARGET)
+	$(Q)rm -rf $(BUILD_DIR) $(TARGET) $(KEYMAP_MACROS_H)
 
 gcc_check:
 	$(Q)$(CC) $(CFLAGS) -fsyntax-only $(SRC)

@@ -15,6 +15,9 @@ build.zig
 /build/
 .cache/
 
+# lua
+.lua*
+
 # tmp
 /test/
 /sounds/

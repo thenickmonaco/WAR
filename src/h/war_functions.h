@@ -103,6 +103,7 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
     LOAD_INT(A_CACHE_SIZE)
     LOAD_INT(A_PATH_LIMIT)
     LOAD_INT(A_WARMUP_FRAMES_FACTOR)
+    LOAD_INT(ROLL_POSITION_X_Y)
     LOAD_INT(A_SCHED_FIFO_PRIORITY)
     // window render
     LOAD_INT(WR_VIEWS_SAVED)
@@ -190,21 +191,21 @@ static inline int war_load_lua_config(war_lua_context* ctx_lua,
 
 #undef LOAD_DOUBLE
 
-#define LOAD_STRING(field)                                                     \
-    lua_getfield(ctx_lua->L, -1, #field);                                      \
-    if (lua_isstring(ctx_lua->L, -1)) {                                        \
-        char* str = strdup(lua_tostring(ctx_lua->L, -1));                      \
-        if (str) {                                                             \
-            atomic_store(&ctx_lua->field, str);                                \
-            call_terry_davis(                                                  \
-                "ctx_lua: %s = %s", #field, atomic_load(&ctx_lua->field));     \
-        }                                                                      \
-    }                                                                          \
-    lua_pop(ctx_lua->L, 1);
+    // #define LOAD_STRING(field) \
+    //     lua_getfield(ctx_lua->L, -1, #field); \
+    //     if (lua_isstring(ctx_lua->L, -1)) { \
+    //         char* str = strdup(lua_tostring(ctx_lua->L, -1)); \
+    //         if (str) { \
+    //             atomic_store(&ctx_lua->field, str); \
+    //             call_terry_davis( \
+    //                 "ctx_lua: %s = %s", #field,
+    //                 atomic_load(&ctx_lua->field));     \
+    //         } \
+    //     } \ lua_pop(ctx_lua->L, 1);
+    //
+    //     LOAD_STRING(CWD)
 
-    LOAD_STRING(CWD)
-
-#undef LOAD_STRING
+    // #undef LOAD_STRING
     return 0;
 }
 
@@ -558,9 +559,9 @@ static inline void war_warpoon_shift_down(war_views* views) {
 // --------------------------
 // Writer: WR -> Audio (to_a)
 static inline uint8_t war_pc_to_a(war_producer_consumer* pc,
-                               uint32_t header,
-                               uint32_t payload_size,
-                               const void* payload) {
+                                  uint32_t header,
+                                  uint32_t payload_size,
+                                  const void* payload) {
     uint32_t total_size = 8 + payload_size; // header(4) + size(4) + payload
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
@@ -607,9 +608,9 @@ static inline uint8_t war_pc_to_a(war_producer_consumer* pc,
 // --------------------------
 // Reader: Audio <- WR (from_wr)
 static inline uint8_t war_pc_from_wr(war_producer_consumer* pc,
-                                  uint32_t* out_header,
-                                  uint32_t* out_size,
-                                  void* out_payload) {
+                                     uint32_t* out_header,
+                                     uint32_t* out_size,
+                                     void* out_payload) {
     uint32_t write_index = pc->i_to_a;
     uint32_t read_index = pc->i_from_wr;
     uint32_t used_bytes =
@@ -654,9 +655,9 @@ static inline uint8_t war_pc_from_wr(war_producer_consumer* pc,
 // --------------------------
 // Writer: Main -> WR (to_wr)
 static inline uint8_t war_pc_to_wr(war_producer_consumer* pc,
-                                uint32_t header,
-                                uint32_t payload_size,
-                                const void* payload) {
+                                   uint32_t header,
+                                   uint32_t payload_size,
+                                   const void* payload) {
     uint32_t total_size = 8 + payload_size;
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
@@ -699,9 +700,9 @@ static inline uint8_t war_pc_to_wr(war_producer_consumer* pc,
 // --------------------------
 // Reader: WR <- Main (from_a)
 static inline uint8_t war_pc_from_a(war_producer_consumer* pc,
-                                 uint32_t* out_header,
-                                 uint32_t* out_size,
-                                 void* out_payload) {
+                                    uint32_t* out_header,
+                                    uint32_t* out_size,
+                                    void* out_payload) {
     uint32_t write_index = pc->i_to_wr;
     uint32_t read_index = pc->i_from_a;
     uint32_t used_bytes =
@@ -874,6 +875,8 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return KEYSYM_LEFTBRACKET;
     case XKB_KEY_bracketright:
         return KEYSYM_RIGHTBRACKET;
+    case XKB_KEY_semicolon:
+        return KEYSYM_SEMICOLON;
     case XKB_KEY_colon:
         return KEYSYM_SEMICOLON;
     case XKB_KEY_underscore:
@@ -952,6 +955,36 @@ static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
         return XKB_KEY_9;
     case XKB_KEY_parenright:
         return XKB_KEY_0;
+    case XKB_KEY_KP_0:
+    case XKB_KEY_KP_Insert:
+        return XKB_KEY_0;
+    case XKB_KEY_KP_1:
+    case XKB_KEY_KP_End:
+        return XKB_KEY_1;
+    case XKB_KEY_KP_2:
+    case XKB_KEY_KP_Down:
+        return XKB_KEY_2;
+    case XKB_KEY_KP_3:
+    case XKB_KEY_KP_Next:
+        return XKB_KEY_3;
+    case XKB_KEY_KP_4:
+    case XKB_KEY_KP_Left:
+        return XKB_KEY_4;
+    case XKB_KEY_KP_5:
+    case XKB_KEY_KP_Begin:
+        return XKB_KEY_5;
+    case XKB_KEY_KP_6:
+    case XKB_KEY_KP_Right:
+        return XKB_KEY_6;
+    case XKB_KEY_KP_7:
+    case XKB_KEY_KP_Home:
+        return XKB_KEY_7;
+    case XKB_KEY_KP_8:
+    case XKB_KEY_KP_Up:
+        return XKB_KEY_8;
+    case XKB_KEY_KP_9:
+    case XKB_KEY_KP_Prior:
+        return XKB_KEY_9;
     default:
         return KEYSYM_DEFAULT; // fallback / unknown
     }
@@ -1412,8 +1445,8 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a,
 }
 
 static inline uint8_t war_parse_token_to_keysym_mod(const char* token,
-                                          uint16_t* keysym_out,
-                                          uint8_t* mod_out) {
+                                                    uint16_t* keysym_out,
+                                                    uint8_t* mod_out) {
     if (!token || !keysym_out || !mod_out) { return 0; }
     *mod_out = 0;
     const char* key_str = token;
@@ -1452,6 +1485,10 @@ static inline uint8_t war_parse_token_to_keysym_mod(const char* token,
                     key_part[sizeof(key_part) - 1] = '\0';
                 }
                 part = strtok_r(NULL, "-", &saveptr);
+            }
+            if (key_part[0] == '\0' && inner_len > 0) {
+                key_part[0] = token_buf[inner_len - 1];
+                key_part[1] = '\0';
             }
             if (key_part[0] != '\0') { key_str = key_part; }
         }
@@ -1493,40 +1530,126 @@ static inline uint8_t war_parse_token_to_keysym_mod(const char* token,
         ks = XKB_KEY_Right;
     } else if (strcasecmp(key_str, "lt") == 0) {
         ks = XKB_KEY_less;
+    } else if (strlen(key_str) == 1) {
+        char c = key_str[0];
+        switch (c) {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            ks = XKB_KEY_0 + (c - '0');
+            break;
+        case '!':
+            ks = XKB_KEY_1;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '@':
+            ks = XKB_KEY_2;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '#':
+            ks = XKB_KEY_3;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '$':
+            ks = XKB_KEY_4;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '%':
+            ks = XKB_KEY_5;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '^':
+            ks = XKB_KEY_6;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '&':
+            ks = XKB_KEY_7;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '*':
+            ks = XKB_KEY_8;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '(':
+            ks = XKB_KEY_9;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case ')':
+            ks = XKB_KEY_0;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '_':
+            ks = XKB_KEY_minus;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '-':
+            ks = XKB_KEY_minus;
+            break;
+        case '+':
+            ks = XKB_KEY_equal;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '=':
+            ks = XKB_KEY_equal;
+            break;
+        case ':':
+            ks = XKB_KEY_semicolon;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case ';':
+            ks = XKB_KEY_semicolon;
+            break;
+        case '?':
+            ks = XKB_KEY_slash;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '/':
+            ks = XKB_KEY_slash;
+            break;
+        case '>':
+            ks = XKB_KEY_period;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case '.':
+            ks = XKB_KEY_period;
+            break;
+        case '<':
+            ks = XKB_KEY_comma;
+            *mod_out |= MOD_SHIFT;
+            break;
+        case ',':
+            ks = XKB_KEY_comma;
+            break;
+        default:
+            ks = xkb_keysym_from_name(key_str, XKB_KEYSYM_NO_FLAGS);
+            break;
+        }
     } else {
         ks = xkb_keysym_from_name(key_str, XKB_KEYSYM_NO_FLAGS);
     }
     if (ks == XKB_KEY_NoSymbol) { return 0; }
+    if (strlen(key_str) == 1 && key_str[0] >= 'A' && key_str[0] <= 'Z' &&
+        !(*mod_out & MOD_SHIFT)) {
+        *mod_out |= MOD_SHIFT;
+    }
     *keysym_out = war_normalize_keysym(ks);
     return 1;
 }
 
 static inline uint16_t war_find_prefix_state(char** prefixes,
-                                      uint16_t prefix_count,
-                                      const char* prefix) {
+                                             uint16_t prefix_count,
+                                             const char* prefix) {
     for (uint16_t i = 0; i < prefix_count; i++) {
         if (strcmp(prefixes[i], prefix) == 0) { return i; }
     }
     return UINT16_MAX;
-}
-
-static inline uint16_t war_get_or_add_prefix_state(char** prefixes,
-                                            uint16_t* prefix_count,
-                                            uint16_t max_states,
-                                            const char* prefix,
-                                            war_pool* pool_wr) {
-    uint16_t existing = war_find_prefix_state(prefixes, *prefix_count, prefix);
-    if (existing != UINT16_MAX) { return existing; }
-    if (*prefix_count >= max_states) {
-        call_terry_davis("prefix_state overflow: %s", prefix);
-        return max_states - 1;
-    }
-    size_t len = strlen(prefix) + 1;
-    char* stored = war_pool_alloc(pool_wr, len);
-    memcpy(stored, prefix, len);
-    prefixes[*prefix_count] = stored;
-    (*prefix_count)++;
-    return *prefix_count - 1;
 }
 
 static inline void war_fsm_execute_command(war_env* env,

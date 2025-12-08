@@ -401,6 +401,7 @@ typedef struct war_lua_context {
     _Atomic double WR_FPS;
     _Atomic int WR_UNDO_NOTES_BATCH_MAX;
     _Atomic int WR_INPUT_SEQUENCE_LENGTH_MAX;
+    _Atomic int ROLL_POSITION_X_Y;
     // pool
     _Atomic int POOL_ALIGNMENT;
     // cmd
@@ -425,7 +426,7 @@ typedef struct war_lua_context {
     _Atomic float WINDOWED_TEXT_THICKNESS;
     _Atomic float DEFAULT_WINDOWED_ALPHA_SCALE;
     _Atomic float DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE;
-    _Atomic(char*) CWD;
+    //_Atomic(char*) CWD;
     // state
     lua_State* L;
 } war_lua_context;
@@ -758,7 +759,7 @@ typedef struct war_window_render_context {
     uint32_t color_note_outline_default;
     uint32_t color_cursor;
     uint32_t color_cursor_transparent;
-    float record_octave;
+    float capture_octave;
     float gain_increment;
     float midi_octave;
     float midi_note;
@@ -786,15 +787,55 @@ typedef struct war_command_context {
 } war_command_context;
 
 typedef struct war_status_context {
+    //-------------------------------------------------------------------------
+    // MIDDLE
+    //-------------------------------------------------------------------------
     char* middle;
     uint32_t middle_size;
+    // mode strings
+    const char* MODE_ROLL;
+    uint32_t MODE_ROLL_size;
+    const char* MODE_VIEWS;
+    uint32_t MODE_VIEWS_size;
+    const char* MODE_VISUAL_LINE;
+    uint32_t MODE_VISUAL_LINE_size;
+    const char* MODE_CAPTURE;
+    uint32_t MODE_CAPTURE_size;
+    const char* MODE_MIDI;
+    uint32_t MODE_MIDI_size;
+    const char* MODE_COMMAND;
+    uint32_t MODE_COMMAND_size;
+    const char* MODE_VISUAL_BLOCK;
+    uint32_t MODE_VISUAL_BLOCK_size;
+    const char* MODE_INSERT;
+    uint32_t MODE_INSERT_size;
+    const char* MODE_O;
+    uint32_t MODE_O_size;
+    const char* MODE_VISUAL;
+    uint32_t MODE_VISUAL_size;
+    const char* MODE_WAV;
+    uint32_t MODE_WAV_size;
+    //-------------------------------------------------------------------------
+    // TOP
+    //-------------------------------------------------------------------------
     char* top;
     uint32_t top_size;
-    char* bottom;
-    uint32_t bottom_size;
-    uint32_t capacity;
+    // roll position
+    char* roll_position;
+    uint32_t roll_position_size;
+    uint32_t roll_position_index;
+    float roll_position_factor;
+    uint8_t roll_position_x_y;
+    // layers
     char* layers_active;
     uint32_t layers_active_size;
+    //-------------------------------------------------------------------------
+    // BOTTOM
+    //-------------------------------------------------------------------------
+    char* bottom;
+    uint32_t bottom_size;
+    // misc
+    uint32_t capacity;
 } war_status_context;
 
 typedef struct war_play_context {
@@ -1029,12 +1070,17 @@ typedef struct war_fsm_context {
     uint8_t* handle_repeat;
     uint8_t* is_prefix;
     uint64_t* next_state;
+    char* cwd;
+    uint32_t cwd_size;
+    char* current_file_path;
+    uint32_t current_file_path_size;
     // Runtime state
     uint8_t* key_down;
     uint64_t state_last_event_us;
     uint64_t* key_last_event_us;
     uint64_t current_state;
     uint32_t current_mode;
+    uint32_t previous_mode;
     // Modifiers
     uint32_t mod_shift;
     uint32_t mod_ctrl;
@@ -1058,17 +1104,17 @@ typedef struct war_fsm_context {
     uint32_t mode_count;
     uint32_t name_limit;
     // modes
-    int MODE_ROLL;
-    int MODE_VIEWS;
-    int MODE_VISUAL_LINE;
-    int MODE_CAPTURE;
-    int MODE_MIDI;
-    int MODE_COMMAND;
-    int MODE_VISUAL_BLOCK;
-    int MODE_INSERT;
-    int MODE_O;
-    int MODE_VISUAL;
-    int MODE_WAV;
+    uint32_t MODE_ROLL;
+    uint32_t MODE_VIEWS;
+    uint32_t MODE_VISUAL_LINE;
+    uint32_t MODE_CAPTURE;
+    uint32_t MODE_MIDI;
+    uint32_t MODE_COMMAND;
+    uint32_t MODE_VISUAL_BLOCK;
+    uint32_t MODE_INSERT;
+    uint32_t MODE_O;
+    uint32_t MODE_VISUAL;
+    uint32_t MODE_WAV;
     // cmd type
     int FUNCTION_NONE;
     int FUNCTION_C;

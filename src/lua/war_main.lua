@@ -31,9 +31,6 @@ function war.keymap.set(modes, keys, command, flags)
     }
 end
 
-war.keys = {
-}
-
 war.modes = {
     roll = 0,
     views = 1,
@@ -113,6 +110,7 @@ ctx_lua = {
     WR_CALLBACK_SIZE                    = 4192,
     A_BYTES_NEEDED                      = 2048,
     A_TARGET_SAMPLES_FACTOR             = 2.0,
+    ROLL_POSITION_X_Y                   = 0,
     -- pool
     POOL_ALIGNMENT                      = 256,
     -- cmd
@@ -137,7 +135,6 @@ ctx_lua = {
     DEFAULT_BOLD_TEXT_THICKNESS         = 0.2,
     DEFAULT_WINDOWED_ALPHA_SCALE        = 0.02,
     DEFAULT_WINDOWED_CURSOR_ALPHA_SCALE = 0.02,
-    CWD                                 = "/home/monaco/Projects/WAR/proto",
     WR_FN_NAME_LIMIT                    = 4096,
 }
 
@@ -214,6 +211,7 @@ pool_wr = {
     -- FSM CONTEXT
     { name = "fsm",                                 type = "war_fsm_state",       count = ctx_lua.WR_STATES },
     { name = "fsm.next_state",                      type = "uint16_t",            count = ctx_lua.WR_STATES * ctx_lua.WR_KEYSYM_COUNT * ctx_lua.WR_MOD_COUNT },
+    { name = "fsm.working_directory",               type = "char",                count = ctx_lua.A_PATH_LIMIT },
     { name = "fsm.is_terminal",                     type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
     { name = "fsm.is_prefix",                       type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
     { name = "fsm.handle_release",                  type = "uint8_t",             count = ctx_lua.WR_STATES * ctx_lua.WR_MODE_COUNT },
@@ -404,1995 +402,2125 @@ keymap = {
                 mode = war.modes.views,
                 type = war.function_types.c,
             },
-            --{
-            --    cmd = "cmd_midi_l",
-            --    mode = "midi",
-            --},
+            {
+                cmd = "war_midi_l",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
         },
     },
-    --{
-    --    sequences = {
-    --        "L",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_L",
-    --            mode = "normal"
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "i",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_i",
-    --            mode = "normal"
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-Tab>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_tab",
-    --            mode = "normal"
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-k>",
-    --        "<A-Up>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_k",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_alt_k",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-j>",
-    --        "<A-Down>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_j",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_alt_j",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-h>",
-    --        "<A-Left>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_h",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_alt_h",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-l>",
-    --        "<A-Right>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_l",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_alt_l",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "0",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_0",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_0",
-    --            mode = "capture",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "$",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_$",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "G",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_G",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "gg",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_gg",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "1",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_1",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_1",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_1",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "2",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_2",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_2",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_2",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "3",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_3",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_3",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_3",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "4",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_4",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_4",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_4",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "5",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_5",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_5",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_5",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "6",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_6",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_6",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_6",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "7",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_7",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_7",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_7",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "8",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_8",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_8",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_8",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "9",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_9",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_9",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_9",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "9",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_9",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_9",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_9",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-=>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ctrl_equal",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-->",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ctrl_minus",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-+>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ctrl_plus",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-A-=>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ctrl_alt_equal",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-A-->",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-0>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ctrl_0",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<Esc>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_esc",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_esc",
-    --            mode = "views",
-    --        },
-    --        {
-    --            cmd = "cmd_record_esc",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_esc",
-    --            mode = "midi",
-    --        },
-    --        {
-    --            cmd = "cmd_command_esc",
-    --            mode = "command",
-    --        },
-    --        {
-    --            cmd = "cmd_wav_esc",
-    --            mode = "wav",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "f",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_f",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-f>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_f",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "t",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_t",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_t",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_t",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "x",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_x",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_x",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "T",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_T",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_T",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "F",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_F",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "gb",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_gb",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "gt",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_gt",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "gd",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_gd",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "gm",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_gm",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "s",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_s",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "S",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_S",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "z",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_z",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_z",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<CR>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_return",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_return",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>div",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacediv",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>dov",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacedov",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>diw",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacediw",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>da",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spaceda",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>hov",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacehov",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>hiv",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacehiv",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>ha",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spaceha",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>sov",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacesov",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>siv",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacesiv",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>sa",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacesa",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>mov",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacemov",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>miv",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacemiv",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>ma",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacema",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>umov",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spaceumov",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>umiv",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spaceumiv",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>uma",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spaceuma",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>a",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacea",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-g>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_g",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-t>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_t",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-n>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_n",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-s>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_s",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-m>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_m",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-y>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_y",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-z>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_z",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-q>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_q",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-e>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_e",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "a",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_a",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>1",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space1",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>2",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space2",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>3",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space3",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>4",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space4",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>5",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space5",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>6",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space6",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>7",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space7",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>8",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space8",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>9",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space9",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>0",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_space0",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-1>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_1",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_1",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-2>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_2",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_2",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-3>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_3",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_3",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-4>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_4",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_4",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-5>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_5",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_5",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-6>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_6",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_6",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-7>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_7",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_7",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-8>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_8",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_8",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-9>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_9",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_9",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-0>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_0",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_0",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-1>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_1",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_1",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-2>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_2",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_2",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-3>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_3",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_3",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-4>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_4",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_4",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-5>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_5",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_5",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-6>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_6",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_6",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-7>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_7",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_7",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-8>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_8",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_8",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-9>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_9",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_9",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-S-0>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_shift_0",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_alt_shift_0",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>d<leader>a",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacedspacea",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-K>",
-    --        "<A-S-Up>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_K",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-J>",
-    --        "<A-S-Down>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_J",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-H>",
-    --        "<A-S-Left>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_H",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-L>",
-    --        "<A-S-Right>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_L",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "d",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_d",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_d",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "m",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_m",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_m",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "X",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_X",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "w",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_w",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_w",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_w",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "W",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_W",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "e",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_e",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_e",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_e",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "E",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_E",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "b",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_b",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_b",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-u>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_u",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-d>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_d",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "A",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_A",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-a>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_a",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-Esc>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_esc",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<A-A>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_alt_A",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-a>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ctrl_a",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<Tab>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_tab",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_normal_tab",
-    --            mode = "capture",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>hiw",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacehiw",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>siw",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacesiw",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>umiw",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spaceumiw",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "ga",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ga",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<S-Tab>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_shift_tab",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "V",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_V",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_V",
-    --            mode = "views",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "K",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_K",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_K",
-    --            mode = "views",
-    --        },
-    --        {
-    --            cmd = "cmd_record_K",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_K",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "J",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_J",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_views_J",
-    --            mode = "views",
-    --        },
-    --        {
-    --            cmd = "cmd_record_J",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_J",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<leader>m",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_spacem",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "B",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_B",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "q",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_q",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_q",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_q",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "Q",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_Q",
-    --            mode = "normal",
-    --        },
-    --        {
-    --            cmd = "cmd_record_Q",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_Q",
-    --            mode = "midi",
-    --        },
-    --        {
-    --            cmd = "cmd_wav_Q",
-    --            mode = "wav",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "r",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_r",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_r",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "y",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_y",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_y",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "u",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_u",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_u",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "i",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_i",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_i",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "o",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_o",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_o",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "p",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_p",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_p",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "[",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_leftbracket",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_leftbracket",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "]",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_rightbracket",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_rightbracket",
-    --            mode = "midi",
-    --            handle_release = 1,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "-",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_minus",
-    --            mode = "capture",
-    --        },
-    --        {
-    --            cmd = "cmd_midi_minus",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "c",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_midi_c",
-    --            mode = "midi",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "u",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_u",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<C-r>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_ctrl_r",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "<Space>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_record_space",
-    --            mode = "capture",
-    --            handle_repeat = 0,
-    --        },
-    --        {
-    --            cmd = "cmd_midi_space",
-    --            mode = "midi",
-    --            handle_repeat = 0,
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        "w<CR>",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_command_w",
-    --            mode = "command",
-    --        },
-    --    },
-    --},
-    --{
-    --    sequences = {
-    --        ":",
-    --    },
-    --    commands = {
-    --        {
-    --            cmd = "cmd_normal_colon",
-    --            mode = "normal",
-    --        },
-    --    },
-    --},
+    {
+        sequences = {
+            "L",
+        },
+        commands = {
+            {
+                cmd = "war_roll_get_layer_from_row",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "i",
+        },
+        commands = {
+            {
+                cmd = "war_roll_map_layer_to_cursor_row",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_i",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-Tab>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_toggle_flux",
+                mode = war.modes.roll,
+                type = war.function_types.c
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-k>",
+            "<A-Up>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_up_leap",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_cursor_up_leap",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-j>",
+            "<A-Down>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_down_leap",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_cursor_down_leap",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-h>",
+            "<A-Left>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_left_leap",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_cursor_left_leap",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-l>",
+            "<A-Right>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_right_leap",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_cursor_right_leap",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "0",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_left_bound",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_0",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "$",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_right_bound_or_prefix_horizontal",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "G",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_bottom_bound_or_prefix_vertical",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "gg",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_top_bound_or_prefix_vertical",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "1",
+        },
+        commands = {
+            {
+                cmd = "war_roll_1",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_1",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_1",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "2",
+        },
+        commands = {
+            {
+                cmd = "war_roll_2",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_2",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_2",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "3",
+        },
+        commands = {
+            {
+                cmd = "war_roll_3",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_3",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_3",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "4",
+        },
+        commands = {
+            {
+                cmd = "war_roll_4",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_4",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_4",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "5",
+        },
+        commands = {
+            {
+                cmd = "war_roll_5",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_5",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_5",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "6",
+        },
+        commands = {
+            {
+                cmd = "war_roll_6",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_6",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_6",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "7",
+        },
+        commands = {
+            {
+                cmd = "war_roll_7",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_7",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_7",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "8",
+        },
+        commands = {
+            {
+                cmd = "war_roll_8",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_8",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_8",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "9",
+        },
+        commands = {
+            {
+                cmd = "war_roll_9",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_9",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_9",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-=>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_zoom_in",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-->",
+        },
+        commands = {
+            {
+                cmd = "war_roll_zoom_out",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-+>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_zoom_in_leap",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-0>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_zoom_reset",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<Esc>",
+        },
+        commands = {
+            {
+                cmd = "war_previous_mode",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_previous_mode",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_previous_mode",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_previous_mode",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_previous_mode",
+                mode = war.modes.wav,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "f",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_fat",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-f>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_alt_f",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "t",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_thin",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_t",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_t",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "x",
+        },
+        commands = {
+            {
+                cmd = "war_roll_x",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_x",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "T",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_move_thin",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_T",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "F",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_move_fat",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "gb",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_bottom",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "gt",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_top",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "gd",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_wav",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "gm",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_middle",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "s",
+        },
+        commands = {
+            {
+                cmd = "war_roll_reset_cursor",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "S",
+        },
+        commands = {
+            {
+                cmd = "war_roll_shift_s",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "z",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_draw",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_enter",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<CR>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_draw",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_enter",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>div",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_delete_in_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>dov",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_delete_outside_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>diw",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_delete_in_word",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>da",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_delete_all",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>hov",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_hide_outside_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>hiv",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_hide_in_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>ha",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_hide_all",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>sov",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_show_outside_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>siv",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_show_in_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>sa",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_show_all",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>mov",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_mute_outside_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>miv",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_mute_in_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>ma",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_mute_all",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>umov",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_unmute_outside_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>umiv",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_unmute_in_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>uma",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_unmute_all",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>a",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_save",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-g>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_1",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-t>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_2",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-n>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_3",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-s>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_4",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-m>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_5",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-y>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_6",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-z>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_7",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-q>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_8",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-e>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_views_mode",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "a",
+        },
+        commands = {
+            {
+                cmd = "war_roll_play",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>1",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space1",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>2",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space2",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>3",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space3",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>4",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space4",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>5",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space5",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>6",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space6",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>7",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space7",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>8",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space8",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>9",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space9",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>0",
+        },
+        commands = {
+            {
+                cmd = "war_roll_space0",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-1>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_1",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_1",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-2>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_2",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_2",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-3>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_3",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_3",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-4>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_4",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_4",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-5>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_5",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_5",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-6>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_6",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_6",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-7>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_7",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_7",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-8>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_8",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_8",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-9>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_9",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_9",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-0>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_get_layer_from_row",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_get_layer_from_row",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-1>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_1",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_1",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-2>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_2",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_2",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-3>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_3",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_3",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-4>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_4",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_4",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-5>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_5",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_5",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-6>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_6",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_6",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-7>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_7",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_7",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-8>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_8",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_8",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-9>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_layer_toggle_9",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_layer_toggle_9",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-S-0>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_get_layer_from_row",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_roll_get_layer_from_row",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>d<leader>a",
+        },
+        commands = {
+            {
+                cmd = "war_roll_spacedspacea",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-K>",
+            "<A-S-Up>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_up_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-J>",
+            "<A-S-Down>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_down_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-H>",
+            "<A-S-Left>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_left_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-L>",
+            "<A-S-Right>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_right_view",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "d",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_delete",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_delete",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "m",
+        },
+        commands = {
+            {
+                cmd = "war_roll_midi_mode",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_previous_mode",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "X",
+        },
+        commands = {
+            {
+                cmd = "war_roll_shift_x",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "w",
+        },
+        commands = {
+            {
+                cmd = "war_roll_w",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_w",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_w",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "W",
+        },
+        commands = {
+            {
+                cmd = "war_roll_W",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "e",
+        },
+        commands = {
+            {
+                cmd = "war_roll_e",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_e",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_e",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "E",
+        },
+        commands = {
+            {
+                cmd = "war_roll_E",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "b",
+        },
+        commands = {
+            {
+                cmd = "war_roll_b",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_b",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "A",
+        },
+        commands = {
+            {
+                cmd = "war_roll_A",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-a>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_alt_a",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-Esc>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_alt_esc",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<A-A>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_alt_A",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-a>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_ctrl_a",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<Tab>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_tab",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_tab",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>hiw",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_hide_in_word",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>siw",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_show_in_word",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>umiw",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_unmute_in_word",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "ga",
+        },
+        commands = {
+            {
+                cmd = "war_roll_cursor_goto_play_bar",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<S-Tab>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_shift_tab",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "V",
+        },
+        commands = {
+            {
+                cmd = "war_roll_shift_v",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_visual_line",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "K",
+        },
+        commands = {
+            {
+                cmd = "war_roll_gain_up",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_shift_up",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_K",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_K",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "J",
+        },
+        commands = {
+            {
+                cmd = "war_roll_gain_down",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_views_shift_down",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_J",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_J",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<leader>m",
+        },
+        commands = {
+            {
+                cmd = "war_roll_note_mute",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "B",
+        },
+        commands = {
+            {
+                cmd = "war_roll_B",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "q",
+        },
+        commands = {
+            {
+                cmd = "war_roll_q",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_q",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_q",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "Q",
+        },
+        commands = {
+            {
+                cmd = "war_roll_capture",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_Q",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_Q",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_wav_Q",
+                mode = war.modes.wav,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "r",
+        },
+        commands = {
+            {
+                cmd = "war_capture_r",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_r",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "u",
+        },
+        commands = {
+            {
+                cmd = "war_roll_u",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_capture_u",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_u",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "o",
+        },
+        commands = {
+            {
+                cmd = "war_capture_o",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_o",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "p",
+        },
+        commands = {
+            {
+                cmd = "war_capture_p",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_p",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "[",
+        },
+        commands = {
+            {
+                cmd = "war_capture_leftbracket",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_leftbracket",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "]",
+        },
+        commands = {
+            {
+                cmd = "war_capture_rightbracket",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_rightbracket",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_release = 1,
+            },
+        },
+    },
+    {
+        sequences = {
+            "-",
+        },
+        commands = {
+            {
+                cmd = "war_capture_minus",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_midi_minus",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "c",
+        },
+        commands = {
+            {
+                cmd = "war_midi_c",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<C-r>",
+        },
+        commands = {
+            {
+                cmd = "war_roll_ctrl_r",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+        },
+    },
+    {
+        sequences = {
+            "<Space>",
+        },
+        commands = {
+            {
+                cmd = "war_capture_space",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+                handle_repeat = 0,
+            },
+            {
+                cmd = "war_midi_space",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+                handle_repeat = 0,
+            },
+        },
+    },
+    {
+        sequences = {
+            ":",
+        },
+        commands = {
+            {
+                cmd = "war_command_mode",
+                mode = war.modes.roll,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_command_mode",
+                mode = war.modes.views,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_command_mode",
+                mode = war.modes.capture,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_command_mode",
+                mode = war.modes.midi,
+                type = war.function_types.c,
+            },
+            {
+                cmd = "war_command_mode",
+                mode = war.modes.wav,
+                type = war.function_types.c,
+            },
+        },
+    },
 }
 
 -- Preprocess keymap: replace <leader> with WR_LEADER
@@ -2475,12 +2603,19 @@ local function war_flatten_keymap(keymap)
 
                 local commands_with_flags = {}
                 for _, cmd in ipairs(entry.commands) do
+                    local merged_handle_repeat = keymap_flags.handle_repeat
+                    if cmd.handle_repeat ~= nil then
+                        merged_handle_repeat = cmd.handle_repeat
+                    elseif #keys > 1 then
+                        merged_handle_repeat = 0
+                    end
+
                     local merged = {
                         cmd            = cmd.cmd,
                         mode           = cmd.mode,
                         type           = cmd.type,
                         handle_release = cmd.handle_release or keymap_flags.handle_release,
-                        handle_repeat  = cmd.handle_repeat or keymap_flags.handle_repeat,
+                        handle_repeat  = merged_handle_repeat,
                         handle_timeout = cmd.handle_timeout or keymap_flags.handle_timeout,
                     }
                     table.insert(commands_with_flags, merged)

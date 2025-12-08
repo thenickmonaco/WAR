@@ -852,22 +852,6 @@ static inline void war_roll_zoom_reset(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_roll_esc(war_env* env) {
-    call_terry_davis("war_roll_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    // if (timeout_state_index) {
-    //     if (fsm[timeout_state_index].command[ctx_wr.mode]) {
-    //         goto* fsm[timeout_state_index].command[ctx_wr.mode];
-    //         timeout_state_index = 0;
-    //     }
-    //     return;
-    // }
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
-    ctx_wr->numeric_prefix = 0;
-    return;
-}
-
 static inline void war_roll_shift_s(war_env* env) {
     call_terry_davis("war_roll_shift_s");
 }
@@ -959,7 +943,7 @@ static inline void war_roll_alt_f(war_env* env) {
 }
 
 static inline void war_roll_cursor_goto_bottom(war_env* env) {
-    call_terry_davis("war_window_render_context");
+    call_terry_davis("war_roll_cursor_goto_bottom");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     war_color_context* ctx_color = env->ctx_color;
@@ -1025,7 +1009,7 @@ static inline void war_roll_cursor_goto_top(war_env* env) {
 }
 
 static inline void war_roll_cursor_goto_middle(war_env* env) {
-    call_terry_davis("war_window_render_context");
+    call_terry_davis("war_roll_cursor_goto_middle");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     war_color_context* ctx_color = env->ctx_color;
@@ -1674,7 +1658,12 @@ static inline void war_roll_midi_mode(war_env* env) {
     call_terry_davis("war_roll_midi_mode");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
+    war_status_context* ctx_status = env->ctx_status;
     ctx_fsm->current_mode = ctx_fsm->MODE_MIDI;
+    ctx_fsm->previous_mode = ctx_fsm->MODE_ROLL;
+    memset(ctx_status->middle, 0, ctx_status->capacity);
+    memcpy(
+        ctx_status->middle, ctx_status->MODE_MIDI, ctx_status->MODE_MIDI_size);
     ctx_wr->numeric_prefix = 0;
 }
 
@@ -2796,13 +2785,24 @@ static inline void war_roll_q(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_roll_Q(war_env* env) {
-    call_terry_davis("war_roll_Q");
+static inline void war_wav_mode(war_env* env) {
+    call_terry_davis("war_wav_mode");
+    war_window_render_context* ctx_wr = env->ctx_wr;
+    war_status_context* ctx_status = env->ctx_status;
+    war_fsm_context* ctx_fsm = env->ctx_fsm;
+    ctx_fsm->previous_mode = ctx_fsm->current_mode;
+    ctx_fsm->current_mode = ctx_fsm->MODE_WAV;
+    memset(ctx_status->middle, 0, ctx_status->capacity);
+    memcpy(ctx_status->middle, ctx_status->MODE_WAV, ctx_status->MODE_WAV_size);
+    ctx_wr->numeric_prefix = 0;
+}
+
+static inline void war_roll_capture(war_env* env) {
+    call_terry_davis("war_roll_capture");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_capture_context* ctx_capture = env->ctx_capture;
     ctx_capture->capture = 1;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_WAV;
+    war_wav_mode(env);
     ctx_wr->numeric_prefix = 0;
 }
 
@@ -2814,8 +2814,8 @@ static inline void war_roll_space(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_roll_colon(war_env* env) {
-    call_terry_davis("war_roll_colon");
+static inline void war_command_mode(war_env* env) {
+    call_terry_davis("war_command_mode");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_command_context* ctx_command = env->ctx_command;
     war_status_context* ctx_status = env->ctx_status;
@@ -2898,19 +2898,19 @@ static inline void war_roll_ctrl_r(war_env* env) {
 }
 
 //-----------------------------------------------------------------------------
-// Record mode commands
+// capture mode commands
 //-----------------------------------------------------------------------------
 
-static inline void war_record_tab(war_env* env) {
-    call_terry_davis("war_record_tab");
+static inline void war_capture_tab(war_env* env) {
+    call_terry_davis("war_capture_tab");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     atomic_fetch_xor(&atomics->capture_monitor, 1);
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_K(war_env* env) {
-    call_terry_davis("war_record_K");
+static inline void war_capture_K(war_env* env) {
+    call_terry_davis("war_capture_K");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     float gain = atomic_load(&atomics->play_gain) + ctx_wr->gain_increment;
@@ -2919,8 +2919,8 @@ static inline void war_record_K(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_J(war_env* env) {
-    call_terry_davis("war_record_J");
+static inline void war_capture_J(war_env* env) {
+    call_terry_davis("war_capture_J");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     float gain = atomic_load(&atomics->play_gain) - ctx_wr->gain_increment;
@@ -2929,8 +2929,8 @@ static inline void war_record_J(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_k(war_env* env) {
-    call_terry_davis("war_record_k");
+static inline void war_capture_k(war_env* env) {
+    call_terry_davis("war_capture_k");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     float gain = atomic_load(&atomics->capture_gain) + ctx_wr->gain_increment;
@@ -2939,8 +2939,8 @@ static inline void war_record_k(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_j(war_env* env) {
-    call_terry_davis("war_record_j");
+static inline void war_capture_j(war_env* env) {
+    call_terry_davis("war_capture_j");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     float gain = atomic_load(&atomics->capture_gain) - ctx_wr->gain_increment;
@@ -2949,228 +2949,217 @@ static inline void war_record_j(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_Q(war_env* env) {
-    call_terry_davis("war_record_Q");
+static inline void war_capture_Q(war_env* env) {
+    call_terry_davis("war_capture_Q");
     war_window_render_context* ctx_wr = env->ctx_wr;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_space(war_env* env) {
-    call_terry_davis("war_record_space");
+static inline void war_capture_space(war_env* env) {
+    call_terry_davis("war_capture_space");
     war_window_render_context* ctx_wr = env->ctx_wr;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_q(war_env* env) {
-    call_terry_davis("war_record_q");
+static inline void war_capture_q(war_env* env) {
+    call_terry_davis("war_capture_q");
     war_window_render_context* ctx_wr = env->ctx_wr;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_w(war_env* env) {
-    call_terry_davis("war_record_w");
+static inline void war_capture_w(war_env* env) {
+    call_terry_davis("war_capture_w");
     war_window_render_context* ctx_wr = env->ctx_wr;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_e(war_env* env) {
-    call_terry_davis("war_record_e");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_record_r(war_env* env) {
-    call_terry_davis("war_record_r");
+static inline void war_capture_e(war_env* env) {
+    call_terry_davis("war_capture_e");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_t(war_env* env) {
-    call_terry_davis("war_record_t");
+static inline void war_capture_r(war_env* env) {
+    call_terry_davis("war_capture_r");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_y(war_env* env) {
-    call_terry_davis("war_record_y");
+static inline void war_capture_t(war_env* env) {
+    call_terry_davis("war_capture_t");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_u(war_env* env) {
-    call_terry_davis("war_record_u");
+static inline void war_capture_y(war_env* env) {
+    call_terry_davis("war_capture_y");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_i(war_env* env) {
-    call_terry_davis("war_record_i");
+static inline void war_capture_u(war_env* env) {
+    call_terry_davis("war_capture_u");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_o(war_env* env) {
-    call_terry_davis("war_record_o");
+static inline void war_capture_i(war_env* env) {
+    call_terry_davis("war_capture_i");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_p(war_env* env) {
-    call_terry_davis("war_record_p");
+static inline void war_capture_o(war_env* env) {
+    call_terry_davis("war_capture_o");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_record_leftbracket(war_env* env) {
-    call_terry_davis("war_record_leftbracket");
+static inline void war_capture_p(war_env* env) {
+    call_terry_davis("war_capture_p");
+    war_window_render_context* ctx_wr = env->ctx_wr;
+    war_fsm_context* ctx_fsm = env->ctx_fsm;
+    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
+    ctx_wr->numeric_prefix = 0;
+}
+
+static inline void war_capture_leftbracket(war_env* env) {
+    call_terry_davis("war_capture_leftbracket");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    float note = 10 + 12 * (ctx_wr->record_octave + 1);
+    float note = 10 + 12 * (ctx_wr->capture_octave + 1);
     if (note > 127) { return; }
     atomic_store(&atomics->map_note, note);
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
 }
 
-static inline void war_record_rightbracket(war_env* env) {
-    call_terry_davis("war_record_rightbracket");
+static inline void war_capture_rightbracket(war_env* env) {
+    call_terry_davis("war_capture_rightbracket");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    float note = 11 + 12 * (ctx_wr->record_octave + 1);
+    float note = 11 + 12 * (ctx_wr->capture_octave + 1);
     if (note > 127) { return; }
     atomic_store(&atomics->map_note, note);
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
 }
 
-static inline void war_record_minus(war_env* env) {
-    call_terry_davis("war_record_minus");
+static inline void war_capture_minus(war_env* env) {
+    call_terry_davis("war_capture_minus");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = -1;
+    ctx_wr->capture_octave = -1;
 }
 
-static inline void war_record_0(war_env* env) {
-    call_terry_davis("war_record_0");
+static inline void war_capture_0(war_env* env) {
+    call_terry_davis("war_capture_0");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 0;
+    ctx_wr->capture_octave = 0;
 }
 
-static inline void war_record_1(war_env* env) {
-    call_terry_davis("war_record_1");
+static inline void war_capture_1(war_env* env) {
+    call_terry_davis("war_capture_1");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 1;
+    ctx_wr->capture_octave = 1;
 }
 
-static inline void war_record_2(war_env* env) {
-    call_terry_davis("war_record_2");
+static inline void war_capture_2(war_env* env) {
+    call_terry_davis("war_capture_2");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 2;
+    ctx_wr->capture_octave = 2;
 }
 
-static inline void war_record_3(war_env* env) {
-    call_terry_davis("war_record_3");
+static inline void war_capture_3(war_env* env) {
+    call_terry_davis("war_capture_3");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 3;
+    ctx_wr->capture_octave = 3;
 }
 
-static inline void war_record_4(war_env* env) {
-    call_terry_davis("war_record_4");
+static inline void war_capture_4(war_env* env) {
+    call_terry_davis("war_capture_4");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 4;
+    ctx_wr->capture_octave = 4;
 }
 
-static inline void war_record_5(war_env* env) {
-    call_terry_davis("war_record_5");
+static inline void war_capture_5(war_env* env) {
+    call_terry_davis("war_capture_5");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 5;
+    ctx_wr->capture_octave = 5;
 }
 
-static inline void war_record_6(war_env* env) {
-    call_terry_davis("war_record_6");
+static inline void war_capture_6(war_env* env) {
+    call_terry_davis("war_capture_6");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 6;
+    ctx_wr->capture_octave = 6;
 }
 
-static inline void war_record_7(war_env* env) {
-    call_terry_davis("war_record_7");
+static inline void war_capture_7(war_env* env) {
+    call_terry_davis("war_capture_7");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 7;
+    ctx_wr->capture_octave = 7;
 }
 
-static inline void war_record_8(war_env* env) {
-    call_terry_davis("war_record_8");
+static inline void war_capture_8(war_env* env) {
+    call_terry_davis("war_capture_8");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 8;
+    ctx_wr->capture_octave = 8;
 }
 
-static inline void war_record_9(war_env* env) {
-    call_terry_davis("war_record_9");
+static inline void war_capture_9(war_env* env) {
+    call_terry_davis("war_capture_9");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_atomics* atomics = env->atomics;
     ctx_wr->numeric_prefix = 0;
     if (atomic_load(&atomics->capture)) { return; }
-    ctx_wr->record_octave = 9;
-}
-
-static inline void war_record_esc(war_env* env) {
-    call_terry_davis("war_record_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_atomics* atomics = env->atomics;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
-    atomic_store(&atomics->capture, 0);
-    atomic_store(&atomics->map_note, -1);
-    ctx_wr->numeric_prefix = 0;
+    ctx_wr->capture_octave = 9;
 }
 
 //-----------------------------------------------------------------------------
@@ -3530,20 +3519,6 @@ static inline void war_views_visual_line(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_views_esc(war_env* env) {
-    call_terry_davis("war_views_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    war_views* views = env->views;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
-        views->warpoon_mode = ctx_fsm->MODE_ROLL;
-        ctx_wr->numeric_prefix = 0;
-        return;
-    }
-    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
-    ctx_wr->numeric_prefix = 0;
-}
-
 static inline void war_views_enter(war_env* env) {
     call_terry_davis("war_views_enter");
     war_window_render_context* ctx_wr = env->ctx_wr;
@@ -3728,11 +3703,77 @@ static inline void war_midi_minus(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_midi_esc(war_env* env) {
-    call_terry_davis("war_midi_esc");
+static inline void war_previous_mode(war_env* env) {
+    call_terry_davis("war_previous_mode");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
+    war_status_context* ctx_status = env->ctx_status;
+    war_command_context* ctx_command = env->ctx_command;
+    if (ctx_command->command == 1) {
+        ctx_command->command = 0;
+        goto command;
+    }
+    uint32_t current = ctx_fsm->current_mode;
+    if (current == ctx_fsm->MODE_ROLL || current == ctx_fsm->MODE_WAV) {
+        ctx_wr->numeric_prefix = 0;
+        return;
+    }
+    ctx_fsm->current_mode = ctx_fsm->previous_mode;
+    ctx_fsm->previous_mode = current;
+command:
+    memset(ctx_status->middle, 0, ctx_status->capacity);
+    if (ctx_fsm->current_mode == ctx_fsm->MODE_WAV) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_WAV,
+               ctx_status->MODE_WAV_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_MIDI,
+               ctx_status->MODE_MIDI_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_ROLL) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_ROLL,
+               ctx_status->MODE_ROLL_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VIEWS) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_VIEWS,
+               ctx_status->MODE_VIEWS_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VISUAL_LINE) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_VISUAL_LINE,
+               ctx_status->MODE_VISUAL_LINE_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_CAPTURE) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_CAPTURE,
+               ctx_status->MODE_CAPTURE_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_MIDI,
+               ctx_status->MODE_MIDI_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_COMMAND,
+               ctx_status->MODE_COMMAND_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VISUAL_BLOCK) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_VISUAL_BLOCK,
+               ctx_status->MODE_VISUAL_BLOCK_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_INSERT) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_INSERT,
+               ctx_status->MODE_INSERT_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_O) {
+        memcpy(ctx_status->middle, ctx_status->MODE_O, ctx_status->MODE_O_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VISUAL) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_VISUAL,
+               ctx_status->MODE_VISUAL_size);
+    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_WAV) {
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_WAV,
+               ctx_status->MODE_WAV_size);
+    }
+    ctx_wr->numeric_prefix = 0;
 }
 
 static inline void war_midi_0(war_env* env) {
@@ -3832,17 +3873,6 @@ static inline void war_wav_Q(war_env* env) {
     lseek(capture_wav->fd, 0, SEEK_SET);
     memset(capture_wav->wav + 44, 0, capture_wav->memfd_capacity - 44);
     capture_wav->memfd_size = 44;
-}
-
-static inline void war_wav_esc(war_env* env) {
-    call_terry_davis("war_wav_esc");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_capture_context* ctx_capture = env->ctx_capture;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
-    ctx_capture->state = CAPTURE_WAITING;
-    ctx_capture->capture = 0;
-    ctx_wr->numeric_prefix = 0;
 }
 
 #endif // WAR_KEYMAP_FUNCTIONS_H

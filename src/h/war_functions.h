@@ -837,200 +837,6 @@ static inline uint64_t war_align64(uint64_t value) {
     return (value + 63) & ~63ULL;
 }
 
-static inline uint16_t war_normalize_keysym(xkb_keysym_t ks) {
-    if ((ks >= XKB_KEY_a && ks <= XKB_KEY_z) ||
-        (ks >= XKB_KEY_0 && ks <= XKB_KEY_9)) {
-        return (uint16_t)ks;
-    }
-    switch (ks) {
-    case XKB_KEY_Escape:
-        return KEYSYM_ESCAPE;
-    case XKB_KEY_apostrophe:
-        return KEYSYM_APOSTROPHE;
-    case XKB_KEY_BackSpace:
-        return KEYSYM_BACKSPACE;
-    case XKB_KEY_Left:
-        return KEYSYM_LEFT;
-    case XKB_KEY_Up:
-        return KEYSYM_UP;
-    case XKB_KEY_Right:
-        return KEYSYM_RIGHT;
-    case XKB_KEY_Down:
-        return KEYSYM_DOWN;
-    case XKB_KEY_Return:
-        return KEYSYM_RETURN;
-    case XKB_KEY_space:
-        return KEYSYM_SPACE;
-    case XKB_KEY_Tab:
-        return KEYSYM_TAB;
-    case XKB_KEY_minus:
-        return KEYSYM_MINUS;
-    case XKB_KEY_comma:
-        return KEYSYM_COMMA;
-    case XKB_KEY_equal:
-        return KEYSYM_EQUAL;
-    case XKB_KEY_plus:
-        return KEYSYM_PLUS;
-    case XKB_KEY_bracketleft:
-        return KEYSYM_LEFTBRACKET;
-    case XKB_KEY_bracketright:
-        return KEYSYM_RIGHTBRACKET;
-    case XKB_KEY_semicolon:
-        return KEYSYM_SEMICOLON;
-    case XKB_KEY_colon:
-        return KEYSYM_SEMICOLON;
-    case XKB_KEY_underscore:
-        return KEYSYM_UNDERSCORE;
-    case 65056:
-        return KEYSYM_TAB;
-    case XKB_KEY_A:
-        return XKB_KEY_a;
-    case XKB_KEY_B:
-        return XKB_KEY_b;
-    case XKB_KEY_C:
-        return XKB_KEY_c;
-    case XKB_KEY_D:
-        return XKB_KEY_d;
-    case XKB_KEY_E:
-        return XKB_KEY_e;
-    case XKB_KEY_F:
-        return XKB_KEY_f;
-    case XKB_KEY_G:
-        return XKB_KEY_g;
-    case XKB_KEY_H:
-        return XKB_KEY_h;
-    case XKB_KEY_I:
-        return XKB_KEY_i;
-    case XKB_KEY_J:
-        return XKB_KEY_j;
-    case XKB_KEY_K:
-        return XKB_KEY_k;
-    case XKB_KEY_L:
-        return XKB_KEY_l;
-    case XKB_KEY_M:
-        return XKB_KEY_m;
-    case XKB_KEY_N:
-        return XKB_KEY_n;
-    case XKB_KEY_O:
-        return XKB_KEY_o;
-    case XKB_KEY_P:
-        return XKB_KEY_p;
-    case XKB_KEY_Q:
-        return XKB_KEY_q;
-    case XKB_KEY_R:
-        return XKB_KEY_r;
-    case XKB_KEY_S:
-        return XKB_KEY_s;
-    case XKB_KEY_T:
-        return XKB_KEY_t;
-    case XKB_KEY_U:
-        return XKB_KEY_u;
-    case XKB_KEY_V:
-        return XKB_KEY_v;
-    case XKB_KEY_W:
-        return XKB_KEY_w;
-    case XKB_KEY_X:
-        return XKB_KEY_x;
-    case XKB_KEY_Y:
-        return XKB_KEY_y;
-    case XKB_KEY_Z:
-        return XKB_KEY_z;
-    case XKB_KEY_exclam:
-        return XKB_KEY_1;
-    case XKB_KEY_at:
-        return XKB_KEY_2;
-    case XKB_KEY_numbersign:
-        return XKB_KEY_3;
-    case XKB_KEY_dollar:
-        return XKB_KEY_4;
-    case XKB_KEY_percent:
-        return XKB_KEY_5;
-    case XKB_KEY_asciicircum:
-        return XKB_KEY_6;
-    case XKB_KEY_ampersand:
-        return XKB_KEY_7;
-    case XKB_KEY_asterisk:
-        return XKB_KEY_8;
-    case XKB_KEY_parenleft:
-        return XKB_KEY_9;
-    case XKB_KEY_parenright:
-        return XKB_KEY_0;
-    case XKB_KEY_KP_0:
-    case XKB_KEY_KP_Insert:
-        return XKB_KEY_0;
-    case XKB_KEY_KP_1:
-    case XKB_KEY_KP_End:
-        return XKB_KEY_1;
-    case XKB_KEY_KP_2:
-    case XKB_KEY_KP_Down:
-        return XKB_KEY_2;
-    case XKB_KEY_KP_3:
-    case XKB_KEY_KP_Next:
-        return XKB_KEY_3;
-    case XKB_KEY_KP_4:
-    case XKB_KEY_KP_Left:
-        return XKB_KEY_4;
-    case XKB_KEY_KP_5:
-    case XKB_KEY_KP_Begin:
-        return XKB_KEY_5;
-    case XKB_KEY_KP_6:
-    case XKB_KEY_KP_Right:
-        return XKB_KEY_6;
-    case XKB_KEY_KP_7:
-    case XKB_KEY_KP_Home:
-        return XKB_KEY_7;
-    case XKB_KEY_KP_8:
-    case XKB_KEY_KP_Up:
-        return XKB_KEY_8;
-    case XKB_KEY_KP_9:
-    case XKB_KEY_KP_Prior:
-        return XKB_KEY_9;
-    default:
-        return KEYSYM_DEFAULT; // fallback / unknown
-    }
-}
-
-static inline int war_keysym_to_int(xkb_keysym_t ks, uint8_t mod) {
-    int lowercase = ks;
-    int mod_shift_difference = (mod == MOD_SHIFT ? 32 : 0);
-    // Letters a-z or A-Z -> always lowercase
-    if (ks >= XKB_KEY_a && ks <= XKB_KEY_z)
-        return (int)ks - mod_shift_difference;
-    if (ks >= XKB_KEY_A && ks <= XKB_KEY_Z) return (int)(ks - XKB_KEY_A + 'a');
-
-    // Numbers 0-9
-    if (ks >= XKB_KEY_0 && ks <= XKB_KEY_9 && mod == 0) return (int)ks;
-
-    switch (ks) {
-    case KEYSYM_SPACE:
-        return ' ';
-    case KEYSYM_APOSTROPHE:
-        return '\'';
-    case KEYSYM_COMMA:
-        return ',';
-    case KEYSYM_MINUS:
-        return '-';
-    case KEYSYM_UNDERSCORE:
-        return '_';
-    case KEYSYM_RETURN:
-        return '\n';
-    case KEYSYM_ESCAPE:
-        return 27;
-    case KEYSYM_UP:
-        return 1;
-    case KEYSYM_DOWN:
-        return 2;
-    case KEYSYM_LEFT:
-        return 3;
-    case KEYSYM_RIGHT:
-        return 4;
-    case KEYSYM_BACKSPACE:
-        return 8;
-    }
-
-    return 0; // non-printable / special keys
-}
-
 static inline void war_command_reset(war_command_context* ctx_command,
                                      war_status_context* ctx_status) {
     memset(ctx_status->middle, 0, ctx_status->capacity);
@@ -1444,6 +1250,73 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a,
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
 
+static inline uint32_t war_apply_mod(uint32_t keysym, uint32_t mod) {
+    if (mod == MOD_SHIFT) { keysym += 32; }
+    return keysym;
+}
+
+static inline uint32_t war_normalize_keysym(uint32_t keysym) {
+    uint8_t modless_letters = keysym >= XKB_KEY_a && keysym <= XKB_KEY_z;
+    uint8_t modless_numbers = keysym >= XKB_KEY_0 && keysym <= XKB_KEY_9;
+    uint8_t modless_arrows = keysym >= XKB_KEY_Left && keysym <= XKB_KEY_Down;
+    uint8_t modless_special =
+        keysym == XKB_KEY_Return || keysym == XKB_KEY_Tab ||
+        keysym == XKB_KEY_Caps_Lock || keysym == XKB_KEY_Escape ||
+        keysym == XKB_KEY_Print || keysym == XKB_KEY_Home ||
+        keysym == XKB_KEY_BackSpace || keysym == XKB_KEY_Delete ||
+        keysym == XKB_KEY_space || keysym == XKB_KEY_semicolon;
+    if (modless_letters || modless_numbers || modless_arrows ||
+        modless_special) {
+        return keysym;
+    }
+    uint8_t mod_letters = keysym >= XKB_KEY_A && keysym <= XKB_KEY_Z;
+    if (mod_letters) { return keysym + 32; }
+    switch (keysym) {
+    case XKB_KEY_asciitilde: // ~
+        return XKB_KEY_grave;
+    case XKB_KEY_exclam: // !
+        return XKB_KEY_1;
+    case XKB_KEY_at: // @
+        return XKB_KEY_2;
+    case XKB_KEY_numbersign: // #
+        return XKB_KEY_3;
+    case XKB_KEY_dollar: // $
+        return XKB_KEY_4;
+    case XKB_KEY_percent: // %
+        return XKB_KEY_5;
+    case XKB_KEY_asciicircum: // ^
+        return XKB_KEY_6;
+    case XKB_KEY_ampersand: // &
+        return XKB_KEY_7;
+    case XKB_KEY_asterisk: // *
+        return XKB_KEY_8;
+    case XKB_KEY_parenleft: // (
+        return XKB_KEY_9;
+    case XKB_KEY_parenright: // )
+        return XKB_KEY_0;
+    case XKB_KEY_underscore: // _
+        return XKB_KEY_minus;
+    case XKB_KEY_plus: // +
+        return XKB_KEY_equal;
+    case XKB_KEY_less: // <
+        return XKB_KEY_comma;
+    case XKB_KEY_greater: // >
+        return XKB_KEY_period;
+    case XKB_KEY_bar: // |
+        return XKB_KEY_backslash;
+    case XKB_KEY_colon: // :
+        return XKB_KEY_semicolon;
+    case XKB_KEY_quotedbl: // "
+        return XKB_KEY_apostrophe;
+    case XKB_KEY_question: // ?
+        return XKB_KEY_slash;
+    case 65056: // <S-Tab>
+        return XKB_KEY_Tab;
+    default:
+        return XKB_KEY_NoSymbol;
+    }
+}
+
 static inline uint8_t war_parse_token_to_keysym_mod(const char* token,
                                                     uint16_t* keysym_out,
                                                     uint8_t* mod_out) {
@@ -1661,6 +1534,18 @@ static inline void war_fsm_execute_command(war_env* env,
     if (ctx_fsm->type[mode_idx] != ctx_fsm->FUNCTION_C) { return; }
     void (*fn)(war_env*) = ctx_fsm->function[mode_idx].c;
     if (fn) { fn(env); }
+}
+
+static inline uint32_t war_trim_whitespace(char* text) {
+    int i = 0;
+    int j = 0;
+    while (isspace((unsigned char)text[i])) i++;
+    while ((text[j++] = text[i++]));
+    uint32_t len = strlen(text);
+    while (len > 0 && isspace((unsigned char)text[len - 1])) {
+        text[--len] = '\0';
+    }
+    return len;
 }
 
 #endif // WAR_FUNCTIONS_H

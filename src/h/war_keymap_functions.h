@@ -2753,8 +2753,8 @@ static inline void war_roll_tab(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_roll_shift_tab(war_env* env) {
-    call_terry_davis("war_roll_shift_tab");
+static inline void war_roll_hud_cycle(war_env* env) {
+    call_terry_davis("war_roll_hud_cycle");
     war_window_render_context* ctx_wr = env->ctx_wr;
     switch (ctx_wr->hud_state) {
     case HUD_PIANO:
@@ -2819,7 +2819,8 @@ static inline void war_command_mode(war_env* env) {
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_command_context* ctx_command = env->ctx_command;
     war_status_context* ctx_status = env->ctx_status;
-    ctx_command->command = 1;
+    war_fsm_context* ctx_fsm = env->ctx_fsm;
+    ctx_fsm->current_mode = ctx_fsm->MODE_COMMAND;
     war_command_reset(ctx_command, ctx_status);
     ctx_wr->numeric_prefix = 0;
 }
@@ -3709,8 +3710,8 @@ static inline void war_previous_mode(war_env* env) {
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     war_status_context* ctx_status = env->ctx_status;
     war_command_context* ctx_command = env->ctx_command;
-    if (ctx_command->command == 1) {
-        ctx_command->command = 0;
+    if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
+        ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
         goto command;
     }
     uint32_t current = ctx_fsm->current_mode;

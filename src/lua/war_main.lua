@@ -2165,7 +2165,7 @@ keymap = {
         },
         commands = {
             {
-                cmd = "war_roll_shift_tab",
+                cmd = "war_roll_hud_cycle",
                 mode = war.modes.roll,
                 type = war.function_types.c,
             },

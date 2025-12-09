@@ -1171,16 +1171,40 @@ skip_capture:
                ctx_status->roll_position,
                roll_position_length);
         // path
-        if (ctx_fsm->current_file_path_size == 0) {
-            memcpy(ctx_status->top,
-                   no_name,
-                   no_name_size);
+        // Build relative path display like Neovim
+        if (ctx_fsm->current_file_path_size > 0) {
+            // Calculate relative path inline without helper function
+            char* display_path = ctx_status->top;
+            int cwd_len = ctx_fsm->cwd_size;
+
+            // Check if file path starts with current working directory
+            if (strncmp(ctx_fsm->current_file_path, ctx_fsm->cwd, cwd_len) ==
+                0) {
+                // File is within current directory - show relative path
+                int file_start = cwd_len;
+                if (ctx_fsm->current_file_path[file_start] == '/') {
+                    file_start++; // Skip the '/' separator
+                }
+                snprintf(display_path,
+                         ctx_status->capacity,
+                         "%s",
+                         ctx_fsm->current_file_path + file_start);
+            } else {
+                // File is outside current directory - show absolute path
+                snprintf(display_path,
+                         ctx_status->capacity,
+                         "%s",
+                         ctx_fsm->current_file_path);
+            }
+        } else {
+            // Show [No Name] when no file open
+            snprintf(ctx_status->top, ctx_status->capacity, "[No Name]");
         }
     }
     //-------------------------------------------------------------------------
     // COMMAND MODE HANDLING
     //-------------------------------------------------------------------------
-    if (ctx_command->command) {
+    if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
         war_command_status(ctx_command, ctx_status);
         if (ctx_command->input_write_index == 0 ||
             ctx_command->input_read_index >= ctx_command->input_write_index) {
@@ -1203,15 +1227,7 @@ skip_capture:
                 war_previous_mode(env);
             }
         } else if (input == 10) { // ASCII newline
-            int i = 0;
-            int j = 0;
-            while (isspace((unsigned char)ctx_command->text[i])) i++;
-            while ((ctx_command->text[j++] = ctx_command->text[i++]));
-            int len = strlen(ctx_command->text);
-            while (len > 0 &&
-                   isspace((unsigned char)ctx_command->text[len - 1])) {
-                ctx_command->text[--len] = '\0';
-            }
+            int len = war_trim_whitespace(ctx_command->text);
             if (strcmp(ctx_command->text, "roll") == 0) {
                 ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
             } else if (strncmp(ctx_command->text, "cd", 2) == 0) {
@@ -1225,15 +1241,7 @@ skip_capture:
                 }
                 ctx_command->text[0] = ' ';
                 ctx_command->text[1] = ' ';
-                i = 0;
-                j = 0;
-                while (isspace((unsigned char)ctx_command->text[i])) i++;
-                while ((ctx_command->text[j++] = ctx_command->text[i++]));
-                len = strlen(ctx_command->text);
-                while (len > 0 &&
-                       isspace((unsigned char)ctx_command->text[len - 1])) {
-                    ctx_command->text[--len] = '\0';
-                }
+                len = war_trim_whitespace(ctx_command->text);
                 if (access(ctx_command->text, F_OK) == 0) {
                     if (chdir(ctx_command->text) == 0) {
                         call_terry_davis("changed working directory to %s",
@@ -1247,6 +1255,24 @@ skip_capture:
                 memcpy(ctx_fsm->cwd, ctx_command->text, len);
                 ctx_fsm->cwd_size = len;
                 goto command_processed;
+            } else if (strncmp(ctx_command->text, "e", 1) == 0) {
+                if (ctx_command->text[1] != ' ' &&
+                    ctx_command->text[1] != '\0') {
+                    goto command_processed;
+                }
+                if (ctx_command->text[1] == '\0') {
+                    // reload project?
+                    goto command_processed;
+                }
+                ctx_command->text[0] = ' ';
+                len = war_trim_whitespace(ctx_command->text);
+                ctx_fsm->current_file_path_size =
+                    snprintf(ctx_fsm->current_file_path,
+                             len + ctx_fsm->cwd_size + 2,
+                             "%s/%s",
+                             ctx_fsm->cwd,
+                             ctx_command->text);
+                call_terry_davis("file_path: %s", ctx_fsm->current_file_path);
             }
         command_processed:
             war_command_reset(ctx_command, ctx_status);
@@ -1332,9 +1358,9 @@ skip_command:
                         // Write repeated key to command input buffer
                         if (ctx_command->input_write_index <
                             ctx_command->capacity) {
-                            int keysym_to_int = war_keysym_to_int(k, m);
+                            uint32_t merged = war_apply_mod(k, m);
                             ctx_command->input[ctx_command->input_write_index] =
-                                keysym_to_int;
+                                merged;
                             ctx_command->input_write_index++;
                         }
                         goto cmd_repeat_done; // Skip FSM processing
@@ -3696,30 +3722,53 @@ cmd_timeout_done:
                 8; // + 8 cuz wayland
             xkb_keysym_t keysym =
                 xkb_state_key_get_one_sym(ctx_fsm->xkb_state, keycode);
-            // TODO: Normalize the other things like '<' (regarding
-            // MOD_SHIFT and XKB)
-            keysym = war_normalize_keysym(keysym); // normalize to lowercase and
-                                                   // prevent out of bounds
             xkb_mod_mask_t mods = xkb_state_serialize_mods(
                 ctx_fsm->xkb_state, XKB_STATE_MODS_DEPRESSED);
-            uint8_t mod = 0;
+            uint32_t mod = 0;
             if (mods & (1 << ctx_fsm->mod_shift)) mod |= MOD_SHIFT;
             if (mods & (1 << ctx_fsm->mod_ctrl)) mod |= MOD_CTRL;
             if (mods & (1 << ctx_fsm->mod_alt)) mod |= MOD_ALT;
             if (mods & (1 << ctx_fsm->mod_logo)) mod |= MOD_LOGO;
-            // Ignore caps/num locks for FSM matching to keep digits consistent
-            if (keysym == KEYSYM_DEFAULT) {
-                // repeats
-                ctx_fsm->key_down[FSM_3D_INDEX(ctx_fsm->current_state,
-                                               ctx_fsm->repeat_keysym,
-                                               ctx_fsm->repeat_mod)] = false;
+            uint8_t pressed = (wl_key_state == 1);
+            call_terry_davis("BEFORE: %u", keysym);
+            keysym = war_normalize_keysym(keysym);
+            call_terry_davis("AFTER: %u", keysym);
+            if (keysym == XKB_KEY_NoSymbol) {
+                call_terry_davis("UNKNOWN");
                 ctx_fsm->repeat_keysym = 0;
                 ctx_fsm->repeat_mod = 0;
                 ctx_fsm->repeating = false;
+                // timeouts
+                ctx_fsm->timeout = false;
+                ctx_fsm->timeout_state_index = 0;
+                ctx_fsm->timeout_start_us = 0;
                 goto cmd_done;
             }
-            // if (mods & (1 << mod_fn)) mod |= MOD_FN;
-            bool pressed = (wl_key_state == 1);
+            //-----------------------------------------------------------------
+            // COMMAND INPUT
+            //-----------------------------------------------------------------
+            if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
+                if (pressed) {
+                    call_terry_davis("pressed cmd");
+                    // Write to input buffer for command mode
+                    if (ctx_command->input_write_index <
+                        ctx_command->capacity) {
+                        uint32_t merged = war_apply_mod(keysym, mod);
+                        ctx_command->input[ctx_command->input_write_index] =
+                            merged;
+                        ctx_command->input_write_index++;
+                    }
+                    // SET UP REPEATS FOR COMMAND MODE
+                    ctx_fsm->repeat_keysym = keysym;
+                    ctx_fsm->repeat_mod = mod;
+                    ctx_fsm->repeating = 0;
+                    ctx_fsm->key_last_event_us[FSM_3D_INDEX(
+                        ctx_fsm->current_state, keysym, mod)] = ctx_wr->now;
+                } else if (!pressed) {
+                    call_terry_davis("not pressed cmd");
+                }
+                goto cmd_done;
+            }
             if (!pressed) {
                 ctx_fsm->key_down[FSM_3D_INDEX(
                     ctx_fsm->current_state, keysym, mod)] = false;
@@ -3756,25 +3805,6 @@ cmd_timeout_done:
                     ctx_fsm->current_state, keysym, mod)] = 1;
                 ctx_fsm->key_last_event_us[FSM_3D_INDEX(
                     ctx_fsm->current_state, keysym, mod)] = ctx_wr->now;
-            }
-            //-----------------------------------------------------------------
-            // COMMAND INPUT
-            //-----------------------------------------------------------------
-            if (ctx_command->command && pressed) {
-                // Write to input buffer for command mode
-                if (ctx_command->input_write_index < ctx_command->capacity) {
-                    int keysym_to_int = war_keysym_to_int(keysym, mod);
-                    ctx_command->input[ctx_command->input_write_index] =
-                        keysym_to_int;
-                    ctx_command->input_write_index++;
-                }
-                // SET UP REPEATS FOR COMMAND MODE
-                ctx_fsm->repeat_keysym = keysym;
-                ctx_fsm->repeat_mod = mod;
-                ctx_fsm->repeating = 0;
-                ctx_fsm->key_last_event_us[FSM_3D_INDEX(
-                    ctx_fsm->current_state, keysym, mod)] = ctx_wr->now;
-                goto cmd_done;
             }
             uint16_t next_state_index = ctx_fsm->next_state[FSM_3D_INDEX(
                 ctx_fsm->current_state, keysym, mod)];

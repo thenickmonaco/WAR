@@ -774,7 +774,6 @@ typedef struct war_window_render_context {
 } war_window_render_context;
 
 typedef struct war_command_context {
-    uint8_t command;
     int* input;
     uint32_t input_write_index;
     uint32_t input_read_index;

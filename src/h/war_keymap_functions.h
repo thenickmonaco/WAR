@@ -2823,6 +2823,13 @@ static inline void war_command_mode(war_env* env) {
     ctx_fsm->current_mode = ctx_fsm->MODE_COMMAND;
     war_command_reset(ctx_command, ctx_status);
     ctx_wr->numeric_prefix = 0;
+    // reset
+    ctx_fsm->repeat_keysym = 0;
+    ctx_fsm->repeat_mod = 0;
+    ctx_fsm->repeating = false;
+    ctx_fsm->timeout = false;
+    ctx_fsm->timeout_state_index = 0;
+    ctx_fsm->timeout_start_us = 0;
 }
 
 static inline void war_roll_u(war_env* env) {

@@ -343,7 +343,6 @@ void* war_window_render(void* args) {
     ctx_command->prompt =
         war_pool_alloc(pool_wr, sizeof(char) * ctx_command->capacity);
     ctx_command->prompt_size = 0;
-    ctx_command->command = 0;
     ctx_command->input_write_index = 0;
     ctx_command->text_write_index = 0;
     ctx_command->input_read_index = 0;
@@ -606,7 +605,7 @@ void* war_window_render(void* args) {
     ctx_fsm->state_last_event_us = 0;
     ctx_fsm->current_state = 0;
     // modes
-    ctx_fsm->current_mode = 0;
+    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
     ctx_fsm->previous_mode = 0;
     // Initialize modifiers
     ctx_fsm->mod_shift = 0;
@@ -619,6 +618,18 @@ void* war_window_render(void* args) {
     // XKB initialization (separate from pool allocation)
     ctx_fsm->xkb_context = NULL;
     ctx_fsm->xkb_state = NULL;
+    // default modes
+    ctx_fsm->MODE_ROLL = 0;
+    ctx_fsm->MODE_VIEWS = 1;
+    ctx_fsm->MODE_VISUAL_LINE = 2;
+    ctx_fsm->MODE_CAPTURE = 3;
+    ctx_fsm->MODE_MIDI = 4;
+    ctx_fsm->MODE_COMMAND = 5;
+    ctx_fsm->MODE_VISUAL_BLOCK = 6;
+    ctx_fsm->MODE_INSERT = 7;
+    ctx_fsm->MODE_O = 8;
+    ctx_fsm->MODE_VISUAL = 9;
+    ctx_fsm->MODE_WAV = 10;
     //-------------------------------------------------------------------------
     // STATUS CONTEXT
     //-------------------------------------------------------------------------
@@ -993,7 +1004,6 @@ void* war_window_render(void* args) {
     env->capture_wav = capture_wav;
     env->ctx_fsm = ctx_fsm;
 wr: {
-
     if (war_pc_from_a(pc_control, &header, &size, control_payload)) {
         goto* pc_control_cmd[header];
     }
@@ -1211,7 +1221,7 @@ skip_capture:
             goto skip_command;
         }
         int input = ctx_command->input[ctx_command->input_read_index];
-        if (input == 8) { // ASCII backspace
+        if (input == '\b') { // ASCII backspace
             if (ctx_command->text_write_index > 0) {
                 for (int i = ctx_command->text_write_index - 1;
                      i < ctx_command->text_size;
@@ -1226,7 +1236,7 @@ skip_capture:
                 war_command_reset(ctx_command, ctx_status);
                 war_previous_mode(env);
             }
-        } else if (input == 10) { // ASCII newline
+        } else if (input == '\n') { // ASCII newline
             int len = war_trim_whitespace(ctx_command->text);
             if (strcmp(ctx_command->text, "roll") == 0) {
                 ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
@@ -1275,12 +1285,13 @@ skip_capture:
                 call_terry_davis("file_path: %s", ctx_fsm->current_file_path);
             }
         command_processed:
+            call_terry_davis("%s", ctx_command->text);
             war_command_reset(ctx_command, ctx_status);
             war_previous_mode(env);
             ctx_command->text_write_index = 0;
             ctx_command->text_size = 0;
             ctx_command->text[0] = '\0';
-        } else if (input == 27) { // ASCII escape
+        } else if (input == '\e') { // ASCII escape
             war_command_reset(ctx_command, ctx_status);
             war_previous_mode(env);
             ctx_command->text_write_index = 0;
@@ -1292,6 +1303,10 @@ skip_capture:
             if (ctx_command->text_write_index < ctx_command->text_size) {
                 ctx_command->text_write_index++;
             }
+        } else if (input == '\t') {
+            call_terry_davis("tab");
+        } else if (input == '\0') {
+            call_terry_davis("none");
         } else {
             if (ctx_command->text_size < ctx_command->capacity - 1) {
                 if (ctx_command->text_write_index < ctx_command->text_size) {
@@ -1354,11 +1369,11 @@ skip_command:
                     //---------------------------------------------------------
                     // COMMAND INPUT REPEATS
                     //---------------------------------------------------------
-                    if (ctx_command->command) {
+                    if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
                         // Write repeated key to command input buffer
                         if (ctx_command->input_write_index <
                             ctx_command->capacity) {
-                            uint32_t merged = war_apply_mod(k, m);
+                            uint32_t merged = war_to_ascii(k, m);
                             ctx_command->input[ctx_command->input_write_index] =
                                 merged;
                             ctx_command->input_write_index++;
@@ -1964,7 +1979,8 @@ cmd_timeout_done:
                 cursor_color = cursor_color_transparent;
             }
             if (ctx_fsm->current_mode == ctx_fsm->MODE_ROLL &&
-                !ctx_command->command && !ctx_wr->cursor_blinking) {
+                ctx_fsm->current_mode != ctx_fsm->MODE_COMMAND &&
+                !ctx_wr->cursor_blinking) {
                 war_make_transparent_quad(
                     transparent_quad_vertices,
                     transparent_quad_indices,
@@ -2025,7 +2041,8 @@ cmd_timeout_done:
                               (float[2]){0.0f, 0.0f},
                               QUAD_OUTLINE);
                 // draw views cursor
-                if (!ctx_wr->cursor_blinking && !ctx_command->command) {
+                if (!ctx_wr->cursor_blinking &&
+                    ctx_fsm->current_mode != ctx_fsm->MODE_COMMAND) {
                     uint32_t cursor_span_x = 1;
                     uint32_t cursor_pos_x = views->warpoon_col;
                     if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
@@ -2120,7 +2137,7 @@ cmd_timeout_done:
                 }
                 break;
             }
-            if (ctx_command->command) {
+            if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
                 war_make_transparent_quad(
                     transparent_quad_vertices,
                     transparent_quad_indices,
@@ -3730,11 +3747,8 @@ cmd_timeout_done:
             if (mods & (1 << ctx_fsm->mod_alt)) mod |= MOD_ALT;
             if (mods & (1 << ctx_fsm->mod_logo)) mod |= MOD_LOGO;
             uint8_t pressed = (wl_key_state == 1);
-            call_terry_davis("BEFORE: %u", keysym);
             keysym = war_normalize_keysym(keysym);
-            call_terry_davis("AFTER: %u", keysym);
             if (keysym == XKB_KEY_NoSymbol) {
-                call_terry_davis("UNKNOWN");
                 ctx_fsm->repeat_keysym = 0;
                 ctx_fsm->repeat_mod = 0;
                 ctx_fsm->repeating = false;
@@ -3749,11 +3763,10 @@ cmd_timeout_done:
             //-----------------------------------------------------------------
             if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
                 if (pressed) {
-                    call_terry_davis("pressed cmd");
                     // Write to input buffer for command mode
                     if (ctx_command->input_write_index <
                         ctx_command->capacity) {
-                        uint32_t merged = war_apply_mod(keysym, mod);
+                        uint32_t merged = war_to_ascii(keysym, mod);
                         ctx_command->input[ctx_command->input_write_index] =
                             merged;
                         ctx_command->input_write_index++;
@@ -3764,8 +3777,37 @@ cmd_timeout_done:
                     ctx_fsm->repeating = 0;
                     ctx_fsm->key_last_event_us[FSM_3D_INDEX(
                         ctx_fsm->current_state, keysym, mod)] = ctx_wr->now;
-                } else if (!pressed) {
-                    call_terry_davis("not pressed cmd");
+                    if (!ctx_fsm->key_down[FSM_3D_INDEX(
+                            ctx_fsm->current_state, keysym, mod)]) {
+                        ctx_fsm->key_down[FSM_3D_INDEX(
+                            ctx_fsm->current_state, keysym, mod)] = 1;
+                        ctx_fsm->key_last_event_us[FSM_3D_INDEX(
+                            ctx_fsm->current_state, keysym, mod)] = ctx_wr->now;
+                    }
+                    goto cmd_done;
+                }
+                if (!pressed) {
+                    ctx_fsm->key_down[FSM_3D_INDEX(
+                        ctx_fsm->current_state, keysym, mod)] = false;
+                    ctx_fsm->key_last_event_us[FSM_3D_INDEX(
+                        ctx_fsm->current_state, keysym, mod)] = 0;
+                    if (ctx_fsm->repeat_keysym == keysym &&
+                        ctx_fsm->handle_repeat[FSM_2D_MODE(
+                            ctx_fsm->current_state, ctx_fsm->current_mode)] &&
+                        ctx_fsm->current_mode != ctx_fsm->MODE_COMMAND) {
+                        ctx_fsm->repeat_keysym = 0;
+                        ctx_fsm->repeat_mod = 0;
+                        ctx_fsm->repeating = false;
+                        // timeouts
+                        ctx_fsm->timeout = false;
+                        ctx_fsm->timeout_state_index = 0;
+                        ctx_fsm->timeout_start_us = 0;
+                    }
+                    if (ctx_wr->skip_release) {
+                        ctx_wr->skip_release = 0;
+                        goto cmd_done;
+                    }
+                    goto cmd_done;
                 }
                 goto cmd_done;
             }
@@ -3778,7 +3820,7 @@ cmd_timeout_done:
                 if (ctx_fsm->repeat_keysym == keysym &&
                     ctx_fsm->handle_repeat[FSM_2D_MODE(
                         ctx_fsm->current_state, ctx_fsm->current_mode)] &&
-                    !ctx_command->command) {
+                    ctx_fsm->current_mode != ctx_fsm->MODE_COMMAND) {
                     ctx_fsm->repeat_keysym = 0;
                     ctx_fsm->repeat_mod = 0;
                     ctx_fsm->repeating = false;

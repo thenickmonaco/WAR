@@ -1250,9 +1250,102 @@ static inline float war_sine_phase_increment(war_audio_context* ctx_a,
     return (2.0f * M_PI * frequency) / (float)ctx_a->sample_rate;
 }
 
-static inline uint32_t war_apply_mod(uint32_t keysym, uint32_t mod) {
-    if (mod == MOD_SHIFT) { keysym += 32; }
-    return keysym;
+static inline uint32_t war_to_ascii(uint32_t keysym, uint32_t mod) {
+    uint8_t modless_letters = keysym >= XKB_KEY_a && keysym <= XKB_KEY_z;
+    uint8_t modless_numbers = keysym >= XKB_KEY_0 && keysym <= XKB_KEY_9;
+    uint8_t mod_shift = mod == MOD_SHIFT;
+    if (mod_shift) {
+        if (modless_letters) { return keysym - 32; }
+        switch (keysym) {
+        case XKB_KEY_comma:
+            return '<';
+        case XKB_KEY_period:
+            return '>';
+        case XKB_KEY_slash:
+            return '?';
+        case XKB_KEY_semicolon:
+            return ':';
+        case XKB_KEY_apostrophe:
+            return '"';
+        case XKB_KEY_bracketleft:
+            return '{';
+        case XKB_KEY_bracketright:
+            return '}';
+        case XKB_KEY_backslash:
+            return '|';
+        case XKB_KEY_grave:
+            return '~';
+        case XKB_KEY_minus:
+            return '_';
+        case XKB_KEY_equal:
+            return '+';
+        case XKB_KEY_1:
+            return '!';
+        case XKB_KEY_2:
+            return '@';
+        case XKB_KEY_3:
+            return '#';
+        case XKB_KEY_4:
+            return '$';
+        case XKB_KEY_5:
+            return '%';
+        case XKB_KEY_6:
+            return '^';
+        case XKB_KEY_7:
+            return '&';
+        case XKB_KEY_8:
+            return '*';
+        case XKB_KEY_9:
+            return '(';
+        case XKB_KEY_0:
+            return ')';
+        default:
+            break;
+        }
+    }
+    if (modless_letters) { return keysym; }
+    if (modless_numbers) { return keysym; }
+    switch (keysym) {
+    case XKB_KEY_BackSpace:
+        return '\b';
+    case XKB_KEY_Return:
+        return '\n';
+    case XKB_KEY_Escape:
+        return '\e';
+    case XKB_KEY_Left:
+        return 3;
+    case XKB_KEY_Right:
+        return 4;
+    case XKB_KEY_space:
+        return ' ';
+    case XKB_KEY_Tab:
+        return '\t';
+    case XKB_KEY_comma:
+        return ',';
+    case XKB_KEY_period:
+        return '.';
+    case XKB_KEY_slash:
+        return '/';
+    case XKB_KEY_semicolon:
+        return ';';
+    case XKB_KEY_apostrophe:
+        return '\'';
+    case XKB_KEY_bracketleft:
+        return '[';
+    case XKB_KEY_bracketright:
+        return ']';
+    case XKB_KEY_backslash:
+        return '\\';
+    case XKB_KEY_grave:
+        return '`';
+    case XKB_KEY_minus:
+        return '-';
+    case XKB_KEY_equal:
+        return '=';
+    default:
+        break;
+    }
+    return '\0';
 }
 
 static inline uint32_t war_normalize_keysym(uint32_t keysym) {
@@ -1264,7 +1357,12 @@ static inline uint32_t war_normalize_keysym(uint32_t keysym) {
         keysym == XKB_KEY_Caps_Lock || keysym == XKB_KEY_Escape ||
         keysym == XKB_KEY_Print || keysym == XKB_KEY_Home ||
         keysym == XKB_KEY_BackSpace || keysym == XKB_KEY_Delete ||
-        keysym == XKB_KEY_space || keysym == XKB_KEY_semicolon;
+        keysym == XKB_KEY_space || keysym == XKB_KEY_semicolon ||
+        keysym == XKB_KEY_comma || keysym == XKB_KEY_period ||
+        keysym == XKB_KEY_slash || keysym == XKB_KEY_apostrophe ||
+        keysym == XKB_KEY_bracketleft || keysym == XKB_KEY_bracketright ||
+        keysym == XKB_KEY_backslash || keysym == XKB_KEY_equal ||
+        keysym == XKB_KEY_minus || keysym == XKB_KEY_grave;
     if (modless_letters || modless_numbers || modless_arrows ||
         modless_special) {
         return keysym;
@@ -1310,6 +1408,10 @@ static inline uint32_t war_normalize_keysym(uint32_t keysym) {
         return XKB_KEY_apostrophe;
     case XKB_KEY_question: // ?
         return XKB_KEY_slash;
+    case XKB_KEY_braceleft:
+        return XKB_KEY_bracketleft;
+    case XKB_KEY_braceright:
+        return XKB_KEY_bracketright;
     case 65056: // <S-Tab>
         return XKB_KEY_Tab;
     default:

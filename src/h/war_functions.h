@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //
 // WAR - make music with vim motions
-// Copyright (C) 2025 Monaco
+// Copyright (C) 2025 Nick Monaco
 //
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
@@ -362,6 +362,8 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_quad_vertex);
             else if (strcmp(type, "war_note_quads") == 0)
                 type_size = sizeof(war_note_quads);
+            else if (strcmp(type, "war_function_union") == 0)
+                type_size = sizeof(war_function_union);
             else if (strcmp(type, "void (*)(war_env*)") == 0)
                 type_size = sizeof(void (*)(war_env*));
             else if (strcmp(type, "war_text_vertex") == 0)
@@ -376,12 +378,16 @@ static inline size_t war_get_pool_wr_size(war_pool* pool,
                 type_size = sizeof(war_play_context);
             else if (strcmp(type, "war_audio_context") == 0)
                 type_size = sizeof(war_audio_context);
-            else if (strcmp(type, "war_cache_wav") == 0)
-                type_size = sizeof(war_cache_wav);
+            else if (strcmp(type, "war_cache") == 0)
+                type_size = sizeof(war_cache);
             else if (strcmp(type, "war_map_wav") == 0)
                 type_size = sizeof(war_map_wav);
-            else if (strcmp(type, "war_wav") == 0)
-                type_size = sizeof(war_wav);
+            else if (strcmp(type, "ino_t") == 0)
+                type_size = sizeof(ino_t);
+            else if (strcmp(type, "dev_t") == 0)
+                type_size = sizeof(dev_t);
+            else if (strcmp(type, "war_file") == 0)
+                type_size = sizeof(war_file);
             else if (strcmp(type, "war_env") == 0)
                 type_size = sizeof(war_env);
             else if (strcmp(type, "war_color_context") == 0)
@@ -477,11 +483,6 @@ static inline void war_get_warpoon_text(war_views* views) {
                  views->col[i],
                  views->bottom_row[i],
                  views->left_col[i]);
-        call_terry_davis("i_views: %u", i);
-        call_terry_davis("views row: %u", views->row[i]);
-        call_terry_davis("views col: %u", views->col[i]);
-        call_terry_davis("views bottom_row: %u", views->bottom_row[i]);
-        call_terry_davis("views left_col: %u", views->left_col[i]);
     }
 }
 
@@ -847,19 +848,20 @@ static inline void war_command_reset(war_command_context* ctx_command,
     memset(ctx_command->input, 0, ctx_command->capacity);
     ctx_command->input_write_index = 0;
     ctx_command->input_read_index = 0;
-    memset(ctx_command->prompt, 0, ctx_command->capacity);
-    ctx_command->prompt_size = 0;
+    memset(ctx_command->prompt_text, 0, ctx_command->capacity);
+    ctx_command->prompt_text_size = 0;
+    ctx_command->prompt_type = WAR_COMMAND_PROMPT_NONE;
 }
 
 static inline void war_command_status(war_command_context* ctx_command,
                                       war_status_context* ctx_status) {
     snprintf(ctx_status->middle,
-             ctx_command->prompt_size + 2 + ctx_command->text_size,
+             ctx_command->prompt_text_size + 2 + ctx_command->text_size,
              "%s:%s",
-             ctx_command->prompt,
+             ctx_command->prompt_text,
              ctx_command->text);
     ctx_status->middle_size =
-        ctx_command->prompt_size + 2 + ctx_command->text_size;
+        ctx_command->prompt_text_size + 2 + ctx_command->text_size;
 }
 
 static inline int war_num_digits(uint32_t n) {
@@ -1633,7 +1635,7 @@ static inline void war_fsm_execute_command(war_env* env,
     if (!ctx_fsm || state_index >= ctx_fsm->state_count) { return; }
     size_t mode_idx =
         (size_t)state_index * ctx_fsm->mode_count + ctx_fsm->current_mode;
-    if (ctx_fsm->type[mode_idx] != ctx_fsm->FUNCTION_C) { return; }
+    if (ctx_fsm->function_type[mode_idx] != ctx_fsm->FUNCTION_C) { return; }
     void (*fn)(war_env*) = ctx_fsm->function[mode_idx].c;
     if (fn) { fn(env); }
 }
@@ -1648,6 +1650,27 @@ static inline uint32_t war_trim_whitespace(char* text) {
         text[--len] = '\0';
     }
     return len;
+}
+
+static inline uint32_t
+war_get_ext(const char* file_name, char* ext, uint32_t name_limit) {
+    if (!file_name || !ext) return 0;
+    memset(ext, 0, name_limit);
+
+    char* last_dot = strrchr(file_name, '.');
+    if (!last_dot) {
+        ext[0] = '\0';
+        return 0; // No extension found
+    }
+
+    // Only copy if there's actually an extension
+    char* ext_start = last_dot + 1;
+    uint32_t ext_len = strlen(ext_start);
+    uint32_t copy_len = (ext_len < name_limit) ? ext_len : name_limit - 1;
+
+    memcpy(ext, ext_start, copy_len);
+    ext[copy_len] = '\0';
+    return copy_len;
 }
 
 #endif // WAR_FUNCTIONS_H

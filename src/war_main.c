@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //
 // WAR - make music with vim motions
-// Copyright (C) 2025 Monaco
+// Copyright (C) 2025 Nick Monaco
 //
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
@@ -12,8 +12,7 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 //
-// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and
-// LICENSE.
+// For the full license text, see LICENSE-AGPL and LICENSE-CC-BY-SA and LICENSE.
 //
 //-----------------------------------------------------------------------------
 
@@ -340,9 +339,9 @@ void* war_window_render(void* args) {
         war_pool_alloc(pool_wr, sizeof(int) * ctx_command->capacity);
     ctx_command->text =
         war_pool_alloc(pool_wr, sizeof(char) * ctx_command->capacity);
-    ctx_command->prompt =
+    ctx_command->prompt_text =
         war_pool_alloc(pool_wr, sizeof(char) * ctx_command->capacity);
-    ctx_command->prompt_size = 0;
+    ctx_command->prompt_text_size = 0;
     ctx_command->input_write_index = 0;
     ctx_command->text_write_index = 0;
     ctx_command->input_read_index = 0;
@@ -517,7 +516,7 @@ void* war_window_render(void* args) {
             .top_row = views_top_row,
             .views_count = 0,
             .warpoon_text = warpoon_text,
-            .warpoon_mode = 0,
+            .warpoon_state = WARPOON_STATE_NORMAL,
             .warpoon_max_col = warpoon_max_col,
             .warpoon_max_row = warpoon_max_row,
             .warpoon_viewport_cols = warpoon_viewport_cols,
@@ -554,10 +553,13 @@ void* war_window_render(void* args) {
     ctx_fsm->name_limit = atomic_load(&ctx_lua->WR_FN_NAME_LIMIT);
     // paths
     ctx_fsm->current_file_path = war_pool_alloc(pool_wr, ctx_fsm->name_limit);
+    ctx_fsm->current_file_type = FILE_WAR;
     ctx_fsm->current_file_path_size = 0;
     ctx_fsm->cwd = war_pool_alloc(pool_wr, ctx_fsm->name_limit);
     getcwd(ctx_fsm->cwd, ctx_fsm->name_limit);
     ctx_fsm->cwd_size = strlen(ctx_fsm->cwd);
+    ctx_fsm->ext = war_pool_alloc(pool_wr, ctx_fsm->name_limit);
+    ctx_fsm->ext_size = 0;
     // FSM data allocations (per state per mode)
     ctx_fsm->next_state =
         war_pool_alloc(pool_wr,
@@ -577,7 +579,7 @@ void* war_window_render(void* args) {
         war_pool_alloc(pool_wr,
                        sizeof(war_function_union) * ctx_fsm->state_count *
                            ctx_fsm->mode_count);
-    ctx_fsm->type = war_pool_alloc(
+    ctx_fsm->function_type = war_pool_alloc(
         pool_wr, sizeof(uint8_t) * ctx_fsm->state_count * ctx_fsm->mode_count);
     ctx_fsm->name =
         war_pool_alloc(pool_wr,
@@ -621,20 +623,13 @@ void* war_window_render(void* args) {
     // default modes
     ctx_fsm->MODE_ROLL = 0;
     ctx_fsm->MODE_VIEWS = 1;
-    ctx_fsm->MODE_VISUAL_LINE = 2;
-    ctx_fsm->MODE_CAPTURE = 3;
-    ctx_fsm->MODE_MIDI = 4;
-    ctx_fsm->MODE_COMMAND = 5;
-    ctx_fsm->MODE_VISUAL_BLOCK = 6;
-    ctx_fsm->MODE_INSERT = 7;
-    ctx_fsm->MODE_O = 8;
-    ctx_fsm->MODE_VISUAL = 9;
-    ctx_fsm->MODE_WAV = 10;
+    ctx_fsm->MODE_CAPTURE = 2;
+    ctx_fsm->MODE_MIDI = 3;
+    ctx_fsm->MODE_COMMAND = 4;
+    ctx_fsm->MODE_WAV = 5;
     //-------------------------------------------------------------------------
     // STATUS CONTEXT
     //-------------------------------------------------------------------------
-    const char* no_name = "[No Name]";
-    uint32_t no_name_size = 9;
     war_status_context* ctx_status =
         war_pool_alloc(pool_wr, sizeof(war_status_context));
     ctx_status->capacity = atomic_load(&ctx_lua->A_PATH_LIMIT);
@@ -666,22 +661,12 @@ void* war_window_render(void* args) {
     ctx_status->MODE_ROLL_size = 0;
     ctx_status->MODE_VIEWS = "-- VIEWS --";
     ctx_status->MODE_VIEWS_size = strlen(ctx_status->MODE_VIEWS);
-    ctx_status->MODE_VISUAL_LINE = "-- VISUAL_LINE --";
-    ctx_status->MODE_VISUAL_LINE_size = strlen(ctx_status->MODE_VISUAL_LINE);
     ctx_status->MODE_CAPTURE = "-- CAPTURE --";
     ctx_status->MODE_CAPTURE_size = strlen(ctx_status->MODE_CAPTURE);
     ctx_status->MODE_MIDI = "-- MIDI --";
     ctx_status->MODE_MIDI_size = strlen(ctx_status->MODE_MIDI);
     ctx_status->MODE_COMMAND = "-- COMMAND --";
     ctx_status->MODE_COMMAND_size = strlen(ctx_status->MODE_COMMAND);
-    ctx_status->MODE_VISUAL_BLOCK = "-- VISUAL_BLOCK --";
-    ctx_status->MODE_VISUAL_BLOCK_size = strlen(ctx_status->MODE_VISUAL_BLOCK);
-    ctx_status->MODE_INSERT = "-- INSERT --";
-    ctx_status->MODE_INSERT_size = strlen(ctx_status->MODE_INSERT);
-    ctx_status->MODE_O = "-- O --";
-    ctx_status->MODE_O_size = strlen(ctx_status->MODE_O);
-    ctx_status->MODE_VISUAL = "-- VISUAL --";
-    ctx_status->MODE_VISUAL_size = strlen(ctx_status->MODE_VISUAL);
     ctx_status->MODE_WAV = "-- WAV --";
     ctx_status->MODE_WAV_size = strlen(ctx_status->MODE_WAV);
     //-----------------------------------------------------------------------------
@@ -846,7 +831,10 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     // CAPTURE WAV
     //-------------------------------------------------------------------------
-    war_wav* capture_wav = war_pool_alloc(pool_wr, sizeof(war_wav));
+    war_file* capture_wav = war_pool_alloc(pool_wr, sizeof(war_file));
+    capture_wav->type = FILE_WAV;
+    capture_wav->fd = -1;
+    capture_wav->fd_size = 0;
     capture_wav->memfd_size = 44;
     capture_wav->name_limit = atomic_load(&ctx_lua->A_PATH_LIMIT);
     uint64_t init_capacity = 44 + sizeof(float) *
@@ -865,13 +853,13 @@ void* war_window_render(void* args) {
     if (ftruncate(capture_wav->memfd, capture_wav->memfd_capacity) == -1) {
         call_terry_davis("memfd ftruncate failed: %s", capture_wav->fname);
     }
-    capture_wav->wav = mmap(NULL,
-                            capture_wav->memfd_capacity,
-                            PROT_READ | PROT_WRITE,
-                            MAP_SHARED,
-                            capture_wav->memfd,
-                            0);
-    if (capture_wav->wav == MAP_FAILED) {
+    capture_wav->file = mmap(NULL,
+                             capture_wav->memfd_capacity,
+                             PROT_READ | PROT_WRITE,
+                             MAP_SHARED,
+                             capture_wav->memfd,
+                             0);
+    if (capture_wav->file == MAP_FAILED) {
         call_terry_davis("mmap failed: %s", capture_wav->fname);
     }
     war_riff_header init_riff_header = (war_riff_header){
@@ -894,40 +882,34 @@ void* war_window_render(void* args) {
         .subchunk2_id = "data",
         .subchunk2_size = init_capacity - 44,
     };
-    *(war_riff_header*)capture_wav->wav = init_riff_header;
-    *(war_fmt_chunk*)(capture_wav->wav + sizeof(war_riff_header)) =
+    *(war_riff_header*)capture_wav->file = init_riff_header;
+    *(war_fmt_chunk*)(capture_wav->file + sizeof(war_riff_header)) =
         init_fmt_chunk;
-    *(war_data_chunk*)(capture_wav->wav + sizeof(war_riff_header) +
+    *(war_data_chunk*)(capture_wav->file + sizeof(war_riff_header) +
                        sizeof(war_fmt_chunk)) = init_data_chunk;
-    capture_wav->fd =
-        open(capture_wav->fname, O_TRUNC | O_CREAT | O_RDWR, 0644);
-    if (capture_wav->fd < 0) {
-        call_terry_davis("fd failed to open: %s", capture_wav->fname);
-    }
-    capture_wav->fd_size = 0;
     //-------------------------------------------------------------------------
-    // CACHE WAV
+    //  CACHE
     //-------------------------------------------------------------------------
-    war_cache_wav* cache_wav = war_pool_alloc(pool_wr, sizeof(war_cache_wav));
-    cache_wav->capacity = atomic_load(&ctx_lua->A_CACHE_SIZE);
-    cache_wav->id =
-        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
-    cache_wav->timestamp =
-        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
-    cache_wav->wav =
-        war_pool_alloc(pool_wr, sizeof(uint8_t*) * cache_wav->capacity);
-    cache_wav->memfd =
-        war_pool_alloc(pool_wr, sizeof(int) * cache_wav->capacity);
-    cache_wav->memfd_size =
-        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
-    cache_wav->memfd_capacity =
-        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
-    cache_wav->fd = war_pool_alloc(pool_wr, sizeof(int) * cache_wav->capacity);
-    cache_wav->fd_size =
-        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache_wav->capacity);
-    cache_wav->count = 0;
-    cache_wav->next_id = 1;
-    cache_wav->next_timestamp = 1;
+    war_cache* cache = war_pool_alloc(pool_wr, sizeof(war_cache));
+    cache->capacity = atomic_load(&ctx_lua->A_CACHE_SIZE);
+    cache->id = war_pool_alloc(pool_wr, sizeof(uint64_t) * cache->capacity);
+    cache->timestamp =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache->capacity);
+    cache->file = war_pool_alloc(pool_wr, sizeof(uint8_t*) * cache->capacity);
+    cache->type = war_pool_alloc(pool_wr, sizeof(uint8_t) * cache->capacity);
+    cache->device = war_pool_alloc(pool_wr, sizeof(dev_t) * cache->capacity);
+    cache->inode = war_pool_alloc(pool_wr, sizeof(ino_t) * cache->capacity);
+    cache->memfd = war_pool_alloc(pool_wr, sizeof(int) * cache->capacity);
+    cache->memfd_size =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache->capacity);
+    cache->memfd_capacity =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache->capacity);
+    cache->fd = war_pool_alloc(pool_wr, sizeof(int) * cache->capacity);
+    cache->fd_size =
+        war_pool_alloc(pool_wr, sizeof(uint64_t) * cache->capacity);
+    cache->count = 0;
+    cache->next_id = 1;
+    cache->next_timestamp = 1;
     //-------------------------------------------------------------------------
     // MAP WAV
     //-------------------------------------------------------------------------
@@ -952,6 +934,7 @@ void* war_window_render(void* args) {
     //-------------------------------------------------------------------------
     war_capture_context* ctx_capture =
         war_pool_alloc(pool_wr, sizeof(war_capture_context));
+    ctx_capture->name_limit = atomic_load(&ctx_lua->A_PATH_LIMIT);
     ctx_capture->fps = atomic_load(&ctx_lua->WR_CAPTURE_CALLBACK_FPS);
     // rate
     ctx_capture->rate_us = (uint64_t)round((1.0 / (double)ctx_capture->fps) *
@@ -960,14 +943,30 @@ void* war_window_render(void* args) {
     ctx_capture->last_read_time = 0;
     ctx_capture->read_count = 0;
     // misc
-    ctx_capture->capture = 0;
     ctx_capture->capture_wait = 1;
     ctx_capture->capture_delay = 0;
     ctx_capture->state = CAPTURE_WAITING;
     ctx_capture->threshold = atomic_load(&ctx_lua->WR_CAPTURE_THRESHOLD);
-    ctx_capture->prompt = 0;
-    ctx_capture->prompt_step = 0; // 0 = fname, 1 = note, 2 = layer
     ctx_capture->monitor = 0;
+    ctx_capture->prompt = 1;
+    ctx_capture->prompt_fname_text =
+        war_pool_alloc(pool_wr, ctx_capture->name_limit);
+    ctx_capture->prompt_fname_text = "filename";
+    ctx_capture->prompt_fname_text_size =
+        strlen(ctx_capture->prompt_fname_text);
+    ctx_capture->prompt_note_text =
+        war_pool_alloc(pool_wr, ctx_capture->name_limit);
+    ctx_capture->prompt_note_text = "note";
+    ctx_capture->prompt_note_text_size = strlen(ctx_capture->prompt_note_text);
+    ctx_capture->prompt_layer_text =
+        war_pool_alloc(pool_wr, ctx_capture->name_limit);
+    ctx_capture->prompt_layer_text = "layer";
+    ctx_capture->prompt_layer_text_size =
+        strlen(ctx_capture->prompt_layer_text);
+    ctx_capture->fname = war_pool_alloc(pool_wr, ctx_capture->name_limit);
+    ctx_capture->fname_size = 0;
+    ctx_capture->note = 0;
+    ctx_capture->layer = 0;
     //-------------------------------------------------------------------------
     // PLAY CONTEXT
     //-------------------------------------------------------------------------
@@ -1003,6 +1002,8 @@ void* war_window_render(void* args) {
     env->ctx_vk = ctx_vk;
     env->capture_wav = capture_wav;
     env->ctx_fsm = ctx_fsm;
+    env->cache = cache;
+    env->pc_capture = pc_capture;
 wr: {
     if (war_pc_from_a(pc_control, &header, &size, control_payload)) {
         goto* pc_control_cmd[header];
@@ -1054,7 +1055,7 @@ skip_play:
     //-------------------------------------------------------------------------
     if (ctx_wr->now - ctx_capture->last_frame_time >= ctx_capture->rate_us) {
         ctx_capture->last_frame_time += ctx_capture->rate_us;
-        if (!ctx_capture->capture) {
+        if (ctx_fsm->current_mode != ctx_fsm->MODE_CAPTURE) {
             pc_capture->i_from_a = pc_capture->i_to_a;
             ctx_capture->state = CAPTURE_WAITING;
             goto skip_capture;
@@ -1093,18 +1094,6 @@ skip_play:
             }
         } else if (!ctx_capture->capture_wait &&
                    ctx_capture->state == CAPTURE_WAITING) {
-        } else if (ctx_capture->state == CAPTURE_PROMPT) {
-            switch (ctx_capture->prompt_step) {
-            case 0: {
-                break;
-            }
-            case 1: {
-                break;
-            }
-            case 2: {
-                break;
-            }
-            }
         }
         if (available_bytes > 0) {
             uint64_t space_left =
@@ -1115,7 +1104,7 @@ skip_play:
                 uint64_t read_idx = read_pos;
                 uint64_t samples_to_copy = bytes_to_copy / sizeof(float);
                 float* wav_samples =
-                    (float*)(capture_wav->wav + capture_wav->memfd_size);
+                    (float*)(capture_wav->file + capture_wav->memfd_size);
                 for (uint64_t i = 0; i < samples_to_copy; i++) {
                     wav_samples[i] = ((float*)pc_capture->to_a)[read_idx / 4];
                     read_idx = (read_idx + 4) & (pc_capture->size - 1);
@@ -1124,10 +1113,10 @@ skip_play:
                 if (ctx_capture->state == CAPTURE_CAPTURING) {
                     capture_wav->memfd_size += bytes_to_copy;
                     war_riff_header* riff_header =
-                        (war_riff_header*)capture_wav->wav;
+                        (war_riff_header*)capture_wav->file;
                     riff_header->chunk_size = capture_wav->memfd_size - 8;
                     war_data_chunk* data_chunk =
-                        (war_data_chunk*)(capture_wav->wav +
+                        (war_data_chunk*)(capture_wav->file +
                                           sizeof(war_riff_header) +
                                           sizeof(war_fmt_chunk));
                     data_chunk->subchunk2_size = capture_wav->memfd_size - 44;
@@ -1237,17 +1226,102 @@ skip_capture:
                 war_previous_mode(env);
             }
         } else if (input == '\n') { // ASCII newline
-            int len = war_trim_whitespace(ctx_command->text);
+            uint32_t len = war_trim_whitespace(ctx_command->text);
+            if (ctx_command->prompt_type == WAR_COMMAND_PROMPT_NONE) {
+                goto war_label_command_mode_no_prompt;
+            }
+            switch (ctx_command->prompt_type) {
+            case WAR_COMMAND_PROMPT_CAPTURE_FNAME: {
+                call_terry_davis("entered fname");
+                // logic
+                if (len == 0) { goto war_label_command_processed; }
+                for (uint32_t i = 0; i < len; i++) {
+                    if (ctx_command->text[i] == ' ') {
+                        goto war_label_command_processed;
+                    }
+                }
+                memset(ctx_capture->fname, 0, ctx_capture->name_limit);
+                memcpy(ctx_capture->fname, ctx_command->text, len);
+                ctx_capture->fname_size = len;
+                // done
+                war_command_reset(ctx_command, ctx_status);
+                ctx_command->prompt_type = WAR_COMMAND_PROMPT_CAPTURE_NOTE;
+                memset(ctx_command->prompt_text, 0, ctx_command->capacity);
+                memcpy(ctx_command->prompt_text,
+                       ctx_capture->prompt_note_text,
+                       ctx_capture->prompt_note_text_size);
+                ctx_command->prompt_text_size =
+                    ctx_capture->prompt_note_text_size;
+                ctx_command->input_write_index = 1;
+                goto war_label_skip_command_processed;
+            }
+            case WAR_COMMAND_PROMPT_CAPTURE_NOTE: {
+                call_terry_davis("entered note");
+                // logic
+                if (len == 0) { goto war_label_command_processed; }
+                int64_t note = -1;
+                for (uint32_t i = 0; i < len; i++) {
+                    if (ctx_command->text[i] == ' ' ||
+                        !isdigit(ctx_command->text[i])) {
+                        goto war_label_command_processed;
+                    }
+                    note = note * 10 + ('0' + (ctx_command->text[i]));
+                }
+                if (note < 0 || note > 127) {
+                    goto war_label_command_processed;
+                }
+                ctx_capture->note = note;
+                // done
+                war_command_reset(ctx_command, ctx_status);
+                ctx_command->prompt_type = WAR_COMMAND_PROMPT_CAPTURE_LAYER;
+                memset(ctx_command->prompt_text, 0, ctx_command->capacity);
+                memcpy(ctx_command->prompt_text,
+                       ctx_capture->prompt_layer_text,
+                       ctx_capture->prompt_layer_text_size);
+                ctx_command->prompt_text_size =
+                    ctx_capture->prompt_layer_text_size;
+                ctx_command->input_write_index = 1;
+                goto war_label_skip_command_processed;
+            }
+            case WAR_COMMAND_PROMPT_CAPTURE_LAYER: {
+                call_terry_davis("entered layer");
+                // logic
+                if (len == 0) { goto war_label_command_processed; }
+                uint64_t layer = 0;
+                bool valid = 1;
+                // done
+                war_command_reset(ctx_command, ctx_status);
+                ctx_command->prompt_type = WAR_COMMAND_PROMPT_NONE;
+                memset(ctx_command->prompt_text, 0, ctx_command->capacity);
+                ctx_command->prompt_text_size = 0;
+                switch (ctx_fsm->current_file_type) {
+                case FILE_WAR:
+                    war_roll_mode(env);
+                    break;
+                case FILE_WAV:
+                    war_wav_mode(env);
+                    break;
+                }
+                goto war_label_skip_command_processed;
+            }
+            }
+        war_label_command_mode_no_prompt:
             if (strcmp(ctx_command->text, "roll") == 0) {
-                ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
+                war_roll_mode(env);
+                memset(ctx_fsm->current_file_path, 0, ctx_fsm->name_limit);
+                ctx_fsm->current_file_path_size = 0;
+            } else if (strcmp(ctx_command->text, "wav") == 0) {
+                war_wav_mode(env);
+                memset(ctx_fsm->current_file_path, 0, ctx_fsm->name_limit);
+                ctx_fsm->current_file_path_size = 0;
             } else if (strncmp(ctx_command->text, "cd", 2) == 0) {
                 if (ctx_command->text[2] != ' ' &&
                     ctx_command->text[2] != '\0') {
-                    goto command_processed;
+                    goto war_label_command_processed;
                 }
                 if (ctx_command->text[2] == '\0') {
                     // don't have $HOME
-                    goto command_processed;
+                    goto war_label_command_processed;
                 }
                 ctx_command->text[0] = ' ';
                 ctx_command->text[1] = ' ';
@@ -1257,40 +1331,60 @@ skip_capture:
                         call_terry_davis("changed working directory to %s",
                                          ctx_command->text);
                     } else {
-                        goto command_processed;
+                        goto war_label_command_processed;
                     }
                 } else {
-                    goto command_processed;
+                    goto war_label_command_processed;
                 }
                 memcpy(ctx_fsm->cwd, ctx_command->text, len);
                 ctx_fsm->cwd_size = len;
-                goto command_processed;
+                goto war_label_command_processed;
             } else if (strncmp(ctx_command->text, "e", 1) == 0) {
                 if (ctx_command->text[1] != ' ' &&
                     ctx_command->text[1] != '\0') {
-                    goto command_processed;
+                    goto war_label_command_processed;
                 }
                 if (ctx_command->text[1] == '\0') {
                     // reload project?
-                    goto command_processed;
+                    goto war_label_command_processed;
                 }
                 ctx_command->text[0] = ' ';
                 len = war_trim_whitespace(ctx_command->text);
+                memset(ctx_fsm->current_file_path, 0, ctx_fsm->name_limit);
                 ctx_fsm->current_file_path_size =
                     snprintf(ctx_fsm->current_file_path,
                              len + ctx_fsm->cwd_size + 2,
                              "%s/%s",
                              ctx_fsm->cwd,
                              ctx_command->text);
+                ctx_fsm->ext_size = war_get_ext(
+                    ctx_command->text, ctx_fsm->ext, ctx_fsm->name_limit);
+                if (strcmp(ctx_fsm->ext, "wav") == 0) {
+                    ctx_fsm->current_file_type = FILE_WAV;
+                    war_wav_mode(env);
+                } else if (strcmp(ctx_fsm->ext, "war") == 0) {
+                    ctx_fsm->current_file_type = FILE_WAR;
+                    war_roll_mode(env);
+                } else {
+                    switch (ctx_fsm->current_file_type) {
+                    case FILE_WAR:
+                        war_roll_mode(env);
+                        break;
+                    case FILE_WAV:
+                        war_wav_mode(env);
+                        break;
+                    }
+                }
                 call_terry_davis("file_path: %s", ctx_fsm->current_file_path);
             }
-        command_processed:
+        war_label_command_processed:
             call_terry_davis("%s", ctx_command->text);
             war_command_reset(ctx_command, ctx_status);
             war_previous_mode(env);
             ctx_command->text_write_index = 0;
             ctx_command->text_size = 0;
             ctx_command->text[0] = '\0';
+        war_label_skip_command_processed:
         } else if (input == '\e') { // ASCII escape
             war_command_reset(ctx_command, ctx_status);
             war_previous_mode(env);
@@ -1304,9 +1398,7 @@ skip_capture:
                 ctx_command->text_write_index++;
             }
         } else if (input == '\t') {
-            call_terry_davis("tab");
         } else if (input == '\0') {
-            call_terry_davis("none");
         } else {
             if (ctx_command->text_size < ctx_command->capacity - 1) {
                 if (ctx_command->text_write_index < ctx_command->text_size) {
@@ -1330,9 +1422,7 @@ skip_command:
     if (ctx_wr->cursor_blink_state &&
         ctx_wr->now - ctx_wr->cursor_blink_previous_us >=
             ctx_wr->cursor_blink_duration_us &&
-        (ctx_fsm->current_mode == ctx_fsm->MODE_ROLL ||
-         (ctx_fsm->current_mode == ctx_fsm->MODE_VIEWS &&
-          views->warpoon_mode != ctx_fsm->MODE_VISUAL_LINE))) {
+        ctx_fsm->current_mode == ctx_fsm->MODE_ROLL) {
         ctx_wr->cursor_blink_duration_us =
             (ctx_wr->cursor_blink_state == CURSOR_BLINK) ?
                 atomic_load(&ctx_lua->WR_CURSOR_BLINK_DURATION_US) :
@@ -1398,12 +1488,12 @@ skip_command:
                             uint16_t temp = ctx_fsm->current_state;
                             ctx_fsm->current_state = 0;
                             ctx_fsm->goto_cmd_repeat_done = true;
-                            if (ctx_fsm->type[FSM_2D_MODE(
+                            if (ctx_fsm->function_type[FSM_2D_MODE(
                                     temp, ctx_fsm->current_mode)] ==
                                 ctx_fsm->FUNCTION_NONE) {
                                 goto cmd_repeat_done;
                             }
-                            if (ctx_fsm->type[FSM_2D_MODE(
+                            if (ctx_fsm->function_type[FSM_2D_MODE(
                                     temp, ctx_fsm->current_mode)] ==
                                 ctx_fsm->FUNCTION_C) {
                                 ctx_fsm
@@ -1438,11 +1528,11 @@ cmd_repeat_done:
         // clear current
         ctx_fsm->current_state = 0;
         ctx_fsm->state_last_event_us = ctx_wr->now;
-        if (ctx_fsm->type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
+        if (ctx_fsm->function_type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
             ctx_fsm->FUNCTION_NONE) {
             goto cmd_timeout_done;
         }
-        if (ctx_fsm->type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
+        if (ctx_fsm->function_type[FSM_2D_MODE(temp, ctx_fsm->current_mode)] ==
             ctx_fsm->FUNCTION_C) {
             ctx_fsm->function[FSM_2D_MODE(temp, ctx_fsm->current_mode)].c(env);
             goto cmd_done;
@@ -2045,7 +2135,7 @@ cmd_timeout_done:
                     ctx_fsm->current_mode != ctx_fsm->MODE_COMMAND) {
                     uint32_t cursor_span_x = 1;
                     uint32_t cursor_pos_x = views->warpoon_col;
-                    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
+                    if (views->warpoon_state == WARPOON_STATE_VISUAL_LINE) {
                         cursor_span_x = views->warpoon_viewport_cols -
                                         views->warpoon_hud_cols;
                         cursor_pos_x = 0;
@@ -2135,7 +2225,6 @@ cmd_timeout_done:
                             0);
                     }
                 }
-                break;
             }
             if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
                 war_make_transparent_quad(
@@ -2145,7 +2234,7 @@ cmd_timeout_done:
                     &transparent_quad_indices_count,
                     (float[3]){ctx_wr->left_col +
                                    ctx_command->text_write_index +
-                                   ctx_command->prompt_size + 1,
+                                   ctx_command->prompt_text_size + 1,
                                ctx_wr->bottom_row + 1,
                                ctx_wr->layers[LAYER_CURSOR]},
                     (float[2]){(float)ctx_wr->cursor_size_x, 1},
@@ -3496,22 +3585,12 @@ cmd_timeout_done:
                     ctx_fsm->MODE_ROLL = mode_value;
                 } else if (strcmp(mode_name, "views") == 0) {
                     ctx_fsm->MODE_VIEWS = mode_value;
-                } else if (strcmp(mode_name, "visual_line") == 0) {
-                    ctx_fsm->MODE_VISUAL_LINE = mode_value;
                 } else if (strcmp(mode_name, "capture") == 0) {
                     ctx_fsm->MODE_CAPTURE = mode_value;
                 } else if (strcmp(mode_name, "midi") == 0) {
                     ctx_fsm->MODE_MIDI = mode_value;
                 } else if (strcmp(mode_name, "command") == 0) {
                     ctx_fsm->MODE_COMMAND = mode_value;
-                } else if (strcmp(mode_name, "visual_block") == 0) {
-                    ctx_fsm->MODE_VISUAL_BLOCK = mode_value;
-                } else if (strcmp(mode_name, "insert") == 0) {
-                    ctx_fsm->MODE_INSERT = mode_value;
-                } else if (strcmp(mode_name, "o") == 0) {
-                    ctx_fsm->MODE_O = mode_value;
-                } else if (strcmp(mode_name, "visual") == 0) {
-                    ctx_fsm->MODE_VISUAL = mode_value;
                 } else if (strcmp(mode_name, "wav") == 0) {
                     ctx_fsm->MODE_WAV = mode_value;
                 }
@@ -3685,7 +3764,7 @@ cmd_timeout_done:
                         ctx_fsm->handle_release[mode_idx] = handle_release;
                         ctx_fsm->handle_repeat[mode_idx] = handle_repeat;
                         ctx_fsm->handle_timeout[mode_idx] = handle_timeout;
-                        ctx_fsm->type[mode_idx] = type;
+                        ctx_fsm->function_type[mode_idx] = type;
                         size_t name_offset = FSM_3D_NAME(current_state, mode);
                         strncpy(ctx_fsm->name + name_offset,
                                 cmd_name,
@@ -3696,7 +3775,7 @@ cmd_timeout_done:
                             ctx_fsm->function[mode_idx].c =
                                 war_get_keymap_function(cmd_name);
                             if (!ctx_fsm->function[mode_idx].c) {
-                                ctx_fsm->type[mode_idx] =
+                                ctx_fsm->function_type[mode_idx] =
                                     ctx_fsm->FUNCTION_NONE;
                             }
                         }

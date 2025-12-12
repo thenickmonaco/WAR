@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //
 // WAR - make music with vim motions
-// Copyright (C) 2025 Monaco
+// Copyright (C) 2025 Nick Monaco
 //
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
@@ -450,6 +450,11 @@ typedef struct war_rgba_t {
     float a;
 } war_rgba_t;
 
+enum war_views_warpoon_state {
+    WARPOON_STATE_NORMAL = 0,
+    WARPOON_STATE_VISUAL_LINE = 1,
+};
+
 typedef struct war_views {
     uint32_t* col;
     uint32_t* row;
@@ -460,7 +465,7 @@ typedef struct war_views {
     uint32_t views_count;
     // warpoon
     char** warpoon_text;
-    uint32_t warpoon_mode;
+    uint32_t warpoon_state;
     uint32_t warpoon_visual_line_row;
     uint32_t warpoon_col;
     uint32_t warpoon_row;
@@ -563,10 +568,19 @@ typedef struct war_map_wav {
     uint32_t name_limit;
 } war_map_wav;
 
-typedef struct war_cache_wav {
+enum war_file_types {
+    FILE_NONE = 0,
+    FILE_WAR = 1,
+    FILE_WAV = 2,
+};
+
+typedef struct war_cache {
     uint64_t* id;
     uint64_t* timestamp;
-    uint8_t** wav;
+    uint8_t** file;
+    uint8_t* type;
+    dev_t* device;
+    ino_t* inode;
     int* memfd;
     uint64_t* memfd_size;
     uint64_t* memfd_capacity;
@@ -576,10 +590,11 @@ typedef struct war_cache_wav {
     uint64_t next_id;
     uint64_t next_timestamp;
     uint32_t capacity;
-} war_cache_wav;
+} war_cache;
 
-typedef struct war_wav {
-    uint8_t* wav;
+typedef struct war_file {
+    uint8_t* file;
+    uint8_t type;
     int memfd;
     uint64_t memfd_size;
     uint64_t memfd_capacity;
@@ -588,7 +603,9 @@ typedef struct war_wav {
     char* fname;
     uint32_t fname_size;
     uint32_t name_limit;
-} war_wav;
+    dev_t device;
+    ino_t inode;
+} war_file;
 
 typedef struct war_midi_context {
     uint64_t* start_frames;
@@ -773,6 +790,13 @@ typedef struct war_window_render_context {
     uint32_t default_viewport_rows;
 } war_window_render_context;
 
+enum war_command_prompt_types {
+    WAR_COMMAND_PROMPT_NONE = 0,
+    WAR_COMMAND_PROMPT_CAPTURE_FNAME = 1,
+    WAR_COMMAND_PROMPT_CAPTURE_NOTE = 2,
+    WAR_COMMAND_PROMPT_CAPTURE_LAYER = 3,
+};
+
 typedef struct war_command_context {
     int* input;
     uint32_t input_write_index;
@@ -780,8 +804,9 @@ typedef struct war_command_context {
     char* text;
     uint32_t text_write_index;
     uint32_t text_size;
-    char* prompt;
-    uint32_t prompt_size;
+    uint8_t prompt_type;
+    char* prompt_text;
+    uint32_t prompt_text_size;
     uint32_t capacity;
 } war_command_context;
 
@@ -796,22 +821,12 @@ typedef struct war_status_context {
     uint32_t MODE_ROLL_size;
     const char* MODE_VIEWS;
     uint32_t MODE_VIEWS_size;
-    const char* MODE_VISUAL_LINE;
-    uint32_t MODE_VISUAL_LINE_size;
     const char* MODE_CAPTURE;
     uint32_t MODE_CAPTURE_size;
     const char* MODE_MIDI;
     uint32_t MODE_MIDI_size;
     const char* MODE_COMMAND;
     uint32_t MODE_COMMAND_size;
-    const char* MODE_VISUAL_BLOCK;
-    uint32_t MODE_VISUAL_BLOCK_size;
-    const char* MODE_INSERT;
-    uint32_t MODE_INSERT_size;
-    const char* MODE_O;
-    uint32_t MODE_O_size;
-    const char* MODE_VISUAL;
-    uint32_t MODE_VISUAL_size;
     const char* MODE_WAV;
     uint32_t MODE_WAV_size;
     //-------------------------------------------------------------------------
@@ -852,7 +867,6 @@ typedef struct war_play_context {
 enum capture_state {
     CAPTURE_WAITING = 0,
     CAPTURE_CAPTURING = 1,
-    CAPTURE_PROMPT = 2,
 };
 
 typedef struct war_capture_context {
@@ -862,15 +876,27 @@ typedef struct war_capture_context {
     uint64_t read_count;
     uint64_t rate_us;
     // misc
-    uint8_t capture;
     uint8_t capture_wait;
-    uint8_t prompt;
     uint32_t capture_delay;
     uint8_t state;
     float threshold;
-    uint8_t prompt_step;
     uint8_t monitor;
     double fps;
+    // prompts
+    uint8_t prompt;
+    char* prompt_fname_text;
+    uint32_t prompt_fname_text_size;
+    char* prompt_note_text;
+    uint32_t prompt_note_text_size;
+    char* prompt_layer_text;
+    uint32_t prompt_layer_text_size;
+    // data
+    char* fname;
+    uint32_t fname_size;
+    uint32_t note;
+    uint64_t layer;
+    // limit
+    uint32_t name_limit;
 } war_capture_context;
 
 typedef struct war_glyph_info {
@@ -1061,7 +1087,7 @@ typedef union war_function_union {
 typedef struct war_fsm_context {
     // FSM data
     war_function_union* function;
-    uint8_t* type;
+    uint8_t* function_type;
     char* name;
     uint8_t* is_terminal;
     uint8_t* handle_release;
@@ -1069,10 +1095,14 @@ typedef struct war_fsm_context {
     uint8_t* handle_repeat;
     uint8_t* is_prefix;
     uint64_t* next_state;
+    // file
     char* cwd;
     uint32_t cwd_size;
     char* current_file_path;
     uint32_t current_file_path_size;
+    uint32_t current_file_type;
+    char* ext;
+    uint32_t ext_size;
     // Runtime state
     uint8_t* key_down;
     uint64_t state_last_event_us;
@@ -1105,14 +1135,9 @@ typedef struct war_fsm_context {
     // modes
     uint32_t MODE_ROLL;
     uint32_t MODE_VIEWS;
-    uint32_t MODE_VISUAL_LINE;
     uint32_t MODE_CAPTURE;
     uint32_t MODE_MIDI;
     uint32_t MODE_COMMAND;
-    uint32_t MODE_VISUAL_BLOCK;
-    uint32_t MODE_INSERT;
-    uint32_t MODE_O;
-    uint32_t MODE_VISUAL;
     uint32_t MODE_WAV;
     // cmd type
     int FUNCTION_NONE;
@@ -1147,8 +1172,10 @@ struct war_env {
     war_note_quads* note_quads;
     war_pool* pool_wr;
     war_vulkan_context* ctx_vk;
-    war_wav* capture_wav;
+    war_file* capture_wav;
     war_fsm_context* ctx_fsm;
+    war_cache* cache;
+    war_producer_consumer* pc_capture;
 };
 
 #endif // WAR_DATA_H

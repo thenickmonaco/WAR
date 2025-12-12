@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //
 // WAR - make music with vim motions
-// Copyright (C) 2025 Monaco
+// Copyright (C) 2025 Nick Monaco
 //
 // This file is part of WAR 1.0 software.
 // WAR 1.0 software is licensed under the GNU Affero General Public License
@@ -43,6 +43,20 @@
 #include <time.h>
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
+
+static inline void war_roll_mode(war_env* env) {
+    call_terry_davis("war_roll_mode");
+    war_window_render_context* ctx_wr = env->ctx_wr;
+    war_fsm_context* ctx_fsm = env->ctx_fsm;
+    war_status_context* ctx_status = env->ctx_status;
+    ctx_fsm->previous_mode = ctx_fsm->current_mode;
+    ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
+    ctx_fsm->current_file_type = FILE_WAR;
+    memset(ctx_status->middle, 0, ctx_status->capacity);
+    memcpy(
+        ctx_status->middle, ctx_status->MODE_ROLL, ctx_status->MODE_ROLL_size);
+    ctx_wr->numeric_prefix = 0;
+}
 
 static inline void war_roll_cursor_up(war_env* env) {
     call_terry_davis("war_roll_cursor_up");
@@ -1654,13 +1668,13 @@ static inline void war_roll_note_mute_all(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_roll_midi_mode(war_env* env) {
+static inline void war_midi_mode(war_env* env) {
     call_terry_davis("war_roll_midi_mode");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     war_status_context* ctx_status = env->ctx_status;
+    ctx_fsm->previous_mode = ctx_fsm->current_mode;
     ctx_fsm->current_mode = ctx_fsm->MODE_MIDI;
-    ctx_fsm->previous_mode = ctx_fsm->MODE_ROLL;
     memset(ctx_status->middle, 0, ctx_status->capacity);
     memcpy(
         ctx_status->middle, ctx_status->MODE_MIDI, ctx_status->MODE_MIDI_size);
@@ -1890,14 +1904,22 @@ static inline void war_roll_views_8(war_env* env) {
     ctx_wr->numeric_prefix = 0;
 }
 
-static inline void war_roll_views_mode(war_env* env) {
-    call_terry_davis("war_roll_views_mode");
+static inline void war_views_mode(war_env* env) {
+    call_terry_davis("war_views_mode");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
+    ctx_fsm->previous_mode = ctx_fsm->current_mode;
     ctx_fsm->current_mode = (ctx_fsm->current_mode != ctx_fsm->MODE_VIEWS) ?
                                 ctx_fsm->MODE_VIEWS :
                                 ctx_fsm->MODE_ROLL;
     ctx_wr->numeric_prefix = 0;
+    // reset
+    ctx_fsm->repeat_keysym = 0;
+    ctx_fsm->repeat_mod = 0;
+    ctx_fsm->repeating = false;
+    ctx_fsm->timeout = false;
+    ctx_fsm->timeout_state_index = 0;
+    ctx_fsm->timeout_start_us = 0;
 }
 
 static inline void war_roll_play(war_env* env) {
@@ -2792,25 +2814,9 @@ static inline void war_wav_mode(war_env* env) {
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     ctx_fsm->previous_mode = ctx_fsm->current_mode;
     ctx_fsm->current_mode = ctx_fsm->MODE_WAV;
+    ctx_fsm->current_file_type = FILE_WAV;
     memset(ctx_status->middle, 0, ctx_status->capacity);
     memcpy(ctx_status->middle, ctx_status->MODE_WAV, ctx_status->MODE_WAV_size);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_capture(war_env* env) {
-    call_terry_davis("war_roll_capture");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_capture_context* ctx_capture = env->ctx_capture;
-    ctx_capture->capture = 1;
-    war_wav_mode(env);
-    ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_roll_space(war_env* env) {
-    call_terry_davis("war_roll_space");
-    war_window_render_context* ctx_wr = env->ctx_wr;
-    war_fsm_context* ctx_fsm = env->ctx_fsm;
-    ctx_fsm->current_mode = ctx_fsm->MODE_CAPTURE;
     ctx_wr->numeric_prefix = 0;
 }
 
@@ -2820,6 +2826,7 @@ static inline void war_command_mode(war_env* env) {
     war_command_context* ctx_command = env->ctx_command;
     war_status_context* ctx_status = env->ctx_status;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
+    ctx_fsm->previous_mode = ctx_fsm->current_mode;
     ctx_fsm->current_mode = ctx_fsm->MODE_COMMAND;
     war_command_reset(ctx_command, ctx_status);
     ctx_wr->numeric_prefix = 0;
@@ -2830,6 +2837,53 @@ static inline void war_command_mode(war_env* env) {
     ctx_fsm->timeout = false;
     ctx_fsm->timeout_state_index = 0;
     ctx_fsm->timeout_start_us = 0;
+}
+
+static inline void war_capture_mode(war_env* env) {
+    call_terry_davis("war_capture_mode");
+    war_window_render_context* ctx_wr = env->ctx_wr;
+    war_capture_context* ctx_capture = env->ctx_capture;
+    war_fsm_context* ctx_fsm = env->ctx_fsm;
+    war_status_context* ctx_status = env->ctx_status;
+    war_producer_consumer* pc_capture = env->pc_capture;
+    war_command_context* ctx_command = env->ctx_command;
+    ctx_fsm->repeat_keysym = 0;
+    ctx_fsm->repeat_mod = 0;
+    ctx_fsm->repeating = false;
+    ctx_fsm->timeout = false;
+    ctx_fsm->timeout_state_index = 0;
+    ctx_fsm->timeout_start_us = 0;
+    if (ctx_fsm->current_mode != ctx_fsm->MODE_CAPTURE) {
+        ctx_fsm->current_file_type = FILE_WAV;
+        ctx_fsm->previous_mode = ctx_fsm->current_mode;
+        ctx_fsm->current_mode = ctx_fsm->MODE_CAPTURE;
+        pc_capture->i_from_a = pc_capture->i_to_a;
+        ctx_capture->state = CAPTURE_WAITING;
+        memset(ctx_status->middle, 0, ctx_status->capacity);
+        memcpy(ctx_status->middle,
+               ctx_status->MODE_CAPTURE,
+               ctx_status->MODE_CAPTURE_size);
+        ctx_wr->numeric_prefix = 0;
+        return;
+    }
+    if (!ctx_capture->prompt) {
+        // save file i guess
+        return;
+    }
+    war_command_mode(env);
+    ctx_command->prompt_type = WAR_COMMAND_PROMPT_CAPTURE_FNAME;
+    memcpy(ctx_command->prompt_text,
+           ctx_capture->prompt_fname_text,
+           ctx_capture->prompt_fname_text_size);
+    ctx_command->prompt_text_size = ctx_capture->prompt_fname_text_size;
+}
+
+static inline void war_roll_space(war_env* env) {
+    call_terry_davis("war_roll_space");
+    war_window_render_context* ctx_wr = env->ctx_wr;
+    war_fsm_context* ctx_fsm = env->ctx_fsm;
+    ctx_fsm->current_mode = ctx_fsm->MODE_CAPTURE;
+    ctx_wr->numeric_prefix = 0;
 }
 
 static inline void war_roll_u(war_env* env) {
@@ -3239,7 +3293,7 @@ static inline void war_views_cursor_left(war_env* env) {
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_views* views = env->views;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
+    if (views->warpoon_state == WARPOON_STATE_VISUAL_LINE) {
         ctx_wr->numeric_prefix = 0;
         return;
     }
@@ -3274,7 +3328,7 @@ static inline void war_views_cursor_right(war_env* env) {
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_views* views = env->views;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
+    if (views->warpoon_state == WARPOON_STATE_VISUAL_LINE) {
         ctx_wr->numeric_prefix = 0;
         return;
     }
@@ -3370,7 +3424,7 @@ static inline void war_views_cursor_left_leap(war_env* env) {
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_views* views = env->views;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
+    if (views->warpoon_state == WARPOON_STATE_VISUAL_LINE) {
         ctx_wr->numeric_prefix = 0;
         return;
     }
@@ -3405,7 +3459,7 @@ static inline void war_views_cursor_right_leap(war_env* env) {
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_views* views = env->views;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
-    if (views->warpoon_mode == ctx_fsm->MODE_VISUAL_LINE) {
+    if (views->warpoon_state == WARPOON_STATE_VISUAL_LINE) {
         ctx_wr->numeric_prefix = 0;
         return;
     }
@@ -3439,6 +3493,10 @@ static inline void war_views_shift_up(war_env* env) {
     call_terry_davis("war_views_shift_up");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_views* views = env->views;
+    if (views->warpoon_state == WARPOON_STATE_NORMAL) {
+        ctx_wr->numeric_prefix = 0;
+        return;
+    }
     war_warpoon_shift_up(views);
     uint32_t increment = ctx_wr->row_increment;
     if (ctx_wr->numeric_prefix) {
@@ -3470,6 +3528,10 @@ static inline void war_views_shift_down(war_env* env) {
     call_terry_davis("war_views_shift_down");
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_views* views = env->views;
+    if (views->warpoon_state == WARPOON_STATE_NORMAL) {
+        ctx_wr->numeric_prefix = 0;
+        return;
+    }
     war_warpoon_shift_down(views);
     uint32_t increment = ctx_wr->row_increment;
     if (ctx_wr->numeric_prefix) {
@@ -3515,15 +3577,7 @@ static inline void war_views_visual_line(war_env* env) {
     war_window_render_context* ctx_wr = env->ctx_wr;
     war_views* views = env->views;
     war_fsm_context* ctx_fsm = env->ctx_fsm;
-    // switch (views->warpoon_mode) {
-    // case ctx_fsm->MODE_ROLL:
-    //     views->warpoon_mode = ctx_fsm->MODE_VISUAL_LINE;
-    //     views->warpoon_visual_line_row = views->warpoon_row;
-    //     break;
-    // case ctx_fsm->MODE_VISUAL_LINE:
-    //     views->warpoon_mode = ctx_fsm->MODE_ROLL;
-    //     break;
-    // }
+    views->warpoon_state = WARPOON_STATE_VISUAL_LINE;
     ctx_wr->numeric_prefix = 0;
 }
 
@@ -3717,69 +3771,32 @@ static inline void war_previous_mode(war_env* env) {
     war_fsm_context* ctx_fsm = env->ctx_fsm;
     war_status_context* ctx_status = env->ctx_status;
     war_command_context* ctx_command = env->ctx_command;
-    if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
-        ctx_fsm->current_mode = ctx_fsm->MODE_ROLL;
-        goto command;
-    }
-    uint32_t current = ctx_fsm->current_mode;
-    if (current == ctx_fsm->MODE_ROLL || current == ctx_fsm->MODE_WAV) {
-        ctx_wr->numeric_prefix = 0;
+    war_views* views = env->views;
+    if (ctx_fsm->current_mode == ctx_fsm->MODE_VIEWS &&
+        views->warpoon_state == WARPOON_STATE_VISUAL_LINE) {
+        views->warpoon_state = WARPOON_STATE_NORMAL;
         return;
     }
-    ctx_fsm->current_mode = ctx_fsm->previous_mode;
-    ctx_fsm->previous_mode = current;
-command:
-    memset(ctx_status->middle, 0, ctx_status->capacity);
-    if (ctx_fsm->current_mode == ctx_fsm->MODE_WAV) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_WAV,
-               ctx_status->MODE_WAV_size);
-    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_MIDI,
-               ctx_status->MODE_MIDI_size);
+    switch (ctx_fsm->current_file_type) {
+    case FILE_WAR:
+        war_roll_mode(env);
+        return;
+    case FILE_WAV:
+        war_wav_mode(env);
+        return;
+    }
+    if (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI) {
+        war_midi_mode(env);
     } else if (ctx_fsm->current_mode == ctx_fsm->MODE_ROLL) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_ROLL,
-               ctx_status->MODE_ROLL_size);
+        war_roll_mode(env);
     } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VIEWS) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_VIEWS,
-               ctx_status->MODE_VIEWS_size);
-    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VISUAL_LINE) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_VISUAL_LINE,
-               ctx_status->MODE_VISUAL_LINE_size);
+        war_views_mode(env);
     } else if (ctx_fsm->current_mode == ctx_fsm->MODE_CAPTURE) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_CAPTURE,
-               ctx_status->MODE_CAPTURE_size);
+        war_capture_mode(env);
     } else if (ctx_fsm->current_mode == ctx_fsm->MODE_MIDI) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_MIDI,
-               ctx_status->MODE_MIDI_size);
+        war_midi_mode(env);
     } else if (ctx_fsm->current_mode == ctx_fsm->MODE_COMMAND) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_COMMAND,
-               ctx_status->MODE_COMMAND_size);
-    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VISUAL_BLOCK) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_VISUAL_BLOCK,
-               ctx_status->MODE_VISUAL_BLOCK_size);
-    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_INSERT) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_INSERT,
-               ctx_status->MODE_INSERT_size);
-    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_O) {
-        memcpy(ctx_status->middle, ctx_status->MODE_O, ctx_status->MODE_O_size);
-    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_VISUAL) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_VISUAL,
-               ctx_status->MODE_VISUAL_size);
-    } else if (ctx_fsm->current_mode == ctx_fsm->MODE_WAV) {
-        memcpy(ctx_status->middle,
-               ctx_status->MODE_WAV,
-               ctx_status->MODE_WAV_size);
+        war_command_mode(env);
     }
     ctx_wr->numeric_prefix = 0;
 }
@@ -3852,35 +3869,6 @@ static inline void war_midi_9(war_env* env) {
     war_window_render_context* ctx_wr = env->ctx_wr;
     ctx_wr->midi_octave = 9;
     ctx_wr->numeric_prefix = 0;
-}
-
-static inline void war_wav_Q(war_env* env) {
-    call_terry_davis("war_wav_Q");
-    war_capture_context* ctx_capture = env->ctx_capture;
-    war_wav* capture_wav = env->capture_wav;
-    ctx_capture->capture = !ctx_capture->capture;
-    if (ctx_capture->capture) { return; }
-    if (ctx_capture->prompt) {
-        ctx_capture->capture = 1;
-        ctx_capture->prompt_step = 0;
-        ctx_capture->state = CAPTURE_PROMPT;
-        return;
-    }
-    if (ftruncate(capture_wav->fd, capture_wav->memfd_size) == -1) {
-        call_terry_davis("save_file: fd ftruncate failed: %s",
-                         capture_wav->fname);
-        return;
-    }
-    off_t offset = 0;
-    call_terry_davis("saving file");
-    ssize_t result = sendfile(
-        capture_wav->fd, capture_wav->memfd, &offset, capture_wav->memfd_size);
-    if (result == -1) {
-        call_terry_davis("save_file: sendfile failed: %s", capture_wav->fname);
-    }
-    lseek(capture_wav->fd, 0, SEEK_SET);
-    memset(capture_wav->wav + 44, 0, capture_wav->memfd_capacity - 44);
-    capture_wav->memfd_size = 44;
 }
 
 #endif // WAR_KEYMAP_FUNCTIONS_H

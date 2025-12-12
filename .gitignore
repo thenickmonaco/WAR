@@ -14,6 +14,9 @@ build.zig
 /build/
 .cache/
 
+# music
+*.wav
+
 # lua
 .lua*
 
